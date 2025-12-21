@@ -30,10 +30,12 @@ Based on the analysis report, interview the user to fully understand the systems
 ## Checklist
 
 ### Phase 1: Discovery & Interview
-- [ ] Understand user's business context and use cases
-- [ ] Clarify integration priorities between suites
-- [ ] Confirm roadmap corrections from analysis report
-- [ ] Define timeline/phase expectations (if any)
+- [x] Understand user's business context and use cases
+- [x] Clarify integration priorities between suites
+- [x] Confirm roadmap corrections from analysis report
+- [x] Define timeline/phase expectations (if any)
+
+**Completed:** See [docs/decisions.md](../decisions.md) for all 5 architecture decisions.
 
 ### Phase 2: Master Roadmap
 - [ ] Create `docs/ROADMAP.md` with suite development order
