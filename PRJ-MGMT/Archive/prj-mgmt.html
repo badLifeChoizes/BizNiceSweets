@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PLM Development Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #0A1628;
+      --bg-surface: #0D1B2A;
+      --bg-card: #1B263B;
+      --bg-card-hover: #243447;
+      --text-primary: #E0E1DD;
+      --text-secondary: #778DA9;
+      --text-muted: #415A77;
+      --accent-blue: #00A8E8;
+      --accent-green: #00D26A;
+      --accent-yellow: #FFB703;
+      --accent-red: #E63946;
+      --border: #415A77;
+      --font-display: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-display);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* Header */
+    .header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .logo-mark {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-green));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .logo h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .logo h1 span {
+      color: var(--accent-blue);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .btn {
+      padding: 0.6rem 1.2rem;
+      border-radius: 6px;
+      font-family: var(--font-display);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #0095d0;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+    }
+
+    /* Main Layout */
+    .main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* KPI Section */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-align: center;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+
+    .kpi-value {
+      font-size: 3rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      line-height: 1;
+    }
+
+    .kpi-value.complete { color: var(--accent-green); }
+    .kpi-value.progress { color: var(--accent-yellow); }
+    .kpi-value.pending { color: var(--text-muted); }
+    .kpi-value.units { color: var(--accent-blue); }
+
+    .kpi-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-top: 0.5rem;
+    }
+
+    /* Section Headers */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .section-header h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      border-left: 4px solid var(--accent-blue);
+      padding-left: 1rem;
+    }
+
+    .section-header .badge {
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+    }
+
+    /* Phases Grid */
+    .phases-section {
+      margin-bottom: 2.5rem;
+    }
+
+    .phases-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .phase-card {
+      background: var(--bg-card);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      display: grid;
+      grid-template-columns: 100px 1fr 200px 140px;
+      align-items: center;
+      gap: 1.5rem;
+      transition: background 0.2s ease;
+    }
+
+    .phase-card:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .phase-label {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .phase-name {
+      font-size: 0.95rem;
+    }
+
+    .phase-name input {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      width: 100%;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid transparent;
+    }
+
+    .phase-name input:hover {
+      border-bottom-color: var(--border);
+    }
+
+    .phase-name input:focus {
+      outline: none;
+      border-bottom-color: var(--accent-blue);
+    }
+
+    /* Progress Slider */
+    .progress-control {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .progress-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--bg-deep);
+      cursor: pointer;
+    }
+
+    .progress-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-blue);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    .progress-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .progress-value {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      min-width: 45px;
+      text-align: right;
+    }
+
+    /* Status Badge */
+    .status-select {
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      font-family: var(--font-display);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-select.complete {
+      background: var(--accent-green);
+      color: var(--bg-deep);
+    }
+
+    .status-select.progress {
+      background: var(--accent-yellow);
+      color: var(--bg-deep);
+    }
+
+    .status-select.pending {
+      background: var(--text-muted);
+      color: var(--text-primary);
+    }
+
+    .status-select option {
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+
+    /* Deliveries Section */
+    .deliveries-section {
+      margin-bottom: 2.5rem;
+    }
+
+    .deliveries-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+    }
+
+    .delivery-card {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border-top: 4px solid var(--accent-blue);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .delivery-card:nth-child(2) { border-top-color: var(--accent-yellow); }
+    .delivery-card:nth-child(3) { border-top-color: var(--accent-green); }
+
+    .delivery-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+    }
+
+    .delivery-date-label {
+      font-size: 0.7rem;
+      color: var(--accent-blue);
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .delivery-card:nth-child(2) .delivery-date-label { color: var(--accent-yellow); }
+    .delivery-card:nth-child(3) .delivery-date-label { color: var(--accent-green); }
+
+    .delivery-date-input {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 1.5rem;
+      font-weight: 600;
+      width: 100%;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid transparent;
+      cursor: pointer;
+    }
+
+    .delivery-date-input:hover {
+      border-bottom-color: var(--border);
+    }
+
+    .delivery-date-input:focus {
+      outline: none;
+      border-bottom-color: var(--accent-blue);
+    }
+
+    .delivery-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 1rem 0;
+    }
+
+    .delivery-title {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .delivery-title input {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 600;
+      width: 100%;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid transparent;
+    }
+
+    .delivery-title input:hover {
+      border-bottom-color: var(--border);
+    }
+
+    .delivery-title input:focus {
+      outline: none;
+      border-bottom-color: var(--accent-blue);
+    }
+
+    .delivery-dest {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .delivery-dest input {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      width: 100%;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid transparent;
+    }
+
+    .delivery-dest input:hover {
+      border-bottom-color: var(--border);
+    }
+
+    .delivery-dest input:focus {
+      outline: none;
+      border-bottom-color: var(--accent-blue);
+    }
+
+    .delivery-countdown {
+      margin-top: 1rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-deep);
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .delivery-countdown.urgent {
+      background: rgba(230, 57, 70, 0.2);
+      color: var(--accent-red);
+    }
+
+    .delivery-countdown.soon {
+      background: rgba(255, 183, 3, 0.2);
+      color: var(--accent-yellow);
+    }
+
+    /* Notes Section */
+    .notes-section {
+      margin-bottom: 2rem;
+    }
+
+    .notes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+    }
+
+    .notes-card {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .notes-card h3 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent-blue);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 1rem;
+    }
+
+    .notes-card:nth-child(2) h3 { color: var(--accent-yellow); }
+    .notes-card:nth-child(3) h3 { color: var(--accent-green); }
+
+    .notes-card textarea {
+      width: 100%;
+      height: 120px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      padding: 0.75rem;
+      resize: none;
+      line-height: 1.6;
+    }
+
+    .notes-card textarea:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    /* Presentation Mode */
+    body.presentation-mode .phase-name input,
+    body.presentation-mode .delivery-title input,
+    body.presentation-mode .delivery-dest input,
+    body.presentation-mode .delivery-date-input {
+      pointer-events: none;
+      border-bottom-color: transparent !important;
+    }
+
+    body.presentation-mode .progress-slider {
+      pointer-events: none;
+    }
+
+    body.presentation-mode .status-select {
+      pointer-events: none;
+      appearance: none;
+    }
+
+    body.presentation-mode .notes-section,
+    body.presentation-mode .header-actions .btn-secondary:first-child {
+      display: none;
+    }
+
+    body.presentation-mode .main {
+      max-width: 1600px;
+    }
+
+    body.presentation-mode .kpi-card {
+      padding: 2rem;
+    }
+
+    body.presentation-mode .kpi-value {
+      font-size: 4rem;
+    }
+
+    /* Add Phase Button */
+    .add-phase-btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: transparent;
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      color: var(--text-secondary);
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-top: 0.75rem;
+    }
+
+    .add-phase-btn:hover {
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+      background: rgba(0, 168, 232, 0.1);
+    }
+
+    body.presentation-mode .add-phase-btn {
+      display: none;
+    }
+
+    /* Delete Button */
+    .delete-btn {
+      opacity: 0;
+      background: transparent;
+      border: none;
+      color: var(--accent-red);
+      cursor: pointer;
+      padding: 0.25rem;
+      transition: opacity 0.2s ease;
+    }
+
+    .phase-card:hover .delete-btn,
+    .delivery-card:hover .delete-btn {
+      opacity: 1;
+    }
+
+    body.presentation-mode .delete-btn {
+      display: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .deliveries-grid { grid-template-columns: 1fr; }
+      .notes-grid { grid-template-columns: 1fr; }
+      .phase-card {
+        grid-template-columns: 80px 1fr;
+        gap: 1rem;
+      }
+      .progress-control, .status-select {
+        grid-column: 2;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .header {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1rem;
+      }
+      .main { padding: 1rem; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .phase-card, .delivery-card, .kpi-card, .notes-card {
+      animation: fadeIn 0.4s ease forwards;
+    }
+
+    .phase-card:nth-child(1) { animation-delay: 0.05s; }
+    .phase-card:nth-child(2) { animation-delay: 0.1s; }
+    .phase-card:nth-child(3) { animation-delay: 0.15s; }
+    .phase-card:nth-child(4) { animation-delay: 0.2s; }
+    .phase-card:nth-child(5) { animation-delay: 0.25s; }
+    .phase-card:nth-child(6) { animation-delay: 0.3s; }
+    .phase-card:nth-child(7) { animation-delay: 0.35s; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo">
+      <div class="logo-mark">PLM</div>
+      <h1>PLM <span>Development</span> Dashboard</h1>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" onclick="exportData()">📥 Export JSON</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('importInput').click()">📤 Import</button>
+      <input type="file" id="importInput" accept=".json" style="display:none" onchange="importData(event)">
+      <button class="btn btn-primary" onclick="togglePresentationMode()">🎬 Present</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- KPIs -->
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- Phases -->
+    <section class="phases-section">
+      <div class="section-header">
+        <h2>Project Phases</h2>
+        <span class="badge" id="phaseCount">7 phases</span>
+      </div>
+      <div class="phases-list" id="phasesList"></div>
+      <button class="add-phase-btn" onclick="addPhase()">+ Add New Phase</button>
+    </section>
+
+    <!-- Deliveries -->
+    <section class="deliveries-section">
+      <div class="section-header">
+        <h2>Upcoming Deliveries</h2>
+        <span class="badge" id="deliveryCount">3 shipments</span>
+      </div>
+      <div class="deliveries-grid" id="deliveriesGrid"></div>
+    </section>
+
+    <!-- Notes -->
+    <section class="notes-section">
+      <div class="section-header">
+        <h2>Project Notes</h2>
+      </div>
+      <div class="notes-grid">
+        <div class="notes-card">
+          <h3>Current Focus</h3>
+          <textarea id="notesFocus" placeholder="Enter current focus items...">• Complete Phase 3 IMSH prototype (95%)
+• Prepare Phase 4 demo unit deliveries
+• Production tool development</textarea>
+        </div>
+        <div class="notes-card">
+          <h3>Upcoming Milestones</h3>
+          <textarea id="notesMilestones" placeholder="Enter upcoming milestones...">• IMSH delivery - Jan 7, 2026
+• Dubai training event - Jan 16, 2026
+• Tender submission - Feb 18, 2026</textarea>
+        </div>
+        <div class="notes-card">
+          <h3>Future Phases</h3>
+          <textarea id="notesFuture" placeholder="Enter future phase notes...">• Build 3x validation units
+• Deliver 1-up mold set to production
+• Scale-up tooling design</textarea>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Project Data
+    let projectData = {
+      phases: [
+        { id: 1, name: "Prototype v1 Demo Unit - SESAM", progress: 100, status: "complete" },
+        { id: 2, name: "Prototype v2 Demo Units - EMS World", progress: 100, status: "complete" },
+        { id: 3, name: "Prototype v3 Demo Unit - IMSH", progress: 95, status: "progress" },
+        { id: 4, name: "V3 Demo Deliveries & Production Tool Development", progress: 25, status: "progress" },
+        { id: 5, name: "Early Production Units & Manufacturing Support", progress: 0, status: "pending" },
+        { id: 6, name: "Validated Mold Set for Production", progress: 0, status: "pending" },
+        { id: 7, name: "Secondary Tool Design for Larger Volumes", progress: 0, status: "pending" }
+      ],
+      deliveries: [
+        { id: 1, date: "2026-01-07", title: "1x Dark Tone Unit", destination: "IMSH" },
+        { id: 2, date: "2026-01-16", title: "3x Units (Dark/Med/Light)", destination: "Dubai Distributor Training" },
+        { id: 3, date: "2026-02-18", title: "2x Units for Tender", destination: "Tender Submission" }
+      ],
+      notes: {
+        focus: "",
+        milestones: "",
+        future: ""
+      }
+    };
+
+    let nextPhaseId = 8;
+    let nextDeliveryId = 4;
+
+    // Render Functions
+    function renderKPIs() {
+      const complete = projectData.phases.filter(p => p.status === "complete").length;
+      const inProgress = projectData.phases.filter(p => p.status === "progress").length;
+      const pending = projectData.phases.filter(p => p.status === "pending").length;
+      const totalUnits = projectData.deliveries.reduce((sum, d) => {
+        const match = d.title.match(/(\d+)x/);
+        return sum + (match ? parseInt(match[1]) : 1);
+      }, 0);
+
+      document.getElementById("kpiGrid").innerHTML = `
+        <div class="kpi-card">
+          <div class="kpi-value complete">${complete}</div>
+          <div class="kpi-label">Complete</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value progress">${inProgress}</div>
+          <div class="kpi-label">In Progress</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value pending">${pending}</div>
+          <div class="kpi-label">Pending</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value units">${totalUnits}</div>
+          <div class="kpi-label">Units to Ship</div>
+        </div>
+      `;
+    }
+
+    function renderPhases() {
+      const container = document.getElementById("phasesList");
+      container.innerHTML = projectData.phases.map((phase, index) => `
+        <div class="phase-card" data-id="${phase.id}">
+          <div class="phase-label">PHASE ${index + 1}</div>
+          <div class="phase-name">
+            <input type="text" value="${phase.name}" onchange="updatePhase(${phase.id}, 'name', this.value)">
+          </div>
+          <div class="progress-control">
+            <input type="range" class="progress-slider" min="0" max="100" value="${phase.progress}" 
+              oninput="updatePhase(${phase.id}, 'progress', parseInt(this.value)); this.nextElementSibling.textContent = this.value + '%'">
+            <span class="progress-value">${phase.progress}%</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <select class="status-select ${phase.status}" onchange="updatePhase(${phase.id}, 'status', this.value); this.className = 'status-select ' + this.value">
+              <option value="complete" ${phase.status === "complete" ? "selected" : ""}>Complete</option>
+              <option value="progress" ${phase.status === "progress" ? "selected" : ""}>In Progress</option>
+              <option value="pending" ${phase.status === "pending" ? "selected" : ""}>Pending</option>
+            </select>
+            <button class="delete-btn" onclick="deletePhase(${phase.id})">✕</button>
+          </div>
+        </div>
+      `).join("");
+      
+      document.getElementById("phaseCount").textContent = `${projectData.phases.length} phases`;
+    }
+
+    function renderDeliveries() {
+      const container = document.getElementById("deliveriesGrid");
+      container.innerHTML = projectData.deliveries.map(delivery => {
+        const daysUntil = getDaysUntil(delivery.date);
+        let countdownClass = "";
+        if (daysUntil <= 7) countdownClass = "urgent";
+        else if (daysUntil <= 30) countdownClass = "soon";
+
+        return `
+          <div class="delivery-card" data-id="${delivery.id}">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div>
+                <div class="delivery-date-label">Ship Date</div>
+                <input type="date" class="delivery-date-input" value="${delivery.date}" 
+                  onchange="updateDelivery(${delivery.id}, 'date', this.value)">
+              </div>
+              <button class="delete-btn" onclick="deleteDelivery(${delivery.id})">✕</button>
+            </div>
+            <div class="delivery-divider"></div>
+            <div class="delivery-title">
+              <input type="text" value="${delivery.title}" onchange="updateDelivery(${delivery.id}, 'title', this.value)">
+            </div>
+            <div class="delivery-dest">
+              <input type="text" value="${delivery.destination}" placeholder="Destination" 
+                onchange="updateDelivery(${delivery.id}, 'destination', this.value)">
+            </div>
+            <div class="delivery-countdown ${countdownClass}">
+              ${daysUntil > 0 ? `${daysUntil} days until ship` : daysUntil === 0 ? "Ships today!" : `${Math.abs(daysUntil)} days overdue`}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      document.getElementById("deliveryCount").textContent = `${projectData.deliveries.length} shipments`;
+    }
+
+    // Helper Functions
+    function getDaysUntil(dateStr) {
+      const target = new Date(dateStr);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      target.setHours(0, 0, 0, 0);
+      return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+    }
+
+    // Update Functions
+    function updatePhase(id, field, value) {
+      const phase = projectData.phases.find(p => p.id === id);
+      if (phase) {
+        phase[field] = value;
+        if (field === "status" || field === "progress") {
+          renderKPIs();
+        }
+      }
+    }
+
+    function updateDelivery(id, field, value) {
+      const delivery = projectData.deliveries.find(d => d.id === id);
+      if (delivery) {
+        delivery[field] = value;
+        renderDeliveries();
+        renderKPIs();
+      }
+    }
+
+    function addPhase() {
+      projectData.phases.push({
+        id: nextPhaseId++,
+        name: "New Phase",
+        progress: 0,
+        status: "pending"
+      });
+      renderPhases();
+      renderKPIs();
+    }
+
+    function deletePhase(id) {
+      if (projectData.phases.length > 1) {
+        projectData.phases = projectData.phases.filter(p => p.id !== id);
+        renderPhases();
+        renderKPIs();
+      }
+    }
+
+    function deleteDelivery(id) {
+      projectData.deliveries = projectData.deliveries.filter(d => d.id !== id);
+      renderDeliveries();
+      renderKPIs();
+    }
+
+    // Presentation Mode
+    function togglePresentationMode() {
+      document.body.classList.toggle("presentation-mode");
+      const btn = document.querySelector(".btn-primary");
+      if (document.body.classList.contains("presentation-mode")) {
+        btn.textContent = "✏️ Edit";
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen();
+        }
+      } else {
+        btn.textContent = "🎬 Present";
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    }
+
+    // Export/Import
+    function exportData() {
+      projectData.notes = {
+        focus: document.getElementById("notesFocus").value,
+        milestones: document.getElementById("notesMilestones").value,
+        future: document.getElementById("notesFuture").value
+      };
+
+      const dataStr = JSON.stringify(projectData, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `plm_project_${new Date().toISOString().split("T")[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          try {
+            const imported = JSON.parse(e.target.result);
+            projectData = imported;
+            nextPhaseId = Math.max(...projectData.phases.map(p => p.id)) + 1;
+            nextDeliveryId = Math.max(...projectData.deliveries.map(d => d.id)) + 1;
+            
+            renderAll();
+            
+            if (imported.notes) {
+              document.getElementById("notesFocus").value = imported.notes.focus || "";
+              document.getElementById("notesMilestones").value = imported.notes.milestones || "";
+              document.getElementById("notesFuture").value = imported.notes.future || "";
+            }
+          } catch (err) {
+            alert("Error importing file. Please check the format.");
+          }
+        };
+        reader.readAsText(file);
+      }
+      event.target.value = "";
+    }
+
+    function renderAll() {
+      renderKPIs();
+      renderPhases();
+      renderDeliveries();
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener("keydown", function(e) {
+      if (e.key === "Escape" && document.body.classList.contains("presentation-mode")) {
+        togglePresentationMode();
+      }
+      if (e.key === "p" && e.ctrlKey) {
+        e.preventDefault();
+        togglePresentationMode();
+      }
+    });
+
+    // Initialize
+    renderAll();
+  </script>
+</body>
+</html>

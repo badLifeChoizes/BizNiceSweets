@@ -1,0 +1,2655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRJ-MGMT Tool v9</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #0A1628;
+      --bg-surface: #0D1B2A;
+      --bg-card: #1B263B;
+      --bg-card-hover: #243447;
+      --text-primary: #E0E1DD;
+      --text-secondary: #778DA9;
+      --text-muted: #415A77;
+      --accent-blue: #00A8E8;
+      --accent-green: #00D26A;
+      --accent-yellow: #FFB703;
+      --accent-red: #E63946;
+      --accent-purple: #9D4EDD;
+      --accent-orange: #FB8500;
+      --border: #415A77;
+      --font-display: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-display);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    .header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 0.75rem; }
+    .logo-mark {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.7rem; font-family: var(--font-mono);
+    }
+    .logo h1 { font-size: 1.1rem; font-weight: 600; font-family: var(--font-mono); }
+    .logo h1 span { color: var(--accent-blue); }
+    .project-selector {
+      display: flex; align-items: center; gap: 0.75rem;
+      background: var(--bg-card); padding: 0.5rem 1rem;
+      border-radius: 8px; border: 1px solid var(--border);
+    }
+    .project-selector label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
+    .project-name-input {
+      background: transparent; border: none; color: var(--text-primary);
+      font-family: var(--font-display); font-size: 1rem; font-weight: 600;
+      width: 200px; padding: 0.25rem;
+    }
+    .project-name-input:focus { outline: none; border-bottom: 1px solid var(--accent-blue); }
+    .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .btn {
+      padding: 0.5rem 1rem; border-radius: 6px;
+      font-family: var(--font-display); font-size: 0.8rem; font-weight: 500;
+      cursor: pointer; transition: all 0.2s ease; border: none;
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+    .btn-primary { background: var(--accent-blue); color: white; }
+    .btn-primary:hover { background: #0095d0; transform: translateY(-1px); }
+    .btn-secondary { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg-card-hover); }
+    .btn-success { background: var(--accent-green); color: var(--bg-deep); }
+    .btn-danger { background: var(--accent-red); color: white; }
+    .btn-warning { background: var(--accent-orange); color: white; }
+    .btn-sm { padding: 0.35rem 0.6rem; font-size: 0.75rem; }
+    .dropdown { position: relative; }
+    .dropdown-menu {
+      position: absolute; top: 100%; right: 0; margin-top: 0.5rem;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+      min-width: 200px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      display: none; z-index: 200; overflow: hidden;
+    }
+    .dropdown-menu.show { display: block; }
+    .dropdown-item {
+      padding: 0.75rem 1rem; cursor: pointer; font-size: 0.85rem;
+      display: flex; align-items: center; gap: 0.5rem; transition: background 0.15s ease;
+    }
+    .dropdown-item:hover { background: var(--bg-card-hover); }
+    .dropdown-divider { height: 1px; background: var(--border); margin: 0.25rem 0; }
+    .main { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+    .tabs {
+      display: flex; gap: 0.25rem; margin-bottom: 1.5rem;
+      background: var(--bg-card); padding: 0.25rem; border-radius: 8px; width: fit-content;
+      flex-wrap: wrap;
+    }
+    .tab {
+      padding: 0.6rem 1.25rem; border-radius: 6px; font-size: 0.85rem; font-weight: 500;
+      cursor: pointer; transition: all 0.2s ease; color: var(--text-secondary);
+      background: transparent; border: none;
+    }
+    .tab:hover { color: var(--text-primary); }
+    .tab.active { background: var(--accent-blue); color: white; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .kpi-card {
+      background: var(--bg-card); border-radius: 10px; padding: 1.25rem;
+      text-align: center; transition: transform 0.2s ease;
+    }
+    .kpi-card:hover { transform: translateY(-2px); }
+    .kpi-value { font-size: 2.5rem; font-weight: 700; font-family: var(--font-mono); line-height: 1; }
+    .kpi-value.complete { color: var(--accent-green); }
+    .kpi-value.progress { color: var(--accent-yellow); }
+    .kpi-value.pending { color: var(--text-muted); }
+    .kpi-value.total { color: var(--accent-blue); }
+    .kpi-value.budget { color: var(--accent-orange); }
+    .kpi-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-top: 0.4rem; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .section-header h2 {
+      font-size: 1.25rem; font-weight: 600; border-left: 4px solid var(--accent-blue);
+      padding-left: 0.75rem; display: flex; align-items: center; gap: 0.75rem;
+    }
+    .badge { background: var(--bg-card); color: var(--text-secondary); padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-family: var(--font-mono); }
+    .phases-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+    .phase-card {
+      background: var(--bg-card); border-radius: 8px; padding: 0.875rem 1rem;
+      display: grid; grid-template-columns: 24px 80px 1fr 120px 180px 100px 32px;
+      align-items: center; gap: 1rem; transition: background 0.2s ease;
+    }
+    .phase-card:hover { background: var(--bg-card-hover); }
+    .phase-label { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; }
+    .phase-name input {
+      background: transparent; border: none; color: var(--text-primary);
+      font-family: var(--font-display); font-size: 0.9rem; width: 100%; padding: 0.2rem 0;
+      border-bottom: 1px solid transparent;
+    }
+    .phase-name input:hover { border-bottom-color: var(--border); }
+    .phase-name input:focus { outline: none; border-bottom-color: var(--accent-blue); }
+    .progress-control { display: flex; align-items: center; gap: 0.5rem; }
+    .progress-slider {
+      flex: 1; -webkit-appearance: none; height: 6px; border-radius: 3px;
+      background: var(--bg-deep); cursor: pointer;
+    }
+    .progress-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent-blue); cursor: pointer; transition: transform 0.15s ease;
+    }
+    .progress-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+    .progress-value { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary); min-width: 40px; text-align: right; }
+    .status-select {
+      padding: 0.35rem 0.6rem; border-radius: 5px; font-family: var(--font-display);
+      font-size: 0.75rem; font-weight: 600; cursor: pointer; border: none;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .status-select.complete { background: var(--accent-green); color: var(--bg-deep); }
+    .status-select.progress { background: var(--accent-yellow); color: var(--bg-deep); }
+    .status-select.pending { background: var(--text-muted); color: var(--text-primary); }
+    .status-select option { background: var(--bg-card); color: var(--text-primary); }
+    .deliveries-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+    .delivery-card {
+      background: var(--bg-card); border-radius: 10px; padding: 1.25rem;
+      border-top: 4px solid var(--accent-blue); transition: transform 0.2s ease;
+    }
+    .delivery-card:hover { transform: translateY(-2px); }
+    .delivery-date-label { font-size: 0.65rem; color: var(--accent-blue); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 0.25rem; }
+    .delivery-date-input {
+      background: transparent; border: none; color: var(--text-primary);
+      font-family: var(--font-mono); font-size: 1.25rem; font-weight: 600;
+      width: 100%; padding: 0.2rem 0; cursor: pointer;
+    }
+    .delivery-date-input:focus { outline: none; }
+    .delivery-divider { height: 1px; background: var(--border); margin: 0.75rem 0; }
+    .delivery-title input, .delivery-dest input {
+      background: transparent; border: none; color: var(--text-primary);
+      font-family: var(--font-display); width: 100%; padding: 0.2rem 0;
+      border-bottom: 1px solid transparent;
+    }
+    .delivery-title input { font-size: 0.95rem; font-weight: 600; }
+    .delivery-dest input { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; }
+    .delivery-title input:focus, .delivery-dest input:focus { outline: none; border-bottom-color: var(--accent-blue); }
+    .delivery-countdown {
+      margin-top: 0.75rem; padding: 0.4rem 0.6rem; background: var(--bg-deep);
+      border-radius: 5px; font-family: var(--font-mono); font-size: 0.75rem;
+      color: var(--text-secondary); text-align: center;
+    }
+    .delivery-countdown.urgent { background: rgba(230, 57, 70, 0.2); color: var(--accent-red); }
+    .delivery-countdown.soon { background: rgba(255, 183, 3, 0.2); color: var(--accent-yellow); }
+    .notes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+    .notes-card { background: var(--bg-card); border-radius: 10px; padding: 1rem; }
+    .notes-card h3 { font-size: 0.75rem; font-weight: 600; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
+    .notes-card:nth-child(2) h3 { color: var(--accent-yellow); }
+    .notes-card:nth-child(3) h3 { color: var(--accent-green); }
+    .notes-card textarea {
+      width: 100%; height: 100px; background: var(--bg-deep); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-family: var(--font-display);
+      font-size: 0.85rem; padding: 0.6rem; resize: none; line-height: 1.5;
+    }
+    .notes-card textarea:focus { outline: none; border-color: var(--accent-blue); }
+    .add-btn {
+      width: 100%; padding: 0.6rem; background: transparent; border: 2px dashed var(--border);
+      border-radius: 8px; color: var(--text-secondary); font-family: var(--font-display);
+      font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease;
+    }
+    .add-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: rgba(0, 168, 232, 0.1); }
+    .delete-btn {
+      opacity: 0; background: transparent; border: none; color: var(--accent-red);
+      cursor: pointer; padding: 0.25rem; font-size: 1rem; transition: opacity 0.2s ease;
+    }
+    .phase-card:hover .delete-btn, .delivery-card:hover .delete-btn { opacity: 1; }
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center; z-index: 300;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--bg-surface); border-radius: 12px; padding: 1.5rem;
+      width: 90%; max-width: 600px; border: 1px solid var(--border); max-height: 90vh; overflow-y: auto;
+    }
+    .modal.modal-lg { max-width: 900px; }
+    .modal.modal-xl { max-width: 1100px; }
+    .modal h3 { font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem; }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-family: var(--font-display);
+      font-size: 0.9rem; padding: 0.6rem;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent-blue); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    .projects-list { max-height: 300px; overflow-y: auto; margin-bottom: 1rem; }
+    .project-item {
+      display: flex; justify-content: space-between; align-items: center; padding: 0.75rem;
+      background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;
+      cursor: pointer; transition: background 0.15s ease;
+    }
+    .project-item:hover { background: var(--bg-card-hover); }
+    .project-item-info h4 { font-size: 0.9rem; margin-bottom: 0.2rem; }
+    .project-item-info span { font-size: 0.75rem; color: var(--text-secondary); }
+    .project-item-actions { display: flex; gap: 0.5rem; }
+    .project-item-actions button {
+      background: transparent; border: none; color: var(--text-secondary);
+      cursor: pointer; padding: 0.25rem; font-size: 0.9rem;
+    }
+    .project-item-actions button:hover { color: var(--accent-red); }
+    body.presentation-mode .header-actions, body.presentation-mode .tabs,
+    body.presentation-mode .add-btn, body.presentation-mode .delete-btn { display: none; }
+    body.presentation-mode .phase-name input, body.presentation-mode .delivery-title input,
+    body.presentation-mode .delivery-dest input, body.presentation-mode .delivery-date-input,
+    body.presentation-mode .progress-slider, body.presentation-mode .status-select,
+    body.presentation-mode .notes-card textarea { pointer-events: none; }
+    body.presentation-mode .main { max-width: 1600px; }
+    body.presentation-mode .kpi-value { font-size: 3.5rem; }
+    .exit-presentation { display: none; position: fixed; top: 1rem; right: 1rem; z-index: 400; }
+    body.presentation-mode .exit-presentation { display: block; }
+    @media (max-width: 1200px) {
+      .phase-card { grid-template-columns: 24px 60px 1fr 100px 100px 32px; }
+      .phase-card .progress-control { display: none; }
+    }
+    @media (max-width: 1000px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .phase-card { grid-template-columns: 24px 1fr 100px 32px; }
+    }
+    @media (max-width: 600px) {
+      .header { flex-direction: column; gap: 0.75rem; padding: 0.75rem; }
+      .project-selector { width: 100%; justify-content: center; }
+      .header-actions { flex-wrap: wrap; justify-content: center; }
+      .main { padding: 1rem; }
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .phase-card, .delivery-card, .kpi-card, .notes-card { animation: fadeIn 0.3s ease forwards; }
+    .empty-state { text-align: center; padding: 3rem 2rem; color: var(--text-secondary); }
+    .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+    .empty-state h3 { font-size: 1.1rem; color: var(--text-primary); margin-bottom: 0.5rem; }
+    .empty-state p { font-size: 0.85rem; margin-bottom: 1rem; }
+    [data-tooltip] { position: relative; }
+    [data-tooltip]::after {
+      content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%;
+      transform: translateX(-50%); padding: 0.4rem 0.6rem; background: var(--bg-deep);
+      color: var(--text-primary); font-size: 0.7rem; font-weight: 400; white-space: nowrap;
+      border-radius: 4px; border: 1px solid var(--border); opacity: 0; visibility: hidden;
+      transition: opacity 0.2s ease; z-index: 500; pointer-events: none; margin-bottom: 0.5rem;
+    }
+    [data-tooltip]:hover::after { opacity: 1; visibility: visible; }
+    .save-indicator {
+      display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem;
+      color: var(--text-secondary); padding: 0.4rem 0.75rem; background: var(--bg-card);
+      border-radius: 6px; transition: all 0.3s ease;
+    }
+    .save-indicator.saving { color: var(--accent-yellow); }
+    .save-indicator.saved { color: var(--accent-green); }
+    .save-indicator-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); transition: background 0.3s ease; }
+    .save-indicator.saving .save-indicator-dot { background: var(--accent-yellow); animation: pulse 1s infinite; }
+    .save-indicator.saved .save-indicator-dot { background: var(--accent-green); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 1000; display: flex; flex-direction: column; gap: 0.5rem; }
+    .toast {
+      padding: 0.75rem 1rem; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text-primary); font-size: 0.85rem;
+      display: flex; align-items: center; gap: 0.5rem; animation: slideIn 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .toast.success { border-left: 3px solid var(--accent-green); }
+    .toast.error { border-left: 3px solid var(--accent-red); }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+    .confirm-modal { background: var(--bg-surface); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 400px; border: 1px solid var(--border); text-align: center; }
+    .confirm-modal h3 { margin-bottom: 0.75rem; color: var(--text-primary); }
+    .confirm-modal p { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.25rem; }
+    .confirm-modal .item-name { color: var(--accent-blue); font-weight: 600; }
+    .confirm-modal-actions { display: flex; gap: 0.75rem; justify-content: center; }
+    body.light-theme {
+      --bg-deep: #F5F7FA; --bg-surface: #FFFFFF; --bg-card: #FFFFFF;
+      --bg-card-hover: #F0F4F8; --text-primary: #1A202C; --text-secondary: #4A5568;
+      --text-muted: #A0AEC0; --border: #E2E8F0;
+    }
+    body.light-theme .header { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    body.light-theme .phase-card, body.light-theme .delivery-card,
+    body.light-theme .kpi-card, body.light-theme .notes-card { box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .theme-toggle {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.4rem 0.6rem; cursor: pointer; font-size: 1rem; transition: all 0.2s ease;
+    }
+    .theme-toggle:hover { background: var(--bg-card-hover); }
+    .undo-redo-controls { display: flex; gap: 0.25rem; }
+    .undo-redo-btn {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px;
+      padding: 0.35rem 0.5rem; cursor: pointer; color: var(--text-secondary);
+      font-size: 0.85rem; transition: all 0.2s ease;
+    }
+    .undo-redo-btn:hover:not(:disabled) { background: var(--bg-card-hover); color: var(--text-primary); }
+    .undo-redo-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .alerts-panel {
+      background: var(--bg-card); border-radius: 8px; padding: 1rem;
+      margin-bottom: 1rem; border-left: 4px solid var(--accent-yellow);
+    }
+    .alerts-panel h3 { font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    .alert-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem;
+    }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-badge {
+      display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem;
+      border-radius: 4px; font-size: 0.65rem; font-weight: 600;
+    }
+    .alert-overdue { background: rgba(230, 57, 70, 0.3); color: var(--accent-red); }
+    .alert-today { background: rgba(255, 183, 3, 0.3); color: var(--accent-yellow); }
+    .alert-soon { background: rgba(0, 168, 232, 0.2); color: var(--accent-blue); }
+    .category-select {
+      padding: 0.4rem 0.6rem; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-size: 0.8rem; cursor: pointer;
+    }
+
+    /* ===== Team & Collaboration Styles ===== */
+    .assignees-container { display: flex; align-items: center; gap: 0.25rem; }
+    .avatar {
+      width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-size: 0.65rem; font-weight: 600; color: white;
+      cursor: pointer; transition: transform 0.15s ease; border: 2px solid var(--bg-card);
+      margin-left: -8px; position: relative;
+    }
+    .avatar:first-child { margin-left: 0; }
+    .avatar:hover { transform: scale(1.15); z-index: 5; }
+    .avatar-add {
+      background: var(--bg-deep); border: 2px dashed var(--border); color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .avatar-add:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+    .assignee-dropdown {
+      position: absolute; top: 100%; left: 0; margin-top: 0.5rem;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+      min-width: 200px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 300;
+      display: none; max-height: 250px; overflow-y: auto;
+    }
+    .assignee-dropdown.show { display: block; }
+    .assignee-option {
+      display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem;
+      cursor: pointer; transition: background 0.15s ease; font-size: 0.85rem;
+    }
+    .assignee-option:hover { background: var(--bg-card-hover); }
+    .assignee-option.selected { background: rgba(0, 168, 232, 0.15); }
+    .assignee-option .avatar { margin-left: 0; width: 24px; height: 24px; font-size: 0.6rem; cursor: default; }
+    .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+    .team-card {
+      background: var(--bg-card); border-radius: 8px; padding: 1rem;
+      display: flex; align-items: center; gap: 1rem; transition: background 0.2s ease;
+    }
+    .team-card:hover { background: var(--bg-card-hover); }
+    .team-card .avatar { width: 48px; height: 48px; font-size: 1rem; margin-left: 0; cursor: default; }
+    .team-card-info { flex: 1; }
+    .team-card-info h4 { font-size: 0.95rem; margin-bottom: 0.15rem; }
+    .team-card-info span { font-size: 0.8rem; color: var(--text-secondary); }
+    .team-card-actions { display: flex; gap: 0.5rem; }
+    .activity-list { max-height: 400px; overflow-y: auto; }
+    .activity-item {
+      display: flex; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border);
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-icon {
+      width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-size: 0.9rem; flex-shrink: 0;
+    }
+    .activity-icon.add { background: rgba(0, 210, 106, 0.2); color: var(--accent-green); }
+    .activity-icon.edit { background: rgba(0, 168, 232, 0.2); color: var(--accent-blue); }
+    .activity-icon.delete { background: rgba(230, 57, 70, 0.2); color: var(--accent-red); }
+    .activity-icon.comment { background: rgba(157, 78, 221, 0.2); color: var(--accent-purple); }
+    .activity-icon.assign { background: rgba(255, 183, 3, 0.2); color: var(--accent-yellow); }
+    .activity-icon.budget { background: rgba(251, 133, 0, 0.2); color: var(--accent-orange); }
+    .activity-content { flex: 1; }
+    .activity-text { font-size: 0.85rem; color: var(--text-primary); }
+    .activity-text strong { color: var(--accent-blue); }
+    .activity-time { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.15rem; }
+
+    /* ===== Phase 6: Budget & Resources Styles ===== */
+    
+    /* Budget Tab */
+    .budget-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .budget-summary-card {
+      background: var(--bg-card); border-radius: 10px; padding: 1.25rem;
+      border-left: 4px solid var(--accent-orange);
+    }
+    .budget-summary-card.time { border-left-color: var(--accent-purple); }
+    .budget-summary-card.variance { border-left-color: var(--accent-green); }
+    .budget-summary-card.variance.over { border-left-color: var(--accent-red); }
+    .budget-summary-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .budget-summary-value { font-size: 1.75rem; font-weight: 700; font-family: var(--font-mono); margin: 0.25rem 0; }
+    .budget-summary-subtext { font-size: 0.75rem; color: var(--text-muted); }
+
+    /* Budget Settings */
+    .budget-settings {
+      background: var(--bg-card); border-radius: 10px; padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;
+    }
+    .budget-settings-item { display: flex; align-items: center; gap: 0.5rem; }
+    .budget-settings-item label { font-size: 0.8rem; color: var(--text-secondary); }
+    .budget-settings-item input, .budget-settings-item select {
+      background: var(--bg-deep); border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text-primary); font-family: var(--font-mono); font-size: 0.85rem;
+      padding: 0.4rem 0.6rem; width: 120px;
+    }
+    .budget-settings-item input:focus, .budget-settings-item select:focus { outline: none; border-color: var(--accent-blue); }
+
+    /* Phase Budget Card */
+    .phase-budget-card {
+      background: var(--bg-card); border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem;
+      display: grid; grid-template-columns: 200px 1fr 150px 100px; gap: 1rem; align-items: center;
+    }
+    .phase-budget-card:hover { background: var(--bg-card-hover); }
+    .phase-budget-name { font-weight: 600; font-size: 0.9rem; }
+    .phase-budget-name span { font-size: 0.75rem; color: var(--text-secondary); display: block; margin-top: 0.15rem; }
+    .phase-budget-bars { display: flex; flex-direction: column; gap: 0.5rem; }
+    .budget-bar-container { display: flex; align-items: center; gap: 0.5rem; }
+    .budget-bar-label { font-size: 0.65rem; color: var(--text-muted); width: 50px; text-transform: uppercase; }
+    .budget-bar-track { flex: 1; height: 8px; background: var(--bg-deep); border-radius: 4px; overflow: hidden; position: relative; }
+    .budget-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+    .budget-bar-fill.estimated { background: var(--accent-blue); opacity: 0.4; }
+    .budget-bar-fill.actual { background: var(--accent-orange); }
+    .budget-bar-fill.actual.over { background: var(--accent-red); }
+    .budget-bar-value { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); min-width: 70px; text-align: right; }
+    .phase-budget-totals { text-align: right; }
+    .phase-budget-totals .total { font-family: var(--font-mono); font-size: 1rem; font-weight: 600; }
+    .phase-budget-totals .variance { font-size: 0.75rem; margin-top: 0.15rem; }
+    .phase-budget-totals .variance.under { color: var(--accent-green); }
+    .phase-budget-totals .variance.over { color: var(--accent-red); }
+
+    /* Time Entry Table */
+    .time-entries-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 1rem; }
+    .time-entries-table th, .time-entries-table td {
+      padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border);
+    }
+    .time-entries-table th { color: var(--text-secondary); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+    .time-entries-table tr:hover td { background: var(--bg-card-hover); }
+    .time-entries-table .hours { font-family: var(--font-mono); color: var(--accent-purple); }
+    .time-entries-table .cost { font-family: var(--font-mono); color: var(--accent-orange); }
+
+    /* Resource List */
+    .resource-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+    .resource-item {
+      display: grid; grid-template-columns: 1fr 80px 100px 100px 32px;
+      gap: 1rem; align-items: center; padding: 0.75rem; background: var(--bg-card);
+      border-radius: 6px;
+    }
+    .resource-item:hover { background: var(--bg-card-hover); }
+    .resource-item input {
+      background: transparent; border: none; color: var(--text-primary);
+      font-family: var(--font-display); font-size: 0.85rem; padding: 0.25rem;
+      border-bottom: 1px solid transparent;
+    }
+    .resource-item input:focus { outline: none; border-bottom-color: var(--accent-blue); }
+    .resource-item input.mono { font-family: var(--font-mono); text-align: right; }
+    .resource-status-select {
+      padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.7rem;
+      border: none; cursor: pointer; font-weight: 600;
+    }
+    .resource-status-select.needed { background: var(--accent-yellow); color: var(--bg-deep); }
+    .resource-status-select.ordered { background: var(--accent-blue); color: white; }
+    .resource-status-select.received { background: var(--accent-green); color: var(--bg-deep); }
+
+    /* Budget Charts */
+    .budget-charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
+    .budget-chart-card { background: var(--bg-card); border-radius: 10px; padding: 1.25rem; }
+    .budget-chart-card h4 { font-size: 0.9rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+
+    /* Invoice Styles */
+    .invoice-preview {
+      background: white; color: #1a1a1a; border-radius: 8px; padding: 2rem;
+      max-height: 500px; overflow-y: auto;
+    }
+    .invoice-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 2rem; border-bottom: 2px solid #333; padding-bottom: 1rem; }
+    .invoice-logo { font-size: 1.5rem; font-weight: 700; color: #00A8E8; }
+    .invoice-title { text-align: right; }
+    .invoice-title h2 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    .invoice-title .invoice-number { color: #666; font-size: 0.9rem; }
+    .invoice-details { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
+    .invoice-details h4 { font-size: 0.75rem; color: #666; text-transform: uppercase; margin-bottom: 0.5rem; }
+    .invoice-details p { margin: 0.25rem 0; font-size: 0.9rem; }
+    .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+    .invoice-table th { background: #f5f5f5; padding: 0.75rem; text-align: left; font-size: 0.75rem; text-transform: uppercase; border-bottom: 2px solid #ddd; }
+    .invoice-table td { padding: 0.75rem; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+    .invoice-table .amount { text-align: right; font-family: var(--font-mono); }
+    .invoice-totals { display: flex; justify-content: flex-end; }
+    .invoice-totals-table { width: 250px; }
+    .invoice-totals-table tr td { padding: 0.5rem; }
+    .invoice-totals-table tr td:last-child { text-align: right; font-family: var(--font-mono); }
+    .invoice-totals-table .total-row { font-weight: 700; font-size: 1.1rem; border-top: 2px solid #333; }
+    .invoice-footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #666; text-align: center; }
+
+    /* Print Styles for Invoice */
+    @media print {
+      body { background: white; }
+      .modal-overlay { position: static; background: none; display: block !important; }
+      .modal { max-width: none; border: none; box-shadow: none; }
+      .modal-actions, .modal h3 { display: none !important; }
+      .invoice-preview { max-height: none; }
+    }
+
+    /* ===== Print Stylesheet for Project Reports ===== */
+    @media print {
+      /* Reset for print */
+      *, *::before, *::after { 
+        box-shadow: none !important; 
+        text-shadow: none !important;
+      }
+      
+      /* Hide non-printable elements */
+      .header, .tabs, .exit-presentation, .toast-container,
+      .add-btn, .delete-btn, .btn, .dropdown,
+      .undo-redo-controls, .save-indicator, .theme-toggle,
+      .modal-overlay:not(.print-active), .alerts-panel,
+      input[type="range"], select, .assignees-container,
+      .progress-slider, .status-select { 
+        display: none !important; 
+      }
+      
+      /* Page setup */
+      @page {
+        size: A4;
+        margin: 1.5cm;
+      }
+      
+      /* Body reset for print */
+      body.print-mode {
+        background: white !important;
+        color: #000 !important;
+        font-size: 11pt;
+        line-height: 1.4;
+      }
+      
+      body.print-mode .main {
+        max-width: none;
+        padding: 0;
+        margin: 0;
+      }
+      
+      /* Print header */
+      .print-header {
+        display: block !important;
+        border-bottom: 2px solid #333;
+        padding-bottom: 1rem;
+        margin-bottom: 1.5rem;
+      }
+      .print-header h1 {
+        font-size: 24pt;
+        margin: 0;
+        color: #000;
+      }
+      .print-header .print-meta {
+        font-size: 10pt;
+        color: #666;
+        margin-top: 0.5rem;
+      }
+      
+      /* KPI cards for print */
+      body.print-mode .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+      body.print-mode .kpi-card {
+        background: #f5f5f5 !important;
+        border: 1px solid #ddd;
+        padding: 0.75rem;
+        text-align: center;
+        border-radius: 4px;
+      }
+      body.print-mode .kpi-value {
+        font-size: 18pt;
+        font-weight: bold;
+        color: #000 !important;
+      }
+      body.print-mode .kpi-label {
+        font-size: 8pt;
+        color: #666;
+        text-transform: uppercase;
+      }
+      
+      /* Phase cards for print */
+      body.print-mode .phase-card {
+        display: grid;
+        grid-template-columns: 40px 1fr 80px 100px;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        border-bottom: 1px solid #ddd;
+        background: white !important;
+        page-break-inside: avoid;
+      }
+      body.print-mode .phase-card input {
+        border: none;
+        background: none;
+        color: #000;
+        font-size: 10pt;
+      }
+      body.print-mode .phase-label {
+        color: #666;
+        font-size: 9pt;
+      }
+      body.print-mode .progress-value {
+        color: #000;
+        font-weight: bold;
+      }
+      
+      /* Delivery cards for print */
+      body.print-mode .deliveries-grid {
+        display: block;
+      }
+      body.print-mode .delivery-card {
+        display: block;
+        border: 1px solid #ddd;
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        page-break-inside: avoid;
+        background: white !important;
+        border-top: 3px solid #333 !important;
+      }
+      body.print-mode .delivery-card input {
+        border: none;
+        background: none;
+        color: #000;
+      }
+      body.print-mode .delivery-date-input {
+        font-size: 12pt;
+        font-weight: bold;
+      }
+      body.print-mode .delivery-countdown {
+        background: #f5f5f5 !important;
+        color: #333 !important;
+      }
+      
+      /* Section headers for print */
+      body.print-mode .section-header h2 {
+        font-size: 14pt;
+        border-left: 3px solid #333;
+        padding-left: 0.5rem;
+        margin-bottom: 0.75rem;
+        color: #000;
+        page-break-after: avoid;
+      }
+      body.print-mode .badge {
+        background: #eee;
+        color: #333;
+      }
+      
+      /* Notes for print */
+      body.print-mode .notes-grid {
+        display: block;
+      }
+      body.print-mode .notes-card {
+        background: white !important;
+        border: 1px solid #ddd;
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+        page-break-inside: avoid;
+      }
+      body.print-mode .notes-card h3 {
+        color: #333 !important;
+        font-size: 10pt;
+        margin-bottom: 0.5rem;
+      }
+      body.print-mode .notes-card textarea {
+        border: none;
+        background: none;
+        color: #000;
+        font-size: 10pt;
+        height: auto;
+        min-height: 50px;
+      }
+      
+      /* Budget summary for print */
+      body.print-mode .budget-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      body.print-mode .budget-summary-card {
+        background: #f9f9f9 !important;
+        border: 1px solid #ddd;
+        border-left: 3px solid #333;
+        padding: 0.5rem;
+      }
+      body.print-mode .budget-summary-value {
+        font-size: 14pt;
+        color: #000 !important;
+      }
+      
+      /* Team grid for print */
+      body.print-mode .team-grid {
+        display: block;
+      }
+      body.print-mode .team-card {
+        display: inline-block;
+        width: 48%;
+        margin-bottom: 0.5rem;
+        margin-right: 1%;
+        background: #f9f9f9 !important;
+        border: 1px solid #ddd;
+        padding: 0.5rem;
+        vertical-align: top;
+      }
+      body.print-mode .avatar {
+        width: 30px;
+        height: 30px;
+        border: 1px solid #333 !important;
+      }
+      
+      /* Page breaks */
+      body.print-mode section {
+        page-break-inside: avoid;
+      }
+      body.print-mode .section-header {
+        page-break-after: avoid;
+      }
+      
+      /* Print footer */
+      .print-footer {
+        display: block !important;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 8pt;
+        color: #999;
+        padding: 0.5rem;
+        border-top: 1px solid #ddd;
+      }
+    }
+    
+    /* Hide print elements when not printing */
+    .print-header, .print-footer {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo">
+      <div class="logo-mark">PRJ</div>
+      <h1>PRJ-<span>MGMT</span> Tool</h1>
+    </div>
+    <div class="project-selector">
+      <label>Project:</label>
+      <input type="text" class="project-name-input" id="projectName" value="New Project" onchange="updateProjectName(this.value)">
+      <select class="category-select" id="projectCategory" onchange="updateProjectCategory(this.value)">
+        <option value="none">Category</option>
+        <option value="work">Work</option>
+        <option value="personal">Personal</option>
+        <option value="client">Client</option>
+      </select>
+    </div>
+    <div class="header-actions">
+      <div class="undo-redo-controls">
+        <button class="undo-redo-btn" onclick="undo()" id="undoBtn" disabled data-tooltip="Ctrl+Z">&larr;</button>
+        <button class="undo-redo-btn" onclick="redo()" id="redoBtn" disabled data-tooltip="Ctrl+Y">&rarr;</button>
+      </div>
+      <div class="save-indicator" id="saveIndicator">
+        <span class="save-indicator-dot"></span>
+        <span id="saveIndicatorText">Saved</span>
+      </div>
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle" data-tooltip="Toggle theme">&#9789;</button>
+      <button class="btn btn-secondary" onclick="showProjectsModal()" data-tooltip="Manage projects">Projects</button>
+      <div class="dropdown">
+        <button class="btn btn-secondary" onclick="toggleDropdown('importDropdown')">Import &#9662;</button>
+        <div class="dropdown-menu" id="importDropdown">
+          <div class="dropdown-item" onclick="document.getElementById('importJson').click(); closeDropdowns();">Import JSON</div>
+          <div class="dropdown-item" onclick="document.getElementById('importCsv').click(); closeDropdowns();">Import CSV (Phases)</div>
+          <div class="dropdown-item" onclick="document.getElementById('importDeliveriesCsv').click(); closeDropdowns();">Import CSV (Deliveries)</div>
+        </div>
+      </div>
+      <div class="dropdown">
+        <button class="btn btn-secondary" onclick="toggleDropdown('exportDropdown')">Export &#9662;</button>
+        <div class="dropdown-menu" id="exportDropdown">
+          <div class="dropdown-item" onclick="exportPDF(); closeDropdowns();">Export PDF Report</div>
+          <div class="dropdown-item" onclick="printProject(); closeDropdowns();">Print Project</div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" onclick="exportJSON(); closeDropdowns();">Export JSON</div>
+          <div class="dropdown-item" onclick="exportCSV('phases'); closeDropdowns();">Export Phases CSV</div>
+          <div class="dropdown-item" onclick="exportCSV('deliveries'); closeDropdowns();">Export Deliveries CSV</div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" onclick="exportBudgetReport(); closeDropdowns();">Export Budget Report</div>
+        </div>
+      </div>
+      <button class="btn btn-secondary" onclick="showActivityModal()" data-tooltip="Activity log">Activity</button>
+      <button class="btn btn-success" onclick="saveProject()" data-tooltip="Ctrl+S">Save</button>
+      <button class="btn btn-primary" onclick="togglePresentationMode()" data-tooltip="Ctrl+P">Present</button>
+    </div>
+    <input type="file" id="importJson" accept=".json" style="display:none" onchange="importJSON(event)">
+    <input type="file" id="importCsv" accept=".csv" style="display:none" onchange="importCSV(event, 'phases')">
+    <input type="file" id="importDeliveriesCsv" accept=".csv" style="display:none" onchange="importCSV(event, 'deliveries')">
+  </header>
+  <button class="btn btn-secondary exit-presentation" onclick="togglePresentationMode()">X Exit</button>
+  <main class="main">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
+      <button class="tab" onclick="switchTab('phases')">Phases</button>
+      <button class="tab" onclick="switchTab('deliveries')">Deliveries</button>
+      <button class="tab" onclick="switchTab('budget')">$ Budget</button>
+      <button class="tab" onclick="switchTab('time')">Time</button>
+      <button class="tab" onclick="switchTab('resources')">Resources</button>
+      <button class="tab" onclick="switchTab('team')">Team</button>
+      <button class="tab" onclick="switchTab('notes')">Notes</button>
+    </div>
+    
+    <!-- Dashboard Tab -->
+    <div class="tab-content active" id="tab-dashboard">
+      <div class="alerts-panel" id="alertsPanel" style="display: none;">
+        <h3>Upcoming Deadlines</h3>
+        <div id="alertsList"></div>
+      </div>
+      <div class="kpi-grid" id="kpiGrid"></div>
+      <section style="margin-bottom: 1.5rem;">
+        <div class="section-header">
+          <h2>Phases <span class="badge" id="phaseCountDash">0</span></h2>
+        </div>
+        <div class="phases-list" id="phasesListDash"></div>
+      </section>
+      <section>
+        <div class="section-header">
+          <h2>Upcoming Deliveries <span class="badge" id="deliveryCountDash">0</span></h2>
+        </div>
+        <div class="deliveries-grid" id="deliveriesGridDash"></div>
+      </section>
+    </div>
+    
+    <!-- Phases Tab -->
+    <div class="tab-content" id="tab-phases">
+      <div class="section-header">
+        <h2>Project Phases <span class="badge" id="phaseCount">0</span></h2>
+      </div>
+      <div class="phases-list" id="phasesList"></div>
+      <button class="add-btn" onclick="addPhase()">+ Add Phase</button>
+    </div>
+    
+    <!-- Deliveries Tab -->
+    <div class="tab-content" id="tab-deliveries">
+      <div class="section-header">
+        <h2>Deliveries <span class="badge" id="deliveryCount">0</span></h2>
+      </div>
+      <div class="deliveries-grid" id="deliveriesGrid"></div>
+      <button class="add-btn" onclick="addDelivery()">+ Add Delivery</button>
+    </div>
+    
+    <!-- Budget Tab -->
+    <div class="tab-content" id="tab-budget">
+      <div class="section-header">
+        <h2>$ Budget Tracking</h2>
+        <button class="btn btn-warning" onclick="showInvoiceModal()">Generate Invoice</button>
+      </div>
+      <div class="budget-settings">
+        <div class="budget-settings-item">
+          <label>Currency:</label>
+          <select id="budgetCurrency" onchange="updateBudgetSettings()">
+            <option value="USD">USD ($)</option>
+            <option value="EUR">EUR (&euro;)</option>
+            <option value="GBP">GBP (&pound;)</option>
+            <option value="JPY">JPY (&yen;)</option>
+            <option value="CAD">CAD ($)</option>
+            <option value="AUD">AUD ($)</option>
+          </select>
+        </div>
+        <div class="budget-settings-item">
+          <label>Hourly Rate:</label>
+          <input type="number" id="hourlyRate" placeholder="0.00" min="0" step="0.01" onchange="updateBudgetSettings()">
+        </div>
+        <div class="budget-settings-item">
+          <label>Tax Rate (%):</label>
+          <input type="number" id="taxRate" placeholder="0" min="0" max="100" step="0.1" onchange="updateBudgetSettings()">
+        </div>
+      </div>
+      <div class="budget-summary-grid" id="budgetSummaryGrid"></div>
+      <div class="section-header" style="margin-top: 1.5rem;">
+        <h2>Phase Budgets</h2>
+      </div>
+      <div id="phaseBudgetsList"></div>
+      <div class="budget-charts-grid" id="budgetChartsGrid"></div>
+    </div>
+    
+    <!-- Time Tab -->
+    <div class="tab-content" id="tab-time">
+      <div class="section-header">
+        <h2>Time Tracking</h2>
+        <button class="btn btn-primary" onclick="showLogTimeModal()">+ Log Time</button>
+      </div>
+      <div class="budget-summary-grid" id="timeSummaryGrid"></div>
+      <div class="section-header" style="margin-top: 1.5rem;">
+        <h2>Time Entries</h2>
+      </div>
+      <div id="timeEntriesContainer"></div>
+    </div>
+    
+    <!-- Resources Tab -->
+    <div class="tab-content" id="tab-resources">
+      <div class="section-header">
+        <h2>Resource Allocation</h2>
+        <button class="btn btn-primary" onclick="showAddResourceModal()">+ Add Resource</button>
+      </div>
+      <div class="budget-summary-grid" id="resourceSummaryGrid"></div>
+      <div class="section-header" style="margin-top: 1.5rem;">
+        <h2>Resources by Phase</h2>
+      </div>
+      <div id="resourcesList"></div>
+    </div>
+    
+    <!-- Team Tab -->
+    <div class="tab-content" id="tab-team">
+      <div class="section-header">
+        <h2>Team Members <span class="badge" id="teamCount">0</span></h2>
+      </div>
+      <div class="team-grid" id="teamGrid"></div>
+      <button class="add-btn" onclick="showAddTeamMemberModal()">+ Add Team Member</button>
+    </div>
+    
+    <!-- Notes Tab -->
+    <div class="tab-content" id="tab-notes">
+      <div class="section-header">
+        <h2>Project Notes</h2>
+      </div>
+      <div class="notes-grid">
+        <div class="notes-card">
+          <h3>Current Focus</h3>
+          <textarea id="notesFocus" placeholder="Enter current focus items..." onchange="updateNotes()"></textarea>
+        </div>
+        <div class="notes-card">
+          <h3>Upcoming Milestones</h3>
+          <textarea id="notesMilestones" placeholder="Enter upcoming milestones..." onchange="updateNotes()"></textarea>
+        </div>
+        <div class="notes-card">
+          <h3>Future Plans</h3>
+          <textarea id="notesFuture" placeholder="Enter future plans..." onchange="updateNotes()"></textarea>
+        </div>
+      </div>
+    </div>
+  </main>
+  
+  <!-- Projects Modal -->
+  <div class="modal-overlay" id="projectsModal">
+    <div class="modal">
+      <h3>Saved Projects</h3>
+      <div class="projects-list" id="projectsList"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="newProject()">+ New Project</button>
+        <button class="btn btn-secondary" onclick="closeModal('projectsModal')">Close</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Confirm Modal -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="confirm-modal">
+      <h3 id="confirmTitle">Confirm Action</h3>
+      <p id="confirmMessage">Are you sure?</p>
+      <div class="confirm-modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('confirmModal')">Cancel</button>
+        <button class="btn btn-danger" id="confirmBtn" onclick="executeConfirm()">Delete</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Add Team Member Modal -->
+  <div class="modal-overlay" id="teamMemberModal">
+    <div class="modal">
+      <h3 id="teamMemberModalTitle">Add Team Member</h3>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="teamMemberName" placeholder="Enter name">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="teamMemberEmail" placeholder="Enter email">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Role</label>
+          <input type="text" id="teamMemberRole" placeholder="Enter role">
+        </div>
+        <div class="form-group">
+          <label>Hourly Rate</label>
+          <input type="number" id="teamMemberRate" placeholder="0.00" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Avatar Color</label>
+        <input type="color" id="teamMemberColor" value="#00A8E8">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('teamMemberModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTeamMember()">Save</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Activity Log Modal -->
+  <div class="modal-overlay" id="activityModal">
+    <div class="modal modal-lg">
+      <h3>Activity Log</h3>
+      <div class="activity-list" id="activityList"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="clearActivityLog()">Clear Log</button>
+        <button class="btn btn-secondary" onclick="closeModal('activityModal')">Close</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Log Time Modal -->
+  <div class="modal-overlay" id="logTimeModal">
+    <div class="modal">
+      <h3>Log Time</h3>
+      <div class="form-group">
+        <label>Phase</label>
+        <select id="timePhaseSelect"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Hours</label>
+          <input type="number" id="timeHours" placeholder="0" min="0" step="0.25">
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="timeDate">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Team Member (optional)</label>
+        <select id="timeTeamMember">
+          <option value="">-- Select --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="timeDescription" rows="2" placeholder="What did you work on?"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('logTimeModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTimeEntry()">Log Time</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Add Resource Modal -->
+  <div class="modal-overlay" id="resourceModal">
+    <div class="modal">
+      <h3 id="resourceModalTitle">Add Resource</h3>
+      <div class="form-group">
+        <label>Phase</label>
+        <select id="resourcePhaseSelect"></select>
+      </div>
+      <div class="form-group">
+        <label>Resource Name</label>
+        <input type="text" id="resourceName" placeholder="e.g., Server Hosting, Design Software">
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Quantity</label>
+          <input type="number" id="resourceQty" placeholder="1" min="1" value="1">
+        </div>
+        <div class="form-group">
+          <label>Unit Cost</label>
+          <input type="number" id="resourceCost" placeholder="0.00" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="resourceStatus">
+            <option value="needed">Needed</option>
+            <option value="ordered">Ordered</option>
+            <option value="received">Received</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <input type="text" id="resourceNotes" placeholder="Additional notes">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('resourceModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveResource()">Save</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Phase Budget Modal -->
+  <div class="modal-overlay" id="phaseBudgetModal">
+    <div class="modal">
+      <h3>Edit Phase Budget - <span id="phaseBudgetName"></span></h3>
+      <input type="hidden" id="phaseBudgetId">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Estimated Cost</label>
+          <input type="number" id="phaseEstimatedCost" placeholder="0.00" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Actual Cost</label>
+          <input type="number" id="phaseActualCost" placeholder="0.00" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Estimated Hours</label>
+          <input type="number" id="phaseEstimatedHours" placeholder="0" min="0" step="0.5">
+        </div>
+        <div class="form-group">
+          <label>Budget Notes</label>
+          <input type="text" id="phaseBudgetNotes" placeholder="Optional notes">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('phaseBudgetModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="savePhaseBudget()">Save</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Invoice Modal -->
+  <div class="modal-overlay" id="invoiceModal">
+    <div class="modal modal-xl">
+      <h3>Invoice Preview</h3>
+      <div class="form-row" style="margin-bottom: 1rem;">
+        <div class="form-group">
+          <label>Client Name</label>
+          <input type="text" id="invoiceClientName" placeholder="Client or Company Name" onchange="renderInvoicePreview()">
+        </div>
+        <div class="form-group">
+          <label>Invoice Number</label>
+          <input type="text" id="invoiceNumber" onchange="renderInvoicePreview()">
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom: 1rem;">
+        <div class="form-group">
+          <label>Invoice Date</label>
+          <input type="date" id="invoiceDate" onchange="renderInvoicePreview()">
+        </div>
+        <div class="form-group">
+          <label>Due Date</label>
+          <input type="date" id="invoiceDueDate" onchange="renderInvoicePreview()">
+        </div>
+      </div>
+      <div class="invoice-preview" id="invoicePreview"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('invoiceModal')">Cancel</button>
+        <button class="btn btn-secondary" onclick="printInvoice()">Print</button>
+        <button class="btn btn-primary" onclick="downloadInvoice()">Download PDF</button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="toast-container" id="toastContainer"></div>
+  
+  <script>
+    // ===== STATE =====
+    let currentProject = {
+      id: generateId(),
+      name: "New Project",
+      created: new Date().toISOString(),
+      modified: new Date().toISOString(),
+      phases: [],
+      deliveries: [],
+      notes: { focus: "", milestones: "", future: "" },
+      team: [],
+      activity: [],
+      budgetSettings: {
+        currency: "USD",
+        hourlyRate: 0,
+        taxRate: 0
+      },
+      resources: []
+    };
+    let nextPhaseId = 1, nextDeliveryId = 1, nextTeamMemberId = 1, nextResourceId = 1, nextTimeEntryId = 1;
+    let autoSaveTimer = null, confirmCallback = null;
+    let historyStack = [], historyIndex = -1;
+    const MAX_HISTORY = 50;
+    let isDarkTheme = true;
+    let editingTeamMemberId = null;
+    let editingResourceId = null;
+    let currentUser = { id: 0, name: 'You', initials: 'Y', color: '#00A8E8' };
+
+    // ===== UTILITIES =====
+    function generateId() { return 'prj_' + Math.random().toString(36).substr(2, 9); }
+    function getDaysUntil(dateStr) {
+      const target = new Date(dateStr), today = new Date();
+      today.setHours(0, 0, 0, 0); target.setHours(0, 0, 0, 0);
+      return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+    }
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function formatDate(dateStr) {
+      return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    function formatDateFull(dateStr) {
+      return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    function getInitials(name) {
+      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+    function getRelativeTime(dateStr) {
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'Just now';
+      if (mins < 60) return mins + 'm ago';
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return hours + 'h ago';
+      const days = Math.floor(hours / 24);
+      if (days < 7) return days + 'd ago';
+      return formatDate(dateStr);
+    }
+    function getCurrencySymbol(currency) {
+      const symbols = { USD: '$', EUR: 'â‚¬', GBP: 'Â£', JPY: 'Â¥', CAD: 'C$', AUD: 'A$' };
+      return symbols[currency] || '$';
+    }
+    function formatCurrency(amount, currency) {
+      const sym = getCurrencySymbol(currency || currentProject.budgetSettings?.currency || 'USD');
+      return sym + (amount || 0).toFixed(2);
+    }
+
+    // ===== TOAST =====
+    function showToast(message, type) {
+      type = type || 'success';
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast ' + type;
+      toast.innerHTML = '<span>' + (type === 'success' ? '&#10003;' : '&#10007;') + '</span><span>' + message + '</span>';
+      container.appendChild(toast);
+      setTimeout(function() { toast.style.opacity = '0'; setTimeout(function() { toast.remove(); }, 300); }, 3000);
+    }
+
+    // ===== AUTO-SAVE =====
+    function triggerAutoSave() {
+      const indicator = document.getElementById('saveIndicator');
+      const text = document.getElementById('saveIndicatorText');
+      indicator.className = 'save-indicator saving';
+      text.textContent = 'Saving...';
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(function() {
+        autoSaveToStorage();
+        indicator.className = 'save-indicator saved';
+        text.textContent = 'Saved';
+      }, 2000);
+    }
+    function autoSaveToStorage() {
+      updateNotes();
+      currentProject.modified = new Date().toISOString();
+      var projects = getSavedProjects();
+      var idx = projects.findIndex(function(p) { return p.id === currentProject.id; });
+      if (idx >= 0) projects[idx] = currentProject;
+      else projects.push(currentProject);
+      localStorage.setItem('prj_mgmt_projects', JSON.stringify(projects));
+    }
+
+    // ===== HISTORY =====
+    function saveToHistory() {
+      if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(JSON.stringify(currentProject));
+      if (historyStack.length > MAX_HISTORY) historyStack.shift();
+      else historyIndex++;
+      updateUndoRedoButtons();
+    }
+    function undo() {
+      if (historyIndex > 0) {
+        historyIndex--;
+        currentProject = JSON.parse(historyStack[historyIndex]);
+        renderAll();
+        updateUndoRedoButtons();
+        showToast('Undone', 'success');
+        triggerAutoSave();
+      }
+    }
+    function redo() {
+      if (historyIndex < historyStack.length - 1) {
+        historyIndex++;
+        currentProject = JSON.parse(historyStack[historyIndex]);
+        renderAll();
+        updateUndoRedoButtons();
+        showToast('Redone', 'success');
+        triggerAutoSave();
+      }
+    }
+    function updateUndoRedoButtons() {
+      document.getElementById('undoBtn').disabled = historyIndex <= 0;
+      document.getElementById('redoBtn').disabled = historyIndex >= historyStack.length - 1;
+    }
+
+    // ===== ACTIVITY LOG =====
+    function logActivity(type, action, details) {
+      if (!currentProject.activity) currentProject.activity = [];
+      currentProject.activity.unshift({
+        id: Date.now(),
+        type: type,
+        action: action,
+        details: details,
+        user: currentUser.name,
+        timestamp: new Date().toISOString()
+      });
+      if (currentProject.activity.length > 100) currentProject.activity = currentProject.activity.slice(0, 100);
+    }
+    function showActivityModal() {
+      renderActivityLog();
+      document.getElementById('activityModal').classList.add('show');
+    }
+    function renderActivityLog() {
+      var list = document.getElementById('activityList');
+      var activity = currentProject.activity || [];
+      if (activity.length === 0) {
+        list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div><h3>No activity yet</h3><p>Actions will be logged here</p></div>';
+        return;
+      }
+      var icons = { add: '+', edit: '&#9998;', delete: '&#10005;', comment: '&#128172;', assign: '&#128100;', budget: '$' };
+      list.innerHTML = activity.map(function(a) {
+        return '<div class="activity-item"><div class="activity-icon ' + a.type + '">' + (icons[a.type] || '&#8226;') + '</div><div class="activity-content"><div class="activity-text">' + a.action + ' <strong>' + escapeHtml(a.details) + '</strong></div><div class="activity-time">' + a.user + ' - ' + getRelativeTime(a.timestamp) + '</div></div></div>';
+      }).join('');
+    }
+    function clearActivityLog() {
+      if (confirm('Clear all activity log entries?')) {
+        currentProject.activity = [];
+        renderActivityLog();
+        triggerAutoSave();
+        showToast('Activity log cleared', 'success');
+      }
+    }
+
+    // ===== THEME =====
+    function toggleTheme() {
+      isDarkTheme = !isDarkTheme;
+      document.body.classList.toggle('light-theme', !isDarkTheme);
+      document.getElementById('themeToggle').innerHTML = isDarkTheme ? '&#9789;' : '&#9788;';
+      localStorage.setItem('prj_mgmt_theme', isDarkTheme ? 'dark' : 'light');
+    }
+    function loadTheme() {
+      if (localStorage.getItem('prj_mgmt_theme') === 'light') {
+        isDarkTheme = false;
+        document.body.classList.add('light-theme');
+        document.getElementById('themeToggle').innerHTML = '&#9788;';
+      }
+    }
+
+    // ===== TABS =====
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+      document.querySelector('.tab-content#tab-' + tabName).classList.add('active');
+      event.target.classList.add('active');
+      if (tabName === 'budget') renderBudgetTab();
+      if (tabName === 'time') renderTimeTab();
+      if (tabName === 'resources') renderResourcesTab();
+      if (tabName === 'team') renderTeamGrid();
+    }
+
+    // ===== DROPDOWNS =====
+    function toggleDropdown(id) {
+      closeDropdowns();
+      document.getElementById(id).classList.toggle('show');
+    }
+    function closeDropdowns() {
+      document.querySelectorAll('.dropdown-menu').forEach(function(d) { d.classList.remove('show'); });
+      document.querySelectorAll('.assignee-dropdown').forEach(function(d) { d.classList.remove('show'); });
+    }
+    document.addEventListener('click', function(e) { 
+      if (!e.target.closest('.dropdown') && !e.target.closest('.assignees-container')) closeDropdowns(); 
+    });
+
+    // ===== CONFIRM =====
+    function showConfirm(title, message, callback) {
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmMessage').innerHTML = message;
+      confirmCallback = callback;
+      document.getElementById('confirmModal').classList.add('show');
+    }
+    function executeConfirm() {
+      if (confirmCallback) { confirmCallback(); confirmCallback = null; }
+      closeModal('confirmModal');
+    }
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+    // ===== TEAM MEMBERS =====
+    function renderTeamGrid() {
+      var container = document.getElementById('teamGrid');
+      var team = currentProject.team || [];
+      document.getElementById('teamCount').textContent = team.length;
+      if (team.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><div class="empty-state-icon">&#128101;</div><h3>No team members</h3><p>Add team members to assign them to phases</p></div>';
+        return;
+      }
+      container.innerHTML = team.map(function(m) {
+        var rateStr = m.hourlyRate ? ' - ' + formatCurrency(m.hourlyRate) + '/hr' : '';
+        return '<div class="team-card"><div class="avatar" style="background: ' + (m.color || '#00A8E8') + '">' + getInitials(m.name) + '</div><div class="team-card-info"><h4>' + escapeHtml(m.name) + '</h4><span>' + escapeHtml(m.email || '') + (m.role ? ' - ' + escapeHtml(m.role) : '') + rateStr + '</span></div><div class="team-card-actions"><button class="btn btn-sm btn-secondary" onclick="editTeamMember(' + m.id + ')">Edit</button><button class="btn btn-sm btn-danger" onclick="confirmDeleteTeamMember(' + m.id + ', \'' + escapeHtml(m.name) + '\')">X</button></div></div>';
+      }).join('');
+    }
+    function showAddTeamMemberModal() {
+      editingTeamMemberId = null;
+      document.getElementById('teamMemberModalTitle').textContent = 'Add Team Member';
+      document.getElementById('teamMemberName').value = '';
+      document.getElementById('teamMemberEmail').value = '';
+      document.getElementById('teamMemberRole').value = '';
+      document.getElementById('teamMemberRate').value = '';
+      document.getElementById('teamMemberColor').value = '#00A8E8';
+      document.getElementById('teamMemberModal').classList.add('show');
+    }
+    function editTeamMember(id) {
+      var member = currentProject.team.find(function(m) { return m.id === id; });
+      if (!member) return;
+      editingTeamMemberId = id;
+      document.getElementById('teamMemberModalTitle').textContent = 'Edit Team Member';
+      document.getElementById('teamMemberName').value = member.name;
+      document.getElementById('teamMemberEmail').value = member.email || '';
+      document.getElementById('teamMemberRole').value = member.role || '';
+      document.getElementById('teamMemberRate').value = member.hourlyRate || '';
+      document.getElementById('teamMemberColor').value = member.color || '#00A8E8';
+      document.getElementById('teamMemberModal').classList.add('show');
+    }
+    function saveTeamMember() {
+      var name = document.getElementById('teamMemberName').value.trim();
+      var email = document.getElementById('teamMemberEmail').value.trim();
+      var role = document.getElementById('teamMemberRole').value.trim();
+      var rate = parseFloat(document.getElementById('teamMemberRate').value) || 0;
+      var color = document.getElementById('teamMemberColor').value;
+      if (!name) { showToast('Name is required', 'error'); return; }
+      saveToHistory();
+      if (!currentProject.team) currentProject.team = [];
+      if (editingTeamMemberId) {
+        var member = currentProject.team.find(function(m) { return m.id === editingTeamMemberId; });
+        if (member) {
+          member.name = name; member.email = email; member.role = role; member.hourlyRate = rate; member.color = color;
+          logActivity('edit', 'Updated team member', name);
+        }
+      } else {
+        currentProject.team.push({ id: nextTeamMemberId++, name: name, email: email, role: role, hourlyRate: rate, color: color });
+        logActivity('add', 'Added team member', name);
+      }
+      renderTeamGrid();
+      closeModal('teamMemberModal');
+      triggerAutoSave();
+      showToast(editingTeamMemberId ? 'Team member updated' : 'Team member added', 'success');
+    }
+    function confirmDeleteTeamMember(id, name) {
+      showConfirm('Delete Team Member?', 'Remove <span class="item-name">"' + name + '"</span> from the team?', function() { deleteTeamMember(id, name); });
+    }
+    function deleteTeamMember(id, name) {
+      saveToHistory();
+      currentProject.team = currentProject.team.filter(function(m) { return m.id !== id; });
+      currentProject.phases.forEach(function(p) { if (p.assignees) p.assignees = p.assignees.filter(function(a) { return a !== id; }); });
+      logActivity('delete', 'Removed team member', name);
+      renderTeamGrid();
+      renderAll();
+      triggerAutoSave();
+      showToast('Team member removed', 'success');
+    }
+
+    // ===== ASSIGNEES =====
+    function renderAssignees(item, type) {
+      var team = currentProject.team || [];
+      var assignees = item.assignees || [];
+      var assigned = team.filter(function(m) { return assignees.indexOf(m.id) >= 0; });
+      var html = '<div class="assignees-container" onclick="event.stopPropagation()">';
+      assigned.slice(0, 3).forEach(function(m) {
+        html += '<div class="avatar" style="background: ' + (m.color || '#00A8E8') + '" title="' + escapeHtml(m.name) + '">' + getInitials(m.name) + '</div>';
+      });
+      if (assigned.length > 3) html += '<div class="avatar" style="background: var(--text-muted)">+' + (assigned.length - 3) + '</div>';
+      html += '<div class="avatar avatar-add" onclick="toggleAssigneeDropdown(event, ' + item.id + ', \'' + type + '\')" title="Assign">+</div>';
+      html += '<div class="assignee-dropdown" id="assignee-' + type + '-' + item.id + '">';
+      if (team.length === 0) {
+        html += '<div style="padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;">No team members. Add some first.</div>';
+      } else {
+        team.forEach(function(m) {
+          var sel = assignees.indexOf(m.id) >= 0;
+          html += '<div class="assignee-option ' + (sel ? 'selected' : '') + '" onclick="toggleAssignee(' + item.id + ', \'' + type + '\', ' + m.id + ')"><div class="avatar" style="background: ' + (m.color || '#00A8E8') + '">' + getInitials(m.name) + '</div><span>' + escapeHtml(m.name) + '</span>' + (sel ? '<span style="margin-left: auto; color: var(--accent-green);">&#10003;</span>' : '') + '</div>';
+        });
+      }
+      html += '</div></div>';
+      return html;
+    }
+    function toggleAssigneeDropdown(event, itemId, type) {
+      event.stopPropagation();
+      closeDropdowns();
+      document.getElementById('assignee-' + type + '-' + itemId).classList.toggle('show');
+    }
+    function toggleAssignee(itemId, type, memberId) {
+      saveToHistory();
+      var items = type === 'phase' ? currentProject.phases : currentProject.deliveries;
+      var item = items.find(function(i) { return i.id === itemId; });
+      if (!item) return;
+      if (!item.assignees) item.assignees = [];
+      var idx = item.assignees.indexOf(memberId);
+      var member = currentProject.team.find(function(m) { return m.id === memberId; });
+      if (idx >= 0) {
+        item.assignees.splice(idx, 1);
+        logActivity('assign', 'Unassigned ' + (member ? member.name : 'member') + ' from', item.name || item.title);
+      } else {
+        item.assignees.push(memberId);
+        logActivity('assign', 'Assigned ' + (member ? member.name : 'member') + ' to', item.name || item.title);
+      }
+      renderAll();
+      triggerAutoSave();
+    }
+
+    // ===== RENDER CORE =====
+    function renderKPIs() {
+      var complete = currentProject.phases.filter(function(p) { return p.status === "complete"; }).length;
+      var inProgress = currentProject.phases.filter(function(p) { return p.status === "progress"; }).length;
+      var pending = currentProject.phases.filter(function(p) { return p.status === "pending"; }).length;
+      var total = currentProject.phases.length;
+      var budgetTotals = calculateBudgetTotals();
+      document.getElementById("kpiGrid").innerHTML = 
+        '<div class="kpi-card"><div class="kpi-value complete">' + complete + '</div><div class="kpi-label">Complete</div></div>' +
+        '<div class="kpi-card"><div class="kpi-value progress">' + inProgress + '</div><div class="kpi-label">In Progress</div></div>' +
+        '<div class="kpi-card"><div class="kpi-value pending">' + pending + '</div><div class="kpi-label">Pending</div></div>' +
+        '<div class="kpi-card"><div class="kpi-value budget">' + formatCurrency(budgetTotals.actual) + '</div><div class="kpi-label">Total Spent</div></div>';
+    }
+    function renderAlerts() {
+      var alertsPanel = document.getElementById('alertsPanel');
+      var alertsList = document.getElementById('alertsList');
+      var alerts = [];
+      currentProject.deliveries.forEach(function(d) {
+        if (d.status === 'shipped') return;
+        var days = getDaysUntil(d.date);
+        if (days < 0) alerts.push({ type: 'overdue', title: d.title, msg: 'Overdue by ' + Math.abs(days) + ' day(s)', days: days });
+        else if (days === 0) alerts.push({ type: 'today', title: d.title, msg: 'Due today!', days: days });
+        else if (days <= 7) alerts.push({ type: 'soon', title: d.title, msg: 'Due in ' + days + ' day(s)', days: days });
+      });
+      alerts.sort(function(a, b) { return a.days - b.days; });
+      if (alerts.length === 0) { alertsPanel.style.display = 'none'; return; }
+      alertsPanel.style.display = 'block';
+      alertsList.innerHTML = alerts.map(function(a) {
+        return '<div class="alert-item"><span>' + escapeHtml(a.title) + '</span><span class="alert-badge alert-' + a.type + '">' + a.msg + '</span></div>';
+      }).join('');
+    }
+    function renderPhases(targetId, showDelete) {
+      var container = document.getElementById(targetId);
+      if (!container) return;
+      var phases = currentProject.phases;
+      if (phases.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128203;</div><h3>No phases yet</h3><p>Add your first phase</p>' + (showDelete ? '<button class="btn btn-primary" onclick="addPhase()">+ Add Phase</button>' : '') + '</div>';
+        document.getElementById("phaseCount").textContent = '0';
+        document.getElementById("phaseCountDash").textContent = '0';
+        return;
+      }
+      container.innerHTML = phases.map(function(phase, index) {
+        return '<div class="phase-card" data-id="' + phase.id + '"><div class="phase-label">P' + (index + 1) + '</div><div class="phase-label"></div><div class="phase-name"><input type="text" value="' + escapeHtml(phase.name) + '" onchange="updatePhase(' + phase.id + ', \'name\', this.value)"></div>' + renderAssignees(phase, 'phase') + '<div class="progress-control"><input type="range" class="progress-slider" min="0" max="100" value="' + phase.progress + '" oninput="updatePhase(' + phase.id + ', \'progress\', parseInt(this.value)); this.nextElementSibling.textContent = this.value + \'%\'"><span class="progress-value">' + phase.progress + '%</span></div><select class="status-select ' + phase.status + '" onchange="updatePhase(' + phase.id + ', \'status\', this.value); this.className = \'status-select \' + this.value"><option value="complete"' + (phase.status === "complete" ? " selected" : "") + '>Complete</option><option value="progress"' + (phase.status === "progress" ? " selected" : "") + '>In Progress</option><option value="pending"' + (phase.status === "pending" ? " selected" : "") + '>Pending</option></select>' + (showDelete ? '<button class="delete-btn" onclick="confirmDeletePhase(' + phase.id + ', \'' + escapeHtml(phase.name) + '\')">X</button>' : '<span></span>') + '</div>';
+      }).join("");
+      document.getElementById("phaseCount").textContent = phases.length;
+      document.getElementById("phaseCountDash").textContent = phases.length;
+    }
+    function renderDeliveries(targetId, showDelete) {
+      var container = document.getElementById(targetId);
+      if (!container) return;
+      var deliveries = currentProject.deliveries.slice().sort(function(a, b) { return new Date(a.date) - new Date(b.date); });
+      if (deliveries.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128230;</div><h3>No deliveries yet</h3><p>Add deliverables with target dates</p>' + (showDelete ? '<button class="btn btn-primary" onclick="addDelivery()">+ Add Delivery</button>' : '') + '</div>';
+        document.getElementById("deliveryCount").textContent = '0';
+        document.getElementById("deliveryCountDash").textContent = '0';
+        return;
+      }
+      var colors = ['#00A8E8', '#FFB703', '#00D26A', '#9D4EDD', '#E63946'];
+      container.innerHTML = deliveries.map(function(d, i) {
+        var days = getDaysUntil(d.date);
+        var color = colors[i % colors.length];
+        var cc = ""; if (days <= 7 && days >= 0) cc = "urgent"; else if (days <= 30 && days > 7) cc = "soon";
+        return '<div class="delivery-card" style="border-top-color: ' + color + '" data-id="' + d.id + '"><div style="display: flex; justify-content: space-between; align-items: start;"><div><div class="delivery-date-label" style="color: ' + color + '">Ship Date</div><input type="date" class="delivery-date-input" value="' + d.date + '" onchange="updateDelivery(' + d.id + ', \'date\', this.value)"></div>' + (showDelete ? '<button class="delete-btn" style="opacity:1" onclick="confirmDeleteDelivery(' + d.id + ', \'' + escapeHtml(d.title) + '\')">X</button>' : '') + '</div><div class="delivery-divider"></div><div class="delivery-title"><input type="text" value="' + escapeHtml(d.title) + '" placeholder="Deliverable name" onchange="updateDelivery(' + d.id + ', \'title\', this.value)"></div><div class="delivery-dest"><input type="text" value="' + escapeHtml(d.destination || '') + '" placeholder="Destination" onchange="updateDelivery(' + d.id + ', \'destination\', this.value)"></div><div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem;">' + renderAssignees(d, 'delivery') + '</div><div class="delivery-countdown ' + cc + '">' + (days > 0 ? days + ' days' : days === 0 ? 'Today!' : Math.abs(days) + ' days ago') + '</div></div>';
+      }).join("");
+      document.getElementById("deliveryCount").textContent = deliveries.length;
+      document.getElementById("deliveryCountDash").textContent = deliveries.length;
+    }
+    function renderNotes() {
+      document.getElementById("notesFocus").value = currentProject.notes ? currentProject.notes.focus || "" : "";
+      document.getElementById("notesMilestones").value = currentProject.notes ? currentProject.notes.milestones || "" : "";
+      document.getElementById("notesFuture").value = currentProject.notes ? currentProject.notes.future || "" : "";
+    }
+    function renderAll() {
+      document.getElementById("projectName").value = currentProject.name;
+      document.getElementById("projectCategory").value = currentProject.category || 'none';
+      renderAlerts();
+      renderKPIs();
+      renderPhases('phasesList', true);
+      renderPhases('phasesListDash', false);
+      renderDeliveries('deliveriesGrid', true);
+      renderDeliveries('deliveriesGridDash', false);
+      renderNotes();
+      renderTeamGrid();
+      renderBudgetSettings();
+    }
+
+    // ===== UPDATES =====
+    function updateProjectName(name) { currentProject.name = name; triggerAutoSave(); }
+    function updateProjectCategory(cat) { currentProject.category = cat; triggerAutoSave(); }
+    function updatePhase(id, field, value) {
+      saveToHistory();
+      var phase = currentProject.phases.find(function(p) { return p.id === id; });
+      if (phase) {
+        phase[field] = value;
+        if (field === "progress" && value === 100) phase.status = "complete";
+        if (field === "progress" && value === 0) phase.status = "pending";
+        if (field === "progress" && value > 0 && value < 100 && phase.status === "pending") phase.status = "progress";
+        logActivity('edit', 'Updated ' + field + ' of phase', phase.name);
+        renderPhases('phasesList', true);
+        renderPhases('phasesListDash', false);
+        renderKPIs();
+        triggerAutoSave();
+      }
+    }
+    function updateDelivery(id, field, value) {
+      saveToHistory();
+      var d = currentProject.deliveries.find(function(x) { return x.id === id; });
+      if (d) { 
+        d[field] = value; 
+        logActivity('edit', 'Updated ' + field + ' of delivery', d.title);
+        renderDeliveries('deliveriesGrid', true); 
+        renderDeliveries('deliveriesGridDash', false); 
+        renderAlerts(); 
+        triggerAutoSave(); 
+      }
+    }
+    function updateNotes() {
+      currentProject.notes = {
+        focus: document.getElementById("notesFocus").value,
+        milestones: document.getElementById("notesMilestones").value,
+        future: document.getElementById("notesFuture").value
+      };
+      triggerAutoSave();
+    }
+
+    // ===== ADD/DELETE =====
+    function addPhase() {
+      saveToHistory();
+      var phase = { id: nextPhaseId++, name: "New Phase", progress: 0, status: "pending", assignees: [], budget: { estimated: 0, actual: 0 }, timeEntries: [] };
+      currentProject.phases.push(phase);
+      logActivity('add', 'Added phase', phase.name);
+      renderPhases('phasesList', true);
+      renderPhases('phasesListDash', false);
+      renderKPIs();
+      triggerAutoSave();
+    }
+    function confirmDeletePhase(id, name) {
+      showConfirm('Delete Phase?', 'Delete <span class="item-name">"' + name + '"</span>?', function() { deletePhase(id, name); });
+    }
+    function deletePhase(id, name) {
+      saveToHistory();
+      currentProject.phases = currentProject.phases.filter(function(p) { return p.id !== id; });
+      currentProject.resources = (currentProject.resources || []).filter(function(r) { return r.phaseId !== id; });
+      logActivity('delete', 'Deleted phase', name);
+      renderPhases('phasesList', true);
+      renderPhases('phasesListDash', false);
+      renderKPIs();
+      showToast('Phase deleted', 'success');
+      triggerAutoSave();
+    }
+    function addDelivery() {
+      saveToHistory();
+      var next = new Date(); next.setDate(next.getDate() + 7);
+      var delivery = { id: nextDeliveryId++, date: next.toISOString().split('T')[0], title: "New Deliverable", destination: "", status: "pending", assignees: [] };
+      currentProject.deliveries.push(delivery);
+      logActivity('add', 'Added delivery', delivery.title);
+      renderDeliveries('deliveriesGrid', true);
+      renderDeliveries('deliveriesGridDash', false);
+      renderAlerts();
+      triggerAutoSave();
+    }
+    function confirmDeleteDelivery(id, title) {
+      showConfirm('Delete Delivery?', 'Delete <span class="item-name">"' + title + '"</span>?', function() { deleteDelivery(id, title); });
+    }
+    function deleteDelivery(id, title) {
+      saveToHistory();
+      currentProject.deliveries = currentProject.deliveries.filter(function(d) { return d.id !== id; });
+      logActivity('delete', 'Deleted delivery', title);
+      renderDeliveries('deliveriesGrid', true);
+      renderDeliveries('deliveriesGridDash', false);
+      renderAlerts();
+      showToast('Delivery deleted', 'success');
+      triggerAutoSave();
+    }
+
+    // ===== BUDGET FUNCTIONS =====
+    function renderBudgetSettings() {
+      var settings = currentProject.budgetSettings || { currency: 'USD', hourlyRate: 0, taxRate: 0 };
+      document.getElementById('budgetCurrency').value = settings.currency || 'USD';
+      document.getElementById('hourlyRate').value = settings.hourlyRate || '';
+      document.getElementById('taxRate').value = settings.taxRate || '';
+    }
+    function updateBudgetSettings() {
+      if (!currentProject.budgetSettings) currentProject.budgetSettings = {};
+      currentProject.budgetSettings.currency = document.getElementById('budgetCurrency').value;
+      currentProject.budgetSettings.hourlyRate = parseFloat(document.getElementById('hourlyRate').value) || 0;
+      currentProject.budgetSettings.taxRate = parseFloat(document.getElementById('taxRate').value) || 0;
+      triggerAutoSave();
+      renderBudgetTab();
+    }
+    function calculateBudgetTotals() {
+      var estimated = 0, actual = 0, estimatedHours = 0, actualHours = 0;
+      currentProject.phases.forEach(function(p) {
+        if (p.budget) {
+          estimated += p.budget.estimated || 0;
+          actual += p.budget.actual || 0;
+          estimatedHours += p.budget.estimatedHours || 0;
+        }
+        if (p.timeEntries) {
+          p.timeEntries.forEach(function(t) { actualHours += t.hours || 0; });
+        }
+      });
+      var resourceCost = 0;
+      (currentProject.resources || []).forEach(function(r) { resourceCost += (r.quantity || 1) * (r.cost || 0); });
+      actual += resourceCost;
+      return { estimated: estimated, actual: actual, estimatedHours: estimatedHours, actualHours: actualHours, resourceCost: resourceCost };
+    }
+    function renderBudgetTab() {
+      var totals = calculateBudgetTotals();
+      var variance = totals.estimated - totals.actual;
+      var varianceClass = variance >= 0 ? '' : ' over';
+      var settings = currentProject.budgetSettings || {};
+      var timeCost = totals.actualHours * (settings.hourlyRate || 0);
+      
+      document.getElementById('budgetSummaryGrid').innerHTML = 
+        '<div class="budget-summary-card"><div class="budget-summary-label">Estimated Budget</div><div class="budget-summary-value">' + formatCurrency(totals.estimated) + '</div><div class="budget-summary-subtext">Across ' + currentProject.phases.length + ' phases</div></div>' +
+        '<div class="budget-summary-card"><div class="budget-summary-label">Actual Spent</div><div class="budget-summary-value" style="color: var(--accent-orange);">' + formatCurrency(totals.actual) + '</div><div class="budget-summary-subtext">Materials + Resources</div></div>' +
+        '<div class="budget-summary-card time"><div class="budget-summary-label">Labor Cost</div><div class="budget-summary-value" style="color: var(--accent-purple);">' + formatCurrency(timeCost) + '</div><div class="budget-summary-subtext">' + totals.actualHours.toFixed(1) + ' hrs @ ' + formatCurrency(settings.hourlyRate || 0) + '/hr</div></div>' +
+        '<div class="budget-summary-card variance' + varianceClass + '"><div class="budget-summary-label">Budget Variance</div><div class="budget-summary-value" style="color: ' + (variance >= 0 ? 'var(--accent-green)' : 'var(--accent-red)') + ';">' + (variance >= 0 ? '+' : '') + formatCurrency(variance) + '</div><div class="budget-summary-subtext">' + (variance >= 0 ? 'Under budget' : 'Over budget') + '</div></div>';
+      
+      renderPhaseBudgets();
+      renderBudgetCharts(totals);
+    }
+    function renderPhaseBudgets() {
+      var container = document.getElementById('phaseBudgetsList');
+      var phases = currentProject.phases;
+      if (phases.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>Add phases to track budgets</p></div>';
+        return;
+      }
+      var maxBudget = Math.max.apply(null, phases.map(function(p) { return Math.max((p.budget && p.budget.estimated) || 0, (p.budget && p.budget.actual) || 0, 1); }));
+      container.innerHTML = phases.map(function(p) {
+        var budget = p.budget || { estimated: 0, actual: 0 };
+        var estPct = maxBudget > 0 ? (budget.estimated / maxBudget * 100) : 0;
+        var actPct = maxBudget > 0 ? (budget.actual / maxBudget * 100) : 0;
+        var variance = budget.estimated - budget.actual;
+        var overClass = variance < 0 ? ' over' : '';
+        var hours = 0;
+        if (p.timeEntries) p.timeEntries.forEach(function(t) { hours += t.hours || 0; });
+        return '<div class="phase-budget-card"><div class="phase-budget-name">' + escapeHtml(p.name) + '<span>' + p.progress + '% complete | ' + hours.toFixed(1) + ' hrs logged</span></div><div class="phase-budget-bars"><div class="budget-bar-container"><span class="budget-bar-label">Est</span><div class="budget-bar-track"><div class="budget-bar-fill estimated" style="width: ' + estPct + '%;"></div></div><span class="budget-bar-value">' + formatCurrency(budget.estimated) + '</span></div><div class="budget-bar-container"><span class="budget-bar-label">Act</span><div class="budget-bar-track"><div class="budget-bar-fill actual' + overClass + '" style="width: ' + actPct + '%;"></div></div><span class="budget-bar-value">' + formatCurrency(budget.actual) + '</span></div></div><div class="phase-budget-totals"><div class="total">' + formatCurrency(budget.actual) + '</div><div class="variance' + (variance >= 0 ? ' under' : ' over') + '">' + (variance >= 0 ? '+' : '') + formatCurrency(variance) + '</div></div><button class="btn btn-sm btn-secondary" onclick="showPhaseBudgetModal(' + p.id + ')">Edit</button></div>';
+      }).join('');
+    }
+    function showPhaseBudgetModal(phaseId) {
+      var phase = currentProject.phases.find(function(p) { return p.id === phaseId; });
+      if (!phase) return;
+      var budget = phase.budget || { estimated: 0, actual: 0, estimatedHours: 0, notes: '' };
+      document.getElementById('phaseBudgetId').value = phaseId;
+      document.getElementById('phaseBudgetName').textContent = phase.name;
+      document.getElementById('phaseEstimatedCost').value = budget.estimated || '';
+      document.getElementById('phaseActualCost').value = budget.actual || '';
+      document.getElementById('phaseEstimatedHours').value = budget.estimatedHours || '';
+      document.getElementById('phaseBudgetNotes').value = budget.notes || '';
+      document.getElementById('phaseBudgetModal').classList.add('show');
+    }
+    function savePhaseBudget() {
+      var phaseId = parseInt(document.getElementById('phaseBudgetId').value);
+      var phase = currentProject.phases.find(function(p) { return p.id === phaseId; });
+      if (!phase) return;
+      saveToHistory();
+      phase.budget = {
+        estimated: parseFloat(document.getElementById('phaseEstimatedCost').value) || 0,
+        actual: parseFloat(document.getElementById('phaseActualCost').value) || 0,
+        estimatedHours: parseFloat(document.getElementById('phaseEstimatedHours').value) || 0,
+        notes: document.getElementById('phaseBudgetNotes').value
+      };
+      logActivity('budget', 'Updated budget for', phase.name);
+      closeModal('phaseBudgetModal');
+      renderBudgetTab();
+      renderKPIs();
+      triggerAutoSave();
+      showToast('Budget updated', 'success');
+    }
+    function renderBudgetCharts(totals) {
+      var container = document.getElementById('budgetChartsGrid');
+      var phases = currentProject.phases;
+      if (phases.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      // Budget by phase bar chart
+      var maxVal = Math.max.apply(null, phases.map(function(p) { return Math.max((p.budget && p.budget.estimated) || 0, (p.budget && p.budget.actual) || 0, 1); }));
+      var barChartHtml = '<div class="budget-chart-card"><h4>Budget by Phase</h4><div style="display: flex; flex-direction: column; gap: 0.75rem;">';
+      phases.forEach(function(p) {
+        var budget = p.budget || { estimated: 0, actual: 0 };
+        var estPct = maxVal > 0 ? (budget.estimated / maxVal * 100) : 0;
+        var actPct = maxVal > 0 ? (budget.actual / maxVal * 100) : 0;
+        barChartHtml += '<div><div style="font-size: 0.8rem; margin-bottom: 0.25rem;">' + escapeHtml(p.name) + '</div><div style="display: flex; gap: 0.5rem; align-items: center;"><div style="flex: 1; height: 20px; background: var(--bg-deep); border-radius: 4px; position: relative; overflow: hidden;"><div style="position: absolute; height: 100%; width: ' + estPct + '%; background: var(--accent-blue); opacity: 0.4;"></div><div style="position: absolute; height: 100%; width: ' + actPct + '%; background: var(--accent-orange);"></div></div><span style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 80px; text-align: right;">' + formatCurrency(budget.actual) + '</span></div></div>';
+      });
+      barChartHtml += '</div><div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1rem; font-size: 0.75rem;"><span><span style="display: inline-block; width: 12px; height: 12px; background: var(--accent-blue); opacity: 0.4; border-radius: 2px; margin-right: 0.25rem;"></span>Estimated</span><span><span style="display: inline-block; width: 12px; height: 12px; background: var(--accent-orange); border-radius: 2px; margin-right: 0.25rem;"></span>Actual</span></div></div>';
+      
+      // Cost breakdown pie concept
+      var timeCost = totals.actualHours * ((currentProject.budgetSettings && currentProject.budgetSettings.hourlyRate) || 0);
+      var materialCost = totals.actual - totals.resourceCost;
+      var pieChartHtml = '<div class="budget-chart-card"><h4>Cost Breakdown</h4><div style="display: flex; flex-direction: column; gap: 0.5rem;">';
+      var breakdown = [
+        { label: 'Labor', value: timeCost, color: 'var(--accent-purple)' },
+        { label: 'Materials', value: materialCost > 0 ? materialCost : 0, color: 'var(--accent-orange)' },
+        { label: 'Resources', value: totals.resourceCost, color: 'var(--accent-blue)' }
+      ];
+      var totalCost = breakdown.reduce(function(s, b) { return s + b.value; }, 0) || 1;
+      breakdown.forEach(function(b) {
+        var pct = (b.value / totalCost * 100).toFixed(1);
+        pieChartHtml += '<div style="display: flex; align-items: center; gap: 0.75rem;"><span style="width: 80px; font-size: 0.8rem;">' + b.label + '</span><div style="flex: 1; height: 24px; background: var(--bg-deep); border-radius: 4px; overflow: hidden;"><div style="height: 100%; width: ' + pct + '%; background: ' + b.color + ';"></div></div><span style="font-family: var(--font-mono); font-size: 0.8rem; min-width: 70px; text-align: right;">' + formatCurrency(b.value) + '</span></div>';
+      });
+      pieChartHtml += '</div></div>';
+      
+      container.innerHTML = barChartHtml + pieChartHtml;
+    }
+
+    // ===== TIME TRACKING =====
+    function renderTimeTab() {
+      var totals = calculateBudgetTotals();
+      var settings = currentProject.budgetSettings || {};
+      var timeCost = totals.actualHours * (settings.hourlyRate || 0);
+      
+      document.getElementById('timeSummaryGrid').innerHTML = 
+        '<div class="budget-summary-card time"><div class="budget-summary-label">Total Hours Logged</div><div class="budget-summary-value" style="color: var(--accent-purple);">' + totals.actualHours.toFixed(1) + '</div><div class="budget-summary-subtext">Across all phases</div></div>' +
+        '<div class="budget-summary-card time"><div class="budget-summary-label">Estimated Hours</div><div class="budget-summary-value">' + totals.estimatedHours.toFixed(1) + '</div><div class="budget-summary-subtext">Budget estimate</div></div>' +
+        '<div class="budget-summary-card"><div class="budget-summary-label">Hourly Rate</div><div class="budget-summary-value">' + formatCurrency(settings.hourlyRate || 0) + '</div><div class="budget-summary-subtext">Per hour</div></div>' +
+        '<div class="budget-summary-card"><div class="budget-summary-label">Total Labor Cost</div><div class="budget-summary-value" style="color: var(--accent-orange);">' + formatCurrency(timeCost) + '</div><div class="budget-summary-subtext">' + totals.actualHours.toFixed(1) + ' x ' + formatCurrency(settings.hourlyRate || 0) + '</div></div>';
+      
+      renderTimeEntries();
+    }
+    function renderTimeEntries() {
+      var container = document.getElementById('timeEntriesContainer');
+      var allEntries = [];
+      currentProject.phases.forEach(function(p) {
+        if (p.timeEntries) {
+          p.timeEntries.forEach(function(t) {
+            allEntries.push({ phase: p.name, phaseId: p.id, entry: t });
+          });
+        }
+      });
+      allEntries.sort(function(a, b) { return new Date(b.entry.date) - new Date(a.entry.date); });
+      
+      if (allEntries.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128337;</div><h3>No time logged</h3><p>Click "Log Time" to track hours spent</p></div>';
+        return;
+      }
+      
+      var settings = currentProject.budgetSettings || {};
+      container.innerHTML = '<table class="time-entries-table"><thead><tr><th>Date</th><th>Phase</th><th>Description</th><th>Team Member</th><th>Hours</th><th>Cost</th><th></th></tr></thead><tbody>' + allEntries.map(function(item) {
+        var t = item.entry;
+        var member = currentProject.team.find(function(m) { return m.id === t.memberId; });
+        var rate = (member && member.hourlyRate) ? member.hourlyRate : (settings.hourlyRate || 0);
+        var cost = t.hours * rate;
+        return '<tr><td>' + formatDate(t.date) + '</td><td>' + escapeHtml(item.phase) + '</td><td>' + escapeHtml(t.description || '-') + '</td><td>' + (member ? escapeHtml(member.name) : '-') + '</td><td class="hours">' + t.hours.toFixed(2) + '</td><td class="cost">' + formatCurrency(cost) + '</td><td><button class="btn btn-sm btn-danger" onclick="deleteTimeEntry(' + item.phaseId + ', ' + t.id + ')">X</button></td></tr>';
+      }).join('') + '</tbody></table>';
+    }
+    function showLogTimeModal() {
+      var select = document.getElementById('timePhaseSelect');
+      select.innerHTML = currentProject.phases.map(function(p) { return '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>'; }).join('');
+      var memberSelect = document.getElementById('timeTeamMember');
+      memberSelect.innerHTML = '<option value="">-- Select --</option>' + currentProject.team.map(function(m) { return '<option value="' + m.id + '">' + escapeHtml(m.name) + '</option>'; }).join('');
+      document.getElementById('timeHours').value = '';
+      document.getElementById('timeDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('timeDescription').value = '';
+      document.getElementById('logTimeModal').classList.add('show');
+    }
+    function saveTimeEntry() {
+      var phaseId = parseInt(document.getElementById('timePhaseSelect').value);
+      var hours = parseFloat(document.getElementById('timeHours').value);
+      var date = document.getElementById('timeDate').value;
+      var memberId = document.getElementById('timeTeamMember').value;
+      var description = document.getElementById('timeDescription').value.trim();
+      
+      if (!hours || hours <= 0) { showToast('Please enter valid hours', 'error'); return; }
+      if (!date) { showToast('Please select a date', 'error'); return; }
+      
+      var phase = currentProject.phases.find(function(p) { return p.id === phaseId; });
+      if (!phase) { showToast('Please select a phase', 'error'); return; }
+      
+      saveToHistory();
+      if (!phase.timeEntries) phase.timeEntries = [];
+      phase.timeEntries.push({
+        id: nextTimeEntryId++,
+        hours: hours,
+        date: date,
+        memberId: memberId ? parseInt(memberId) : null,
+        description: description,
+        timestamp: new Date().toISOString()
+      });
+      
+      logActivity('budget', 'Logged ' + hours + ' hours on', phase.name);
+      closeModal('logTimeModal');
+      renderTimeTab();
+      renderKPIs();
+      triggerAutoSave();
+      showToast('Time logged successfully', 'success');
+    }
+    function deleteTimeEntry(phaseId, entryId) {
+      var phase = currentProject.phases.find(function(p) { return p.id === phaseId; });
+      if (!phase || !phase.timeEntries) return;
+      saveToHistory();
+      phase.timeEntries = phase.timeEntries.filter(function(t) { return t.id !== entryId; });
+      logActivity('delete', 'Deleted time entry from', phase.name);
+      renderTimeTab();
+      triggerAutoSave();
+      showToast('Time entry deleted', 'success');
+    }
+
+    // ===== RESOURCES =====
+    function renderResourcesTab() {
+      var resources = currentProject.resources || [];
+      var totalCost = resources.reduce(function(s, r) { return s + ((r.quantity || 1) * (r.cost || 0)); }, 0);
+      var needed = resources.filter(function(r) { return r.status === 'needed'; }).length;
+      var ordered = resources.filter(function(r) { return r.status === 'ordered'; }).length;
+      var received = resources.filter(function(r) { return r.status === 'received'; }).length;
+      
+      document.getElementById('resourceSummaryGrid').innerHTML = 
+        '<div class="budget-summary-card"><div class="budget-summary-label">Total Resources</div><div class="budget-summary-value" style="color: var(--accent-blue);">' + resources.length + '</div><div class="budget-summary-subtext">Items tracked</div></div>' +
+        '<div class="budget-summary-card"><div class="budget-summary-label">Total Cost</div><div class="budget-summary-value" style="color: var(--accent-orange);">' + formatCurrency(totalCost) + '</div><div class="budget-summary-subtext">All resources</div></div>' +
+        '<div class="budget-summary-card"><div class="budget-summary-label">Needed</div><div class="budget-summary-value" style="color: var(--accent-yellow);">' + needed + '</div><div class="budget-summary-subtext">To be ordered</div></div>' +
+        '<div class="budget-summary-card variance"><div class="budget-summary-label">Received</div><div class="budget-summary-value" style="color: var(--accent-green);">' + received + '</div><div class="budget-summary-subtext">Ready to use</div></div>';
+      
+      renderResourcesList();
+    }
+    function renderResourcesList() {
+      var container = document.getElementById('resourcesList');
+      var resources = currentProject.resources || [];
+      
+      if (resources.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128230;</div><h3>No resources</h3><p>Track equipment, materials, and services</p></div>';
+        return;
+      }
+      
+      // Group by phase
+      var byPhase = {};
+      resources.forEach(function(r) {
+        var phaseId = r.phaseId || 0;
+        if (!byPhase[phaseId]) byPhase[phaseId] = [];
+        byPhase[phaseId].push(r);
+      });
+      
+      var html = '';
+      Object.keys(byPhase).forEach(function(phaseId) {
+        var phase = currentProject.phases.find(function(p) { return p.id === parseInt(phaseId); });
+        var phaseName = phase ? phase.name : 'Unassigned';
+        html += '<div style="margin-bottom: 1.5rem;"><h4 style="font-size: 0.9rem; margin-bottom: 0.75rem; color: var(--text-secondary);">' + escapeHtml(phaseName) + '</h4><div class="resource-list">';
+        byPhase[phaseId].forEach(function(r) {
+          html += '<div class="resource-item"><input type="text" value="' + escapeHtml(r.name) + '" onchange="updateResource(' + r.id + ', \'name\', this.value)" placeholder="Resource name"><input type="number" class="mono" value="' + (r.quantity || 1) + '" min="1" onchange="updateResource(' + r.id + ', \'quantity\', parseInt(this.value))"><input type="number" class="mono" value="' + (r.cost || 0) + '" min="0" step="0.01" onchange="updateResource(' + r.id + ', \'cost\', parseFloat(this.value))"><select class="resource-status-select ' + r.status + '" onchange="updateResource(' + r.id + ', \'status\', this.value); this.className = \'resource-status-select \' + this.value"><option value="needed"' + (r.status === 'needed' ? ' selected' : '') + '>Needed</option><option value="ordered"' + (r.status === 'ordered' ? ' selected' : '') + '>Ordered</option><option value="received"' + (r.status === 'received' ? ' selected' : '') + '>Received</option></select><button class="delete-btn" style="opacity: 1;" onclick="deleteResource(' + r.id + ')">X</button></div>';
+        });
+        html += '</div></div>';
+      });
+      
+      container.innerHTML = html;
+    }
+    function showAddResourceModal() {
+      editingResourceId = null;
+      document.getElementById('resourceModalTitle').textContent = 'Add Resource';
+      var select = document.getElementById('resourcePhaseSelect');
+      select.innerHTML = '<option value="">-- No Phase --</option>' + currentProject.phases.map(function(p) { return '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>'; }).join('');
+      document.getElementById('resourceName').value = '';
+      document.getElementById('resourceQty').value = '1';
+      document.getElementById('resourceCost').value = '';
+      document.getElementById('resourceStatus').value = 'needed';
+      document.getElementById('resourceNotes').value = '';
+      document.getElementById('resourceModal').classList.add('show');
+    }
+    function saveResource() {
+      var phaseId = document.getElementById('resourcePhaseSelect').value;
+      var name = document.getElementById('resourceName').value.trim();
+      var qty = parseInt(document.getElementById('resourceQty').value) || 1;
+      var cost = parseFloat(document.getElementById('resourceCost').value) || 0;
+      var status = document.getElementById('resourceStatus').value;
+      var notes = document.getElementById('resourceNotes').value.trim();
+      
+      if (!name) { showToast('Resource name is required', 'error'); return; }
+      
+      saveToHistory();
+      if (!currentProject.resources) currentProject.resources = [];
+      currentProject.resources.push({
+        id: nextResourceId++,
+        phaseId: phaseId ? parseInt(phaseId) : null,
+        name: name,
+        quantity: qty,
+        cost: cost,
+        status: status,
+        notes: notes
+      });
+      
+      logActivity('add', 'Added resource', name);
+      closeModal('resourceModal');
+      renderResourcesTab();
+      renderBudgetTab();
+      renderKPIs();
+      triggerAutoSave();
+      showToast('Resource added', 'success');
+    }
+    function updateResource(id, field, value) {
+      var resource = (currentProject.resources || []).find(function(r) { return r.id === id; });
+      if (!resource) return;
+      saveToHistory();
+      resource[field] = value;
+      logActivity('edit', 'Updated resource', resource.name);
+      renderResourcesTab();
+      triggerAutoSave();
+    }
+    function deleteResource(id) {
+      saveToHistory();
+      var resource = (currentProject.resources || []).find(function(r) { return r.id === id; });
+      currentProject.resources = (currentProject.resources || []).filter(function(r) { return r.id !== id; });
+      logActivity('delete', 'Deleted resource', resource ? resource.name : 'Unknown');
+      renderResourcesTab();
+      renderBudgetTab();
+      renderKPIs();
+      triggerAutoSave();
+      showToast('Resource deleted', 'success');
+    }
+
+    // ===== INVOICE GENERATION =====
+    function showInvoiceModal() {
+      document.getElementById('invoiceClientName').value = '';
+      document.getElementById('invoiceNumber').value = 'INV-' + Date.now().toString().slice(-6);
+      document.getElementById('invoiceDate').value = new Date().toISOString().split('T')[0];
+      var dueDate = new Date(); dueDate.setDate(dueDate.getDate() + 30);
+      document.getElementById('invoiceDueDate').value = dueDate.toISOString().split('T')[0];
+      renderInvoicePreview();
+      document.getElementById('invoiceModal').classList.add('show');
+    }
+    function renderInvoicePreview() {
+      var clientName = document.getElementById('invoiceClientName').value || 'Client Name';
+      var invoiceNumber = document.getElementById('invoiceNumber').value || 'INV-000000';
+      var invoiceDate = document.getElementById('invoiceDate').value;
+      var dueDate = document.getElementById('invoiceDueDate').value;
+      var settings = currentProject.budgetSettings || {};
+      var currency = settings.currency || 'USD';
+      
+      var items = [];
+      var subtotal = 0;
+      
+      // Add phase costs
+      currentProject.phases.forEach(function(p) {
+        if (p.budget && p.budget.actual > 0) {
+          items.push({ desc: p.name + ' - Materials/Direct Costs', qty: 1, rate: p.budget.actual, amount: p.budget.actual });
+          subtotal += p.budget.actual;
+        }
+        if (p.timeEntries && p.timeEntries.length > 0) {
+          var totalHours = p.timeEntries.reduce(function(s, t) { return s + t.hours; }, 0);
+          var rate = settings.hourlyRate || 0;
+          var laborCost = totalHours * rate;
+          if (laborCost > 0) {
+            items.push({ desc: p.name + ' - Labor (' + totalHours.toFixed(1) + ' hrs)', qty: totalHours, rate: rate, amount: laborCost });
+            subtotal += laborCost;
+          }
+        }
+      });
+      
+      // Add resources
+      (currentProject.resources || []).forEach(function(r) {
+        var cost = (r.quantity || 1) * (r.cost || 0);
+        if (cost > 0) {
+          items.push({ desc: r.name, qty: r.quantity || 1, rate: r.cost || 0, amount: cost });
+          subtotal += cost;
+        }
+      });
+      
+      var taxRate = settings.taxRate || 0;
+      var tax = subtotal * (taxRate / 100);
+      var total = subtotal + tax;
+      
+      var html = '<div class="invoice-header"><div class="invoice-logo">PRJ-MGMT</div><div class="invoice-title"><h2>INVOICE</h2><div class="invoice-number">' + invoiceNumber + '</div></div></div>';
+      html += '<div class="invoice-details"><div><h4>Bill To</h4><p><strong>' + escapeHtml(clientName) + '</strong></p></div><div style="text-align: right;"><h4>Invoice Details</h4><p>Date: ' + formatDateFull(invoiceDate) + '</p><p>Due: ' + formatDateFull(dueDate) + '</p><p>Project: ' + escapeHtml(currentProject.name) + '</p></div></div>';
+      
+      if (items.length === 0) {
+        html += '<p style="text-align: center; padding: 2rem; color: #666;">No billable items. Add phase budgets or time entries.</p>';
+      } else {
+        html += '<table class="invoice-table"><thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th class="amount">Amount</th></tr></thead><tbody>';
+        items.forEach(function(item) {
+          html += '<tr><td>' + escapeHtml(item.desc) + '</td><td>' + item.qty + '</td><td class="amount">' + formatCurrency(item.rate, currency) + '</td><td class="amount">' + formatCurrency(item.amount, currency) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        
+        html += '<div class="invoice-totals"><table class="invoice-totals-table"><tr><td>Subtotal</td><td>' + formatCurrency(subtotal, currency) + '</td></tr>';
+        if (taxRate > 0) {
+          html += '<tr><td>Tax (' + taxRate + '%)</td><td>' + formatCurrency(tax, currency) + '</td></tr>';
+        }
+        html += '<tr class="total-row"><td>Total</td><td>' + formatCurrency(total, currency) + '</td></tr></table></div>';
+      }
+      
+      html += '<div class="invoice-footer"><p>Thank you for your business!</p><p>Generated by PRJ-MGMT Tool</p></div>';
+      
+      document.getElementById('invoicePreview').innerHTML = html;
+    }
+    function printInvoice() {
+      window.print();
+    }
+    function downloadInvoice() {
+      // Create a simple text version for download
+      var clientName = document.getElementById('invoiceClientName').value || 'Client';
+      var invoiceNumber = document.getElementById('invoiceNumber').value || 'INV-000000';
+      var content = document.getElementById('invoicePreview').innerText;
+      var blob = new Blob([content], { type: 'text/plain' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = invoiceNumber + '_' + clientName.replace(/\s+/g, '_') + '.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Invoice downloaded', 'success');
+    }
+
+    // ===== PROJECTS =====
+    function getSavedProjects() { var s = localStorage.getItem('prj_mgmt_projects'); return s ? JSON.parse(s) : []; }
+    function saveProject() {
+      updateNotes();
+      currentProject.modified = new Date().toISOString();
+      var projects = getSavedProjects();
+      var idx = projects.findIndex(function(p) { return p.id === currentProject.id; });
+      if (idx >= 0) projects[idx] = currentProject; else projects.push(currentProject);
+      localStorage.setItem('prj_mgmt_projects', JSON.stringify(projects));
+      document.getElementById('saveIndicator').className = 'save-indicator saved';
+      document.getElementById('saveIndicatorText').textContent = 'Saved';
+      showToast('Project saved!', 'success');
+    }
+    function loadProject(id) {
+      var projects = getSavedProjects();
+      var p = projects.find(function(x) { return x.id === id; });
+      if (p) {
+        currentProject = JSON.parse(JSON.stringify(p));
+        if (!currentProject.team) currentProject.team = [];
+        if (!currentProject.activity) currentProject.activity = [];
+        if (!currentProject.budgetSettings) currentProject.budgetSettings = { currency: 'USD', hourlyRate: 0, taxRate: 0 };
+        if (!currentProject.resources) currentProject.resources = [];
+        nextPhaseId = Math.max.apply(null, currentProject.phases.map(function(x) { return x.id; }).concat([0])) + 1;
+        nextDeliveryId = Math.max.apply(null, currentProject.deliveries.map(function(x) { return x.id; }).concat([0])) + 1;
+        nextTeamMemberId = Math.max.apply(null, (currentProject.team || []).map(function(x) { return x.id; }).concat([0])) + 1;
+        nextResourceId = Math.max.apply(null, (currentProject.resources || []).map(function(x) { return x.id; }).concat([0])) + 1;
+        var maxTimeId = 0;
+        currentProject.phases.forEach(function(p) {
+          if (p.timeEntries) {
+            p.timeEntries.forEach(function(t) { if (t.id > maxTimeId) maxTimeId = t.id; });
+          }
+        });
+        nextTimeEntryId = maxTimeId + 1;
+        renderAll();
+        closeModal('projectsModal');
+      }
+    }
+    function deleteProject(id) {
+      var projects = getSavedProjects().filter(function(p) { return p.id !== id; });
+      localStorage.setItem('prj_mgmt_projects', JSON.stringify(projects));
+      showToast('Project deleted', 'success');
+      renderProjectsList();
+    }
+    function newProject() {
+      currentProject = { 
+        id: generateId(), 
+        name: "New Project", 
+        created: new Date().toISOString(), 
+        modified: new Date().toISOString(), 
+        phases: [], 
+        deliveries: [], 
+        notes: { focus: "", milestones: "", future: "" }, 
+        team: [], 
+        activity: [],
+        budgetSettings: { currency: 'USD', hourlyRate: 0, taxRate: 0 },
+        resources: []
+      };
+      nextPhaseId = 1; nextDeliveryId = 1; nextTeamMemberId = 1; nextResourceId = 1; nextTimeEntryId = 1;
+      renderAll();
+      closeModal('projectsModal');
+    }
+    function showProjectsModal() { renderProjectsList(); document.getElementById('projectsModal').classList.add('show'); }
+    function renderProjectsList() {
+      var projects = getSavedProjects();
+      var container = document.getElementById('projectsList');
+      if (projects.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding: 2rem;"><div class="empty-state-icon">&#128193;</div><h3>No saved projects</h3></div>';
+        return;
+      }
+      container.innerHTML = projects.map(function(p) {
+        return '<div class="project-item" onclick="loadProject(\'' + p.id + '\')"><div class="project-item-info"><h4>' + escapeHtml(p.name) + '</h4><span>' + (p.phases ? p.phases.length : 0) + ' phases | ' + ((p.team || []).length) + ' members</span></div><div class="project-item-actions" onclick="event.stopPropagation()"><button onclick="deleteProject(\'' + p.id + '\')" title="Delete">&#128465;</button></div></div>';
+      }).join('');
+    }
+
+    // ===== EXPORT =====
+    function exportJSON() {
+      updateNotes();
+      var data = JSON.stringify(currentProject, null, 2);
+      var blob = new Blob([data], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = url; a.download = currentProject.name.replace(/\s+/g, '_') + '.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function exportCSV(type) {
+      var name = currentProject.name.replace(/\s+/g, '_');
+      if (type === 'phases') {
+        var csv = 'Phase,Name,Progress,Status,EstimatedBudget,ActualBudget\n';
+        currentProject.phases.forEach(function(p, i) { 
+          var budget = p.budget || { estimated: 0, actual: 0 };
+          csv += (i+1) + ',"' + p.name.replace(/"/g, '""') + '",' + p.progress + ',' + p.status + ',' + budget.estimated + ',' + budget.actual + '\n'; 
+        });
+        downloadFile(csv, name + '_phases.csv');
+      } else if (type === 'deliveries') {
+        var csv = 'Date,Title,Destination,Status\n';
+        currentProject.deliveries.forEach(function(d) { 
+          csv += d.date + ',"' + d.title.replace(/"/g, '""') + '","' + (d.destination||'').replace(/"/g, '""') + '",' + (d.status||'pending') + '\n'; 
+        });
+        downloadFile(csv, name + '_deliveries.csv');
+      }
+    }
+    function exportBudgetReport() {
+      var name = currentProject.name.replace(/\s+/g, '_');
+      var totals = calculateBudgetTotals();
+      var settings = currentProject.budgetSettings || {};
+      var csv = 'PRJ-MGMT Budget Report\n';
+      csv += 'Project: ' + currentProject.name + '\n';
+      csv += 'Generated: ' + new Date().toISOString() + '\n\n';
+      csv += 'SUMMARY\n';
+      csv += 'Estimated Budget,' + totals.estimated + '\n';
+      csv += 'Actual Spent,' + totals.actual + '\n';
+      csv += 'Variance,' + (totals.estimated - totals.actual) + '\n';
+      csv += 'Total Hours,' + totals.actualHours + '\n';
+      csv += 'Hourly Rate,' + (settings.hourlyRate || 0) + '\n';
+      csv += 'Labor Cost,' + (totals.actualHours * (settings.hourlyRate || 0)) + '\n\n';
+      csv += 'PHASES\n';
+      csv += 'Phase,Estimated,Actual,Hours,Status\n';
+      currentProject.phases.forEach(function(p) {
+        var budget = p.budget || { estimated: 0, actual: 0 };
+        var hours = 0;
+        if (p.timeEntries) p.timeEntries.forEach(function(t) { hours += t.hours; });
+        csv += '"' + p.name + '",' + budget.estimated + ',' + budget.actual + ',' + hours + ',' + p.status + '\n';
+      });
+      csv += '\nRESOURCES\n';
+      csv += 'Name,Quantity,Cost,Status\n';
+      (currentProject.resources || []).forEach(function(r) {
+        csv += '"' + r.name + '",' + (r.quantity || 1) + ',' + (r.cost || 0) + ',' + r.status + '\n';
+      });
+      downloadFile(csv, name + '_budget_report.csv');
+      showToast('Budget report exported', 'success');
+    }
+    
+    // ===== PDF EXPORT =====
+    function exportPDF() {
+      var jsPDF = window.jspdf.jsPDF;
+      var doc = new jsPDF();
+      var yPos = 20;
+      var pageHeight = doc.internal.pageSize.height;
+      var pageWidth = doc.internal.pageSize.width;
+      var margin = 20;
+      var contentWidth = pageWidth - (margin * 2);
+      
+      function checkNewPage(needed) {
+        if (yPos + needed > pageHeight - 20) {
+          doc.addPage();
+          yPos = 20;
+          return true;
+        }
+        return false;
+      }
+      
+      function addSectionHeader(text) {
+        checkNewPage(15);
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.setDrawColor(0, 168, 232);
+        doc.setLineWidth(0.5);
+        doc.line(margin, yPos + 2, margin + 3, yPos + 2);
+        doc.setTextColor(0, 0, 0);
+        doc.text(text, margin + 6, yPos);
+        yPos += 10;
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+      }
+      
+      // Title
+      doc.setFontSize(24);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(0, 168, 232);
+      doc.text(currentProject.name, margin, yPos);
+      yPos += 8;
+      
+      // Subtitle
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text('Project Report - Generated ' + new Date().toLocaleDateString(), margin, yPos);
+      yPos += 5;
+      doc.text('Category: ' + (currentProject.category || 'None'), margin, yPos);
+      yPos += 15;
+      
+      // KPIs
+      var complete = currentProject.phases.filter(function(p) { return p.status === 'complete'; }).length;
+      var inProgress = currentProject.phases.filter(function(p) { return p.status === 'progress'; }).length;
+      var pending = currentProject.phases.filter(function(p) { return p.status === 'pending'; }).length;
+      var totals = calculateBudgetTotals();
+      
+      doc.setFillColor(245, 247, 250);
+      doc.rect(margin, yPos, contentWidth, 20, 'F');
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(9);
+      
+      var kpiWidth = contentWidth / 4;
+      var kpis = [
+        { label: 'COMPLETE', value: complete, color: [0, 210, 106] },
+        { label: 'IN PROGRESS', value: inProgress, color: [255, 183, 3] },
+        { label: 'PENDING', value: pending, color: [65, 90, 119] },
+        { label: 'TOTAL SPENT', value: formatCurrency(totals.actual), color: [251, 133, 0] }
+      ];
+      
+      kpis.forEach(function(kpi, i) {
+        var x = margin + (i * kpiWidth) + (kpiWidth / 2);
+        doc.setFontSize(16);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(kpi.color[0], kpi.color[1], kpi.color[2]);
+        doc.text(String(kpi.value), x, yPos + 10, { align: 'center' });
+        doc.setFontSize(7);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(kpi.label, x, yPos + 16, { align: 'center' });
+      });
+      yPos += 30;
+      
+      // Phases Section
+      if (currentProject.phases.length > 0) {
+        addSectionHeader('Phases (' + currentProject.phases.length + ')');
+        
+        // Table header
+        doc.setFillColor(230, 230, 230);
+        doc.rect(margin, yPos, contentWidth, 7, 'F');
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(50, 50, 50);
+        doc.text('#', margin + 2, yPos + 5);
+        doc.text('Phase Name', margin + 12, yPos + 5);
+        doc.text('Progress', margin + 100, yPos + 5);
+        doc.text('Status', margin + 130, yPos + 5);
+        yPos += 10;
+        
+        doc.setFont(undefined, 'normal');
+        currentProject.phases.forEach(function(phase, i) {
+          checkNewPage(8);
+          doc.setTextColor(0, 0, 0);
+          doc.setFontSize(9);
+          doc.text(String(i + 1), margin + 2, yPos);
+          doc.text(phase.name.substring(0, 40), margin + 12, yPos);
+          doc.text(phase.progress + '%', margin + 100, yPos);
+          
+          var statusColors = { complete: [0, 210, 106], progress: [255, 183, 3], pending: [65, 90, 119] };
+          var sc = statusColors[phase.status] || [100, 100, 100];
+          doc.setTextColor(sc[0], sc[1], sc[2]);
+          doc.text(phase.status.toUpperCase(), margin + 130, yPos);
+          yPos += 7;
+        });
+        yPos += 10;
+      }
+      
+      // Deliveries Section
+      if (currentProject.deliveries.length > 0) {
+        addSectionHeader('Deliveries (' + currentProject.deliveries.length + ')');
+        
+        // Table header
+        doc.setFillColor(230, 230, 230);
+        doc.rect(margin, yPos, contentWidth, 7, 'F');
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(50, 50, 50);
+        doc.text('Date', margin + 2, yPos + 5);
+        doc.text('Title', margin + 30, yPos + 5);
+        doc.text('Destination', margin + 110, yPos + 5);
+        doc.text('Days', margin + 155, yPos + 5);
+        yPos += 10;
+        
+        doc.setFont(undefined, 'normal');
+        currentProject.deliveries.slice().sort(function(a, b) { return new Date(a.date) - new Date(b.date); }).forEach(function(d) {
+          checkNewPage(8);
+          var days = getDaysUntil(d.date);
+          doc.setTextColor(0, 0, 0);
+          doc.setFontSize(9);
+          doc.text(d.date, margin + 2, yPos);
+          doc.text((d.title || '').substring(0, 35), margin + 30, yPos);
+          doc.text((d.destination || '-').substring(0, 20), margin + 110, yPos);
+          
+          if (days < 0) doc.setTextColor(230, 57, 70);
+          else if (days <= 7) doc.setTextColor(255, 183, 3);
+          else doc.setTextColor(0, 168, 232);
+          doc.text(days > 0 ? days + ' days' : days === 0 ? 'Today' : Math.abs(days) + ' days ago', margin + 155, yPos);
+          yPos += 7;
+        });
+        yPos += 10;
+      }
+      
+      // Budget Summary
+      if (totals.estimated > 0 || totals.actual > 0) {
+        addSectionHeader('Budget Summary');
+        
+        var settings = currentProject.budgetSettings || {};
+        var laborCost = totals.actualHours * (settings.hourlyRate || 0);
+        var variance = totals.estimated - totals.actual;
+        
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+        var budgetItems = [
+          ['Estimated Budget:', formatCurrency(totals.estimated)],
+          ['Actual Spent:', formatCurrency(totals.actual)],
+          ['Labor Cost (' + totals.actualHours.toFixed(1) + ' hrs):', formatCurrency(laborCost)],
+          ['Variance:', (variance >= 0 ? '+' : '') + formatCurrency(variance)]
+        ];
+        
+        budgetItems.forEach(function(item) {
+          checkNewPage(7);
+          doc.text(item[0], margin, yPos);
+          doc.text(item[1], margin + 60, yPos);
+          yPos += 6;
+        });
+        yPos += 10;
+      }
+      
+      // Team Members
+      if (currentProject.team && currentProject.team.length > 0) {
+        addSectionHeader('Team Members (' + currentProject.team.length + ')');
+        
+        doc.setFontSize(9);
+        currentProject.team.forEach(function(m) {
+          checkNewPage(7);
+          doc.setTextColor(0, 0, 0);
+          doc.text(m.name, margin, yPos);
+          doc.setTextColor(100, 100, 100);
+          doc.text((m.role || 'Team Member') + (m.email ? ' - ' + m.email : ''), margin + 50, yPos);
+          yPos += 6;
+        });
+        yPos += 10;
+      }
+      
+      // Notes
+      var notes = currentProject.notes || {};
+      if (notes.focus || notes.milestones || notes.future) {
+        addSectionHeader('Project Notes');
+        doc.setFontSize(9);
+        
+        if (notes.focus) {
+          checkNewPage(15);
+          doc.setFont(undefined, 'bold');
+          doc.setTextColor(0, 168, 232);
+          doc.text('Current Focus:', margin, yPos);
+          yPos += 5;
+          doc.setFont(undefined, 'normal');
+          doc.setTextColor(0, 0, 0);
+          var focusLines = doc.splitTextToSize(notes.focus, contentWidth);
+          doc.text(focusLines.slice(0, 3), margin, yPos);
+          yPos += Math.min(focusLines.length, 3) * 4 + 5;
+        }
+        
+        if (notes.milestones) {
+          checkNewPage(15);
+          doc.setFont(undefined, 'bold');
+          doc.setTextColor(255, 183, 3);
+          doc.text('Upcoming Milestones:', margin, yPos);
+          yPos += 5;
+          doc.setFont(undefined, 'normal');
+          doc.setTextColor(0, 0, 0);
+          var mLines = doc.splitTextToSize(notes.milestones, contentWidth);
+          doc.text(mLines.slice(0, 3), margin, yPos);
+          yPos += Math.min(mLines.length, 3) * 4 + 5;
+        }
+      }
+      
+      // Footer on each page
+      var totalPages = doc.internal.getNumberOfPages();
+      for (var i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text('PRJ-MGMT Tool - Page ' + i + ' of ' + totalPages, pageWidth / 2, pageHeight - 10, { align: 'center' });
+      }
+      
+      // Save
+      var filename = currentProject.name.replace(/\s+/g, '_') + '_report.pdf';
+      doc.save(filename);
+      showToast('PDF exported: ' + filename, 'success');
+    }
+    
+    // ===== PRINT PROJECT =====
+    function printProject() {
+      // Add print header if not exists
+      var printHeader = document.querySelector('.print-header');
+      if (!printHeader) {
+        printHeader = document.createElement('div');
+        printHeader.className = 'print-header';
+        document.querySelector('.main').insertBefore(printHeader, document.querySelector('.main').firstChild);
+      }
+      printHeader.innerHTML = '<h1>' + escapeHtml(currentProject.name) + '</h1><div class="print-meta">Project Report - Generated ' + new Date().toLocaleDateString() + ' | Category: ' + (currentProject.category || 'None') + '</div>';
+      
+      // Add print footer if not exists
+      var printFooter = document.querySelector('.print-footer');
+      if (!printFooter) {
+        printFooter = document.createElement('div');
+        printFooter.className = 'print-footer';
+        document.body.appendChild(printFooter);
+      }
+      printFooter.innerHTML = 'Generated by PRJ-MGMT Tool';
+      
+      // Switch to dashboard for complete view
+      switchTab('dashboard');
+      
+      // Add print mode class
+      document.body.classList.add('print-mode');
+      
+      // Trigger print
+      setTimeout(function() {
+        window.print();
+        // Remove print mode after printing
+        setTimeout(function() {
+          document.body.classList.remove('print-mode');
+        }, 500);
+      }, 100);
+    }
+    function downloadFile(content, filename) {
+      var blob = new Blob([content], { type: 'text/csv' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function importJSON(event) {
+      var file = event.target.files[0]; if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          currentProject = JSON.parse(e.target.result);
+          currentProject.id = currentProject.id || generateId();
+          if (!currentProject.team) currentProject.team = [];
+          if (!currentProject.activity) currentProject.activity = [];
+          if (!currentProject.budgetSettings) currentProject.budgetSettings = { currency: 'USD', hourlyRate: 0, taxRate: 0 };
+          if (!currentProject.resources) currentProject.resources = [];
+          nextPhaseId = Math.max.apply(null, (currentProject.phases || []).map(function(p) { return p.id; }).concat([0])) + 1;
+          nextDeliveryId = Math.max.apply(null, (currentProject.deliveries || []).map(function(d) { return d.id; }).concat([0])) + 1;
+          nextTeamMemberId = Math.max.apply(null, (currentProject.team || []).map(function(m) { return m.id; }).concat([0])) + 1;
+          nextResourceId = Math.max.apply(null, (currentProject.resources || []).map(function(r) { return r.id; }).concat([0])) + 1;
+          renderAll();
+          showToast('Project imported!', 'success');
+        } catch (err) { showToast('Error importing file', 'error'); }
+      };
+      reader.readAsText(file);
+      event.target.value = "";
+    }
+    function importCSV(event, type) {
+      var file = event.target.files[0]; if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          var lines = e.target.result.split('\n').filter(function(l) { return l.trim(); });
+          saveToHistory();
+          if (type === 'phases') {
+            for (var i = 1; i < lines.length; i++) {
+              var vals = parseCSVLine(lines[i]);
+              if (vals.length >= 2) {
+                currentProject.phases.push({ id: nextPhaseId++, name: vals[1] || 'Phase ' + i, progress: parseInt(vals[2]) || 0, status: vals[3] || 'pending', assignees: [], budget: { estimated: parseFloat(vals[4]) || 0, actual: parseFloat(vals[5]) || 0 }, timeEntries: [] });
+              }
+            }
+          } else if (type === 'deliveries') {
+            for (var i = 1; i < lines.length; i++) {
+              var vals = parseCSVLine(lines[i]);
+              if (vals.length >= 2) {
+                currentProject.deliveries.push({ id: nextDeliveryId++, date: vals[0] || new Date().toISOString().split('T')[0], title: vals[1] || 'Delivery ' + i, destination: vals[2] || '', status: vals[3] || 'pending', assignees: [] });
+              }
+            }
+          }
+          logActivity('add', 'Imported ' + type + ' from', 'CSV');
+          renderAll();
+          showToast(type + ' imported!', 'success');
+          triggerAutoSave();
+        } catch (err) { showToast('Error importing CSV', 'error'); }
+      };
+      reader.readAsText(file);
+      event.target.value = "";
+    }
+    function parseCSVLine(line) {
+      var result = [], current = '', inQuotes = false;
+      for (var i = 0; i < line.length; i++) {
+        var c = line[i];
+        if (c === '"') { if (inQuotes && line[i+1] === '"') { current += '"'; i++; } else inQuotes = !inQuotes; }
+        else if (c === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+        else current += c;
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    // ===== PRESENTATION =====
+    function togglePresentationMode() {
+      document.body.classList.toggle('presentation-mode');
+      if (document.body.classList.contains('presentation-mode')) {
+        switchTab('dashboard');
+        if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function() {});
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen().catch(function() {});
+      }
+    }
+
+    // ===== KEYBOARD SHORTCUTS =====
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        if (document.body.classList.contains('presentation-mode')) togglePresentationMode();
+        closeDropdowns();
+        document.querySelectorAll('.modal-overlay').forEach(function(m) { m.classList.remove('show'); });
+      }
+      if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveProject(); }
+      if (e.ctrlKey && e.key === 'p') { e.preventDefault(); togglePresentationMode(); }
+      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+      if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); }
+    });
+
+    // ===== INITIALIZE =====
+    loadTheme();
+    saveToHistory();
+    renderAll();
+    updateUndoRedoButtons();
+  </script>
+</body>
+</html>

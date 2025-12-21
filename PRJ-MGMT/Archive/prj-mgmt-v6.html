@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRJ-MGMT Tool</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #0A1628;
+      --bg-surface: #0D1B2A;
+      --bg-card: #1B263B;
+      --bg-card-hover: #243447;
+      --text-primary: #E0E1DD;
+      --text-secondary: #778DA9;
+      --text-muted: #415A77;
+      --accent-blue: #00A8E8;
+      --accent-green: #00D26A;
+      --accent-yellow: #FFB703;
+      --accent-red: #E63946;
+      --accent-purple: #9D4EDD;
+      --border: #415A77;
+      --font-display: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-display);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    .header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 0.75rem; }
+    .logo-mark {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.7rem; font-family: var(--font-mono);
+    }
+    .logo h1 { font-size: 1.1rem; font-weight: 600; font-family: var(--font-mono); }
+    .logo h1 span { color: var(--accent-blue); }
+    .project-selector {
+      display: flex; align-items: center; gap: 0.75rem;
+      background: var(--bg-card); padding: 0.5rem 1rem;
+      border-radius: 8px; border: 1px solid var(--border);
+    }
+    .project-selector label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
+    .project-name-input {
+      background: transparent; border: none; color: var(--text-primary);
+      font-family: var(--font-display); font-size: 1rem; font-weight: 600;
+      width: 200px; padding: 0.25rem;
+    }
+    .project-name-input:focus { outline: none; border-bottom: 1px solid var(--accent-blue); }
+    .header-actions { display: flex; gap: 0.5rem; }
+    .btn {
+      padding: 0.5rem 1rem; border-radius: 6px;
+      font-family: var(--font-display); font-size: 0.8rem; font-weight: 500;
+      cursor: pointer; transition: all 0.2s ease; border: none;
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+    .btn-primary { background: var(--accent-blue); color: white; }
+    .btn-primary:hover { background: #0095d0; transform: translateY(-1px); }
+    .btn-secondary { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg-card-hover); }
+    .btn-success { background: var(--accent-green); color: var(--bg-deep); }
+    .btn-danger { background: var(--accent-red); color: white; }
+    .dropdown { position: relative; }
+    .dropdown-menu {
+      position: absolute; top: 100%; right: 0; margin-top: 0.5rem;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+      min-width: 180px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      display: none; z-index: 200; overflow: hidden;
+    }
+    .dropdown-menu.show { display: block; }
+    .dropdown-item {
+      padding: 0.75rem 1rem; cursor: pointer; font-size: 0.85rem;
+      display: flex; align-items: center; gap: 0.5rem; transition: background 0.15s ease;
+    }
+    .dropdown-item:hover { background: var(--bg-card-hover); }
+    .dropdown-divider { height: 1px; background: var(--border); margin: 0.25rem 0; }
+    .main { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+    .tabs {
+      display: flex; gap: 0.25rem; margin-bottom: 1.5rem;
+      background: var(--bg-card); padding: 0.25rem; border-radius: 8px; width: fit-content;
+    }
+    .tab {
+      padding: 0.6rem 1.25rem; border-radius: 6px; font-size: 0.85rem; font-weight: 500;
+      cursor: pointer; transition: all 0.2s ease; color: var(--text-secondary);
+      background: transparent; border: none;
+    }
+    .tab:hover { color: var(--text-primary); }
+    .tab.active { background: var(--accent-blue); color: white; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .kpi-card {
+      background: var(--bg-card); border-radius: 10px; padding: 1.25rem;
+      text-align: center; transition: transform 0.2s ease;
+    }
+    .kpi-card:hover { transform: translateY(-2px); }
+    .kpi-value { font-size: 2.5rem; font-weight: 700; font-family: var(--font-mono); line-height: 1; }
+    .kpi-value.complete { color: var(--accent-green); }
+    .kpi-value.progress { color: var(--accent-yellow); }
+    .kpi-value.pending { color: var(--text-muted); }
+    .kpi-value.total { color: var(--accent-blue); }
+    .kpi-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-top: 0.4rem; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .section-header h2 {
+      font-size: 1.25rem; font-weight: 600; border-left: 4px solid var(--accent-blue);
+      padding-left: 0.75rem; display: flex; align-items: center; gap: 0.75rem;
+    }
+    .badge { background: var(--bg-card); color: var(--text-secondary); padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-family: var(--font-mono); }
+    .phases-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+    .phase-card {
+      background: var(--bg-card); border-radius: 8px; padding: 0.875rem 1rem;
+      display: grid; grid-template-columns: 24px 80px 1fr 180px 100px 32px;
+      align-items: center; gap: 1rem; transition: background 0.2s ease;
+    }
+    .phase-card:hover { background: var(--bg-card-hover); }
+    .phase-label { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; }
+    .phase-name input {
+      background: transparent; border: none; color: var(--text-primary);
+      font-family: var(--font-display); font-size: 0.9rem; width: 100%; padding: 0.2rem 0;
+      border-bottom: 1px solid transparent;
+    }
+    .phase-name input:hover { border-bottom-color: var(--border); }
+    .phase-name input:focus { outline: none; border-bottom-color: var(--accent-blue); }
+    .progress-control { display: flex; align-items: center; gap: 0.5rem; }
+    .progress-slider {
+      flex: 1; -webkit-appearance: none; height: 6px; border-radius: 3px;
+      background: var(--bg-deep); cursor: pointer;
+    }
+    .progress-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent-blue); cursor: pointer; transition: transform 0.15s ease;
+    }
+    .progress-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+    .progress-value { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary); min-width: 40px; text-align: right; }
+    .status-select {
+      padding: 0.35rem 0.6rem; border-radius: 5px; font-family: var(--font-display);
+      font-size: 0.75rem; font-weight: 600; cursor: pointer; border: none;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .status-select.complete { background: var(--accent-green); color: var(--bg-deep); }
+    .status-select.progress { background: var(--accent-yellow); color: var(--bg-deep); }
+    .status-select.pending { background: var(--text-muted); color: var(--text-primary); }
+    .status-select option { background: var(--bg-card); color: var(--text-primary); }
+    .deliveries-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+    .delivery-card {
+      background: var(--bg-card); border-radius: 10px; padding: 1.25rem;
+      border-top: 4px solid var(--accent-blue); transition: transform 0.2s ease;
+    }
+    .delivery-card:hover { transform: translateY(-2px); }
+    .delivery-date-label { font-size: 0.65rem; color: var(--accent-blue); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 0.25rem; }
+    .delivery-date-input {
+      background: transparent; border: none; color: var(--text-primary);
+      font-family: var(--font-mono); font-size: 1.25rem; font-weight: 600;
+      width: 100%; padding: 0.2rem 0; cursor: pointer;
+    }
+    .delivery-date-input:focus { outline: none; }
+    .delivery-divider { height: 1px; background: var(--border); margin: 0.75rem 0; }
+    .delivery-title input, .delivery-dest input {
+      background: transparent; border: none; color: var(--text-primary);
+      font-family: var(--font-display); width: 100%; padding: 0.2rem 0;
+      border-bottom: 1px solid transparent;
+    }
+    .delivery-title input { font-size: 0.95rem; font-weight: 600; }
+    .delivery-dest input { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; }
+    .delivery-title input:focus, .delivery-dest input:focus { outline: none; border-bottom-color: var(--accent-blue); }
+    .delivery-countdown {
+      margin-top: 0.75rem; padding: 0.4rem 0.6rem; background: var(--bg-deep);
+      border-radius: 5px; font-family: var(--font-mono); font-size: 0.75rem;
+      color: var(--text-secondary); text-align: center;
+    }
+    .delivery-countdown.urgent { background: rgba(230, 57, 70, 0.2); color: var(--accent-red); }
+    .delivery-countdown.soon { background: rgba(255, 183, 3, 0.2); color: var(--accent-yellow); }
+    .notes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+    .notes-card { background: var(--bg-card); border-radius: 10px; padding: 1rem; }
+    .notes-card h3 { font-size: 0.75rem; font-weight: 600; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
+    .notes-card:nth-child(2) h3 { color: var(--accent-yellow); }
+    .notes-card:nth-child(3) h3 { color: var(--accent-green); }
+    .notes-card textarea {
+      width: 100%; height: 100px; background: var(--bg-deep); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-family: var(--font-display);
+      font-size: 0.85rem; padding: 0.6rem; resize: none; line-height: 1.5;
+    }
+    .notes-card textarea:focus { outline: none; border-color: var(--accent-blue); }
+    .add-btn {
+      width: 100%; padding: 0.6rem; background: transparent; border: 2px dashed var(--border);
+      border-radius: 8px; color: var(--text-secondary); font-family: var(--font-display);
+      font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease;
+    }
+    .add-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: rgba(0, 168, 232, 0.1); }
+    .delete-btn {
+      opacity: 0; background: transparent; border: none; color: var(--accent-red);
+      cursor: pointer; padding: 0.25rem; font-size: 1rem; transition: opacity 0.2s ease;
+    }
+    .phase-card:hover .delete-btn, .delivery-card:hover .delete-btn { opacity: 1; }
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center; z-index: 300;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--bg-surface); border-radius: 12px; padding: 1.5rem;
+      width: 90%; max-width: 500px; border: 1px solid var(--border); max-height: 90vh; overflow-y: auto;
+    }
+    .modal h3 { font-size: 1.1rem; margin-bottom: 1rem; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem; }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-family: var(--font-display);
+      font-size: 0.9rem; padding: 0.6rem;
+    }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent-blue); }
+    .projects-list { max-height: 300px; overflow-y: auto; margin-bottom: 1rem; }
+    .project-item {
+      display: flex; justify-content: space-between; align-items: center; padding: 0.75rem;
+      background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;
+      cursor: pointer; transition: background 0.15s ease;
+    }
+    .project-item:hover { background: var(--bg-card-hover); }
+    .project-item-info h4 { font-size: 0.9rem; margin-bottom: 0.2rem; }
+    .project-item-info span { font-size: 0.75rem; color: var(--text-secondary); }
+    .project-item-actions { display: flex; gap: 0.5rem; }
+    .project-item-actions button {
+      background: transparent; border: none; color: var(--text-secondary);
+      cursor: pointer; padding: 0.25rem; font-size: 0.9rem;
+    }
+    .project-item-actions button:hover { color: var(--accent-red); }
+    body.presentation-mode .header-actions, body.presentation-mode .tabs,
+    body.presentation-mode .add-btn, body.presentation-mode .delete-btn { display: none; }
+    body.presentation-mode .phase-name input, body.presentation-mode .delivery-title input,
+    body.presentation-mode .delivery-dest input, body.presentation-mode .delivery-date-input,
+    body.presentation-mode .progress-slider, body.presentation-mode .status-select,
+    body.presentation-mode .notes-card textarea { pointer-events: none; }
+    body.presentation-mode .main { max-width: 1600px; }
+    body.presentation-mode .kpi-value { font-size: 3.5rem; }
+    .exit-presentation { display: none; position: fixed; top: 1rem; right: 1rem; z-index: 400; }
+    body.presentation-mode .exit-presentation { display: block; }
+    @media (max-width: 1000px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .phase-card { grid-template-columns: 24px 1fr; }
+    }
+    @media (max-width: 600px) {
+      .header { flex-direction: column; gap: 0.75rem; padding: 0.75rem; }
+      .project-selector { width: 100%; justify-content: center; }
+      .header-actions { flex-wrap: wrap; justify-content: center; }
+      .main { padding: 1rem; }
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .phase-card, .delivery-card, .kpi-card, .notes-card { animation: fadeIn 0.3s ease forwards; }
+    .empty-state { text-align: center; padding: 3rem 2rem; color: var(--text-secondary); }
+    .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+    .empty-state h3 { font-size: 1.1rem; color: var(--text-primary); margin-bottom: 0.5rem; }
+    .empty-state p { font-size: 0.85rem; margin-bottom: 1rem; }
+    [data-tooltip] { position: relative; }
+    [data-tooltip]::after {
+      content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%;
+      transform: translateX(-50%); padding: 0.4rem 0.6rem; background: var(--bg-deep);
+      color: var(--text-primary); font-size: 0.7rem; font-weight: 400; white-space: nowrap;
+      border-radius: 4px; border: 1px solid var(--border); opacity: 0; visibility: hidden;
+      transition: opacity 0.2s ease; z-index: 500; pointer-events: none; margin-bottom: 0.5rem;
+    }
+    [data-tooltip]:hover::after { opacity: 1; visibility: visible; }
+    .save-indicator {
+      display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem;
+      color: var(--text-secondary); padding: 0.4rem 0.75rem; background: var(--bg-card);
+      border-radius: 6px; transition: all 0.3s ease;
+    }
+    .save-indicator.saving { color: var(--accent-yellow); }
+    .save-indicator.saved { color: var(--accent-green); }
+    .save-indicator-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); transition: background 0.3s ease; }
+    .save-indicator.saving .save-indicator-dot { background: var(--accent-yellow); animation: pulse 1s infinite; }
+    .save-indicator.saved .save-indicator-dot { background: var(--accent-green); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 1000; display: flex; flex-direction: column; gap: 0.5rem; }
+    .toast {
+      padding: 0.75rem 1rem; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text-primary); font-size: 0.85rem;
+      display: flex; align-items: center; gap: 0.5rem; animation: slideIn 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .toast.success { border-left: 3px solid var(--accent-green); }
+    .toast.error { border-left: 3px solid var(--accent-red); }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+    .confirm-modal { background: var(--bg-surface); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 400px; border: 1px solid var(--border); text-align: center; }
+    .confirm-modal h3 { margin-bottom: 0.75rem; color: var(--text-primary); }
+    .confirm-modal p { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.25rem; }
+    .confirm-modal .item-name { color: var(--accent-blue); font-weight: 600; }
+    .confirm-modal-actions { display: flex; gap: 0.75rem; justify-content: center; }
+    body.light-theme {
+      --bg-deep: #F5F7FA; --bg-surface: #FFFFFF; --bg-card: #FFFFFF;
+      --bg-card-hover: #F0F4F8; --text-primary: #1A202C; --text-secondary: #4A5568;
+      --text-muted: #A0AEC0; --border: #E2E8F0;
+    }
+    body.light-theme .header { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    body.light-theme .phase-card, body.light-theme .delivery-card,
+    body.light-theme .kpi-card, body.light-theme .notes-card { box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .theme-toggle {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.4rem 0.6rem; cursor: pointer; font-size: 1rem; transition: all 0.2s ease;
+    }
+    .theme-toggle:hover { background: var(--bg-card-hover); }
+    .undo-redo-controls { display: flex; gap: 0.25rem; }
+    .undo-redo-btn {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px;
+      padding: 0.35rem 0.5rem; cursor: pointer; color: var(--text-secondary);
+      font-size: 0.85rem; transition: all 0.2s ease;
+    }
+    .undo-redo-btn:hover:not(:disabled) { background: var(--bg-card-hover); color: var(--text-primary); }
+    .undo-redo-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .alerts-panel {
+      background: var(--bg-card); border-radius: 8px; padding: 1rem;
+      margin-bottom: 1rem; border-left: 4px solid var(--accent-yellow);
+    }
+    .alerts-panel h3 { font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    .alert-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem;
+    }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-badge {
+      display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem;
+      border-radius: 4px; font-size: 0.65rem; font-weight: 600;
+    }
+    .alert-overdue { background: rgba(230, 57, 70, 0.3); color: var(--accent-red); }
+    .alert-today { background: rgba(255, 183, 3, 0.3); color: var(--accent-yellow); }
+    .alert-soon { background: rgba(0, 168, 232, 0.2); color: var(--accent-blue); }
+    .category-select {
+      padding: 0.4rem 0.6rem; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-primary); font-size: 0.8rem; cursor: pointer;
+    }
+    /* Phase 4: Visualization Styles */
+    .viz-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .viz-tab {
+      padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.8rem; font-weight: 500;
+      cursor: pointer; transition: all 0.2s ease; color: var(--text-secondary);
+      background: var(--bg-card); border: 1px solid var(--border);
+    }
+    .viz-tab:hover { color: var(--text-primary); border-color: var(--accent-blue); }
+    .viz-tab.active { background: var(--accent-blue); color: white; border-color: var(--accent-blue); }
+    .viz-content { display: none; }
+    .viz-content.active { display: block; }
+    .timeline-container { background: var(--bg-card); border-radius: 10px; padding: 1.5rem; overflow-x: auto; }
+    .timeline-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .timeline-header h3 { font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .timeline-scroll { overflow-x: auto; padding-bottom: 1rem; }
+    .timeline { position: relative; min-height: 300px; min-width: 800px; }
+    .timeline-months { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+    .timeline-month {
+      flex: 1; min-width: 100px; padding: 0.5rem; text-align: center;
+      font-size: 0.75rem; color: var(--text-secondary); border-right: 1px solid var(--border);
+    }
+    .timeline-month:last-child { border-right: none; }
+    .timeline-month.current { background: rgba(0, 168, 232, 0.1); color: var(--accent-blue); font-weight: 600; }
+    .timeline-row { display: flex; align-items: center; margin-bottom: 0.75rem; position: relative; height: 40px; }
+    .timeline-row-label {
+      width: 150px; padding-right: 1rem; font-size: 0.8rem; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;
+    }
+    .timeline-row-track { flex: 1; position: relative; height: 100%; background: var(--bg-deep); border-radius: 4px; }
+    .timeline-bar {
+      position: absolute; height: 28px; top: 6px; border-radius: 4px;
+      display: flex; align-items: center; padding: 0 0.5rem; font-size: 0.7rem;
+      font-weight: 500; color: white; cursor: pointer; transition: transform 0.2s ease;
+    }
+    .timeline-bar:hover { transform: scaleY(1.1); z-index: 10; }
+    .timeline-bar.phase { background: var(--accent-blue); }
+    .timeline-bar.phase.complete { background: var(--accent-green); }
+    .timeline-bar.phase.progress { background: var(--accent-yellow); color: var(--bg-deep); }
+    .timeline-marker {
+      position: absolute; width: 12px; height: 12px; border-radius: 50%;
+      background: var(--accent-purple); top: 50%; transform: translateY(-50%);
+      cursor: pointer; z-index: 5;
+    }
+    .timeline-marker:hover { transform: translateY(-50%) scale(1.3); }
+    .timeline-today-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent-red); z-index: 20; }
+    .timeline-today-label { position: absolute; top: -20px; transform: translateX(-50%); font-size: 0.65rem; color: var(--accent-red); font-weight: 600; }
+    .calendar-container { background: var(--bg-card); border-radius: 10px; padding: 1.5rem; }
+    .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .calendar-nav { display: flex; align-items: center; gap: 1rem; }
+    .calendar-nav-btn {
+      padding: 0.5rem 0.75rem; background: var(--bg-deep); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text-secondary); cursor: pointer; font-size: 1rem;
+    }
+    .calendar-nav-btn:hover { background: var(--bg-card-hover); }
+    .calendar-month-label { font-size: 1.1rem; font-weight: 600; min-width: 180px; text-align: center; }
+    .calendar-today-btn {
+      padding: 0.4rem 0.75rem; background: var(--accent-blue); border: none;
+      border-radius: 4px; color: white; font-size: 0.8rem; cursor: pointer;
+    }
+    .calendar-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px;
+      background: var(--border); border-radius: 8px; overflow: hidden;
+    }
+    .calendar-day-header {
+      background: var(--bg-deep); padding: 0.75rem; text-align: center;
+      font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;
+    }
+    .calendar-day { background: var(--bg-surface); min-height: 100px; padding: 0.5rem; position: relative; }
+    .calendar-day.other-month { background: var(--bg-deep); opacity: 0.5; }
+    .calendar-day.today { background: rgba(0, 168, 232, 0.1); }
+    .calendar-day.today::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 3px; background: var(--accent-blue);
+    }
+    .calendar-day-number { font-size: 0.85rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; }
+    .calendar-day.today .calendar-day-number { color: var(--accent-blue); }
+    .calendar-event {
+      padding: 0.25rem 0.4rem; border-radius: 3px; font-size: 0.7rem;
+      margin-bottom: 0.25rem; cursor: pointer; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .calendar-event.delivery { background: rgba(157, 78, 221, 0.2); color: var(--accent-purple); border-left: 2px solid var(--accent-purple); }
+    .gantt-container { background: var(--bg-card); border-radius: 10px; padding: 1.5rem; overflow-x: auto; }
+    .gantt-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .gantt-legend { display: flex; gap: 1rem; font-size: 0.75rem; }
+    .gantt-legend-item { display: flex; align-items: center; gap: 0.35rem; }
+    .gantt-legend-color { width: 12px; height: 12px; border-radius: 2px; }
+    .gantt-scroll { overflow-x: auto; padding-bottom: 1rem; }
+    .gantt-chart { min-width: 900px; }
+    .gantt-time-header { display: flex; margin-left: 200px; border-bottom: 1px solid var(--border); }
+    .gantt-week {
+      flex: 1; min-width: 80px; padding: 0.5rem; text-align: center;
+      font-size: 0.7rem; color: var(--text-secondary); border-right: 1px solid var(--border);
+    }
+    .gantt-week:last-child { border-right: none; }
+    .gantt-week.current { background: rgba(0, 168, 232, 0.1); }
+    .gantt-rows { margin-top: 0.5rem; }
+    .gantt-row {
+      display: flex; align-items: center; padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .gantt-row:last-child { border-bottom: none; }
+    .gantt-row-label { width: 200px; padding-right: 1rem; flex-shrink: 0; }
+    .gantt-row-name {
+      font-size: 0.85rem; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .gantt-row-progress { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem; }
+    .gantt-row-track { flex: 1; position: relative; height: 24px; }
+    .gantt-bar-container { position: absolute; height: 100%; }
+    .gantt-bar { height: 18px; border-radius: 3px; position: relative; cursor: pointer; }
+    .gantt-bar:hover { transform: scaleY(1.2); }
+    .gantt-bar-bg { position: absolute; inset: 0; background: var(--bg-deep); border-radius: 3px; border: 1px solid var(--border); }
+    .gantt-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; transition: width 0.3s ease; }
+    .gantt-bar-fill.complete { background: var(--accent-green); }
+    .gantt-bar-fill.progress { background: var(--accent-yellow); }
+    .gantt-bar-fill.pending { background: var(--text-muted); }
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; }
+    .chart-card { background: var(--bg-card); border-radius: 10px; padding: 1.5rem; }
+    .chart-card h4 { font-size: 0.9rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .chart-canvas-container { position: relative; height: 250px; }
+    .chart-svg { width: 100%; height: 100%; }
+    .chart-axis-line { stroke: var(--border); stroke-width: 1; }
+    .chart-grid-line { stroke: var(--border); stroke-width: 0.5; stroke-dasharray: 4 4; }
+    .chart-axis-label { fill: var(--text-secondary); font-size: 0.65rem; font-family: var(--font-mono); }
+    .chart-line { fill: none; stroke-width: 2; stroke-linecap: round; }
+    .chart-bar { cursor: pointer; }
+    .chart-bar:hover { opacity: 0.8; }
+    .chart-legend { display: flex; justify-content: center; gap: 1.5rem; margin-top: 1rem; }
+    .chart-legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-secondary); }
+    .chart-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .burndown-info { display: flex; gap: 2rem; margin-bottom: 1rem; }
+    .burndown-stat { text-align: center; }
+    .burndown-stat-value { font-size: 1.5rem; font-weight: 700; font-family: var(--font-mono); }
+    .burndown-stat-value.good { color: var(--accent-green); }
+    .burndown-stat-value.warning { color: var(--accent-yellow); }
+    .burndown-stat-value.danger { color: var(--accent-red); }
+    .burndown-stat-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+    .dashboard-widget { background: var(--bg-card); border-radius: 10px; padding: 1.25rem; }
+    .dashboard-widget h4 { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    .widget-value { font-size: 2rem; font-weight: 700; font-family: var(--font-mono); }
+    .widget-subtext { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; }
+    .widget-progress-ring { position: relative; width: 80px; height: 80px; margin: 0 auto; }
+    .widget-progress-ring svg { transform: rotate(-90deg); }
+    .widget-progress-ring circle { fill: none; stroke-width: 8; }
+    .widget-progress-ring .bg { stroke: var(--bg-deep); }
+    .widget-progress-ring .progress { stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
+    .widget-progress-ring .value { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.1rem; font-weight: 700; font-family: var(--font-mono); }
+    .widget-list { max-height: 150px; overflow-y: auto; }
+    .widget-list-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem;
+    }
+    .widget-list-item:last-child { border-bottom: none; }
+    .widget-bar { height: 8px; background: var(--bg-deep); border-radius: 4px; margin-top: 0.5rem; overflow: hidden; }
+    .widget-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+    .widget-status-dots { display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.5rem; }
+    .widget-status-dot { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+    .widget-status-dot .dot {
+      width: 24px; height: 24px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 600; color: white;
+    }
+    .widget-status-dot .label { font-size: 0.6rem; color: var(--text-muted); }
+    .viz-empty-state { text-align: center; padding: 4rem 2rem; color: var(--text-secondary); }
+    .viz-empty-state-icon { font-size: 4rem; margin-bottom: 1rem; opacity: 0.3; }
+    .viz-empty-state h3 { font-size: 1.2rem; color: var(--text-primary); margin-bottom: 0.5rem; }
+    .viz-empty-state p { font-size: 0.9rem; max-width: 400px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo">
+      <div class="logo-mark">PRJ</div>
+      <h1>PRJ-<span>MGMT</span> Tool</h1>
+    </div>
+    <div class="project-selector">
+      <label>Project:</label>
+      <input type="text" class="project-name-input" id="projectName" value="New Project" onchange="updateProjectName(this.value)">
+      <select class="category-select" id="projectCategory" onchange="updateProjectCategory(this.value)">
+        <option value="none">📁 Category</option>
+        <option value="work">💼 Work</option>
+        <option value="personal">🏠 Personal</option>
+        <option value="client">🤝 Client</option>
+      </select>
+    </div>
+    <div class="header-actions">
+      <div class="undo-redo-controls">
+        <button class="undo-redo-btn" onclick="undo()" id="undoBtn" disabled data-tooltip="Ctrl+Z">↶</button>
+        <button class="undo-redo-btn" onclick="redo()" id="redoBtn" disabled data-tooltip="Ctrl+Y">↷</button>
+      </div>
+      <div class="save-indicator" id="saveIndicator">
+        <span class="save-indicator-dot"></span>
+        <span id="saveIndicatorText">Saved</span>
+      </div>
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle" data-tooltip="Toggle theme">🌙</button>
+      <button class="btn btn-secondary" onclick="showProjectsModal()" data-tooltip="Manage projects">📂 Projects</button>
+      <div class="dropdown">
+        <button class="btn btn-secondary" onclick="toggleDropdown('importDropdown')">📥 Import ▾</button>
+        <div class="dropdown-menu" id="importDropdown">
+          <div class="dropdown-item" onclick="document.getElementById('importJson').click(); closeDropdowns();">📄 Import JSON</div>
+          <div class="dropdown-item" onclick="document.getElementById('importCsv').click(); closeDropdowns();">📊 Import CSV (Phases)</div>
+          <div class="dropdown-item" onclick="document.getElementById('importDeliveriesCsv').click(); closeDropdowns();">📦 Import CSV (Deliveries)</div>
+        </div>
+      </div>
+      <div class="dropdown">
+        <button class="btn btn-secondary" onclick="toggleDropdown('exportDropdown')">📤 Export ▾</button>
+        <div class="dropdown-menu" id="exportDropdown">
+          <div class="dropdown-item" onclick="exportJSON(); closeDropdowns();">📄 Export JSON</div>
+          <div class="dropdown-item" onclick="exportCSV('phases'); closeDropdowns();">📊 Export Phases CSV</div>
+          <div class="dropdown-item" onclick="exportCSV('deliveries'); closeDropdowns();">📦 Export Deliveries CSV</div>
+        </div>
+      </div>
+      <button class="btn btn-success" onclick="saveProject()" data-tooltip="Ctrl+S">💾 Save</button>
+      <button class="btn btn-primary" onclick="togglePresentationMode()" data-tooltip="Ctrl+P">🎬 Present</button>
+    </div>
+    <input type="file" id="importJson" accept=".json" style="display:none" onchange="importJSON(event)">
+    <input type="file" id="importCsv" accept=".csv" style="display:none" onchange="importCSV(event, 'phases')">
+    <input type="file" id="importDeliveriesCsv" accept=".csv" style="display:none" onchange="importCSV(event, 'deliveries')">
+  </header>
+  <button class="btn btn-secondary exit-presentation" onclick="togglePresentationMode()">✕ Exit</button>
+  <main class="main">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
+      <button class="tab" onclick="switchTab('phases')">Phases</button>
+      <button class="tab" onclick="switchTab('deliveries')">Deliveries</button>
+      <button class="tab" onclick="switchTab('visualizations')">📊 Visualizations</button>
+      <button class="tab" onclick="switchTab('notes')">Notes</button>
+    </div>
+    <!-- Dashboard Tab -->
+    <div class="tab-content active" id="tab-dashboard">
+      <div class="alerts-panel" id="alertsPanel" style="display: none;">
+        <h3>⚠️ Upcoming Deadlines</h3>
+        <div id="alertsList"></div>
+      </div>
+      <div class="kpi-grid" id="kpiGrid"></div>
+      <section style="margin-bottom: 1.5rem;">
+        <div class="section-header">
+          <h2>Phases <span class="badge" id="phaseCountDash">0</span></h2>
+        </div>
+        <div class="phases-list" id="phasesListDash"></div>
+      </section>
+      <section>
+        <div class="section-header">
+          <h2>Upcoming Deliveries <span class="badge" id="deliveryCountDash">0</span></h2>
+        </div>
+        <div class="deliveries-grid" id="deliveriesGridDash"></div>
+      </section>
+    </div>
+    <!-- Phases Tab -->
+    <div class="tab-content" id="tab-phases">
+      <div class="section-header">
+        <h2>Project Phases <span class="badge" id="phaseCount">0</span></h2>
+      </div>
+      <div class="phases-list" id="phasesList"></div>
+      <button class="add-btn" onclick="addPhase()">+ Add Phase</button>
+    </div>
+    <!-- Deliveries Tab -->
+    <div class="tab-content" id="tab-deliveries">
+      <div class="section-header">
+        <h2>Deliveries <span class="badge" id="deliveryCount">0</span></h2>
+      </div>
+      <div class="deliveries-grid" id="deliveriesGrid"></div>
+      <button class="add-btn" onclick="addDelivery()">+ Add Delivery</button>
+    </div>
+    <!-- Visualizations Tab -->
+    <div class="tab-content" id="tab-visualizations">
+      <div class="section-header">
+        <h2>📊 Project Visualizations</h2>
+      </div>
+      <div class="viz-tabs">
+        <button class="viz-tab active" onclick="switchVizTab('timeline')">📅 Timeline</button>
+        <button class="viz-tab" onclick="switchVizTab('calendar')">📆 Calendar</button>
+        <button class="viz-tab" onclick="switchVizTab('gantt')">📊 Gantt Chart</button>
+        <button class="viz-tab" onclick="switchVizTab('charts')">📈 Charts</button>
+        <button class="viz-tab" onclick="switchVizTab('dashboard')">🎛️ Status Dashboard</button>
+      </div>
+      <div class="viz-content active" id="viz-timeline">
+        <div class="timeline-container" id="timelineContainer"></div>
+      </div>
+      <div class="viz-content" id="viz-calendar">
+        <div class="calendar-container" id="calendarContainer"></div>
+      </div>
+      <div class="viz-content" id="viz-gantt">
+        <div class="gantt-container" id="ganttContainer"></div>
+      </div>
+      <div class="viz-content" id="viz-charts">
+        <div class="charts-grid" id="chartsGrid"></div>
+      </div>
+      <div class="viz-content" id="viz-dashboard">
+        <div class="dashboard-grid" id="statusDashboard"></div>
+      </div>
+    </div>
+    <!-- Notes Tab -->
+    <div class="tab-content" id="tab-notes">
+      <div class="section-header">
+        <h2>Project Notes</h2>
+      </div>
+      <div class="notes-grid">
+        <div class="notes-card">
+          <h3>Current Focus</h3>
+          <textarea id="notesFocus" placeholder="Enter current focus items..." onchange="updateNotes()"></textarea>
+        </div>
+        <div class="notes-card">
+          <h3>Upcoming Milestones</h3>
+          <textarea id="notesMilestones" placeholder="Enter upcoming milestones..." onchange="updateNotes()"></textarea>
+        </div>
+        <div class="notes-card">
+          <h3>Future Plans</h3>
+          <textarea id="notesFuture" placeholder="Enter future plans..." onchange="updateNotes()"></textarea>
+        </div>
+      </div>
+    </div>
+  </main>
+  <!-- Projects Modal -->
+  <div class="modal-overlay" id="projectsModal">
+    <div class="modal">
+      <h3>📂 Saved Projects</h3>
+      <div class="projects-list" id="projectsList"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="newProject()">+ New Project</button>
+        <button class="btn btn-secondary" onclick="closeModal('projectsModal')">Close</button>
+      </div>
+    </div>
+  </div>
+  <!-- Confirm Modal -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="confirm-modal">
+      <h3 id="confirmTitle">Confirm Action</h3>
+      <p id="confirmMessage">Are you sure?</p>
+      <div class="confirm-modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('confirmModal')">Cancel</button>
+        <button class="btn btn-danger" id="confirmBtn" onclick="executeConfirm()">Delete</button>
+      </div>
+    </div>
+  </div>
+  <div class="toast-container" id="toastContainer"></div>
+  <script>
+    // State
+    let currentProject = {
+      id: generateId(),
+      name: "New Project",
+      created: new Date().toISOString(),
+      modified: new Date().toISOString(),
+      phases: [],
+      deliveries: [],
+      notes: { focus: "", milestones: "", future: "" }
+    };
+    let nextPhaseId = 1, nextDeliveryId = 1, autoSaveTimer = null, confirmCallback = null;
+    let historyStack = [], historyIndex = -1;
+    const MAX_HISTORY = 50;
+    let isDarkTheme = true;
+    let currentVizTab = 'timeline';
+    let calendarDate = new Date();
+
+    // Utilities
+    function generateId() { return 'prj_' + Math.random().toString(36).substr(2, 9); }
+    function getDaysUntil(dateStr) {
+      const target = new Date(dateStr), today = new Date();
+      today.setHours(0, 0, 0, 0); target.setHours(0, 0, 0, 0);
+      return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+    }
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function formatDate(dateStr) {
+      return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    // Toast
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `<span>${type === 'success' ? '✓' : '✗'}</span><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+    }
+
+    // Auto-save
+    function triggerAutoSave() {
+      const indicator = document.getElementById('saveIndicator');
+      const text = document.getElementById('saveIndicatorText');
+      indicator.className = 'save-indicator saving';
+      text.textContent = 'Saving...';
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        autoSaveToStorage();
+        indicator.className = 'save-indicator saved';
+        text.textContent = 'Saved';
+      }, 2000);
+    }
+    function autoSaveToStorage() {
+      updateNotes();
+      currentProject.modified = new Date().toISOString();
+      let projects = getSavedProjects();
+      const idx = projects.findIndex(p => p.id === currentProject.id);
+      if (idx >= 0) projects[idx] = currentProject;
+      else projects.push(currentProject);
+      localStorage.setItem('prj_mgmt_projects', JSON.stringify(projects));
+    }
+
+    // History
+    function saveToHistory() {
+      if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(JSON.stringify(currentProject));
+      if (historyStack.length > MAX_HISTORY) historyStack.shift();
+      else historyIndex++;
+      updateUndoRedoButtons();
+    }
+    function undo() {
+      if (historyIndex > 0) {
+        historyIndex--;
+        currentProject = JSON.parse(historyStack[historyIndex]);
+        renderAll();
+        updateUndoRedoButtons();
+        showToast('Undone', 'success');
+        triggerAutoSave();
+      }
+    }
+    function redo() {
+      if (historyIndex < historyStack.length - 1) {
+        historyIndex++;
+        currentProject = JSON.parse(historyStack[historyIndex]);
+        renderAll();
+        updateUndoRedoButtons();
+        showToast('Redone', 'success');
+        triggerAutoSave();
+      }
+    }
+    function updateUndoRedoButtons() {
+      document.getElementById('undoBtn').disabled = historyIndex <= 0;
+      document.getElementById('redoBtn').disabled = historyIndex >= historyStack.length - 1;
+    }
+
+    // Theme
+    function toggleTheme() {
+      isDarkTheme = !isDarkTheme;
+      document.body.classList.toggle('light-theme', !isDarkTheme);
+      document.getElementById('themeToggle').textContent = isDarkTheme ? '🌙' : '☀️';
+      localStorage.setItem('prj_mgmt_theme', isDarkTheme ? 'dark' : 'light');
+    }
+    function loadTheme() {
+      if (localStorage.getItem('prj_mgmt_theme') === 'light') {
+        isDarkTheme = false;
+        document.body.classList.add('light-theme');
+        document.getElementById('themeToggle').textContent = '☀️';
+      }
+    }
+
+    // Tabs
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.tab-content#tab-${tabName}`).classList.add('active');
+      event.target.classList.add('active');
+      if (tabName === 'visualizations') renderCurrentVisualization();
+    }
+    function switchVizTab(vizName) {
+      currentVizTab = vizName;
+      document.querySelectorAll('.viz-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.viz-content').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.viz-content#viz-${vizName}`).classList.add('active');
+      event.target.classList.add('active');
+      renderCurrentVisualization();
+    }
+    function renderCurrentVisualization() {
+      switch(currentVizTab) {
+        case 'timeline': renderTimeline(); break;
+        case 'calendar': renderCalendar(); break;
+        case 'gantt': renderGanttChart(); break;
+        case 'charts': renderCharts(); break;
+        case 'dashboard': renderStatusDashboard(); break;
+      }
+    }
+
+    // Dropdowns
+    function toggleDropdown(id) {
+      closeDropdowns();
+      document.getElementById(id).classList.toggle('show');
+    }
+    function closeDropdowns() {
+      document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show'));
+    }
+    document.addEventListener('click', e => { if (!e.target.closest('.dropdown')) closeDropdowns(); });
+
+    // Confirm
+    function showConfirm(title, message, callback) {
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmMessage').innerHTML = message;
+      confirmCallback = callback;
+      document.getElementById('confirmModal').classList.add('show');
+    }
+    function executeConfirm() {
+      if (confirmCallback) { confirmCallback(); confirmCallback = null; }
+      closeModal('confirmModal');
+    }
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+    // Render
+    function renderKPIs() {
+      const complete = currentProject.phases.filter(p => p.status === "complete").length;
+      const inProgress = currentProject.phases.filter(p => p.status === "progress").length;
+      const pending = currentProject.phases.filter(p => p.status === "pending").length;
+      const total = currentProject.phases.length;
+      document.getElementById("kpiGrid").innerHTML = `
+        <div class="kpi-card"><div class="kpi-value complete">${complete}</div><div class="kpi-label">Complete</div></div>
+        <div class="kpi-card"><div class="kpi-value progress">${inProgress}</div><div class="kpi-label">In Progress</div></div>
+        <div class="kpi-card"><div class="kpi-value pending">${pending}</div><div class="kpi-label">Pending</div></div>
+        <div class="kpi-card"><div class="kpi-value total">${total}</div><div class="kpi-label">Total Phases</div></div>
+      `;
+    }
+    function renderAlerts() {
+      const alertsPanel = document.getElementById('alertsPanel');
+      const alertsList = document.getElementById('alertsList');
+      const alerts = [];
+      currentProject.deliveries.forEach(d => {
+        if (d.status === 'shipped') return;
+        const days = getDaysUntil(d.date);
+        if (days < 0) alerts.push({ type: 'overdue', title: d.title, msg: `Overdue by ${Math.abs(days)} day(s)`, days });
+        else if (days === 0) alerts.push({ type: 'today', title: d.title, msg: 'Due today!', days });
+        else if (days <= 7) alerts.push({ type: 'soon', title: d.title, msg: `Due in ${days} day(s)`, days });
+      });
+      alerts.sort((a, b) => a.days - b.days);
+      if (alerts.length === 0) { alertsPanel.style.display = 'none'; return; }
+      alertsPanel.style.display = 'block';
+      alertsList.innerHTML = alerts.map(a => `
+        <div class="alert-item"><span>${escapeHtml(a.title)}</span><span class="alert-badge alert-${a.type}">${a.msg}</span></div>
+      `).join('');
+    }
+    function renderPhases(targetId = 'phasesList', showDelete = true) {
+      const container = document.getElementById(targetId);
+      if (!container) return;
+      const phases = currentProject.phases;
+      if (phases.length === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📋</div><h3>No phases yet</h3><p>Add your first phase</p>${showDelete ? '<button class="btn btn-primary" onclick="addPhase()">+ Add Phase</button>' : ''}</div>`;
+        document.getElementById("phaseCount").textContent = '0';
+        document.getElementById("phaseCountDash").textContent = '0';
+        return;
+      }
+      container.innerHTML = phases.map((phase, index) => `
+        <div class="phase-card" data-id="${phase.id}">
+          <div class="phase-label">PHASE ${index + 1}</div>
+          <div class="phase-label">&nbsp;</div>
+          <div class="phase-name"><input type="text" value="${escapeHtml(phase.name)}" onchange="updatePhase(${phase.id}, 'name', this.value)"></div>
+          <div class="progress-control">
+            <input type="range" class="progress-slider" min="0" max="100" value="${phase.progress}" 
+              oninput="updatePhase(${phase.id}, 'progress', parseInt(this.value)); this.nextElementSibling.textContent = this.value + '%'">
+            <span class="progress-value">${phase.progress}%</span>
+          </div>
+          <select class="status-select ${phase.status}" onchange="updatePhase(${phase.id}, 'status', this.value); this.className = 'status-select ' + this.value">
+            <option value="complete" ${phase.status === "complete" ? "selected" : ""}>Complete</option>
+            <option value="progress" ${phase.status === "progress" ? "selected" : ""}>In Progress</option>
+            <option value="pending" ${phase.status === "pending" ? "selected" : ""}>Pending</option>
+          </select>
+          ${showDelete ? `<button class="delete-btn" onclick="confirmDeletePhase(${phase.id}, '${escapeHtml(phase.name)}')">✕</button>` : '<span></span>'}
+        </div>
+      `).join("");
+      document.getElementById("phaseCount").textContent = phases.length;
+      document.getElementById("phaseCountDash").textContent = phases.length;
+    }
+    function renderDeliveries(targetId = 'deliveriesGrid', showDelete = true) {
+      const container = document.getElementById(targetId);
+      if (!container) return;
+      const deliveries = [...currentProject.deliveries].sort((a, b) => new Date(a.date) - new Date(b.date));
+      if (deliveries.length === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📦</div><h3>No deliveries yet</h3><p>Add deliverables with target dates</p>${showDelete ? '<button class="btn btn-primary" onclick="addDelivery()">+ Add Delivery</button>' : ''}</div>`;
+        document.getElementById("deliveryCount").textContent = '0';
+        document.getElementById("deliveryCountDash").textContent = '0';
+        return;
+      }
+      const colors = ['#00A8E8', '#FFB703', '#00D26A', '#9D4EDD', '#E63946'];
+      container.innerHTML = deliveries.map((d, i) => {
+        const days = getDaysUntil(d.date);
+        const color = colors[i % colors.length];
+        let cc = ""; if (days <= 7 && days >= 0) cc = "urgent"; else if (days <= 30 && days > 7) cc = "soon";
+        return `
+          <div class="delivery-card" style="border-top-color: ${color}" data-id="${d.id}">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div>
+                <div class="delivery-date-label" style="color: ${color}">Ship Date</div>
+                <input type="date" class="delivery-date-input" value="${d.date}" onchange="updateDelivery(${d.id}, 'date', this.value)">
+              </div>
+              ${showDelete ? `<button class="delete-btn" style="opacity:1" onclick="confirmDeleteDelivery(${d.id}, '${escapeHtml(d.title)}')">✕</button>` : ''}
+            </div>
+            <div class="delivery-divider"></div>
+            <div class="delivery-title"><input type="text" value="${escapeHtml(d.title)}" placeholder="Deliverable name" onchange="updateDelivery(${d.id}, 'title', this.value)"></div>
+            <div class="delivery-dest"><input type="text" value="${escapeHtml(d.destination || '')}" placeholder="Destination" onchange="updateDelivery(${d.id}, 'destination', this.value)"></div>
+            <div class="delivery-countdown ${cc}">${days > 0 ? `${days} days` : days === 0 ? "Today!" : `${Math.abs(days)} days ago`}</div>
+          </div>
+        `;
+      }).join("");
+      document.getElementById("deliveryCount").textContent = deliveries.length;
+      document.getElementById("deliveryCountDash").textContent = deliveries.length;
+    }
+    function renderNotes() {
+      document.getElementById("notesFocus").value = currentProject.notes.focus || "";
+      document.getElementById("notesMilestones").value = currentProject.notes.milestones || "";
+      document.getElementById("notesFuture").value = currentProject.notes.future || "";
+    }
+    function renderAll() {
+      document.getElementById("projectName").value = currentProject.name;
+      document.getElementById("projectCategory").value = currentProject.category || 'none';
+      renderAlerts();
+      renderKPIs();
+      renderPhases('phasesList', true);
+      renderPhases('phasesListDash', false);
+      renderDeliveries('deliveriesGrid', true);
+      renderDeliveries('deliveriesGridDash', false);
+      renderNotes();
+      if (document.getElementById('tab-visualizations').classList.contains('active')) renderCurrentVisualization();
+    }
+
+    // Updates
+    function updateProjectName(name) { currentProject.name = name; triggerAutoSave(); }
+    function updateProjectCategory(cat) { currentProject.category = cat; triggerAutoSave(); }
+    function updatePhase(id, field, value) {
+      saveToHistory();
+      const phase = currentProject.phases.find(p => p.id === id);
+      if (phase) {
+        phase[field] = value;
+        if (field === "progress" && value === 100) phase.status = "complete";
+        if (field === "progress" && value === 0) phase.status = "pending";
+        if (field === "progress" && value > 0 && value < 100 && phase.status === "pending") phase.status = "progress";
+        renderPhases('phasesList', true);
+        renderPhases('phasesListDash', false);
+        renderKPIs();
+        triggerAutoSave();
+      }
+    }
+    function updateDelivery(id, field, value) {
+      saveToHistory();
+      const d = currentProject.deliveries.find(x => x.id === id);
+      if (d) { d[field] = value; renderDeliveries('deliveriesGrid', true); renderDeliveries('deliveriesGridDash', false); renderAlerts(); triggerAutoSave(); }
+    }
+    function updateNotes() {
+      currentProject.notes = {
+        focus: document.getElementById("notesFocus").value,
+        milestones: document.getElementById("notesMilestones").value,
+        future: document.getElementById("notesFuture").value
+      };
+      triggerAutoSave();
+    }
+
+    // Add/Delete
+    function addPhase() {
+      saveToHistory();
+      currentProject.phases.push({ id: nextPhaseId++, name: "New Phase", progress: 0, status: "pending" });
+      renderPhases('phasesList', true);
+      renderPhases('phasesListDash', false);
+      renderKPIs();
+      triggerAutoSave();
+    }
+    function confirmDeletePhase(id, name) {
+      showConfirm('Delete Phase?', `Delete <span class="item-name">"${name}"</span>?`, () => deletePhase(id));
+    }
+    function deletePhase(id) {
+      saveToHistory();
+      currentProject.phases = currentProject.phases.filter(p => p.id !== id);
+      renderPhases('phasesList', true);
+      renderPhases('phasesListDash', false);
+      renderKPIs();
+      showToast('Phase deleted', 'success');
+      triggerAutoSave();
+    }
+    function addDelivery() {
+      saveToHistory();
+      const next = new Date(); next.setDate(next.getDate() + 7);
+      currentProject.deliveries.push({ id: nextDeliveryId++, date: next.toISOString().split('T')[0], title: "New Deliverable", destination: "", status: "pending" });
+      renderDeliveries('deliveriesGrid', true);
+      renderDeliveries('deliveriesGridDash', false);
+      renderAlerts();
+      triggerAutoSave();
+    }
+    function confirmDeleteDelivery(id, title) {
+      showConfirm('Delete Delivery?', `Delete <span class="item-name">"${title}"</span>?`, () => deleteDelivery(id));
+    }
+    function deleteDelivery(id) {
+      saveToHistory();
+      currentProject.deliveries = currentProject.deliveries.filter(d => d.id !== id);
+      renderDeliveries('deliveriesGrid', true);
+      renderDeliveries('deliveriesGridDash', false);
+      renderAlerts();
+      showToast('Delivery deleted', 'success');
+      triggerAutoSave();
+    }
+
+    // Projects
+    function getSavedProjects() { const s = localStorage.getItem('prj_mgmt_projects'); return s ? JSON.parse(s) : []; }
+    function saveProject() {
+      updateNotes();
+      currentProject.modified = new Date().toISOString();
+      let projects = getSavedProjects();
+      const idx = projects.findIndex(p => p.id === currentProject.id);
+      if (idx >= 0) projects[idx] = currentProject; else projects.push(currentProject);
+      localStorage.setItem('prj_mgmt_projects', JSON.stringify(projects));
+      document.getElementById('saveIndicator').className = 'save-indicator saved';
+      document.getElementById('saveIndicatorText').textContent = 'Saved';
+      showToast('Project saved!', 'success');
+    }
+    function loadProject(id) {
+      const projects = getSavedProjects();
+      const p = projects.find(x => x.id === id);
+      if (p) {
+        currentProject = JSON.parse(JSON.stringify(p));
+        nextPhaseId = Math.max(...currentProject.phases.map(x => x.id), 0) + 1;
+        nextDeliveryId = Math.max(...currentProject.deliveries.map(x => x.id), 0) + 1;
+        renderAll();
+        closeModal('projectsModal');
+      }
+    }
+    function deleteProject(id) {
+      const projects = getSavedProjects().filter(p => p.id !== id);
+      localStorage.setItem('prj_mgmt_projects', JSON.stringify(projects));
+      showToast('Project deleted', 'success');
+      renderProjectsList();
+    }
+    function newProject() {
+      currentProject = { id: generateId(), name: "New Project", created: new Date().toISOString(), modified: new Date().toISOString(), phases: [], deliveries: [], notes: { focus: "", milestones: "", future: "" } };
+      nextPhaseId = 1; nextDeliveryId = 1;
+      renderAll();
+      closeModal('projectsModal');
+    }
+    function showProjectsModal() { renderProjectsList(); document.getElementById('projectsModal').classList.add('show'); }
+    function renderProjectsList() {
+      const projects = getSavedProjects();
+      const container = document.getElementById('projectsList');
+      if (projects.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="padding: 2rem;"><div class="empty-state-icon">📁</div><h3>No saved projects</h3></div>`;
+        return;
+      }
+      container.innerHTML = projects.map(p => `
+        <div class="project-item" onclick="loadProject('${p.id}')">
+          <div class="project-item-info"><h4>${escapeHtml(p.name)}</h4><span>${p.phases?.length || 0} phases</span></div>
+          <div class="project-item-actions" onclick="event.stopPropagation()">
+            <button onclick="deleteProject('${p.id}')" title="Delete">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Export/Import
+    function exportJSON() {
+      updateNotes();
+      const data = JSON.stringify(currentProject, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `${currentProject.name.replace(/\s+/g, '_')}.json`; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function exportCSV(type) {
+      const name = currentProject.name.replace(/\s+/g, '_');
+      if (type === 'phases') {
+        let csv = 'Phase,Name,Progress,Status\n';
+        currentProject.phases.forEach((p, i) => { csv += `${i+1},"${p.name.replace(/"/g, '""')}",${p.progress},${p.status}\n`; });
+        downloadFile(csv, `${name}_phases.csv`);
+      } else if (type === 'deliveries') {
+        let csv = 'Date,Title,Destination,Status\n';
+        currentProject.deliveries.forEach(d => { csv += `${d.date},"${d.title.replace(/"/g, '""')}","${(d.destination||'').replace(/"/g, '""')}",${d.status||'pending'}\n`; });
+        downloadFile(csv, `${name}_deliveries.csv`);
+      }
+    }
+    function downloadFile(content, filename) {
+      const blob = new Blob([content], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function importJSON(event) {
+      const file = event.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          currentProject = JSON.parse(e.target.result);
+          currentProject.id = currentProject.id || generateId();
+          nextPhaseId = Math.max(...(currentProject.phases?.map(p => p.id) || [0]), 0) + 1;
+          nextDeliveryId = Math.max(...(currentProject.deliveries?.map(d => d.id) || [0]), 0) + 1;
+          renderAll();
+          showToast('Project imported!', 'success');
+        } catch (err) { showToast('Error importing file', 'error'); }
+      };
+      reader.readAsText(file);
+      event.target.value = "";
+    }
+    function importCSV(event, type) {
+      const file = event.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const lines = e.target.result.split('\n').filter(l => l.trim());
+          saveToHistory();
+          if (type === 'phases') {
+            for (let i = 1; i < lines.length; i++) {
+              const vals = parseCSVLine(lines[i]);
+              if (vals.length >= 2) {
+                currentProject.phases.push({ id: nextPhaseId++, name: vals[1] || `Phase ${i}`, progress: parseInt(vals[2]) || 0, status: vals[3] || 'pending' });
+              }
+            }
+          } else if (type === 'deliveries') {
+            for (let i = 1; i < lines.length; i++) {
+              const vals = parseCSVLine(lines[i]);
+              if (vals.length >= 2) {
+                currentProject.deliveries.push({ id: nextDeliveryId++, date: vals[0] || new Date().toISOString().split('T')[0], title: vals[1] || `Delivery ${i}`, destination: vals[2] || '', status: vals[3] || 'pending' });
+              }
+            }
+          }
+          renderAll();
+          showToast(`${type} imported!`, 'success');
+          triggerAutoSave();
+        } catch (err) { showToast('Error importing CSV', 'error'); }
+      };
+      reader.readAsText(file);
+      event.target.value = "";
+    }
+    function parseCSVLine(line) {
+      const result = []; let current = '', inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') { if (inQuotes && line[i+1] === '"') { current += '"'; i++; } else inQuotes = !inQuotes; }
+        else if (c === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+        else current += c;
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    // Presentation
+    function togglePresentationMode() {
+      document.body.classList.toggle('presentation-mode');
+      if (document.body.classList.contains('presentation-mode')) {
+        switchTab('dashboard');
+        if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    // ===== PHASE 4: VISUALIZATIONS =====
+    
+    // Timeline View
+    function renderTimeline() {
+      const container = document.getElementById('timelineContainer');
+      const phases = currentProject.phases;
+      const deliveries = currentProject.deliveries;
+      
+      if (phases.length === 0 && deliveries.length === 0) {
+        container.innerHTML = `<div class="viz-empty-state"><div class="viz-empty-state-icon">📅</div><h3>No data to display</h3><p>Add phases or deliveries to see them on the timeline</p></div>`;
+        return;
+      }
+
+      const today = new Date();
+      const startDate = new Date(today); startDate.setMonth(startDate.getMonth() - 1); startDate.setDate(1);
+      const endDate = new Date(today); endDate.setMonth(endDate.getMonth() + 5); endDate.setDate(0);
+      
+      const months = [];
+      const current = new Date(startDate);
+      while (current <= endDate) { months.push(new Date(current)); current.setMonth(current.getMonth() + 1); }
+      
+      const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+      function getPos(date) {
+        const d = new Date(date);
+        return Math.max(0, Math.min(100, (Math.ceil((d - startDate) / (1000 * 60 * 60 * 24)) / totalDays) * 100));
+      }
+      const todayPos = getPos(today);
+
+      container.innerHTML = `
+        <div class="timeline-header"><h3>📅 Project Timeline</h3></div>
+        <div class="timeline-scroll">
+          <div class="timeline" style="width: ${Math.max(900, months.length * 120)}px;">
+            <div class="timeline-months">
+              ${months.map(m => `<div class="timeline-month ${m.getMonth() === today.getMonth() && m.getFullYear() === today.getFullYear() ? 'current' : ''}">${m.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div>`).join('')}
+            </div>
+            <div class="timeline-rows" style="margin-left: 150px; position: relative;">
+              <div class="timeline-today-line" style="left: calc(${todayPos}% - 1px);"><span class="timeline-today-label">Today</span></div>
+              ${phases.map((phase, i) => {
+                const start = new Date(today); start.setDate(start.getDate() - 30 + (i * 14));
+                const end = new Date(start); end.setDate(end.getDate() + 21);
+                const startPos = getPos(start), endPos = getPos(end);
+                return `<div class="timeline-row">
+                  <div class="timeline-row-label">${escapeHtml(phase.name)}</div>
+                  <div class="timeline-row-track">
+                    <div class="timeline-bar phase ${phase.status}" style="left: ${startPos}%; width: ${Math.max(5, endPos - startPos)}%;" title="${escapeHtml(phase.name)} - ${phase.progress}%">${phase.progress}%</div>
+                  </div>
+                </div>`;
+              }).join('')}
+              ${deliveries.map(d => `<div class="timeline-row">
+                <div class="timeline-row-label">${escapeHtml(d.title)}</div>
+                <div class="timeline-row-track"><div class="timeline-marker" style="left: ${getPos(d.date)}%;" title="${escapeHtml(d.title)}"></div></div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // Calendar View
+    function renderCalendar() {
+      const container = document.getElementById('calendarContainer');
+      const year = calendarDate.getFullYear(), month = calendarDate.getMonth();
+      const firstDay = new Date(year, month, 1), lastDay = new Date(year, month + 1, 0);
+      const startDow = firstDay.getDay();
+      
+      const days = [];
+      const prevMonth = new Date(year, month, 0);
+      for (let i = startDow - 1; i >= 0; i--) days.push({ date: new Date(year, month - 1, prevMonth.getDate() - i), other: true });
+      for (let d = 1; d <= lastDay.getDate(); d++) days.push({ date: new Date(year, month, d), other: false });
+      const rem = 42 - days.length;
+      for (let d = 1; d <= rem; d++) days.push({ date: new Date(year, month + 1, d), other: true });
+      
+      const today = new Date(); today.setHours(0,0,0,0);
+      function getEvents(date) {
+        const ds = date.toISOString().split('T')[0];
+        return currentProject.deliveries.filter(d => d.date === ds).map(d => ({ type: 'delivery', title: d.title }));
+      }
+
+      container.innerHTML = `
+        <div class="calendar-header">
+          <div class="calendar-nav">
+            <button class="calendar-nav-btn" onclick="changeCalendarMonth(-1)">◀</button>
+            <span class="calendar-month-label">${calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+            <button class="calendar-nav-btn" onclick="changeCalendarMonth(1)">▶</button>
+          </div>
+          <button class="calendar-today-btn" onclick="goToCalendarToday()">Today</button>
+        </div>
+        <div class="calendar-grid">
+          <div class="calendar-day-header">Sun</div><div class="calendar-day-header">Mon</div><div class="calendar-day-header">Tue</div>
+          <div class="calendar-day-header">Wed</div><div class="calendar-day-header">Thu</div><div class="calendar-day-header">Fri</div><div class="calendar-day-header">Sat</div>
+          ${days.map(day => {
+            const isToday = day.date.getTime() === today.getTime();
+            const events = getEvents(day.date);
+            return `<div class="calendar-day ${day.other ? 'other-month' : ''} ${isToday ? 'today' : ''}">
+              <div class="calendar-day-number">${day.date.getDate()}</div>
+              ${events.slice(0, 3).map(e => `<div class="calendar-event ${e.type}" title="${escapeHtml(e.title)}">${escapeHtml(e.title)}</div>`).join('')}
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+    function changeCalendarMonth(delta) { calendarDate.setMonth(calendarDate.getMonth() + delta); renderCalendar(); }
+    function goToCalendarToday() { calendarDate = new Date(); renderCalendar(); }
+
+    // Gantt Chart
+    function renderGanttChart() {
+      const container = document.getElementById('ganttContainer');
+      const phases = currentProject.phases;
+      
+      if (phases.length === 0) {
+        container.innerHTML = `<div class="viz-empty-state"><div class="viz-empty-state-icon">📊</div><h3>No phases to display</h3><p>Add phases to see the Gantt chart</p></div>`;
+        return;
+      }
+
+      const today = new Date();
+      const startDate = new Date(today); startDate.setDate(startDate.getDate() - startDate.getDay());
+      const weeks = [];
+      for (let i = -2; i < 12; i++) { const w = new Date(startDate); w.setDate(w.getDate() + (i * 7)); weeks.push(w); }
+
+      container.innerHTML = `
+        <div class="gantt-header">
+          <h3>📊 Gantt Chart</h3>
+          <div class="gantt-legend">
+            <div class="gantt-legend-item"><div class="gantt-legend-color" style="background: var(--accent-green);"></div><span>Complete</span></div>
+            <div class="gantt-legend-item"><div class="gantt-legend-color" style="background: var(--accent-yellow);"></div><span>In Progress</span></div>
+            <div class="gantt-legend-item"><div class="gantt-legend-color" style="background: var(--text-muted);"></div><span>Pending</span></div>
+          </div>
+        </div>
+        <div class="gantt-scroll">
+          <div class="gantt-chart">
+            <div class="gantt-time-header">
+              ${weeks.map((w, i) => {
+                const isCurrent = w <= today && new Date(w.getTime() + 7*24*60*60*1000) > today;
+                return `<div class="gantt-week ${isCurrent ? 'current' : ''}">${w.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>`;
+              }).join('')}
+            </div>
+            <div class="gantt-rows">
+              ${phases.map((phase, i) => {
+                const start = Math.max(0, Math.min(90, 10 + (i * 15)));
+                const width = Math.max(15, 25 - (i * 2));
+                return `<div class="gantt-row">
+                  <div class="gantt-row-label"><div class="gantt-row-name">${escapeHtml(phase.name)}</div><div class="gantt-row-progress">${phase.progress}% complete</div></div>
+                  <div class="gantt-row-track">
+                    <div class="gantt-bar-container" style="left: ${start}%; width: ${width}%;">
+                      <div class="gantt-bar" style="width: 100%;"><div class="gantt-bar-bg"></div><div class="gantt-bar-fill ${phase.status}" style="width: ${phase.progress}%;"></div></div>
+                    </div>
+                  </div>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // Charts
+    function renderCharts() {
+      const container = document.getElementById('chartsGrid');
+      const phases = currentProject.phases;
+      
+      if (phases.length === 0) {
+        container.innerHTML = `<div class="viz-empty-state"><div class="viz-empty-state-icon">📈</div><h3>No data to chart</h3><p>Add phases to see progress charts</p></div>`;
+        return;
+      }
+
+      const total = phases.length;
+      const complete = phases.filter(p => p.status === 'complete').length;
+      const progress = phases.filter(p => p.status === 'progress').length;
+      const pending = total - complete - progress;
+      const avgProg = Math.round(phases.reduce((s, p) => s + p.progress, 0) / total);
+
+      container.innerHTML = `
+        <div class="chart-card">
+          <h4>📊 Phase Status Distribution</h4>
+          <div class="chart-canvas-container">${renderPieChart([
+            { label: 'Complete', value: complete, color: '#00D26A' },
+            { label: 'In Progress', value: progress, color: '#FFB703' },
+            { label: 'Pending', value: pending, color: '#415A77' }
+          ])}</div>
+        </div>
+        <div class="chart-card">
+          <h4>📈 Progress Overview</h4>
+          <div class="chart-canvas-container">${renderBarChart(phases.map(p => ({
+            label: p.name.substring(0, 10), value: p.progress,
+            color: p.status === 'complete' ? '#00D26A' : p.status === 'progress' ? '#FFB703' : '#415A77'
+          })))}</div>
+        </div>
+        <div class="chart-card">
+          <h4>🔥 Burndown Summary</h4>
+          <div class="burndown-info">
+            <div class="burndown-stat"><div class="burndown-stat-value ${avgProg >= 70 ? 'good' : avgProg >= 40 ? 'warning' : 'danger'}">${avgProg}%</div><div class="burndown-stat-label">Avg Progress</div></div>
+            <div class="burndown-stat"><div class="burndown-stat-value good">${complete}</div><div class="burndown-stat-label">Completed</div></div>
+            <div class="burndown-stat"><div class="burndown-stat-value warning">${total - complete}</div><div class="burndown-stat-label">Remaining</div></div>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h4>⏱️ Completion Rate</h4>
+          <div class="chart-canvas-container" style="display:flex;align-items:center;justify-content:center;">
+            <div style="text-align:center;">
+              <div style="font-size:3rem;font-weight:700;font-family:var(--font-mono);color:${avgProg >= 70 ? '#00D26A' : avgProg >= 40 ? '#FFB703' : '#E63946'};">${avgProg}%</div>
+              <div style="font-size:0.85rem;color:var(--text-secondary);">Overall Completion</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderPieChart(data) {
+      const total = data.reduce((s, d) => s + d.value, 0);
+      if (total === 0) return '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No data</div>';
+      const cx = 120, cy = 100, r = 70;
+      let angle = -90;
+      const slices = data.filter(d => d.value > 0).map(d => {
+        const a = (d.value / total) * 360;
+        const start = angle, end = angle + a; angle = end;
+        const sr = (start * Math.PI) / 180, er = (end * Math.PI) / 180;
+        const x1 = cx + r * Math.cos(sr), y1 = cy + r * Math.sin(sr);
+        const x2 = cx + r * Math.cos(er), y2 = cy + r * Math.sin(er);
+        return { ...d, path: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${a > 180 ? 1 : 0} 1 ${x2} ${y2} Z` };
+      });
+      return `<svg class="chart-svg" viewBox="0 0 240 200">${slices.map(s => `<path d="${s.path}" fill="${s.color}" class="chart-bar" />`).join('')}</svg>
+        <div class="chart-legend">${data.filter(d => d.value > 0).map(d => `<div class="chart-legend-item"><div class="chart-legend-dot" style="background:${d.color};"></div><span>${d.label} (${d.value})</span></div>`).join('')}</div>`;
+    }
+
+    function renderBarChart(data) {
+      if (data.length === 0) return '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No data</div>';
+      const w = 400, h = 200, p = { top: 20, right: 20, bottom: 40, left: 40 };
+      const cw = w - p.left - p.right, ch = h - p.top - p.bottom;
+      const bw = Math.min(40, (cw / data.length) * 0.7);
+      const gap = (cw - (bw * data.length)) / (data.length + 1);
+      return `<svg class="chart-svg" viewBox="0 0 ${w} ${h}">
+        <line class="chart-axis-line" x1="${p.left}" y1="${p.top}" x2="${p.left}" y2="${h - p.bottom}" />
+        <line class="chart-axis-line" x1="${p.left}" y1="${h - p.bottom}" x2="${w - p.right}" y2="${h - p.bottom}" />
+        ${[25, 50, 75, 100].map(v => {
+          const y = p.top + ch - (v / 100 * ch);
+          return `<line class="chart-grid-line" x1="${p.left}" y1="${y}" x2="${w - p.right}" y2="${y}" /><text class="chart-axis-label" x="${p.left - 5}" y="${y + 3}" text-anchor="end">${v}</text>`;
+        }).join('')}
+        ${data.map((d, i) => {
+          const x = p.left + gap + (i * (bw + gap));
+          const bh = (d.value / 100) * ch;
+          return `<rect class="chart-bar" x="${x}" y="${p.top + ch - bh}" width="${bw}" height="${bh}" fill="${d.color}" rx="2" /><text class="chart-axis-label" x="${x + bw/2}" y="${h - p.bottom + 15}" text-anchor="middle">${d.label}</text>`;
+        }).join('')}
+      </svg>`;
+    }
+
+    // Status Dashboard
+    function renderStatusDashboard() {
+      const container = document.getElementById('statusDashboard');
+      const phases = currentProject.phases;
+      const deliveries = currentProject.deliveries;
+      
+      const total = phases.length;
+      const complete = phases.filter(p => p.status === 'complete').length;
+      const progress = phases.filter(p => p.status === 'progress').length;
+      const pending = total - complete - progress;
+      const avgProg = total > 0 ? Math.round(phases.reduce((s, p) => s + p.progress, 0) / total) : 0;
+      
+      const upcoming = [...deliveries].filter(d => d.status !== 'shipped').sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 5);
+      const overdue = deliveries.filter(d => getDaysUntil(d.date) < 0 && d.status !== 'shipped');
+      
+      const circ = 2 * Math.PI * 32;
+      const offset = circ - (avgProg / 100) * circ;
+
+      container.innerHTML = `
+        <div class="dashboard-widget">
+          <h4>📊 Overall Progress</h4>
+          <div class="widget-progress-ring">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle class="bg" cx="40" cy="40" r="32" />
+              <circle class="progress" cx="40" cy="40" r="32" stroke="${avgProg >= 70 ? '#00D26A' : avgProg >= 40 ? '#FFB703' : '#E63946'}" stroke-dasharray="${circ}" stroke-dashoffset="${offset}" />
+            </svg>
+            <div class="value" style="color:${avgProg >= 70 ? '#00D26A' : avgProg >= 40 ? '#FFB703' : '#E63946'}">${avgProg}%</div>
+          </div>
+        </div>
+        <div class="dashboard-widget">
+          <h4>📋 Phase Status</h4>
+          <div class="widget-status-dots">
+            <div class="widget-status-dot"><div class="dot" style="background:#00D26A;">${complete}</div><span class="label">Done</span></div>
+            <div class="widget-status-dot"><div class="dot" style="background:#FFB703;">${progress}</div><span class="label">Active</span></div>
+            <div class="widget-status-dot"><div class="dot" style="background:#415A77;">${pending}</div><span class="label">Pending</span></div>
+          </div>
+          <div class="widget-bar"><div class="widget-bar-fill" style="width:${total > 0 ? (complete / total) * 100 : 0}%;background:#00D26A;"></div></div>
+        </div>
+        <div class="dashboard-widget">
+          <h4>📦 Deliveries</h4>
+          <div class="widget-value" style="color:var(--accent-blue);">${deliveries.length}</div>
+          <div class="widget-subtext">${overdue.length > 0 ? `<span style="color:var(--accent-red);">⚠️ ${overdue.length} overdue</span>` : '✓ All on track'}</div>
+        </div>
+        <div class="dashboard-widget">
+          <h4>⏰ Upcoming</h4>
+          <div class="widget-list">
+            ${upcoming.length > 0 ? upcoming.map(d => {
+              const days = getDaysUntil(d.date);
+              const uc = days < 0 ? 'color:var(--accent-red)' : days <= 7 ? 'color:var(--accent-yellow)' : '';
+              return `<div class="widget-list-item"><span>${escapeHtml(d.title)}</span><span style="${uc}">${days < 0 ? 'Overdue' : days === 0 ? 'Today' : `${days}d`}</span></div>`;
+            }).join('') : '<div style="text-align:center;color:var(--text-muted);padding:1rem;">No upcoming</div>'}
+          </div>
+        </div>
+        <div class="dashboard-widget">
+          <h4>🎯 Project Health</h4>
+          <div class="widget-value" style="color:${avgProg >= 50 ? '#00D26A' : avgProg >= 25 ? '#FFB703' : '#E63946'};">
+            ${avgProg >= 70 ? '🟢' : avgProg >= 40 ? '🟡' : '🔴'}
+          </div>
+          <div class="widget-subtext">${avgProg >= 70 ? 'On Track' : avgProg >= 40 ? 'Needs Attention' : 'At Risk'}</div>
+        </div>
+        <div class="dashboard-widget">
+          <h4>📅 Project Info</h4>
+          <div class="widget-list-item"><span>Total Phases</span><span>${total}</span></div>
+          <div class="widget-list-item"><span>Total Deliveries</span><span>${deliveries.length}</span></div>
+          <div class="widget-list-item"><span>Created</span><span>${new Date(currentProject.created).toLocaleDateString()}</span></div>
+        </div>`;
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        if (document.body.classList.contains('presentation-mode')) togglePresentationMode();
+        closeDropdowns();
+        document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('show'));
+      }
+      if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveProject(); }
+      if (e.ctrlKey && e.key === 'p') { e.preventDefault(); togglePresentationMode(); }
+      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+      if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); }
+    });
+
+    // Initialize
+    loadTheme();
+    saveToHistory();
+    renderAll();
+    updateUndoRedoButtons();
+  </script>
+</body>
+</html>

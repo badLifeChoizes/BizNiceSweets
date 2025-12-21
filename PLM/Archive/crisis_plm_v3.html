@@ -1,0 +1,1768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRISIS PLM - Bill of Materials Manager</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #131316;
+            --bg-tertiary: #1a1a1f;
+            --bg-elevated: #222228;
+            --border: #2a2a32;
+            --border-light: #3a3a44;
+            --text-primary: #e8e8ec;
+            --text-secondary: #9898a4;
+            --text-muted: #606068;
+            --accent: #00d4aa;
+            --accent-dim: #00a888;
+            --accent-glow: rgba(0, 212, 170, 0.15);
+            --warning: #ffaa00;
+            --error: #ff4466;
+            --success: #00dd88;
+            --part-color: #4488ff;
+            --subassy-color: #aa66ff;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .logo { display: flex; align-items: center; gap: 12px; }
+        
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--bg-primary);
+        }
+        
+        .logo-text { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 15px; }
+        .logo-text span { color: var(--text-muted); font-weight: 400; }
+        
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .file-name { color: var(--text-muted); font-size: 12px; margin-right: 12px; }
+        
+        .btn {
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn:hover { background: var(--bg-elevated); border-color: var(--border-light); }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-primary);
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+        
+        .btn-primary:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .btn-success { background: var(--success); border-color: var(--success); color: var(--bg-primary); }
+        .btn-danger { background: var(--error); border-color: var(--error); color: white; }
+        .btn-sm { padding: 6px 10px; font-size: 12px; }
+        
+        .main { display: flex; height: calc(100vh - 56px); }
+        
+        .sidebar {
+            width: 220px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 16px 0;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .nav-section { margin-bottom: 24px; }
+        .nav-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); padding: 0 16px; margin-bottom: 8px; }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border-left: 2px solid transparent;
+        }
+        
+        .nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .nav-item.active { background: var(--accent-glow); color: var(--accent); border-left-color: var(--accent); }
+        
+        .nav-badge { margin-left: auto; font-size: 11px; font-weight: 600; background: var(--bg-elevated); padding: 2px 6px; border-radius: 4px; color: var(--text-muted); }
+        .nav-item.active .nav-badge { background: var(--accent); color: var(--bg-primary); }
+        
+        .sidebar-footer { margin-top: auto; padding: 16px; border-top: 1px solid var(--border); }
+        
+        .content { flex: 1; overflow: auto; padding: 24px; }
+        
+        .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
+        .page-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+        .page-subtitle { color: var(--text-secondary); font-size: 14px; }
+        .page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        
+        .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .card-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+        .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+        .stat-value { font-size: 28px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+        .stat-value.accent { color: var(--accent); }
+        
+        .table-wrap { overflow-x: auto; max-height: calc(100vh - 320px); }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px 12px; background: var(--bg-tertiary); color: var(--text-secondary); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text-primary); }
+        tr:hover td { background: var(--bg-tertiary); }
+        .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .tag-part { background: rgba(68, 136, 255, 0.15); color: var(--part-color); }
+        .tag-subassy { background: rgba(170, 102, 255, 0.15); color: var(--subassy-color); }
+        .tag-direct { background: rgba(0, 221, 136, 0.15); color: var(--success); }
+        .tag-user { background: rgba(255, 170, 0, 0.15); color: var(--warning); }
+        
+        .search-box { position: relative; }
+        .search-box input { width: 250px; padding: 10px 12px 10px 36px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); font-size: 13px; }
+        .search-box input:focus { outline: none; border-color: var(--accent); }
+        .search-box input::placeholder { color: var(--text-muted); }
+        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+        
+        .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+        .filter-pill { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); transition: all 0.15s ease; }
+        .filter-pill:hover { border-color: var(--border-light); color: var(--text-primary); }
+        .filter-pill.active { background: var(--accent); border-color: var(--accent); color: var(--bg-primary); }
+        
+        .builder-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        @media (max-width: 1024px) { .builder-grid { grid-template-columns: 1fr; } .sidebar { display: none; } }
+        
+        .builder-panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; max-height: calc(100vh - 200px); }
+        .panel-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+        .panel-title { font-weight: 600; font-size: 14px; }
+        .panel-body { flex: 1; overflow-y: auto; padding: 8px; }
+        
+        .selectable-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: all 0.15s ease; border: 1px solid transparent; }
+        .selectable-item:hover { background: var(--bg-tertiary); }
+        .item-info { flex: 1; min-width: 0; }
+        .item-name { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .item-meta { font-size: 11px; color: var(--text-muted); }
+        .item-cost { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); }
+        
+        .assembly-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 8px; }
+        .qty-input { width: 60px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: center; }
+        .qty-input:focus { outline: none; border-color: var(--accent); }
+        .remove-btn { padding: 6px 10px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-radius: 4px; font-size: 16px; }
+        .remove-btn:hover { background: rgba(255, 68, 102, 0.15); color: var(--error); }
+        
+        .totals-bar { background: var(--bg-tertiary); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .total-item { text-align: center; }
+        .total-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
+        .total-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 600; }
+        .total-value.highlight { color: var(--accent); }
+        
+        .empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        
+        .hidden { display: none !important; }
+        
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-lg { max-width: 900px; }
+        
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .modal-title { font-size: 18px; font-weight: 600; }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+        }
+        
+        .modal-close:hover { color: var(--text-primary); }
+        
+        .modal-body { padding: 24px; overflow-y: auto; flex: 1; }
+        
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        
+        /* Form Styles */
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); }
+        .form-label.required::after { content: ' *'; color: var(--error); }
+        
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .form-textarea { min-height: 80px; resize: vertical; }
+        .form-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+        
+        /* Upload area in modal */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover, .upload-area.dragover {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+        
+        .upload-area .icon { font-size: 32px; margin-bottom: 8px; }
+        .upload-area .text { font-weight: 500; }
+        .upload-area .hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        
+        /* Column mapping */
+        .mapping-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+        .mapping-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-tertiary); border-radius: 6px; }
+        .mapping-label { font-size: 12px; color: var(--text-muted); min-width: 100px; }
+        .mapping-value { font-size: 13px; font-weight: 500; color: var(--accent); }
+        .mapping-value.unmapped { color: var(--text-muted); font-style: italic; }
+        
+        /* Preview table */
+        .preview-wrap { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; margin-top: 16px; }
+        .preview-wrap table { font-size: 12px; }
+        .preview-count { font-size: 13px; color: var(--text-secondary); margin-top: 12px; }
+        
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+        .tab { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-secondary); background: transparent; border: 1px solid transparent; }
+        .tab:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .tab.active { background: var(--accent); color: var(--bg-primary); }
+        
+        /* BOM builder in assembly modal */
+        .bom-builder { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .bom-header { padding: 12px; background: var(--bg-tertiary); display: flex; justify-content: space-between; align-items: center; }
+        .bom-list { max-height: 200px; overflow-y: auto; }
+        .bom-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        .bom-item:last-child { border-bottom: none; }
+        .bom-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">C</div>
+            <div class="logo-text">CRISIS PLM <span>/ BOM Manager</span></div>
+        </div>
+        <div class="header-actions">
+            <span id="fileName" class="file-name"></span>
+            <label class="btn">
+                📁 Import Excel
+                <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+            </label>
+        </div>
+    </header>
+    
+    <div class="main">
+        <nav class="sidebar">
+            <div class="nav-section">
+                <div class="nav-label">Overview</div>
+                <div class="nav-item active" data-view="dashboard">📊 <span>Dashboard</span></div>
+            </div>
+            <div class="nav-section">
+                <div class="nav-label">Data</div>
+                <div class="nav-item" data-view="parts">📦 <span>Parts</span><span class="nav-badge" id="partsCount">0</span></div>
+                <div class="nav-item" data-view="assemblies">🔧 <span>Assemblies</span><span class="nav-badge" id="assyCount">0</span></div>
+            </div>
+            <div class="nav-section">
+                <div class="nav-label">Build</div>
+                <div class="nav-item" data-view="builder">🛠️ <span>Product Builder</span></div>
+                <div class="nav-item" data-view="flatbom">📋 <span>Flat BOM</span><span class="nav-badge" id="flatbomCount">0</span></div>
+            </div>
+            <div class="sidebar-footer">
+                <button class="btn btn-primary" style="width: 100%;" onclick="showExportModal()">📥 Export All</button>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="view">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Dashboard</h1>
+                        <p class="page-subtitle">Overview of your BOM data</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn" onclick="showModal('import-parts')">📥 Import Parts</button>
+                        <button class="btn" onclick="showModal('import-assemblies')">📥 Import Assemblies</button>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">Total Parts</div><div class="stat-value" id="statParts">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Assemblies</div><div class="stat-value" id="statAssy">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Product Items</div><div class="stat-value" id="statProduct">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Flat BOM Lines</div><div class="stat-value accent" id="statFlatbom">0</div></div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">Total Extended Qty</div><div class="stat-value" id="statQty">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Total Cost (Avg)</div><div class="stat-value accent" id="statCost">$0.00</div></div>
+                </div>
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <span style="font-weight: 600;">Quick Actions</span>
+                    </div>
+                    <div style="padding: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <button class="btn" onclick="showModal('new-part')" style="justify-content: center; padding: 16px;">➕ New Part</button>
+                        <button class="btn" onclick="showModal('new-assembly')" style="justify-content: center; padding: 16px;">🔧 New Assembly</button>
+                        <button class="btn" onclick="showModal('import-parts')" style="justify-content: center; padding: 16px;">📄 Import Parts CSV</button>
+                        <button class="btn" onclick="showModal('import-assemblies')" style="justify-content: center; padding: 16px;">📄 Import Assemblies CSV</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Parts View -->
+            <div id="view-parts" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Parts</h1>
+                        <p class="page-subtitle" id="partsSubtitle">0 parts</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-primary" onclick="showModal('new-part')">➕ New Part</button>
+                        <button class="btn" onclick="showModal('import-parts')">📥 Import CSV</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="partsSearch" placeholder="Search parts...">
+                        </div>
+                        <div class="filter-pills" id="typeFilters"></div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Part Number</th>
+                                    <th>Description</th>
+                                    <th>Type</th>
+                                    <th>Region</th>
+                                    <th>Cost (Avg)</th>
+                                    <th>Source</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="partsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Assemblies View -->
+            <div id="view-assemblies" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Assemblies</h1>
+                        <p class="page-subtitle" id="assySubtitle">0 assemblies</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-primary" onclick="showModal('new-assembly')">➕ New Assembly</button>
+                        <button class="btn" onclick="showModal('import-assemblies')">📥 Import CSV</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>ID</th>
+                                    <th>Module</th>
+                                    <th>Parts</th>
+                                    <th>Total Cost</th>
+                                    <th>Source</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="assyTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Builder View -->
+            <div id="view-builder" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Product Builder</h1>
+                        <p class="page-subtitle">Build your product configuration</p>
+                    </div>
+                    <button class="btn btn-primary" id="exportBtn" disabled onclick="exportFlatBom()">📥 Export Flat BOM</button>
+                </div>
+                <div class="builder-grid">
+                    <div class="builder-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">Available Items</span>
+                            <div class="tabs" style="margin: 0;">
+                                <div class="tab active" data-tab="assy" onclick="switchBuilderTab('assy')">Assemblies</div>
+                                <div class="tab" data-tab="parts" onclick="switchBuilderTab('parts')">Parts</div>
+                            </div>
+                        </div>
+                        <div class="panel-body" id="availableItems"></div>
+                    </div>
+                    <div class="builder-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">Current Product</span>
+                            <span style="color: var(--text-muted); font-size: 12px;" id="productCount">0 items</span>
+                        </div>
+                        <div class="panel-body" id="productItems">
+                            <div class="empty-state">
+                                <div class="icon">📦</div>
+                                <div>No items added yet</div>
+                                <div style="font-size: 12px; margin-top: 4px;">Click items on the left to add</div>
+                            </div>
+                        </div>
+                        <div class="totals-bar">
+                            <div class="total-item"><div class="total-label">Items</div><div class="total-value" id="totalItems">0</div></div>
+                            <div class="total-item"><div class="total-label">Flat Parts</div><div class="total-value" id="totalParts">0</div></div>
+                            <div class="total-item"><div class="total-label">Total Qty</div><div class="total-value" id="totalQty">0</div></div>
+                            <div class="total-item"><div class="total-label">Total Cost</div><div class="total-value highlight" id="totalCost">$0.00</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Flat BOM View -->
+            <div id="view-flatbom" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Flat BOM</h1>
+                        <p class="page-subtitle" id="flatbomSubtitle">0 line items</p>
+                    </div>
+                    <button class="btn btn-primary" id="exportBtn2" disabled onclick="exportFlatBom()">📥 Export to Excel</button>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Part Number</th>
+                                    <th>Description</th>
+                                    <th>Source</th>
+                                    <th>Qty/Src</th>
+                                    <th>Src Qty</th>
+                                    <th>Extended</th>
+                                    <th>Unit Cost</th>
+                                    <th>Line Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody id="flatbomTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modal Container -->
+    <div id="modalContainer"></div>
+
+    <script>
+        // =====================================================================
+        // DATA STATE
+        // =====================================================================
+        const state = {
+            parts: [],           // All parts (imported + user-created)
+            assemblies: {},      // All assemblies (imported + user-created)
+            product: [],         // Current product configuration
+            searchTerm: '',
+            typeFilter: 'all',
+            builderTab: 'assy'
+        };
+        
+        let partIdCounter = 1;
+        let assyIdCounter = 1;
+        
+        // =====================================================================
+        // COLUMN MAPPING CONFIGURATION
+        // =====================================================================
+        const PART_COLUMN_ALIASES = {
+            partNumber: ['part_number', 'partnumber', 'part number', 'part#', 'part_num', 'partnum', 'pn', 'item', 'item_number', 'sku'],
+            description: ['description', 'desc', 'name', 'part_name', 'partname', 'title', 'item_description'],
+            partType: ['part_type', 'parttype', 'type', 'category', 'part_category'],
+            region: ['region', 'module', 'area', 'location', 'zone'],
+            costHigh: ['cost_high', 'costhigh', 'high_cost', 'max_cost', 'cost_max'],
+            costLow: ['cost_low', 'costlow', 'low_cost', 'min_cost', 'cost_min'],
+            costAvg: ['cost_avg', 'costavg', 'avg_cost', 'cost', 'unit_cost', 'unitcost', 'price'],
+            units: ['units', 'unit', 'uom', 'unit_of_measure'],
+            notes: ['notes', 'note', 'comments', 'comment', 'remarks']
+        };
+        
+        const ASSY_COLUMN_ALIASES = {
+            name: ['name', 'assembly_name', 'assyname', 'assy_name', 'subassembly', 'sub_assembly', 'title'],
+            id: ['id', 'assembly_id', 'assyid', 'assy_id', 'subassy_id'],
+            module: ['module', 'region', 'type', 'category', 'area'],
+            description: ['description', 'desc', 'notes']
+        };
+        
+        // =====================================================================
+        // UTILITIES
+        // =====================================================================
+        const formatCurrency = (val) => {
+            if (val === null || val === undefined || isNaN(val)) return '-';
+            return '$' + Number(val).toFixed(2);
+        };
+        
+        const escapeHtml = (str) => {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+        
+        const generatePartId = () => `P${String(partIdCounter++).padStart(4, '0')}`;
+        const generateAssyId = () => `SA${String(assyIdCounter++).padStart(4, '0')}`;
+        
+        // Find matching column from aliases
+        function findColumn(headers, aliases) {
+            const normalized = headers.map(h => h ? String(h).toLowerCase().trim().replace(/[^a-z0-9]/g, '_') : '');
+            for (const alias of aliases) {
+                const idx = normalized.findIndex(h => h === alias.replace(/[^a-z0-9]/g, '_'));
+                if (idx !== -1) return idx;
+            }
+            return -1;
+        }
+        
+        // Map columns from headers
+        function mapColumns(headers, aliasConfig) {
+            const mapping = {};
+            for (const [field, aliases] of Object.entries(aliasConfig)) {
+                const idx = findColumn(headers, aliases);
+                mapping[field] = idx;
+            }
+            return mapping;
+        }
+        
+        // =====================================================================
+        // EXCEL/CSV PARSING
+        // =====================================================================
+        function parseFile(file, callback) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    callback(wb);
+                } catch (err) {
+                    alert('Error parsing file: ' + err.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function importFromCrisisBom(file) {
+            parseFile(file, (wb) => {
+                // Import Master_Parts
+                if (wb.Sheets['Master_Parts']) {
+                    const data = XLSX.utils.sheet_to_json(wb.Sheets['Master_Parts'], { defval: '' });
+                    data.forEach(row => {
+                        state.parts.push({
+                            id: row.Part_ID || generatePartId(),
+                            partNumber: row.Part_Number || '',
+                            description: row.Description || '',
+                            partType: row.Part_Type || '',
+                            region: row.Region || '',
+                            costHigh: Number(row.Cost_High) || 0,
+                            costLow: Number(row.Cost_Low) || 0,
+                            costAvg: Number(row.Cost_Avg) || 0,
+                            units: row.Units || 'EA',
+                            notes: row.Notes || '',
+                            source: 'imported'
+                        });
+                    });
+                }
+                
+                // Import sub-assemblies
+                const subAssySheets = wb.SheetNames.filter(n => 
+                    n.includes('Basic') || n.includes('Injection') || n.includes('CPR') || 
+                    n.includes('Sternal') || n.includes('RGB') || n.includes('BP') ||
+                    n.includes('ECG') || n.includes('Auscultation') || n.includes('Genital')
+                );
+                
+                subAssySheets.forEach(sheetName => {
+                    const json = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1 });
+                    const name = json[5]?.[1] || sheetName;
+                    const module = json[6]?.[1] || '';
+                    
+                    const parts = [];
+                    for (let i = 13; i < json.length; i++) {
+                        const row = json[i];
+                        if (row && row[1]) {
+                            parts.push({
+                                partNumber: row[1],
+                                description: row[2] || '',
+                                qty: Number(row[3]) || 1,
+                                partType: row[4] || '',
+                                region: row[5] || '',
+                                costAvg: Number(row[9]) || 0
+                            });
+                        }
+                    }
+                    
+                    if (parts.length > 0 || name) {
+                        state.assemblies[name] = {
+                            id: generateAssyId(),
+                            name,
+                            module,
+                            description: '',
+                            parts,
+                            source: 'imported'
+                        };
+                    }
+                });
+                
+                document.getElementById('fileName').textContent = file.name;
+                updateAllViews();
+            });
+        }
+        
+        function importPartsFromCSV(file, callback) {
+            parseFile(file, (wb) => {
+                const sheet = wb.Sheets[wb.SheetNames[0]];
+                const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                
+                if (data.length < 2) {
+                    alert('File must have headers and at least one data row');
+                    return;
+                }
+                
+                const headers = data[0];
+                const mapping = mapColumns(headers, PART_COLUMN_ALIASES);
+                const rows = data.slice(1).filter(row => row.some(cell => cell));
+                
+                callback({ headers, mapping, rows, data });
+            });
+        }
+        
+        function importAssembliesFromCSV(file, callback) {
+            parseFile(file, (wb) => {
+                const sheet = wb.Sheets[wb.SheetNames[0]];
+                const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                
+                if (data.length < 2) {
+                    alert('File must have headers and at least one data row');
+                    return;
+                }
+                
+                const headers = data[0];
+                const mapping = mapColumns(headers, ASSY_COLUMN_ALIASES);
+                const rows = data.slice(1).filter(row => row.some(cell => cell));
+                
+                callback({ headers, mapping, rows, data });
+            });
+        }
+        
+        // =====================================================================
+        // PART/ASSEMBLY MANAGEMENT
+        // =====================================================================
+        function createPart(data) {
+            const part = {
+                id: generatePartId(),
+                partNumber: data.partNumber || '',
+                description: data.description || 'New Part',
+                partType: data.partType || '',
+                region: data.region || '',
+                costHigh: Number(data.costHigh) || 0,
+                costLow: Number(data.costLow) || 0,
+                costAvg: Number(data.costAvg) || 0,
+                units: data.units || 'EA',
+                notes: data.notes || '',
+                source: 'user'
+            };
+            
+            if (!part.partNumber) {
+                part.partNumber = part.id;
+            }
+            
+            state.parts.push(part);
+            updateAllViews();
+            return part;
+        }
+        
+        function createAssembly(data) {
+            const id = generateAssyId();
+            const assy = {
+                id,
+                name: data.name || 'New Assembly',
+                module: data.module || '',
+                description: data.description || '',
+                parts: data.parts || [],
+                source: 'user'
+            };
+            
+            state.assemblies[assy.name] = assy;
+            updateAllViews();
+            return assy;
+        }
+        
+        function deletePart(idx) {
+            if (confirm('Delete this part?')) {
+                state.parts.splice(idx, 1);
+                updateAllViews();
+            }
+        }
+        
+        function deleteAssembly(name) {
+            if (confirm('Delete this assembly?')) {
+                delete state.assemblies[name];
+                updateAllViews();
+            }
+        }
+        
+        // =====================================================================
+        // PRODUCT BUILDER
+        // =====================================================================
+        function addToProduct(item, type) {
+            const existing = state.product.find(p => 
+                type === 'part' ? p.partNumber === item.partNumber : p.name === item.name
+            );
+            
+            if (existing) {
+                existing.qty += 1;
+            } else {
+                if (type === 'part') {
+                    state.product.push({
+                        type: 'PART',
+                        partNumber: item.partNumber,
+                        description: item.description,
+                        costAvg: item.costAvg || 0,
+                        qty: 1
+                    });
+                } else {
+                    const totalCost = item.parts.reduce((sum, p) => sum + (p.qty * p.costAvg), 0);
+                    state.product.push({
+                        type: 'SUB-ASSY',
+                        name: item.name,
+                        module: item.module,
+                        costAvg: totalCost,
+                        parts: item.parts,
+                        qty: 1
+                    });
+                }
+            }
+            updateAllViews();
+        }
+        
+        function updateProductQty(idx, qty) {
+            state.product[idx].qty = Math.max(1, parseInt(qty) || 1);
+            updateAllViews();
+        }
+        
+        function removeFromProduct(idx) {
+            state.product.splice(idx, 1);
+            updateAllViews();
+        }
+        
+        function generateFlatBom() {
+            const items = [];
+            state.product.forEach(item => {
+                if (item.type === 'PART') {
+                    items.push({
+                        partNumber: item.partNumber,
+                        description: item.description,
+                        sourceType: 'DIRECT',
+                        sourceName: 'Product Config',
+                        qtyInSource: 1,
+                        sourceQty: item.qty,
+                        extendedQty: item.qty,
+                        costAvg: item.costAvg,
+                        lineCost: item.qty * item.costAvg
+                    });
+                } else if (item.type === 'SUB-ASSY' && item.parts) {
+                    item.parts.forEach(part => {
+                        items.push({
+                            partNumber: part.partNumber,
+                            description: part.description,
+                            sourceType: 'SUB-ASSY',
+                            sourceName: item.name,
+                            qtyInSource: part.qty,
+                            sourceQty: item.qty,
+                            extendedQty: part.qty * item.qty,
+                            costAvg: part.costAvg,
+                            lineCost: part.qty * item.qty * part.costAvg
+                        });
+                    });
+                }
+            });
+            return items;
+        }
+        
+        function getTotals() {
+            const flatBom = generateFlatBom();
+            return {
+                lineItems: flatBom.length,
+                totalQty: flatBom.reduce((sum, i) => sum + i.extendedQty, 0),
+                totalCost: flatBom.reduce((sum, i) => sum + i.lineCost, 0)
+            };
+        }
+        
+        // =====================================================================
+        // EXPORT
+        // =====================================================================
+        function exportFlatBom() {
+            const flatBom = generateFlatBom();
+            const wb = XLSX.utils.book_new();
+            
+            const flatData = flatBom.map(item => ({
+                'Part Number': item.partNumber,
+                'Description': item.description,
+                'Source Type': item.sourceType,
+                'Source Name': item.sourceName,
+                'Qty in Source': item.qtyInSource,
+                'Source Qty': item.sourceQty,
+                'Extended Qty': item.extendedQty,
+                'Unit Cost': item.costAvg,
+                'Line Cost': item.lineCost
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(flatData), 'Flat_BOM');
+            
+            const productData = state.product.map(item => ({
+                'Type': item.type,
+                'Part#/Name': item.type === 'PART' ? item.partNumber : item.name,
+                'Description': item.description || item.module || '',
+                'Qty': item.qty,
+                'Unit Cost': item.costAvg,
+                'Line Cost': item.qty * item.costAvg
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(productData), 'Product_Config');
+            
+            XLSX.writeFile(wb, 'CRISIS_FlatBOM_Export.xlsx');
+        }
+        
+        function exportAllData() {
+            const wb = XLSX.utils.book_new();
+            
+            // Parts
+            const partsData = state.parts.map(p => ({
+                'Part_ID': p.id,
+                'Part_Number': p.partNumber,
+                'Description': p.description,
+                'Part_Type': p.partType,
+                'Region': p.region,
+                'Cost_High': p.costHigh,
+                'Cost_Low': p.costLow,
+                'Cost_Avg': p.costAvg,
+                'Units': p.units,
+                'Notes': p.notes,
+                'Source': p.source
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partsData), 'Parts');
+            
+            // Assemblies
+            const assyData = Object.values(state.assemblies).map(a => ({
+                'Assembly_ID': a.id,
+                'Name': a.name,
+                'Module': a.module,
+                'Description': a.description,
+                'Parts_Count': a.parts.length,
+                'Source': a.source
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(assyData), 'Assemblies');
+            
+            // Assembly BOMs
+            Object.values(state.assemblies).forEach(assy => {
+                if (assy.parts.length > 0) {
+                    const bomData = assy.parts.map(p => ({
+                        'Part_Number': p.partNumber,
+                        'Description': p.description,
+                        'Qty': p.qty,
+                        'Cost_Avg': p.costAvg
+                    }));
+                    const sheetName = assy.name.substring(0, 31).replace(/[\\/*?[\]]/g, '_');
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bomData), sheetName);
+                }
+            });
+            
+            XLSX.writeFile(wb, 'CRISIS_PLM_Export.xlsx');
+        }
+        
+        // =====================================================================
+        // MODALS
+        // =====================================================================
+        function showModal(type) {
+            const container = document.getElementById('modalContainer');
+            let html = '';
+            
+            switch(type) {
+                case 'new-part':
+                    html = `
+                        <div class="modal-overlay" onclick="closeModal(event)">
+                            <div class="modal" onclick="event.stopPropagation()">
+                                <div class="modal-header">
+                                    <h2 class="modal-title">New Part</h2>
+                                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label class="form-label">Part Number</label>
+                                            <input type="text" class="form-input" id="newPartNumber" placeholder="Auto-generated if empty">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label required">Description</label>
+                                            <input type="text" class="form-input" id="newPartDesc" placeholder="Part description">
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label class="form-label">Type</label>
+                                            <input type="text" class="form-input" id="newPartType" placeholder="PP, SA, MD, etc.">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Region/Module</label>
+                                            <input type="text" class="form-input" id="newPartRegion" placeholder="HEAD, TORSO, etc.">
+                                        </div>
+                                    </div>
+                                    <div class="form-row-3">
+                                        <div class="form-group">
+                                            <label class="form-label">Cost High</label>
+                                            <input type="number" step="0.01" class="form-input" id="newPartCostHigh" placeholder="0.00">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Cost Low</label>
+                                            <input type="number" step="0.01" class="form-input" id="newPartCostLow" placeholder="0.00">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Cost Avg</label>
+                                            <input type="number" step="0.01" class="form-input" id="newPartCostAvg" placeholder="0.00">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Notes</label>
+                                        <textarea class="form-textarea" id="newPartNotes" placeholder="Additional notes..."></textarea>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn" onclick="closeModal()">Cancel</button>
+                                    <button class="btn btn-primary" onclick="saveNewPart()">Create Part</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'new-assembly':
+                    html = `
+                        <div class="modal-overlay" onclick="closeModal(event)">
+                            <div class="modal modal-lg" onclick="event.stopPropagation()">
+                                <div class="modal-header">
+                                    <h2 class="modal-title">New Assembly</h2>
+                                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label class="form-label required">Assembly Name</label>
+                                            <input type="text" class="form-input" id="newAssyName" placeholder="e.g., BasicHead Assembly">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Module/Region</label>
+                                            <input type="text" class="form-input" id="newAssyModule" placeholder="HEAD, TORSO, etc.">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Description</label>
+                                        <input type="text" class="form-input" id="newAssyDesc" placeholder="Assembly description">
+                                    </div>
+                                    
+                                    <div class="bom-builder" style="margin-top: 20px;">
+                                        <div class="bom-header">
+                                            <span style="font-weight: 600;">Bill of Materials</span>
+                                            <button class="btn btn-sm" onclick="showAddPartToAssy()">➕ Add Part</button>
+                                        </div>
+                                        <div class="bom-list" id="assyBomList">
+                                            <div class="bom-empty">No parts added. Click "Add Part" to add components.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn" onclick="closeModal()">Cancel</button>
+                                    <button class="btn btn-primary" onclick="saveNewAssembly()">Create Assembly</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    window._assyBomParts = [];
+                    break;
+                    
+                case 'import-parts':
+                    html = `
+                        <div class="modal-overlay" onclick="closeModal(event)">
+                            <div class="modal modal-lg" onclick="event.stopPropagation()">
+                                <div class="modal-header">
+                                    <h2 class="modal-title">Import Parts from CSV/Excel</h2>
+                                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="upload-area" id="partsUploadArea" onclick="document.getElementById('partsFileInput').click()">
+                                        <div class="icon">📄</div>
+                                        <div class="text">Drop CSV or Excel file here</div>
+                                        <div class="hint">or click to browse</div>
+                                        <input type="file" id="partsFileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="handlePartsFileUpload(this.files[0])">
+                                    </div>
+                                    <div id="partsImportPreview" class="hidden">
+                                        <h4 style="margin-bottom: 12px;">Column Mapping</h4>
+                                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                                            Detected columns are shown below. Only Description or Part Number is required.
+                                        </p>
+                                        <div class="mapping-grid" id="partsMappingGrid"></div>
+                                        <div class="preview-wrap" id="partsPreviewTable"></div>
+                                        <div class="preview-count" id="partsPreviewCount"></div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn" onclick="closeModal()">Cancel</button>
+                                    <button class="btn btn-primary" id="importPartsBtn" disabled onclick="confirmImportParts()">Import Parts</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    window._partsImportData = null;
+                    break;
+                    
+                case 'import-assemblies':
+                    html = `
+                        <div class="modal-overlay" onclick="closeModal(event)">
+                            <div class="modal modal-lg" onclick="event.stopPropagation()">
+                                <div class="modal-header">
+                                    <h2 class="modal-title">Import Assemblies from CSV/Excel</h2>
+                                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="upload-area" id="assyUploadArea" onclick="document.getElementById('assyFileInput').click()">
+                                        <div class="icon">📄</div>
+                                        <div class="text">Drop CSV or Excel file here</div>
+                                        <div class="hint">or click to browse</div>
+                                        <input type="file" id="assyFileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleAssyFileUpload(this.files[0])">
+                                    </div>
+                                    <div class="form-hint" style="margin-top: 12px;">
+                                        Note: This imports assembly definitions. To add parts to assemblies, edit them after import.
+                                    </div>
+                                    <div id="assyImportPreview" class="hidden">
+                                        <h4 style="margin-bottom: 12px;">Column Mapping</h4>
+                                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                                            Detected columns are shown below. Only Name is required.
+                                        </p>
+                                        <div class="mapping-grid" id="assyMappingGrid"></div>
+                                        <div class="preview-wrap" id="assyPreviewTable"></div>
+                                        <div class="preview-count" id="assyPreviewCount"></div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn" onclick="closeModal()">Cancel</button>
+                                    <button class="btn btn-primary" id="importAssyBtn" disabled onclick="confirmImportAssemblies()">Import Assemblies</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    window._assyImportData = null;
+                    break;
+                    
+                case 'add-part-to-assy':
+                    const partOptions = state.parts.map((p, i) => 
+                        `<option value="${i}">${escapeHtml(p.partNumber)} - ${escapeHtml(p.description)}</option>`
+                    ).join('');
+                    html = `
+                        <div class="modal-overlay" onclick="closeModal(event)" style="z-index: 1001;">
+                            <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px;">
+                                <div class="modal-header">
+                                    <h2 class="modal-title">Add Part to Assembly</h2>
+                                    <button class="modal-close" onclick="closeAddPartModal()">&times;</button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="form-group">
+                                        <label class="form-label">Select Part</label>
+                                        <select class="form-select" id="assyPartSelect">
+                                            <option value="">-- Select a part --</option>
+                                            ${partOptions}
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Or enter manually:</label>
+                                        <input type="text" class="form-input" id="assyPartManual" placeholder="Part number">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Description (if manual)</label>
+                                        <input type="text" class="form-input" id="assyPartManualDesc" placeholder="Description">
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label class="form-label">Quantity</label>
+                                            <input type="number" class="form-input" id="assyPartQty" value="1" min="1">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Unit Cost</label>
+                                            <input type="number" step="0.01" class="form-input" id="assyPartCost" placeholder="0.00">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn" onclick="closeAddPartModal()">Cancel</button>
+                                    <button class="btn btn-primary" onclick="confirmAddPartToAssy()">Add Part</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+            }
+            
+            container.innerHTML = html;
+            
+            // Setup drag and drop for upload areas
+            setTimeout(() => {
+                ['partsUploadArea', 'assyUploadArea'].forEach(id => {
+                    const area = document.getElementById(id);
+                    if (area) {
+                        area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('dragover'); });
+                        area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+                        area.addEventListener('drop', (e) => {
+                            e.preventDefault();
+                            area.classList.remove('dragover');
+                            const file = e.dataTransfer.files[0];
+                            if (file) {
+                                if (id === 'partsUploadArea') handlePartsFileUpload(file);
+                                else handleAssyFileUpload(file);
+                            }
+                        });
+                    }
+                });
+            }, 0);
+        }
+        
+        function closeModal(event) {
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('modalContainer').innerHTML = '';
+        }
+        
+        function saveNewPart() {
+            const desc = document.getElementById('newPartDesc').value.trim();
+            const partNum = document.getElementById('newPartNumber').value.trim();
+            
+            if (!desc && !partNum) {
+                alert('Please enter at least a description or part number');
+                return;
+            }
+            
+            createPart({
+                partNumber: partNum,
+                description: desc || 'New Part',
+                partType: document.getElementById('newPartType').value.trim(),
+                region: document.getElementById('newPartRegion').value.trim(),
+                costHigh: document.getElementById('newPartCostHigh').value,
+                costLow: document.getElementById('newPartCostLow').value,
+                costAvg: document.getElementById('newPartCostAvg').value,
+                notes: document.getElementById('newPartNotes').value.trim()
+            });
+            
+            closeModal();
+        }
+        
+        function saveNewAssembly() {
+            const name = document.getElementById('newAssyName').value.trim();
+            if (!name) {
+                alert('Please enter an assembly name');
+                return;
+            }
+            
+            createAssembly({
+                name,
+                module: document.getElementById('newAssyModule').value.trim(),
+                description: document.getElementById('newAssyDesc').value.trim(),
+                parts: window._assyBomParts || []
+            });
+            
+            closeModal();
+        }
+        
+        function showAddPartToAssy() {
+            showModal('add-part-to-assy');
+        }
+        
+        function closeAddPartModal() {
+            // Remove just the add-part modal overlay
+            const overlays = document.querySelectorAll('.modal-overlay');
+            if (overlays.length > 1) {
+                overlays[overlays.length - 1].remove();
+            }
+        }
+        
+        function confirmAddPartToAssy() {
+            const selectIdx = document.getElementById('assyPartSelect').value;
+            const manualNum = document.getElementById('assyPartManual').value.trim();
+            const manualDesc = document.getElementById('assyPartManualDesc').value.trim();
+            const qty = parseInt(document.getElementById('assyPartQty').value) || 1;
+            const cost = parseFloat(document.getElementById('assyPartCost').value) || 0;
+            
+            let part;
+            if (selectIdx !== '') {
+                const p = state.parts[parseInt(selectIdx)];
+                part = {
+                    partNumber: p.partNumber,
+                    description: p.description,
+                    qty: qty,
+                    costAvg: cost || p.costAvg
+                };
+            } else if (manualNum || manualDesc) {
+                part = {
+                    partNumber: manualNum || 'TBD',
+                    description: manualDesc || manualNum || 'New Part',
+                    qty: qty,
+                    costAvg: cost
+                };
+            } else {
+                alert('Please select or enter a part');
+                return;
+            }
+            
+            window._assyBomParts.push(part);
+            updateAssyBomList();
+            closeAddPartModal();
+        }
+        
+        function updateAssyBomList() {
+            const list = document.getElementById('assyBomList');
+            if (!window._assyBomParts || window._assyBomParts.length === 0) {
+                list.innerHTML = '<div class="bom-empty">No parts added. Click "Add Part" to add components.</div>';
+                return;
+            }
+            
+            list.innerHTML = window._assyBomParts.map((p, i) => `
+                <div class="bom-item">
+                    <span class="tag tag-part">P</span>
+                    <div class="item-info">
+                        <div class="item-name">${escapeHtml(p.partNumber)}</div>
+                        <div class="item-meta">${escapeHtml(p.description)}</div>
+                    </div>
+                    <input type="number" class="qty-input" value="${p.qty}" min="1" onchange="updateAssyBomQty(${i}, this.value)">
+                    <span class="item-cost">${formatCurrency(p.costAvg)}</span>
+                    <button class="remove-btn" onclick="removeAssyBomPart(${i})">✕</button>
+                </div>
+            `).join('');
+        }
+        
+        function updateAssyBomQty(idx, qty) {
+            window._assyBomParts[idx].qty = Math.max(1, parseInt(qty) || 1);
+        }
+        
+        function removeAssyBomPart(idx) {
+            window._assyBomParts.splice(idx, 1);
+            updateAssyBomList();
+        }
+        
+        // File upload handlers
+        function handlePartsFileUpload(file) {
+            if (!file) return;
+            importPartsFromCSV(file, (data) => {
+                window._partsImportData = data;
+                document.getElementById('partsUploadArea').classList.add('hidden');
+                document.getElementById('partsImportPreview').classList.remove('hidden');
+                
+                // Show mapping
+                const mappingHtml = Object.entries(PART_COLUMN_ALIASES).map(([field, aliases]) => {
+                    const idx = data.mapping[field];
+                    const mapped = idx !== -1 ? data.headers[idx] : null;
+                    return `
+                        <div class="mapping-item">
+                            <span class="mapping-label">${field}:</span>
+                            <span class="mapping-value ${mapped ? '' : 'unmapped'}">${mapped || 'not found'}</span>
+                        </div>
+                    `;
+                }).join('');
+                document.getElementById('partsMappingGrid').innerHTML = mappingHtml;
+                
+                // Show preview table
+                const previewRows = data.rows.slice(0, 5);
+                let tableHtml = '<table><thead><tr>';
+                data.headers.forEach(h => tableHtml += `<th>${escapeHtml(h)}</th>`);
+                tableHtml += '</tr></thead><tbody>';
+                previewRows.forEach(row => {
+                    tableHtml += '<tr>';
+                    data.headers.forEach((_, i) => tableHtml += `<td>${escapeHtml(row[i] || '')}</td>`);
+                    tableHtml += '</tr>';
+                });
+                tableHtml += '</tbody></table>';
+                document.getElementById('partsPreviewTable').innerHTML = tableHtml;
+                document.getElementById('partsPreviewCount').textContent = `${data.rows.length} parts will be imported`;
+                
+                // Enable import button if we have at least description or partNumber
+                const hasRequired = data.mapping.description !== -1 || data.mapping.partNumber !== -1;
+                document.getElementById('importPartsBtn').disabled = !hasRequired;
+            });
+        }
+        
+        function handleAssyFileUpload(file) {
+            if (!file) return;
+            importAssembliesFromCSV(file, (data) => {
+                window._assyImportData = data;
+                document.getElementById('assyUploadArea').classList.add('hidden');
+                document.getElementById('assyImportPreview').classList.remove('hidden');
+                
+                // Show mapping
+                const mappingHtml = Object.entries(ASSY_COLUMN_ALIASES).map(([field, aliases]) => {
+                    const idx = data.mapping[field];
+                    const mapped = idx !== -1 ? data.headers[idx] : null;
+                    return `
+                        <div class="mapping-item">
+                            <span class="mapping-label">${field}:</span>
+                            <span class="mapping-value ${mapped ? '' : 'unmapped'}">${mapped || 'not found'}</span>
+                        </div>
+                    `;
+                }).join('');
+                document.getElementById('assyMappingGrid').innerHTML = mappingHtml;
+                
+                // Show preview table
+                const previewRows = data.rows.slice(0, 5);
+                let tableHtml = '<table><thead><tr>';
+                data.headers.forEach(h => tableHtml += `<th>${escapeHtml(h)}</th>`);
+                tableHtml += '</tr></thead><tbody>';
+                previewRows.forEach(row => {
+                    tableHtml += '<tr>';
+                    data.headers.forEach((_, i) => tableHtml += `<td>${escapeHtml(row[i] || '')}</td>`);
+                    tableHtml += '</tr>';
+                });
+                tableHtml += '</tbody></table>';
+                document.getElementById('assyPreviewTable').innerHTML = tableHtml;
+                document.getElementById('assyPreviewCount').textContent = `${data.rows.length} assemblies will be imported`;
+                
+                // Enable import button if we have name
+                const hasRequired = data.mapping.name !== -1;
+                document.getElementById('importAssyBtn').disabled = !hasRequired;
+            });
+        }
+        
+        function confirmImportParts() {
+            const data = window._partsImportData;
+            if (!data) return;
+            
+            const m = data.mapping;
+            let imported = 0;
+            
+            data.rows.forEach(row => {
+                const desc = m.description !== -1 ? row[m.description] : '';
+                const partNum = m.partNumber !== -1 ? row[m.partNumber] : '';
+                
+                if (desc || partNum) {
+                    state.parts.push({
+                        id: generatePartId(),
+                        partNumber: partNum || '',
+                        description: desc || partNum || 'Imported Part',
+                        partType: m.partType !== -1 ? (row[m.partType] || '') : '',
+                        region: m.region !== -1 ? (row[m.region] || '') : '',
+                        costHigh: m.costHigh !== -1 ? (Number(row[m.costHigh]) || 0) : 0,
+                        costLow: m.costLow !== -1 ? (Number(row[m.costLow]) || 0) : 0,
+                        costAvg: m.costAvg !== -1 ? (Number(row[m.costAvg]) || 0) : 0,
+                        units: m.units !== -1 ? (row[m.units] || 'EA') : 'EA',
+                        notes: m.notes !== -1 ? (row[m.notes] || '') : '',
+                        source: 'csv-import'
+                    });
+                    imported++;
+                }
+            });
+            
+            alert(`Imported ${imported} parts`);
+            closeModal();
+            updateAllViews();
+        }
+        
+        function confirmImportAssemblies() {
+            const data = window._assyImportData;
+            if (!data) return;
+            
+            const m = data.mapping;
+            let imported = 0;
+            
+            data.rows.forEach(row => {
+                const name = m.name !== -1 ? row[m.name] : '';
+                
+                if (name) {
+                    state.assemblies[name] = {
+                        id: generateAssyId(),
+                        name: name,
+                        module: m.module !== -1 ? (row[m.module] || '') : '',
+                        description: m.description !== -1 ? (row[m.description] || '') : '',
+                        parts: [],
+                        source: 'csv-import'
+                    };
+                    imported++;
+                }
+            });
+            
+            alert(`Imported ${imported} assemblies`);
+            closeModal();
+            updateAllViews();
+        }
+        
+        function showExportModal() {
+            if (confirm('Export all parts and assemblies to Excel?')) {
+                exportAllData();
+            }
+        }
+        
+        // =====================================================================
+        // VIEW UPDATES
+        // =====================================================================
+        function updateAllViews() {
+            const totals = getTotals();
+            const flatBom = generateFlatBom();
+            const assyCount = Object.keys(state.assemblies).length;
+            
+            // Nav badges
+            document.getElementById('partsCount').textContent = state.parts.length;
+            document.getElementById('assyCount').textContent = assyCount;
+            document.getElementById('flatbomCount').textContent = flatBom.length;
+            
+            // Dashboard stats
+            document.getElementById('statParts').textContent = state.parts.length;
+            document.getElementById('statAssy').textContent = assyCount;
+            document.getElementById('statProduct').textContent = state.product.length;
+            document.getElementById('statFlatbom').textContent = flatBom.length;
+            document.getElementById('statQty').textContent = totals.totalQty;
+            document.getElementById('statCost').textContent = formatCurrency(totals.totalCost);
+            
+            // Parts view
+            updatePartsTable();
+            updateTypeFilters();
+            document.getElementById('partsSubtitle').textContent = `${state.parts.length} parts`;
+            
+            // Assemblies view
+            updateAssyTable();
+            document.getElementById('assySubtitle').textContent = `${assyCount} assemblies`;
+            
+            // Builder view
+            updateAvailableItems();
+            updateProductItems();
+            document.getElementById('productCount').textContent = `${state.product.length} items`;
+            document.getElementById('totalItems').textContent = state.product.length;
+            document.getElementById('totalParts').textContent = flatBom.length;
+            document.getElementById('totalQty').textContent = totals.totalQty;
+            document.getElementById('totalCost').textContent = formatCurrency(totals.totalCost);
+            
+            // Flat BOM view
+            updateFlatBomTable();
+            document.getElementById('flatbomSubtitle').textContent = `${flatBom.length} line items · Total: ${formatCurrency(totals.totalCost)}`;
+            
+            // Export buttons
+            const canExport = flatBom.length > 0;
+            document.getElementById('exportBtn').disabled = !canExport;
+            document.getElementById('exportBtn2').disabled = !canExport;
+        }
+        
+        function updateTypeFilters() {
+            const types = [...new Set(state.parts.map(p => p.partType).filter(Boolean))];
+            const container = document.getElementById('typeFilters');
+            
+            let html = `<button class="filter-pill ${state.typeFilter === 'all' ? 'active' : ''}" data-type="all">All</button>`;
+            types.forEach(t => {
+                html += `<button class="filter-pill ${state.typeFilter === t ? 'active' : ''}" data-type="${escapeHtml(t)}">${escapeHtml(t)}</button>`;
+            });
+            container.innerHTML = html;
+            
+            container.querySelectorAll('.filter-pill').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    state.typeFilter = btn.dataset.type;
+                    updateAllViews();
+                });
+            });
+        }
+        
+        function updatePartsTable() {
+            const filtered = state.parts.filter(p => {
+                const matchesSearch = !state.searchTerm || 
+                    (p.partNumber && p.partNumber.toLowerCase().includes(state.searchTerm.toLowerCase())) ||
+                    (p.description && p.description.toLowerCase().includes(state.searchTerm.toLowerCase()));
+                const matchesType = state.typeFilter === 'all' || p.partType === state.typeFilter;
+                return matchesSearch && matchesType;
+            });
+            
+            const tbody = document.getElementById('partsTableBody');
+            tbody.innerHTML = filtered.slice(0, 200).map((p, idx) => `
+                <tr>
+                    <td class="mono">${escapeHtml(p.partNumber) || '-'}</td>
+                    <td>${escapeHtml(p.description) || '-'}</td>
+                    <td>${p.partType ? `<span class="tag tag-part">${escapeHtml(p.partType)}</span>` : '-'}</td>
+                    <td>${escapeHtml(p.region) || '-'}</td>
+                    <td class="mono">${formatCurrency(p.costAvg)}</td>
+                    <td><span class="tag ${p.source === 'user' ? 'tag-user' : ''}">${p.source || 'imported'}</span></td>
+                    <td>
+                        <button class="btn btn-sm" onclick="addPartToProduct(${state.parts.indexOf(p)})">+ Add</button>
+                        ${p.source === 'user' ? `<button class="btn btn-sm btn-danger" onclick="deletePart(${state.parts.indexOf(p)})" style="margin-left:4px;">✕</button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        window.addPartToProduct = (idx) => addToProduct(state.parts[idx], 'part');
+        
+        function updateAssyTable() {
+            const items = Object.values(state.assemblies);
+            const tbody = document.getElementById('assyTableBody');
+            
+            tbody.innerHTML = items.map(a => {
+                const totalCost = a.parts.reduce((sum, p) => sum + (p.qty * p.costAvg), 0);
+                return `
+                    <tr>
+                        <td><span class="tag tag-subassy">SA</span> ${escapeHtml(a.name)}</td>
+                        <td class="mono">${escapeHtml(a.id)}</td>
+                        <td>${escapeHtml(a.module) || '-'}</td>
+                        <td class="mono">${a.parts.length}</td>
+                        <td class="mono">${formatCurrency(totalCost)}</td>
+                        <td><span class="tag ${a.source === 'user' ? 'tag-user' : ''}">${a.source || 'imported'}</span></td>
+                        <td>
+                            <button class="btn btn-sm" onclick="addAssyToProduct('${escapeHtml(a.name)}')">+ Add</button>
+                            ${a.source === 'user' || a.source === 'csv-import' ? `<button class="btn btn-sm btn-danger" onclick="deleteAssembly('${escapeHtml(a.name)}')" style="margin-left:4px;">✕</button>` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        window.addAssyToProduct = (name) => addToProduct(state.assemblies[name], 'assy');
+        
+        function switchBuilderTab(tab) {
+            state.builderTab = tab;
+            document.querySelectorAll('.panel-header .tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.tab === tab);
+            });
+            updateAvailableItems();
+        }
+        
+        function updateAvailableItems() {
+            const container = document.getElementById('availableItems');
+            
+            if (state.builderTab === 'assy') {
+                const items = Object.values(state.assemblies);
+                container.innerHTML = items.map(a => {
+                    const totalCost = a.parts.reduce((sum, p) => sum + (p.qty * p.costAvg), 0);
+                    return `
+                        <div class="selectable-item" onclick="addAssyToProduct('${escapeHtml(a.name)}')">
+                            <span class="tag tag-subassy">SA</span>
+                            <div class="item-info">
+                                <div class="item-name">${escapeHtml(a.name)}</div>
+                                <div class="item-meta">${a.parts.length} parts · ${escapeHtml(a.module)}</div>
+                            </div>
+                            <div class="item-cost">${formatCurrency(totalCost)}</div>
+                        </div>
+                    `;
+                }).join('') || '<div class="empty-state"><div class="icon">🔧</div><div>No assemblies yet</div></div>';
+            } else {
+                container.innerHTML = state.parts.slice(0, 100).map((p, idx) => `
+                    <div class="selectable-item" onclick="addPartToProduct(${idx})">
+                        <span class="tag tag-part">P</span>
+                        <div class="item-info">
+                            <div class="item-name">${escapeHtml(p.partNumber || p.id)}</div>
+                            <div class="item-meta">${escapeHtml(p.description)}</div>
+                        </div>
+                        <div class="item-cost">${formatCurrency(p.costAvg)}</div>
+                    </div>
+                `).join('') || '<div class="empty-state"><div class="icon">📦</div><div>No parts yet</div></div>';
+            }
+        }
+        
+        function updateProductItems() {
+            const container = document.getElementById('productItems');
+            
+            if (state.product.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📦</div>
+                        <div>No items added yet</div>
+                        <div style="font-size: 12px; margin-top: 4px;">Click items on the left to add</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = state.product.map((item, idx) => `
+                <div class="assembly-item">
+                    <span class="tag ${item.type === 'PART' ? 'tag-part' : 'tag-subassy'}">
+                        ${item.type === 'PART' ? 'P' : 'SA'}
+                    </span>
+                    <div class="item-info">
+                        <div class="item-name">${escapeHtml(item.type === 'PART' ? item.partNumber : item.name)}</div>
+                        <div class="item-meta">${escapeHtml(item.description || item.module || '')}</div>
+                    </div>
+                    <input type="number" class="qty-input" value="${item.qty}" min="1" onchange="updateProductQty(${idx}, this.value)">
+                    <div class="item-cost">${formatCurrency(item.qty * item.costAvg)}</div>
+                    <button class="remove-btn" onclick="removeFromProduct(${idx})">✕</button>
+                </div>
+            `).join('');
+        }
+        
+        function updateFlatBomTable() {
+            const flatBom = generateFlatBom();
+            const tbody = document.getElementById('flatbomTableBody');
+            
+            if (flatBom.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 48px; color: var(--text-muted);">
+                            No items in Flat BOM - add parts or assemblies in the Builder
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = flatBom.map(item => `
+                <tr>
+                    <td class="mono">${escapeHtml(item.partNumber)}</td>
+                    <td>${escapeHtml(item.description) || '-'}</td>
+                    <td>
+                        <span class="tag ${item.sourceType === 'DIRECT' ? 'tag-direct' : 'tag-subassy'}">${item.sourceType}</span>
+                        <span style="margin-left: 6px; font-size: 12px; color: var(--text-secondary);">${escapeHtml(item.sourceName)}</span>
+                    </td>
+                    <td class="mono">${item.qtyInSource}</td>
+                    <td class="mono">${item.sourceQty}</td>
+                    <td class="mono" style="font-weight: 600;">${item.extendedQty}</td>
+                    <td class="mono">${formatCurrency(item.costAvg)}</td>
+                    <td class="mono" style="color: var(--accent);">${formatCurrency(item.lineCost)}</td>
+                </tr>
+            `).join('');
+        }
+        
+        // =====================================================================
+        // NAVIGATION
+        // =====================================================================
+        function showView(viewName) {
+            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+            document.getElementById('view-' + viewName).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.querySelector(`.nav-item[data-view="${viewName}"]`)?.classList.add('active');
+        }
+        
+        // =====================================================================
+        // INITIALIZATION
+        // =====================================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', () => showView(item.dataset.view));
+            });
+            
+            // File input for CRISIS BOM import
+            document.getElementById('fileInput').addEventListener('change', (e) => {
+                if (e.target.files[0]) importFromCrisisBom(e.target.files[0]);
+            });
+            
+            // Search
+            document.getElementById('partsSearch').addEventListener('input', (e) => {
+                state.searchTerm = e.target.value;
+                updatePartsTable();
+            });
+            
+            // Initial render
+            updateAllViews();
+        });
+    </script>
+</body>
+</html>

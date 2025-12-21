@@ -1,0 +1,3955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLM - Product Lifecycle Management</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --bg-elevated: #30363d;
+            --border: #30363d;
+            --border-light: #484f58;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent: #58a6ff;
+            --accent-emphasis: #1f6feb;
+            --success: #3fb950;
+            --warning: #d29922;
+            --error: #f85149;
+            --purple: #a371f7;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        /* ===== HEADER ===== */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-left { display: flex; align-items: center; gap: 24px; }
+        .logo { font-size: 18px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+        .logo-icon { background: var(--accent); color: var(--bg-primary); width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+        
+        .product-selector { display: flex; align-items: center; gap: 8px; }
+        .product-selector label { color: var(--text-secondary); font-size: 13px; }
+        .product-selector select {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+        
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        .save-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status-dot.saved { background: var(--success); }
+        .status-dot.unsaved { background: var(--warning); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        
+        .sync-info { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--bg-tertiary); border-radius: 6px; margin-right: 8px; font-size: 12px; }
+        .sync-time { color: var(--text-muted); }
+        .sync-badge { padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 11px; }
+        .sync-badge.fresh { background: rgba(63, 185, 80, 0.2); color: var(--success); }
+        .sync-badge.stale { background: rgba(210, 153, 34, 0.2); color: var(--warning); }
+        .sync-badge.none { background: rgba(248, 81, 73, 0.2); color: var(--error); }
+        
+        .quick-actions { display: flex; gap: 6px; }
+        .btn-sync { background: var(--accent-emphasis); border-color: var(--accent-emphasis); color: white; }
+        .btn-sync:hover { background: var(--accent); }
+        
+        .workflow-card { background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary)); border: 1px solid var(--accent); border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+        .workflow-steps { display: flex; gap: 16px; margin-top: 16px; flex-wrap: wrap; }
+        .workflow-step { flex: 1; min-width: 200px; background: var(--bg-secondary); border-radius: 6px; padding: 16px; text-align: center; }
+        .workflow-step-num { width: 28px; height: 28px; background: var(--accent); color: var(--bg-primary); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; margin-bottom: 8px; }
+        .workflow-step-title { font-weight: 600; margin-bottom: 4px; }
+        .workflow-step-desc { font-size: 12px; color: var(--text-muted); }
+        
+        /* ===== BUTTONS ===== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn:hover { background: var(--bg-elevated); border-color: var(--border-light); }
+        .btn-primary { background: var(--accent-emphasis); border-color: var(--accent-emphasis); color: white; }
+        .btn-primary:hover { background: var(--accent); }
+        .btn-success { background: var(--success); border-color: var(--success); color: var(--bg-primary); }
+        .btn-danger { background: transparent; border-color: var(--error); color: var(--error); }
+        .btn-danger:hover { background: var(--error); color: white; }
+        .btn-sm { padding: 4px 8px; font-size: 12px; }
+        .btn-icon { padding: 6px; min-width: 32px; justify-content: center; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        /* ===== LAYOUT ===== */
+        .main { display: flex; height: calc(100vh - 60px); }
+        
+        .sidebar {
+            width: 240px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        
+        .nav { padding: 16px 0; flex: 1; overflow-y: auto; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); padding: 0 16px; margin-bottom: 8px; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+            font-size: 14px;
+        }
+        .nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .nav-item.active { background: rgba(88, 166, 255, 0.1); color: var(--accent); border-right: 2px solid var(--accent); }
+        .nav-badge { margin-left: auto; background: var(--bg-elevated); padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .nav-item.active .nav-badge { background: var(--accent); color: var(--bg-primary); }
+        
+        .sidebar-footer { padding: 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+        
+        .content { flex: 1; overflow: auto; padding: 24px; }
+        
+        /* ===== VIEWS ===== */
+        .view { display: none; }
+        .view.active { display: block; }
+        
+        .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
+        .page-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+        .page-subtitle { color: var(--text-secondary); font-size: 14px; }
+        .page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        
+        /* ===== CARDS ===== */
+        .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .card-title { font-weight: 600; font-size: 14px; }
+        .card-body { padding: 16px; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+        .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+        .stat-value { font-size: 28px; font-weight: 600; font-family: 'SF Mono', Monaco, monospace; }
+        .stat-value.accent { color: var(--accent); }
+        
+        /* ===== TABLES ===== */
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px 12px; background: var(--bg-tertiary); color: var(--text-secondary); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tr:hover td { background: var(--bg-tertiary); }
+        .mono { font-family: 'SF Mono', Monaco, monospace; font-size: 12px; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .nowrap { white-space: nowrap; }
+        
+        /* ===== TAGS ===== */
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .tag-draft { background: rgba(210, 153, 34, 0.2); color: var(--warning); }
+        .tag-released { background: rgba(63, 185, 80, 0.2); color: var(--success); }
+        .tag-obsolete { background: rgba(248, 81, 73, 0.2); color: var(--error); }
+        .tag-type { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
+        .tag-product { background: rgba(163, 113, 247, 0.2); color: var(--purple); }
+        .tag-assy { background: rgba(163, 113, 247, 0.15); color: var(--purple); }
+        .tag-part-class { background: rgba(88, 166, 255, 0.1); color: var(--text-secondary); }
+        .tag-category { background: var(--bg-elevated); color: var(--text-secondary); }
+        
+        /* ===== DROPDOWN MENU ===== */
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 4px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            min-width: 220px;
+            z-index: 100;
+            padding: 4px;
+        }
+        .dropdown-item {
+            display: block;
+            width: 100%;
+            padding: 10px 12px;
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 13px;
+            text-align: left;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: background 0.15s;
+        }
+        .dropdown-item:hover { background: var(--bg-tertiary); }
+        .dropdown-item:disabled { color: var(--text-muted); cursor: not-allowed; }
+        .dropdown-item:disabled:hover { background: transparent; }
+        
+        /* ===== SELECTED ROW ===== */
+        tr.selected-row { background: rgba(88, 166, 255, 0.08); }
+        tr.selected-row td { border-bottom-color: rgba(88, 166, 255, 0.2); }
+        
+        /* ===== FILTER PILL WARNING ===== */
+        .filter-pill.warning { border-color: var(--warning); color: var(--warning); }
+        .filter-pill.warning.active { background: var(--warning); color: var(--bg-primary); }
+        
+        .rev-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 20px; padding: 0 6px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: 'SF Mono', Monaco, monospace; background: var(--bg-elevated); color: var(--text-secondary); }
+        
+        /* ===== FORMS ===== */
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); }
+        .form-label.required::after { content: ' *'; color: var(--error); }
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--accent); }
+        .form-textarea { min-height: 80px; resize: vertical; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+        .form-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        
+        /* ===== SEARCH & FILTERS ===== */
+        .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .search-box { position: relative; flex: 1; min-width: 200px; max-width: 300px; }
+        .search-box input { width: 100%; padding: 8px 12px 8px 36px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); font-size: 13px; }
+        .search-box input:focus { outline: none; border-color: var(--accent); }
+        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 14px; }
+        
+        .filter-group { display: flex; gap: 4px; }
+        .filter-btn { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); transition: all 0.15s; }
+        .filter-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .filter-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg-primary); }
+        
+        /* ===== BOM TREE ===== */
+        .bom-tree { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .bom-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); transition: background 0.15s; }
+        .bom-row:last-child { border-bottom: none; }
+        .bom-row:hover { background: var(--bg-tertiary); }
+        .bom-row.level-0 { background: var(--bg-tertiary); font-weight: 600; }
+        .bom-row.level-1 { padding-left: 32px; }
+        .bom-row.level-2 { padding-left: 56px; }
+        .bom-row.level-3 { padding-left: 80px; }
+        .bom-row.level-4 { padding-left: 104px; }
+        .bom-expand { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); font-size: 12px; border-radius: 4px; }
+        .bom-expand:hover { background: var(--bg-elevated); color: var(--text-primary); }
+        .bom-expand.empty { visibility: hidden; }
+        .bom-info { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .bom-pn { font-family: 'SF Mono', Monaco, monospace; font-size: 12px; color: var(--accent); min-width: 100px; }
+        .bom-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .bom-qty { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-width: 50px; text-align: center; }
+        .bom-cost { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-width: 80px; text-align: right; }
+        .bom-ext { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; min-width: 80px; text-align: right; color: var(--success); }
+        .bom-actions { min-width: 70px; display: flex; gap: 4px; justify-content: flex-end; }
+        
+        /* ===== MODALS ===== */
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+        .modal { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; }
+        .modal-lg { max-width: 800px; }
+        .modal-xl { max-width: 1000px; }
+        .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .modal-title { font-size: 18px; font-weight: 600; }
+        .modal-close { background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; padding: 0; line-height: 1; }
+        .modal-close:hover { color: var(--text-primary); }
+        .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; }
+        
+        /* ===== WHERE USED ===== */
+        .where-used-link { color: var(--purple); cursor: pointer; font-size: 12px; }
+        .where-used-link:hover { text-decoration: underline; }
+        
+        /* ===== UPLOAD ===== */
+        .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(88, 166, 255, 0.05); }
+        .upload-zone-icon { font-size: 40px; margin-bottom: 12px; }
+        .upload-zone-text { color: var(--text-secondary); margin-bottom: 4px; }
+        .upload-zone-hint { font-size: 12px; color: var(--text-muted); }
+        
+        /* ===== TABS ===== */
+        .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        .tab { padding: 8px 16px; border-radius: 6px 6px 0 0; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text-secondary); background: transparent; border: none; }
+        .tab:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+        .tab.active { color: var(--accent); background: var(--bg-tertiary); }
+        
+        /* ===== EMPTY STATE ===== */
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        .empty-state-title { font-size: 16px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+        
+        /* ===== SORTABLE TABLE HEADERS ===== */
+        th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+        th.sortable:hover { background: var(--bg-elevated); color: var(--accent); }
+        th.sortable .sort-icon { margin-left: 4px; opacity: 0.5; font-size: 10px; }
+        th.sortable.active { color: var(--accent); }
+        th.sortable.active .sort-icon { opacity: 1; }
+        
+        /* ===== COLUMN FILTERS ===== */
+        .column-filter { display: flex; flex-direction: column; gap: 4px; }
+        .column-filter input, .column-filter select { 
+            padding: 4px 8px; font-size: 11px; border: 1px solid var(--border); 
+            border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary);
+            width: 100%; min-width: 60px;
+        }
+        .column-filter input:focus, .column-filter select:focus { border-color: var(--accent); outline: none; }
+        .column-filter input::placeholder { color: var(--text-muted); }
+        
+        /* ===== TOAST NOTIFICATIONS ===== */
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; }
+        .toast { padding: 12px 20px; border-radius: 8px; background: var(--bg-secondary); border: 1px solid var(--border); 
+                 box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 10px;
+                 animation: slideIn 0.3s ease; min-width: 250px; }
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--error); }
+        .toast.warning { border-color: var(--warning); }
+        .toast-icon { font-size: 18px; }
+        .toast-message { flex: 1; font-size: 13px; }
+        .toast-close { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+        
+        /* ===== QUICK ACTIONS ROW ===== */
+        .row-actions { opacity: 0; transition: opacity 0.15s; }
+        tr:hover .row-actions { opacity: 1; }
+        
+        /* ===== KEYBOARD SHORTCUT HINTS ===== */
+        .kbd { display: inline-block; padding: 2px 6px; font-size: 11px; font-family: monospace; 
+               background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; }
+        
+        /* ===== BETTER FILTER PILLS ===== */
+        .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+        .filter-pill { padding: 4px 12px; border-radius: 16px; font-size: 12px; cursor: pointer;
+                      background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-secondary);
+                      transition: all 0.15s; }
+        .filter-pill:hover { border-color: var(--accent); color: var(--text-primary); }
+        .filter-pill.active { background: var(--accent); border-color: var(--accent); color: var(--bg-primary); }
+        .filter-pill .count { margin-left: 4px; opacity: 0.7; }
+        
+        /* ===== STATUS INDICATORS ===== */
+        .status-released { color: var(--success); }
+        .status-draft { color: var(--warning); }
+        .status-obsolete { color: var(--error); }
+        
+        /* ===== TBD HIGHLIGHT ===== */
+        .tbd-warning { color: var(--warning); font-style: italic; }
+        
+        /* ===== SELECTABLE PART ROWS ===== */
+        .selectable-part-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .selectable-part-row:hover {
+            background: var(--bg-tertiary);
+        }
+        .selectable-part-row.selected {
+            background: var(--accent-glow);
+            border-left: 3px solid var(--accent);
+        }
+        .selectable-part-row:last-child {
+            border-bottom: none;
+        }
+        
+        /* ===== RESPONSIVE IMPROVEMENTS ===== */
+        @media (max-width: 1200px) {
+            .sidebar { width: 60px; }
+            .sidebar .nav-text { display: none; }
+            .sidebar .nav-badge { display: none; }
+            .content { margin-left: 60px; }
+        }
+        
+        /* ===== UTILITIES ===== */
+        .hidden { display: none !important; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .gap-2 { gap: 8px; }
+        .gap-3 { gap: 12px; }
+        .ml-auto { margin-left: auto; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+        
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <div class="logo-icon">P</div>
+                <span>PLM</span>
+            </div>
+            <div class="product-selector">
+                <label>Product:</label>
+                <select id="productSelect" onchange="selectProduct(this.value)">
+                    <option value="">All Parts (No Product)</option>
+                </select>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="sync-info">
+                <span>📁 Last sync:</span>
+                <span class="sync-time" id="lastSyncTime">Never</span>
+                <span class="sync-badge none" id="syncBadge">Not Synced</span>
+            </div>
+            <div class="quick-actions">
+                <button class="btn btn-sm btn-sync" onclick="showModal('syncHelp')" title="SharePoint Sync Help">☁️ Sync</button>
+                <button class="btn btn-sm" onclick="quickExportJson()" title="Download database for SharePoint">⬇️ Export</button>
+                <button class="btn btn-sm" onclick="document.getElementById('quickImportInput').click()" title="Load database from SharePoint">⬆️ Import</button>
+                <input type="file" id="quickImportInput" accept=".json" style="display:none" onchange="quickImportJson(this.files[0])">
+            </div>
+            <div class="save-status">
+                <span class="status-dot" id="saveStatusDot"></span>
+                <span id="saveStatusText">Saved</span>
+            </div>
+            <button class="btn btn-sm" onclick="showModal('import')">📁 Import Excel</button>
+            <button class="btn btn-sm" onclick="showModal('export')">📤 Export Excel</button>
+        </div>
+    </header>
+    
+    <!-- MAIN -->
+    <div class="main">
+        <!-- SIDEBAR -->
+        <nav class="sidebar">
+            <div class="nav">
+                <div class="nav-section">
+                    <div class="nav-title">Overview</div>
+                    <div class="nav-item active" data-view="dashboard">📊 Dashboard</div>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-title">Data</div>
+                    <div class="nav-item" data-view="parts">📦 Parts Database <span class="nav-badge" id="navPartsCount">0</span></div>
+                    <div class="nav-item" data-view="products">🏭 Products <span class="nav-badge" id="navProductsCount">0</span></div>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-title">Views</div>
+                    <div class="nav-item" data-view="bom">🌳 Indented BOM</div>
+                    <div class="nav-item" data-view="flatbom">📋 Flat BOM</div>
+                    <div class="nav-item" data-view="whereused">🔗 Where Used</div>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-title">History</div>
+                    <div class="nav-item" data-view="history">📜 Change Log <span class="nav-badge" id="navHistoryCount">0</span></div>
+                </div>
+            </div>
+            <div class="sidebar-footer">
+                <button class="btn" style="width:100%" onclick="showModal('newPart')">➕ New Part</button>
+            </div>
+        </nav>
+        
+        <!-- CONTENT -->
+        <main class="content" id="contentArea">
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="view active"></div>
+            
+            <!-- Parts Database View -->
+            <div id="view-parts" class="view"></div>
+            
+            <!-- Products View -->
+            <div id="view-products" class="view"></div>
+            
+            <!-- Indented BOM View -->
+            <div id="view-bom" class="view"></div>
+            
+            <!-- Flat BOM View -->
+            <div id="view-flatbom" class="view"></div>
+            
+            <!-- Where Used View -->
+            <div id="view-whereused" class="view"></div>
+            
+            <!-- History View -->
+            <div id="view-history" class="view"></div>
+        </main>
+    </div>
+    
+    <!-- MODAL CONTAINER -->
+    <div id="modalContainer"></div>
+
+<script>
+// =============================================================================
+// STATE MANAGEMENT
+// =============================================================================
+const DB = {
+    parts: [],          // All parts (including assemblies and products)
+    history: [],        // Change log
+    selectedProduct: null,
+    selectedBomPart: null,  // Part to view in BOM view
+    searchTerm: '',
+    filters: {
+        status: 'all',
+        type: 'all',
+        category: 'all',
+        bomFilter: 'all',
+        tbdFilter: false
+    },
+    expandedBomNodes: new Set(),
+    selectedParts: new Set(),
+    hasUnsavedChanges: false,
+    
+    // Sorting
+    sort: {
+        column: 'partNumber',
+        direction: 'asc'
+    },
+    
+    // Sync tracking
+    lastExportTime: null,
+    lastImportTime: null,
+    lastExportedBy: null,
+    lastImportedFrom: null,
+    
+    // Version control
+    version: 0,
+    checkedOutBy: null,
+    checkedOutAt: null,
+    lastModifiedBy: null,
+    lastModifiedAt: null,
+    currentUser: null  // Set when checking out
+};
+
+let idCounter = 1;
+
+// =============================================================================
+// SORTING & FILTERING
+// =============================================================================
+function sortParts(parts, column, direction) {
+    return [...parts].sort((a, b) => {
+        let valA, valB;
+        
+        switch(column) {
+            case 'partNumber':
+                valA = a.partNumber || '';
+                valB = b.partNumber || '';
+                break;
+            case 'legacyPartNumber':
+                valA = a.legacyPartNumber || '';
+                valB = b.legacyPartNumber || '';
+                break;
+            case 'name':
+                valA = a.name || '';
+                valB = b.name || '';
+                break;
+            case 'type':
+                valA = a.type || '';
+                valB = b.type || '';
+                break;
+            case 'status':
+                valA = a.status || '';
+                valB = b.status || '';
+                break;
+            case 'cost':
+                valA = a.status === 'released' && a.cost > 0 ? a.cost : a.costAvg || 0;
+                valB = b.status === 'released' && b.cost > 0 ? b.cost : b.costAvg || 0;
+                break;
+            case 'category':
+                valA = a.category || '';
+                valB = b.category || '';
+                break;
+            case 'bom':
+                valA = (a.bom || []).length;
+                valB = (b.bom || []).length;
+                break;
+            case 'usedIn':
+                valA = Parts.getWhereUsed(a.id).length;
+                valB = Parts.getWhereUsed(b.id).length;
+                break;
+            case 'class':
+                // Sort order: PRODUCT > ASSEMBLY > PART
+                const getClassOrder = (p) => {
+                    if (p.isProduct) return 0;
+                    if (p.bom && p.bom.length > 0) return 1;
+                    return 2;
+                };
+                valA = getClassOrder(a);
+                valB = getClassOrder(b);
+                break;
+            default:
+                valA = a[column] || '';
+                valB = b[column] || '';
+        }
+        
+        // Numeric comparison
+        if (typeof valA === 'number' && typeof valB === 'number') {
+            return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        
+        // String comparison
+        valA = String(valA).toLowerCase();
+        valB = String(valB).toLowerCase();
+        
+        if (valA < valB) return direction === 'asc' ? -1 : 1;
+        if (valA > valB) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+function toggleSort(column) {
+    if (DB.sort.column === column) {
+        DB.sort.direction = DB.sort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        DB.sort.column = column;
+        DB.sort.direction = 'asc';
+    }
+    renderPartsView();
+}
+
+function getSortIcon(column) {
+    if (DB.sort.column !== column) return '↕️';
+    return DB.sort.direction === 'asc' ? '↑' : '↓';
+}
+
+// =============================================================================
+// SHAREPOINT SYNC FUNCTIONS WITH VERSION CONTROL
+// =============================================================================
+function promptForUsername() {
+    let username = localStorage.getItem('plmUsername');
+    if (!username) {
+        username = prompt('Enter your name/email for tracking changes:');
+        if (username) {
+            localStorage.setItem('plmUsername', username);
+        }
+    }
+    return username || 'Anonymous';
+}
+
+function quickExportJson() {
+    const username = promptForUsername();
+    
+    const data = {
+        // Version control
+        version: (DB.version || 0) + 1,
+        checkedOutBy: null,  // Clear checkout on export
+        checkedOutAt: null,
+        lastModifiedBy: username,
+        lastModifiedAt: new Date().toISOString(),
+        
+        // Data
+        parts: DB.parts,
+        history: DB.history,
+        idCounter: idCounter,
+        
+        // Metadata
+        exportedAt: new Date().toISOString(),
+        exportedBy: username
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'plm_database.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // Update local state
+    DB.version = data.version;
+    DB.checkedOutBy = null;
+    DB.checkedOutAt = null;
+    DB.lastModifiedBy = username;
+    DB.lastModifiedAt = data.lastModifiedAt;
+    DB.lastExportTime = new Date().toISOString();
+    localStorage.setItem('plmLastExport', DB.lastExportTime);
+    updateSyncStatus();
+    
+    // Also save to localStorage
+    saveToStorage();
+    
+    alert(`✅ Database exported! (Version ${data.version})\n\nNext step: Upload plm_database.json to your SharePoint PLM_Data folder.`);
+}
+
+function quickImportJson(file) {
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            
+            // Validate the data
+            if (!data.parts || !Array.isArray(data.parts)) {
+                throw new Error('Invalid database file: missing parts array');
+            }
+            
+            // Check for checkout conflict
+            const username = promptForUsername();
+            let warningMsg = '';
+            
+            if (data.checkedOutBy && data.checkedOutBy !== username) {
+                const checkoutTime = data.checkedOutAt ? new Date(data.checkedOutAt).toLocaleString() : 'Unknown time';
+                warningMsg = `\n\n⚠️ WARNING: This database is checked out by:\n${data.checkedOutBy}\nSince: ${checkoutTime}\n\nThey may be making changes!`;
+            }
+            
+            // Build confirmation message
+            const partCount = data.parts.length;
+            const historyCount = (data.history || []).length;
+            const version = data.version || 'Unknown';
+            const lastModified = data.lastModifiedAt ? new Date(data.lastModifiedAt).toLocaleString() : 'Unknown';
+            const lastModifiedBy = data.lastModifiedBy || 'Unknown';
+            
+            const confirmed = confirm(
+                `📥 Import Database?\n\n` +
+                `Version: ${version}\n` +
+                `Parts: ${partCount}\n` +
+                `Last modified: ${lastModified}\n` +
+                `By: ${lastModifiedBy}` +
+                `${warningMsg}\n\n` +
+                `This will replace your current local data!`
+            );
+            
+            if (!confirmed) return;
+            
+            // Import the data
+            DB.parts = data.parts || [];
+            DB.history = data.history || [];
+            idCounter = data.idCounter || 1;
+            
+            // Update version control state
+            DB.version = data.version || 0;
+            DB.checkedOutBy = data.checkedOutBy;
+            DB.checkedOutAt = data.checkedOutAt;
+            DB.lastModifiedBy = data.lastModifiedBy;
+            DB.lastModifiedAt = data.lastModifiedAt;
+            
+            // Update sync status
+            DB.lastImportTime = new Date().toISOString();
+            DB.lastImportedFrom = file.name;
+            localStorage.setItem('plmLastImport', DB.lastImportTime);
+            localStorage.setItem('plmImportedVersion', String(DB.version));
+            
+            // Save to localStorage
+            saveToStorage();
+            updateSyncStatus();
+            renderAll();
+            
+            alert(`✅ Imported successfully!\n\nVersion: ${version}\n${partCount} parts loaded.`);
+            
+        } catch (err) {
+            alert('❌ Error importing file:\n\n' + err.message);
+            console.error('Import error:', err);
+        }
+    };
+    reader.readAsText(file);
+    
+    // Reset the file input
+    document.getElementById('quickImportInput').value = '';
+}
+
+function checkoutDatabase() {
+    const username = promptForUsername();
+    
+    if (DB.checkedOutBy && DB.checkedOutBy !== username) {
+        const proceed = confirm(
+            `⚠️ Database is currently checked out by:\n${DB.checkedOutBy}\n\n` +
+            `Do you want to override and check it out anyway?`
+        );
+        if (!proceed) return;
+    }
+    
+    DB.checkedOutBy = username;
+    DB.checkedOutAt = new Date().toISOString();
+    DB.currentUser = username;
+    
+    saveToStorage();
+    updateSyncStatus();
+    
+    alert(`✅ Database checked out to: ${username}\n\nRemember to Export when you're done!`);
+}
+
+function updateSyncStatus() {
+    const lastExport = localStorage.getItem('plmLastExport');
+    const lastImport = localStorage.getItem('plmLastImport');
+    
+    const timeEl = document.getElementById('lastSyncTime');
+    const badgeEl = document.getElementById('syncBadge');
+    
+    // Show version in badge if available
+    let badgeText = '';
+    let badgeClass = 'none';
+    
+    if (DB.version > 0) {
+        badgeText = `v${DB.version}`;
+        badgeClass = 'fresh';
+    }
+    
+    // Determine the most recent sync
+    let lastSync = null;
+    let syncType = '';
+    
+    if (lastExport && lastImport) {
+        if (new Date(lastExport) > new Date(lastImport)) {
+            lastSync = lastExport;
+            syncType = 'exported';
+        } else {
+            lastSync = lastImport;
+            syncType = 'imported';
+        }
+    } else if (lastExport) {
+        lastSync = lastExport;
+        syncType = 'exported';
+    } else if (lastImport) {
+        lastSync = lastImport;
+        syncType = 'imported';
+    }
+    
+    if (lastSync) {
+        const syncDate = new Date(lastSync);
+        const now = new Date();
+        const hoursDiff = (now - syncDate) / (1000 * 60 * 60);
+        
+        // Format time
+        timeEl.textContent = formatRelativeTime(syncDate);
+        
+        // Set badge based on version and checkout status
+        if (DB.checkedOutBy) {
+            badgeText = `🔒 ${DB.checkedOutBy.split('@')[0]}`;
+            badgeClass = 'stale';
+        } else if (DB.version > 0) {
+            badgeText = `v${DB.version}`;
+            if (hoursDiff < 24) {
+                badgeClass = 'fresh';
+            } else {
+                badgeClass = 'stale';
+            }
+        }
+    } else {
+        timeEl.textContent = 'Never';
+        badgeText = 'Not Synced';
+        badgeClass = 'none';
+    }
+    
+    badgeEl.textContent = badgeText;
+    badgeEl.className = 'sync-badge ' + badgeClass;
+}
+
+function formatRelativeTime(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+}
+
+// =============================================================================
+// UTILITIES
+// =============================================================================
+const Utils = {
+    generateId: () => `P${String(idCounter++).padStart(5, '0')}`,
+    
+    formatCurrency: (v) => {
+        if (v == null || isNaN(v)) return '-';
+        return '$' + Number(v).toFixed(2);
+    },
+    
+    formatDate: (d) => d ? new Date(d).toLocaleDateString() : '-',
+    formatDateTime: (d) => d ? new Date(d).toLocaleString() : '-',
+    
+    escapeHtml: (s) => s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') : '',
+    
+    debounce: (fn, delay) => {
+        let timer;
+        return (...args) => {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn(...args), delay);
+        };
+    }
+};
+
+// =============================================================================
+// PART OPERATIONS
+// =============================================================================
+const Parts = {
+    create(data) {
+        const now = new Date().toISOString();
+        const part = {
+            id: data.id || Utils.generateId(),
+            partNumber: data.partNumber || '',
+            legacyPartNumber: data.legacyPartNumber || null,
+            name: data.name || 'New Part',
+            type: data.type || 'PP',
+            category: data.category || '',
+            revision: data.revision || 'A',
+            status: data.status || 'draft',
+            
+            // Cost - released
+            cost: Number(data.cost) || 0,
+            costedDate: data.costedDate || null,
+            
+            // Cost - development
+            costLow: Number(data.costLow) || 0,
+            costHigh: Number(data.costHigh) || 0,
+            costAvg: Number(data.costAvg) || 0,
+            
+            // Metadata
+            notes: data.notes || '',
+            
+            // BOM
+            bom: data.bom || [],
+            
+            // Flags
+            isProduct: data.isProduct || false,
+            
+            // Timestamps
+            created: data.created || now,
+            modified: data.modified || now
+        };
+        
+        if (!part.partNumber) part.partNumber = part.id;
+        
+        DB.parts.push(part);
+        History.add('create', 'part', part.id, `Created: ${part.partNumber} - ${part.name}`);
+        markUnsaved();
+        return part;
+    },
+    
+    update(id, changes) {
+        const part = DB.parts.find(p => p.id === id);
+        if (!part) return null;
+        
+        const oldData = JSON.parse(JSON.stringify(part));
+        Object.assign(part, changes, { modified: new Date().toISOString() });
+        
+        History.add('update', 'part', id, `Updated: ${part.partNumber}`, oldData);
+        markUnsaved();
+        return part;
+    },
+    
+    delete(id) {
+        const idx = DB.parts.findIndex(p => p.id === id);
+        if (idx === -1) return false;
+        
+        const part = DB.parts[idx];
+        History.add('delete', 'part', id, `Deleted: ${part.partNumber} - ${part.name}`, part);
+        DB.parts.splice(idx, 1);
+        markUnsaved();
+        return true;
+    },
+    
+    getById(id) {
+        return DB.parts.find(p => p.id === id);
+    },
+    
+    getByPartNumber(pn) {
+        return DB.parts.find(p => p.partNumber === pn);
+    },
+    
+    getProducts() {
+        return DB.parts.filter(p => p.isProduct);
+    },
+    
+    getAssemblies() {
+        return DB.parts.filter(p => p.bom && p.bom.length > 0);
+    },
+    
+    hasChildren(id) {
+        const part = this.getById(id);
+        return part && part.bom && part.bom.length > 0;
+    },
+    
+    // Get effective cost (released cost or avg dev cost)
+    getEffectiveCost(part) {
+        if (part.status === 'released' && part.cost > 0) return part.cost;
+        if (part.costAvg > 0) return part.costAvg;
+        return 0;
+    },
+    
+    // Calculate rolled-up cost for an assembly
+    getRolledUpCost(partId, visitedIds = new Set()) {
+        if (visitedIds.has(partId)) return 0; // Prevent infinite loops
+        visitedIds.add(partId);
+        
+        const part = this.getById(partId);
+        if (!part) return 0;
+        
+        if (!part.bom || part.bom.length === 0) {
+            return this.getEffectiveCost(part);
+        }
+        
+        let total = 0;
+        for (const item of part.bom) {
+            const childCost = this.getRolledUpCost(item.partId, new Set(visitedIds));
+            total += childCost * item.qty;
+        }
+        return total;
+    },
+    
+    // Get where used (which parts contain this part in their BOM)
+    getWhereUsed(partId) {
+        const results = [];
+        for (const part of DB.parts) {
+            if (part.bom) {
+                const found = part.bom.find(b => b.partId === partId);
+                if (found) {
+                    results.push({
+                        part: part,
+                        qty: found.qty
+                    });
+                }
+            }
+        }
+        return results;
+    },
+    
+    // Add part to BOM
+    addToBom(parentId, childId, qty = 1) {
+        const parent = this.getById(parentId);
+        if (!parent) return false;
+        
+        if (!parent.bom) parent.bom = [];
+        
+        const existing = parent.bom.find(b => b.partId === childId);
+        if (existing) {
+            existing.qty += qty;
+        } else {
+            parent.bom.push({ partId: childId, qty });
+        }
+        
+        parent.modified = new Date().toISOString();
+        History.add('update', 'part', parentId, `Added to BOM: ${this.getById(childId)?.partNumber || childId}`);
+        markUnsaved();
+        return true;
+    },
+    
+    // Remove from BOM
+    removeFromBom(parentId, childId) {
+        const parent = this.getById(parentId);
+        if (!parent || !parent.bom) return false;
+        
+        const idx = parent.bom.findIndex(b => b.partId === childId);
+        if (idx === -1) return false;
+        
+        parent.bom.splice(idx, 1);
+        parent.modified = new Date().toISOString();
+        History.add('update', 'part', parentId, `Removed from BOM: ${this.getById(childId)?.partNumber || childId}`);
+        markUnsaved();
+        return true;
+    },
+    
+    // Update BOM quantity
+    updateBomQty(parentId, childId, qty) {
+        const parent = this.getById(parentId);
+        if (!parent || !parent.bom) return false;
+        
+        const item = parent.bom.find(b => b.partId === childId);
+        if (!item) return false;
+        
+        item.qty = Math.max(1, parseInt(qty) || 1);
+        parent.modified = new Date().toISOString();
+        markUnsaved();
+        return true;
+    },
+    
+    // Generate flat BOM for a part
+    generateFlatBom(partId, parentQty = 1, results = [], visitedIds = new Set()) {
+        if (visitedIds.has(partId)) return results;
+        visitedIds.add(partId);
+        
+        const part = this.getById(partId);
+        if (!part) return results;
+        
+        if (!part.bom || part.bom.length === 0) {
+            // Leaf part - add to results
+            const existing = results.find(r => r.partId === partId);
+            if (existing) {
+                existing.qty += parentQty;
+            } else {
+                results.push({
+                    partId: partId,
+                    partNumber: part.partNumber,
+                    name: part.name,
+                    type: part.type,
+                    qty: parentQty,
+                    cost: this.getEffectiveCost(part)
+                });
+            }
+        } else {
+            // Assembly - recurse into children
+            for (const item of part.bom) {
+                this.generateFlatBom(item.partId, parentQty * item.qty, results, new Set(visitedIds));
+            }
+        }
+        
+        return results;
+    }
+};
+
+// =============================================================================
+// HISTORY
+// =============================================================================
+const History = {
+    add(action, type, itemId, description, oldValue = null) {
+        DB.history.unshift({
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            action,
+            type,
+            itemId,
+            description,
+            oldValue
+        });
+        
+        // Keep only last 500 entries
+        if (DB.history.length > 500) {
+            DB.history = DB.history.slice(0, 500);
+        }
+    },
+    
+    clear() {
+        if (!confirm('Clear all history?')) return;
+        DB.history = [];
+        markUnsaved();
+        renderAll();
+    }
+};
+
+// =============================================================================
+// PERSISTENCE
+// =============================================================================
+function markUnsaved() {
+    DB.hasUnsavedChanges = true;
+    document.getElementById('saveStatusDot').className = 'status-dot unsaved';
+    document.getElementById('saveStatusText').textContent = 'Unsaved';
+}
+
+function markSaved() {
+    DB.hasUnsavedChanges = false;
+    document.getElementById('saveStatusDot').className = 'status-dot saved';
+    document.getElementById('saveStatusText').textContent = 'Saved';
+}
+
+function saveToStorage() {
+    const data = {
+        parts: DB.parts,
+        history: DB.history,
+        idCounter: idCounter,
+        savedAt: new Date().toISOString()
+    };
+    localStorage.setItem('plmData', JSON.stringify(data));
+    markSaved();
+}
+
+function loadFromStorage() {
+    const saved = localStorage.getItem('plmData');
+    if (saved) {
+        try {
+            const data = JSON.parse(saved);
+            DB.parts = data.parts || [];
+            DB.history = data.history || [];
+            idCounter = data.idCounter || 1;
+            markSaved();
+            return true;
+        } catch (e) {
+            console.error('Failed to load from storage:', e);
+        }
+    }
+    return false;
+}
+
+function clearAllData() {
+    if (!confirm('⚠️ Delete ALL data?\n\nThis will clear all parts, BOMs, and history.\nThis cannot be undone!')) return;
+    if (!confirm('Are you really sure? Type "DELETE" mentally and click OK.')) return;
+    
+    DB.parts = [];
+    DB.history = [];
+    idCounter = 1;
+    localStorage.removeItem('plmData');
+    localStorage.removeItem('plmLastExport');
+    localStorage.removeItem('plmLastImport');
+    
+    markSaved();
+    updateSyncStatus();
+    renderAll();
+    
+    alert('All data cleared.');
+}
+
+// =============================================================================
+// IMPORT / EXPORT
+// =============================================================================
+const ImportExport = {
+    parseFile(file, callback) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const wb = XLSX.read(e.target.result, { type: 'array' });
+                callback(wb);
+            } catch (err) {
+                alert('Error reading file: ' + err.message);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    },
+    
+    importParts(file, sheetName = null) {
+        this.parseFile(file, (wb) => {
+            const sheet = sheetName ? wb.Sheets[sheetName] : wb.Sheets[wb.SheetNames[0]];
+            const data = XLSX.utils.sheet_to_json(sheet);
+            
+            let imported = 0;
+            for (const row of data) {
+                const partNumber = row.Part_Number || row.PartNumber || row.partNumber || row.part_number || '';
+                const name = row.Name || row.Description || row.name || row.description || '';
+                
+                if (!partNumber && !name) continue;
+                
+                // Check for existing
+                const existing = Parts.getByPartNumber(partNumber);
+                if (existing) {
+                    // Update existing
+                    Parts.update(existing.id, {
+                        name: name || existing.name,
+                        type: row.Type || row.type || row.Part_Type || existing.type,
+                        category: row.Category || row.category || row.Region || existing.category,
+                        costHigh: Number(row.Cost_High || row.costHigh) || existing.costHigh,
+                        costLow: Number(row.Cost_Low || row.costLow) || existing.costLow,
+                        costAvg: Number(row.Cost_Avg || row.costAvg || row.Cost || row.cost) || existing.costAvg,
+                        notes: row.Notes || row.notes || existing.notes
+                    });
+                } else {
+                    // Create new
+                    Parts.create({
+                        partNumber: partNumber,
+                        name: name || partNumber,
+                        type: row.Type || row.type || row.Part_Type || 'PP',
+                        category: row.Category || row.category || row.Region || '',
+                        costHigh: Number(row.Cost_High || row.costHigh) || 0,
+                        costLow: Number(row.Cost_Low || row.costLow) || 0,
+                        costAvg: Number(row.Cost_Avg || row.costAvg || row.Cost || row.cost) || 0,
+                        notes: row.Notes || row.notes || '',
+                        isProduct: (row.Is_Product || row.isProduct || '').toString().toLowerCase() === 'true'
+                    });
+                    imported++;
+                }
+            }
+            
+            renderAll();
+            alert(`Imported ${imported} new parts`);
+        });
+    },
+    
+    importBoms(file) {
+        this.parseFile(file, (wb) => {
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            const data = XLSX.utils.sheet_to_json(sheet);
+            
+            let added = 0;
+            for (const row of data) {
+                const parentPN = row.Assembly_Name || row.Parent || row.parent || '';
+                const childPN = row.Part_Number || row.Child || row.child || '';
+                const qty = Number(row.Qty || row.qty || row.Quantity || 1);
+                
+                if (!parentPN || !childPN) continue;
+                
+                // Find or create parent
+                let parent = Parts.getByPartNumber(parentPN);
+                if (!parent) {
+                    parent = Parts.create({ partNumber: parentPN, name: parentPN });
+                }
+                
+                // Find or create child
+                let child = Parts.getByPartNumber(childPN);
+                if (!child) {
+                    const desc = row.Part_Description || row.Description || childPN;
+                    child = Parts.create({ partNumber: childPN, name: desc });
+                }
+                
+                // Add to BOM
+                Parts.addToBom(parent.id, child.id, qty);
+                added++;
+            }
+            
+            renderAll();
+            alert(`Added ${added} BOM relationships`);
+        });
+    },
+    
+    exportAll() {
+        const wb = XLSX.utils.book_new();
+        
+        // Parts sheet
+        const partsData = DB.parts.map(p => ({
+            Part_Number: p.partNumber,
+            Name: p.name,
+            Type: p.type,
+            Category: p.category,
+            Revision: p.revision,
+            Status: p.status,
+            Cost: p.cost,
+            Costed_Date: p.costedDate,
+            Cost_Low: p.costLow,
+            Cost_High: p.costHigh,
+            Cost_Avg: p.costAvg,
+            Is_Product: p.isProduct,
+            Has_BOM: (p.bom && p.bom.length > 0),
+            Notes: p.notes,
+            Created: p.created,
+            Modified: p.modified
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partsData), 'Parts');
+        
+        // BOMs sheet
+        const bomData = [];
+        for (const part of DB.parts) {
+            if (part.bom && part.bom.length > 0) {
+                for (const item of part.bom) {
+                    const child = Parts.getById(item.partId);
+                    bomData.push({
+                        Parent_PN: part.partNumber,
+                        Parent_Name: part.name,
+                        Child_PN: child?.partNumber || item.partId,
+                        Child_Name: child?.name || '',
+                        Qty: item.qty
+                    });
+                }
+            }
+        }
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bomData), 'BOMs');
+        
+        // Products sheet
+        const productsData = Parts.getProducts().map(p => ({
+            Part_Number: p.partNumber,
+            Name: p.name,
+            Revision: p.revision,
+            Status: p.status,
+            Total_Cost: Parts.getRolledUpCost(p.id)
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(productsData), 'Products');
+        
+        XLSX.writeFile(wb, `PLM_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
+    },
+    
+    exportProductBom(productId) {
+        const product = Parts.getById(productId);
+        if (!product) return;
+        
+        const wb = XLSX.utils.book_new();
+        
+        // Indented BOM
+        const indented = [];
+        const addToIndented = (partId, level = 0, parentQty = 1) => {
+            const part = Parts.getById(partId);
+            if (!part) return;
+            
+            indented.push({
+                Level: level,
+                Part_Number: part.partNumber,
+                Name: part.name,
+                Type: part.type,
+                Qty: parentQty,
+                Unit_Cost: Parts.getEffectiveCost(part),
+                Extended_Cost: Parts.getEffectiveCost(part) * parentQty
+            });
+            
+            if (part.bom) {
+                for (const item of part.bom) {
+                    addToIndented(item.partId, level + 1, item.qty * parentQty);
+                }
+            }
+        };
+        addToIndented(productId);
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(indented), 'Indented_BOM');
+        
+        // Flat BOM
+        const flatBom = Parts.generateFlatBom(productId);
+        const flatData = flatBom.map(item => ({
+            Part_Number: item.partNumber,
+            Name: item.name,
+            Type: item.type,
+            Total_Qty: item.qty,
+            Unit_Cost: item.cost,
+            Extended_Cost: item.qty * item.cost
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(flatData), 'Flat_BOM');
+        
+        XLSX.writeFile(wb, `${product.partNumber}_BOM.xlsx`);
+    }
+};
+
+// =============================================================================
+// EXPORT MANAGER - Excel Export Functions
+// =============================================================================
+const ExportManager = {
+    // Get dashboard statistics
+    getDashboardStats() {
+        const products = Parts.getProducts();
+        const assemblies = Parts.getAssemblies();
+        const tbdCount = DB.parts.filter(p => (p.legacyPartNumber || '').toUpperCase().includes('TBD')).length;
+        
+        const stats = {
+            totalItems: DB.parts.length,
+            products: products.length,
+            assemblies: assemblies.length,
+            partsOnly: DB.parts.filter(p => !p.bom || p.bom.length === 0).length,
+            released: DB.parts.filter(p => p.status === 'released').length,
+            draft: DB.parts.filter(p => p.status === 'draft').length,
+            obsolete: DB.parts.filter(p => p.status === 'obsolete').length,
+            tbdParts: tbdCount,
+            totalCost: DB.parts.reduce((sum, p) => {
+                const cost = p.status === 'released' && p.cost > 0 ? p.cost : p.costAvg;
+                return sum + (cost || 0);
+            }, 0)
+        };
+        
+        // Cost by type
+        const costByType = {};
+        DB.parts.forEach(p => {
+            const type = p.type || 'Other';
+            const cost = p.status === 'released' && p.cost > 0 ? p.cost : p.costAvg;
+            if (!costByType[type]) costByType[type] = { count: 0, cost: 0 };
+            costByType[type].count++;
+            costByType[type].cost += cost || 0;
+        });
+        stats.costByType = costByType;
+        
+        // Cost by category
+        const costByCategory = {};
+        DB.parts.forEach(p => {
+            const cat = p.category || 'Uncategorized';
+            const cost = p.status === 'released' && p.cost > 0 ? p.cost : p.costAvg;
+            if (!costByCategory[cat]) costByCategory[cat] = { count: 0, cost: 0 };
+            costByCategory[cat].count++;
+            costByCategory[cat].cost += cost || 0;
+        });
+        stats.costByCategory = costByCategory;
+        
+        return stats;
+    },
+    
+    // Format part for export
+    formatPartForExport(p) {
+        const hasBom = p.bom && p.bom.length > 0;
+        const whereUsed = Parts.getWhereUsed(p.id);
+        const cost = p.status === 'released' && p.cost > 0 ? p.cost : p.costAvg;
+        
+        let itemClass = 'PART';
+        if (p.isProduct) itemClass = 'PRODUCT';
+        else if (hasBom) itemClass = 'ASSEMBLY';
+        
+        return {
+            Part_Number: p.partNumber,
+            Legacy_PN: p.legacyPartNumber || '',
+            Name: p.name,
+            Class: itemClass,
+            Type: p.type,
+            Category: p.category || '',
+            Revision: p.revision,
+            Status: p.status,
+            Cost_Released: p.cost || 0,
+            Cost_Low: p.costLow || 0,
+            Cost_High: p.costHigh || 0,
+            Cost_Avg: p.costAvg || 0,
+            Effective_Cost: cost,
+            BOM_Count: hasBom ? p.bom.length : 0,
+            Used_In_Count: whereUsed.length,
+            Is_Product: p.isProduct ? 'Yes' : 'No',
+            Is_Assembly: hasBom ? 'Yes' : 'No',
+            Is_TBD: (p.legacyPartNumber || '').toUpperCase().includes('TBD') ? 'Yes' : 'No',
+            Notes: p.notes || '',
+            Created: p.created,
+            Modified: p.modified
+        };
+    },
+    
+    // Export all parts
+    exportAllParts() {
+        const wb = XLSX.utils.book_new();
+        
+        // Dashboard Summary sheet
+        const stats = this.getDashboardStats();
+        const summaryData = [
+            { Metric: 'Total Items', Value: stats.totalItems },
+            { Metric: 'Products', Value: stats.products },
+            { Metric: 'Assemblies', Value: stats.assemblies },
+            { Metric: 'Parts (no BOM)', Value: stats.partsOnly },
+            { Metric: 'Released', Value: stats.released },
+            { Metric: 'Draft', Value: stats.draft },
+            { Metric: 'Obsolete', Value: stats.obsolete },
+            { Metric: 'TBD Parts', Value: stats.tbdParts },
+            { Metric: 'Export Date', Value: new Date().toISOString() }
+        ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryData), 'Summary');
+        
+        // All Parts sheet
+        const partsData = DB.parts.map(p => this.formatPartForExport(p));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partsData), 'All_Parts');
+        
+        // Cost by Type sheet
+        const typeData = Object.entries(stats.costByType).map(([type, data]) => ({
+            Type: type,
+            Count: data.count,
+            Total_Cost: data.cost
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(typeData), 'Cost_by_Type');
+        
+        // Cost by Category sheet
+        const catData = Object.entries(stats.costByCategory).map(([cat, data]) => ({
+            Category: cat,
+            Count: data.count,
+            Total_Cost: data.cost
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catData), 'Cost_by_Category');
+        
+        XLSX.writeFile(wb, `PLM_All_Parts_${new Date().toISOString().slice(0,10)}.xlsx`);
+        showToast(`Exported ${DB.parts.length} parts`, 'success');
+    },
+    
+    // Export filtered parts (current view)
+    exportFilteredParts() {
+        // Re-apply current filters
+        let filtered = [...DB.parts];
+        
+        if (DB.searchTerm) {
+            const term = DB.searchTerm.toLowerCase();
+            filtered = filtered.filter(p => 
+                p.partNumber.toLowerCase().includes(term) || 
+                p.name.toLowerCase().includes(term) ||
+                (p.legacyPartNumber || '').toLowerCase().includes(term)
+            );
+        }
+        
+        if (DB.filters.status !== 'all') {
+            filtered = filtered.filter(p => p.status === DB.filters.status);
+        }
+        
+        if (DB.filters.type !== 'all') {
+            filtered = filtered.filter(p => p.type === DB.filters.type);
+        }
+        
+        if (DB.filters.category !== 'all') {
+            filtered = filtered.filter(p => p.category === DB.filters.category);
+        }
+        
+        if (DB.filters.bomFilter === 'assemblies') {
+            filtered = filtered.filter(p => p.bom && p.bom.length > 0 && !p.isProduct);
+        } else if (DB.filters.bomFilter === 'parts') {
+            filtered = filtered.filter(p => !p.bom || p.bom.length === 0);
+        } else if (DB.filters.bomFilter === 'products') {
+            filtered = filtered.filter(p => p.isProduct);
+        }
+        
+        if (DB.filters.tbdFilter) {
+            filtered = filtered.filter(p => (p.legacyPartNumber || '').toUpperCase().includes('TBD'));
+        }
+        
+        const wb = XLSX.utils.book_new();
+        
+        // Filter info
+        const filterInfo = [
+            { Filter: 'Search Term', Value: DB.searchTerm || '(none)' },
+            { Filter: 'Status', Value: DB.filters.status },
+            { Filter: 'Type', Value: DB.filters.type },
+            { Filter: 'Category', Value: DB.filters.category },
+            { Filter: 'Class Filter', Value: DB.filters.bomFilter },
+            { Filter: 'TBD Only', Value: DB.filters.tbdFilter ? 'Yes' : 'No' },
+            { Filter: 'Results Count', Value: filtered.length },
+            { Filter: 'Export Date', Value: new Date().toISOString() }
+        ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filterInfo), 'Filter_Info');
+        
+        // Filtered parts
+        const partsData = filtered.map(p => this.formatPartForExport(p));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partsData), 'Filtered_Parts');
+        
+        XLSX.writeFile(wb, `PLM_Filtered_${new Date().toISOString().slice(0,10)}.xlsx`);
+        showToast(`Exported ${filtered.length} filtered parts`, 'success');
+    },
+    
+    // Export selected parts
+    exportSelectedParts() {
+        if (DB.selectedParts.size === 0) {
+            showToast('No parts selected', 'warning');
+            return;
+        }
+        
+        const selectedIds = Array.from(DB.selectedParts);
+        const parts = selectedIds.map(id => Parts.getById(id)).filter(Boolean);
+        
+        const wb = XLSX.utils.book_new();
+        
+        // Selection info
+        const selectionInfo = [
+            { Info: 'Selected Count', Value: parts.length },
+            { Info: 'Export Date', Value: new Date().toISOString() }
+        ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(selectionInfo), 'Selection_Info');
+        
+        // Selected parts
+        const partsData = parts.map(p => this.formatPartForExport(p));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partsData), 'Selected_Parts');
+        
+        // If any selected parts have BOMs, include BOM details
+        const bomData = [];
+        parts.forEach(part => {
+            if (part.bom && part.bom.length > 0) {
+                part.bom.forEach(item => {
+                    const child = Parts.getById(item.partId);
+                    bomData.push({
+                        Parent_PN: part.partNumber,
+                        Parent_Name: part.name,
+                        Child_PN: child?.partNumber || item.partId,
+                        Child_Name: child?.name || '',
+                        Qty: item.qty,
+                        Unit_Cost: child ? Parts.getEffectiveCost(child) : 0,
+                        Extended_Cost: child ? Parts.getEffectiveCost(child) * item.qty : 0
+                    });
+                });
+            }
+        });
+        
+        if (bomData.length > 0) {
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bomData), 'BOMs');
+        }
+        
+        XLSX.writeFile(wb, `PLM_Selected_${new Date().toISOString().slice(0,10)}.xlsx`);
+        showToast(`Exported ${parts.length} selected parts`, 'success');
+    },
+    
+    // Export single part with full details
+    exportSinglePart(partId) {
+        const part = Parts.getById(partId);
+        if (!part) {
+            showToast('Part not found', 'error');
+            return;
+        }
+        
+        const wb = XLSX.utils.book_new();
+        
+        // Part details
+        const hasBom = part.bom && part.bom.length > 0;
+        const whereUsed = Parts.getWhereUsed(partId);
+        const cost = part.status === 'released' && part.cost > 0 ? part.cost : part.costAvg;
+        
+        const details = [
+            { Field: 'Part Number', Value: part.partNumber },
+            { Field: 'Legacy PN', Value: part.legacyPartNumber || '-' },
+            { Field: 'Name', Value: part.name },
+            { Field: 'Class', Value: part.isProduct ? 'PRODUCT' : (hasBom ? 'ASSEMBLY' : 'PART') },
+            { Field: 'Type', Value: part.type },
+            { Field: 'Category', Value: part.category || '-' },
+            { Field: 'Revision', Value: part.revision },
+            { Field: 'Status', Value: part.status },
+            { Field: 'Cost (Released)', Value: part.cost || 0 },
+            { Field: 'Cost Low', Value: part.costLow || 0 },
+            { Field: 'Cost High', Value: part.costHigh || 0 },
+            { Field: 'Cost Avg', Value: part.costAvg || 0 },
+            { Field: 'Effective Cost', Value: cost },
+            { Field: 'Is Product', Value: part.isProduct ? 'Yes' : 'No' },
+            { Field: 'Has BOM', Value: hasBom ? 'Yes' : 'No' },
+            { Field: 'BOM Items', Value: hasBom ? part.bom.length : 0 },
+            { Field: 'Used In', Value: whereUsed.length },
+            { Field: 'Notes', Value: part.notes || '' },
+            { Field: 'Created', Value: part.created },
+            { Field: 'Modified', Value: part.modified }
+        ];
+        
+        if (hasBom) {
+            const rolledUpCost = Parts.getRolledUpCost(partId);
+            details.push({ Field: 'Rolled Up Cost', Value: rolledUpCost });
+        }
+        
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(details), 'Part_Details');
+        
+        // BOM if exists
+        if (hasBom) {
+            const bomData = part.bom.map(item => {
+                const child = Parts.getById(item.partId);
+                return {
+                    Part_Number: child?.partNumber || item.partId,
+                    Name: child?.name || '',
+                    Type: child?.type || '',
+                    Qty: item.qty,
+                    Unit_Cost: child ? Parts.getEffectiveCost(child) : 0,
+                    Extended_Cost: child ? Parts.getEffectiveCost(child) * item.qty : 0
+                };
+            });
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bomData), 'Direct_BOM');
+            
+            // Flat BOM
+            const flatBom = Parts.generateFlatBom(partId);
+            const flatData = flatBom.map(item => ({
+                Part_Number: item.partNumber,
+                Name: item.name,
+                Type: item.type,
+                Total_Qty: item.qty,
+                Unit_Cost: item.cost,
+                Extended_Cost: item.qty * item.cost
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(flatData), 'Flat_BOM');
+        }
+        
+        // Where used
+        if (whereUsed.length > 0) {
+            const whereUsedData = whereUsed.map(w => ({
+                Parent_PN: w.part.partNumber,
+                Parent_Name: w.part.name,
+                Qty: w.qty
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(whereUsedData), 'Where_Used');
+        }
+        
+        XLSX.writeFile(wb, `${part.partNumber}_Details.xlsx`);
+        showToast(`Exported ${part.partNumber}`, 'success');
+    },
+    
+    // Export full dashboard report
+    exportDashboardReport() {
+        const wb = XLSX.utils.book_new();
+        const stats = this.getDashboardStats();
+        
+        // Executive Summary
+        const summaryData = [
+            { Metric: 'Total Items in Database', Value: stats.totalItems },
+            { Metric: 'Products', Value: stats.products },
+            { Metric: 'Assemblies', Value: stats.assemblies },
+            { Metric: 'Parts (no BOM)', Value: stats.partsOnly },
+            { Metric: '', Value: '' },
+            { Metric: 'Status Breakdown', Value: '' },
+            { Metric: '  Released', Value: stats.released },
+            { Metric: '  Draft', Value: stats.draft },
+            { Metric: '  Obsolete', Value: stats.obsolete },
+            { Metric: '', Value: '' },
+            { Metric: 'Data Quality', Value: '' },
+            { Metric: '  TBD Parts (need PN assignment)', Value: stats.tbdParts },
+            { Metric: '', Value: '' },
+            { Metric: 'Report Generated', Value: new Date().toLocaleString() }
+        ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryData), 'Executive_Summary');
+        
+        // Cost by Type
+        const typeData = Object.entries(stats.costByType).map(([type, data]) => ({
+            Type: type,
+            Item_Count: data.count,
+            Total_Cost: data.cost,
+            Avg_Cost: data.count > 0 ? (data.cost / data.count).toFixed(2) : 0
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(typeData), 'Cost_by_Type');
+        
+        // Cost by Category
+        const catData = Object.entries(stats.costByCategory).map(([cat, data]) => ({
+            Category: cat,
+            Item_Count: data.count,
+            Total_Cost: data.cost,
+            Avg_Cost: data.count > 0 ? (data.cost / data.count).toFixed(2) : 0
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catData), 'Cost_by_Category');
+        
+        // Products Summary
+        const products = Parts.getProducts();
+        const productsData = products.map(p => ({
+            Part_Number: p.partNumber,
+            Name: p.name,
+            Revision: p.revision,
+            Status: p.status,
+            Direct_BOM_Items: p.bom?.length || 0,
+            Total_Cost: Parts.getRolledUpCost(p.id)
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(productsData), 'Products');
+        
+        // TBD Parts (need attention)
+        const tbdParts = DB.parts.filter(p => (p.legacyPartNumber || '').toUpperCase().includes('TBD'));
+        if (tbdParts.length > 0) {
+            const tbdData = tbdParts.map(p => ({
+                Part_Number: p.partNumber,
+                Legacy_PN: p.legacyPartNumber,
+                Name: p.name,
+                Type: p.type,
+                Category: p.category || '',
+                Status: p.status
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tbdData), 'TBD_Parts');
+        }
+        
+        // Recent History
+        const historyData = DB.history.slice(0, 50).map(h => ({
+            Date: h.timestamp,
+            Action: h.action,
+            Type: h.type,
+            Description: h.description
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(historyData), 'Recent_Changes');
+        
+        XLSX.writeFile(wb, `PLM_Dashboard_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+        showToast('Dashboard report exported', 'success');
+    },
+    
+    // Export full database (for backup/sync)
+    exportFullDatabase() {
+        const wb = XLSX.utils.book_new();
+        
+        // All parts with full details
+        const partsData = DB.parts.map(p => this.formatPartForExport(p));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partsData), 'All_Parts');
+        
+        // All BOMs
+        const bomData = [];
+        DB.parts.forEach(part => {
+            if (part.bom && part.bom.length > 0) {
+                part.bom.forEach(item => {
+                    const child = Parts.getById(item.partId);
+                    bomData.push({
+                        Parent_ID: part.id,
+                        Parent_PN: part.partNumber,
+                        Child_ID: item.partId,
+                        Child_PN: child?.partNumber || item.partId,
+                        Qty: item.qty
+                    });
+                });
+            }
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bomData), 'All_BOMs');
+        
+        // History
+        const historyData = DB.history.map(h => ({
+            ID: h.id,
+            Timestamp: h.timestamp,
+            Action: h.action,
+            Type: h.type,
+            ItemID: h.itemId,
+            Description: h.description
+        }));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(historyData), 'History');
+        
+        // Database info
+        const dbInfo = [
+            { Key: 'Version', Value: DB.version },
+            { Key: 'Total Parts', Value: DB.parts.length },
+            { Key: 'Export Date', Value: new Date().toISOString() },
+            { Key: 'ID Counter', Value: idCounter }
+        ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dbInfo), 'DB_Info');
+        
+        XLSX.writeFile(wb, `PLM_Full_Database_${new Date().toISOString().slice(0,10)}.xlsx`);
+        showToast('Full database exported', 'success');
+    }
+};
+
+// =============================================================================
+// UI RENDERING
+// =============================================================================
+function renderAll() {
+    updateNavCounts();
+    updateProductSelector();
+    renderDashboard();
+    renderPartsView();
+    renderProductsView();
+    renderBomView();
+    renderFlatBomView();
+    renderWhereUsedView();
+    renderHistoryView();
+}
+
+function updateNavCounts() {
+    document.getElementById('navPartsCount').textContent = DB.parts.length;
+    document.getElementById('navProductsCount').textContent = Parts.getProducts().length;
+    document.getElementById('navHistoryCount').textContent = DB.history.length;
+}
+
+function updateProductSelector() {
+    const select = document.getElementById('productSelect');
+    const currentVal = select.value;
+    const products = Parts.getProducts();
+    
+    let html = '<option value="">All Parts (No Product)</option>';
+    for (const p of products) {
+        html += `<option value="${p.id}">${Utils.escapeHtml(p.partNumber)} - ${Utils.escapeHtml(p.name)}</option>`;
+    }
+    select.innerHTML = html;
+    
+    // Restore selection if still valid
+    if (currentVal && products.find(p => p.id === currentVal)) {
+        select.value = currentVal;
+    }
+}
+
+function selectProduct(productId) {
+    DB.selectedProduct = productId || null;
+    renderAll();
+}
+
+// Dashboard
+function renderDashboard() {
+    const container = document.getElementById('view-dashboard');
+    const products = Parts.getProducts();
+    const assemblies = Parts.getAssemblies();
+    const allParts = DB.parts.filter(p => !p.bom || p.bom.length === 0);
+    const releasedCount = DB.parts.filter(p => p.status === 'released').length;
+    const draftCount = DB.parts.filter(p => p.status === 'draft').length;
+    const tbdCount = DB.parts.filter(p => (p.legacyPartNumber || '').toUpperCase().includes('TBD')).length;
+    
+    const lastExport = localStorage.getItem('plmLastExport');
+    const lastImport = localStorage.getItem('plmLastImport');
+    const hasNeverSynced = !lastExport && !lastImport;
+    
+    // Sync workflow card for new users or empty database
+    const syncWorkflowHtml = (hasNeverSynced || DB.parts.length === 0) ? `
+        <div class="workflow-card">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                <span style="font-size:24px">☁️</span>
+                <div>
+                    <div style="font-weight:600;font-size:16px">SharePoint Team Sync</div>
+                    <div style="color:var(--text-secondary);font-size:13px">Share your PLM database with your team via SharePoint</div>
+                </div>
+            </div>
+            <div class="workflow-steps">
+                <div class="workflow-step">
+                    <div class="workflow-step-num">1</div>
+                    <div class="workflow-step-title">Import Latest</div>
+                    <div class="workflow-step-desc">Download plm_database.json from SharePoint and click Import</div>
+                </div>
+                <div class="workflow-step">
+                    <div class="workflow-step-num">2</div>
+                    <div class="workflow-step-title">Make Changes</div>
+                    <div class="workflow-step-desc">Add parts, edit BOMs, update costs</div>
+                </div>
+                <div class="workflow-step">
+                    <div class="workflow-step-num">3</div>
+                    <div class="workflow-step-title">Export & Upload</div>
+                    <div class="workflow-step-desc">Click Export, then upload to SharePoint</div>
+                </div>
+            </div>
+            <div style="margin-top:16px;text-align:center">
+                <button class="btn btn-sync" onclick="showModal('syncHelp')" style="padding:10px 24px">
+                    ☁️ Learn More About Syncing
+                </button>
+            </div>
+        </div>
+    ` : '';
+    
+    // Product selector and detail view
+    let productDetailHtml = '';
+    if (DB.selectedProduct) {
+        const product = Parts.getById(DB.selectedProduct);
+        if (product) {
+            const totalCost = Parts.getRolledUpCost(product.id);
+            const flatBom = Parts.generateFlatBom(product.id);
+            const directParts = (product.bom || []).length;
+            const uniqueParts = flatBom.length;
+            const totalQty = flatBom.reduce((sum, p) => sum + p.qty, 0);
+            
+            // Cost breakdown by type
+            const costByType = {};
+            flatBom.forEach(item => {
+                const type = item.type || 'Other';
+                if (!costByType[type]) costByType[type] = { count: 0, cost: 0 };
+                costByType[type].count += item.qty;
+                costByType[type].cost += item.cost * item.qty;
+            });
+            
+            // Status breakdown
+            const statusBreakdown = {
+                released: flatBom.filter(p => p.status === 'released').length,
+                draft: flatBom.filter(p => p.status === 'draft').length
+            };
+            
+            productDetailHtml = `
+                <div class="card product-detail-card" style="margin-bottom:24px;border-left:4px solid var(--accent)">
+                    <div class="card-header" style="background:var(--bg-tertiary)">
+                        <div style="display:flex;align-items:center;gap:12px">
+                            <span style="font-size:24px">📦</span>
+                            <div>
+                                <div class="card-title" style="font-size:18px">${Utils.escapeHtml(product.name)}</div>
+                                <div style="color:var(--text-muted);font-size:12px">${Utils.escapeHtml(product.partNumber)} • Rev ${product.revision}</div>
+                            </div>
+                            <span class="tag tag-${product.status}" style="margin-left:auto">${product.status}</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats-grid" style="grid-template-columns:repeat(5, 1fr)">
+                            <div class="stat-card">
+                                <div class="stat-label">Total Cost</div>
+                                <div class="stat-value accent">${Utils.formatCurrency(totalCost)}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Direct Items</div>
+                                <div class="stat-value">${directParts}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Unique Parts</div>
+                                <div class="stat-value">${uniqueParts}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Total Quantity</div>
+                                <div class="stat-value">${totalQty}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">BOM Status</div>
+                                <div style="font-size:12px">
+                                    <span style="color:var(--success)">${statusBreakdown.released} released</span> / 
+                                    <span style="color:var(--warning)">${statusBreakdown.draft} draft</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+                            <div style="background:var(--bg-tertiary);padding:16px;border-radius:8px">
+                                <div style="font-weight:600;margin-bottom:12px">Cost by Type</div>
+                                ${Object.entries(costByType).map(([type, data]) => `
+                                    <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px">
+                                        <span><span class="tag tag-type">${type}</span> (${data.count})</span>
+                                        <span class="mono" style="color:var(--accent)">${Utils.formatCurrency(data.cost)}</span>
+                                    </div>
+                                `).join('')}
+                                <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;font-weight:600">
+                                    <span>Total</span>
+                                    <span class="mono" style="color:var(--success)">${Utils.formatCurrency(totalCost)}</span>
+                                </div>
+                            </div>
+                            
+                            <div style="background:var(--bg-tertiary);padding:16px;border-radius:8px">
+                                <div style="font-weight:600;margin-bottom:12px">Direct BOM Items</div>
+                                <div style="max-height:150px;overflow-y:auto">
+                                    ${(product.bom || []).slice(0, 10).map(item => {
+                                        const child = Parts.getById(item.partId);
+                                        const isAssy = child && child.bom && child.bom.length > 0;
+                                        return child ? `
+                                            <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px">
+                                                <span>
+                                                    ${isAssy ? '<span class="tag tag-assy" style="padding:1px 4px;font-size:9px;margin-right:4px">ASSY</span>' : ''}
+                                                    ${Utils.escapeHtml(child.partNumber)}
+                                                </span>
+                                                <span class="mono">×${item.qty}</span>
+                                            </div>
+                                        ` : '';
+                                    }).join('')}
+                                    ${(product.bom || []).length > 10 ? `<div style="color:var(--text-muted);font-size:11px">...and ${product.bom.length - 10} more</div>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top:16px;display:flex;gap:8px">
+                            <button class="btn" onclick="showModal('bomEditor', '${product.id}')">📋 Edit BOM</button>
+                            <button class="btn" onclick="showView('bom')">🌳 View Tree</button>
+                            <button class="btn" onclick="showView('flatbom')">📄 Flat BOM</button>
+                            <button class="btn" onclick="ImportExport.exportProductBom('${product.id}')">📤 Export</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    container.innerHTML = `
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Dashboard</h1>
+                <p class="page-subtitle">Product Lifecycle Management Overview</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn" onclick="showModal('syncHelp')">☁️ Sync Help</button>
+                <button class="btn btn-primary" onclick="showModal('newPart')">➕ New Part</button>
+            </div>
+        </div>
+        
+        ${syncWorkflowHtml}
+        
+        <!-- Product Selector -->
+        <div class="card" style="margin-bottom:24px">
+            <div class="card-header">
+                <span class="card-title">🎯 Select Product to Analyze</span>
+            </div>
+            <div class="card-body" style="padding:16px">
+                <div style="display:flex;gap:12px;align-items:center">
+                    <select class="form-select" style="flex:1;max-width:400px" onchange="DB.selectedProduct = this.value || null; renderDashboard()">
+                        <option value="">-- Select a Product --</option>
+                        ${products.map(p => `
+                            <option value="${p.id}" ${DB.selectedProduct === p.id ? 'selected' : ''}>
+                                ${Utils.escapeHtml(p.partNumber)} - ${Utils.escapeHtml(p.name)}
+                            </option>
+                        `).join('')}
+                    </select>
+                    ${products.length === 0 ? `
+                        <span style="color:var(--text-muted);font-size:13px">No products yet. Mark a part as "Product" to see it here.</span>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+        
+        ${productDetailHtml}
+        
+        <!-- Global Stats -->
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-label">Total Items</div><div class="stat-value">${DB.parts.length}</div></div>
+            <div class="stat-card"><div class="stat-label">Products</div><div class="stat-value" style="color:var(--accent)">${products.length}</div></div>
+            <div class="stat-card"><div class="stat-label">Assemblies</div><div class="stat-value">${assemblies.length}</div></div>
+            <div class="stat-card"><div class="stat-label">Released</div><div class="stat-value" style="color:var(--success)">${releasedCount}</div></div>
+            <div class="stat-card"><div class="stat-label">Draft</div><div class="stat-value" style="color:var(--warning)">${draftCount}</div></div>
+            <div class="stat-card"><div class="stat-label">TBD Parts</div><div class="stat-value" style="color:${tbdCount > 0 ? 'var(--error)' : 'var(--text-muted)'}">${tbdCount}</div></div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header"><span class="card-title">Recent Changes</span></div>
+            <div class="card-body" style="padding:0;max-height:300px;overflow-y:auto">
+                ${DB.history.slice(0, 10).map(h => `
+                    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center">
+                        <span style="font-size:18px">${h.action === 'create' ? '➕' : h.action === 'update' ? '✏️' : '🗑️'}</span>
+                        <div style="flex:1">
+                            <div style="font-weight:500">${Utils.escapeHtml(h.description)}</div>
+                            <div style="font-size:12px;color:var(--text-muted)">${Utils.formatDateTime(h.timestamp)}</div>
+                        </div>
+                    </div>
+                `).join('') || '<div class="empty-state"><div class="empty-state-title">No changes yet</div></div>'}
+            </div>
+        </div>
+    `;
+}
+
+// Parts View
+function renderPartsView() {
+    const container = document.getElementById('view-parts');
+    
+    // Filter parts
+    let filtered = [...DB.parts];
+    
+    // Text search
+    if (DB.searchTerm) {
+        const term = DB.searchTerm.toLowerCase();
+        filtered = filtered.filter(p => 
+            p.partNumber.toLowerCase().includes(term) || 
+            p.name.toLowerCase().includes(term) ||
+            (p.legacyPartNumber || '').toLowerCase().includes(term)
+        );
+    }
+    
+    // Status filter
+    if (DB.filters.status !== 'all') {
+        filtered = filtered.filter(p => p.status === DB.filters.status);
+    }
+    
+    // Type filter
+    if (DB.filters.type !== 'all') {
+        filtered = filtered.filter(p => p.type === DB.filters.type);
+    }
+    
+    // Category filter
+    if (DB.filters.category !== 'all') {
+        filtered = filtered.filter(p => p.category === DB.filters.category);
+    }
+    
+    // BOM filter (assemblies vs parts)
+    if (DB.filters.bomFilter === 'assemblies') {
+        filtered = filtered.filter(p => p.bom && p.bom.length > 0 && !p.isProduct);
+    } else if (DB.filters.bomFilter === 'parts') {
+        filtered = filtered.filter(p => !p.bom || p.bom.length === 0);
+    } else if (DB.filters.bomFilter === 'products') {
+        filtered = filtered.filter(p => p.isProduct);
+    }
+    
+    // TBD filter
+    if (DB.filters.tbdFilter) {
+        filtered = filtered.filter(p => (p.legacyPartNumber || '').toUpperCase().includes('TBD'));
+    }
+    
+    // Sort
+    filtered = sortParts(filtered, DB.sort.column, DB.sort.direction);
+    
+    // Get unique values for filters
+    const types = [...new Set(DB.parts.map(p => p.type).filter(Boolean))].sort();
+    const categories = [...new Set(DB.parts.map(p => p.category).filter(Boolean))].sort();
+    
+    // Count by status
+    const statusCounts = {
+        all: DB.parts.length,
+        draft: DB.parts.filter(p => p.status === 'draft').length,
+        released: DB.parts.filter(p => p.status === 'released').length,
+        obsolete: DB.parts.filter(p => p.status === 'obsolete').length
+    };
+    
+    // Count by BOM type
+    const bomCounts = {
+        all: DB.parts.length,
+        assemblies: DB.parts.filter(p => p.bom && p.bom.length > 0 && !p.isProduct).length,
+        parts: DB.parts.filter(p => !p.bom || p.bom.length === 0).length,
+        products: DB.parts.filter(p => p.isProduct).length
+    };
+    
+    // Count TBD parts
+    const tbdCount = DB.parts.filter(p => (p.legacyPartNumber || '').toUpperCase().includes('TBD')).length;
+    
+    // Check if all filtered parts are selected
+    const allFilteredSelected = filtered.length > 0 && filtered.every(p => DB.selectedParts.has(p.id));
+    
+    container.innerHTML = `
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Parts Database</h1>
+                <p class="page-subtitle">${filtered.length} of ${DB.parts.length} items ${tbdCount > 0 ? `<span class="tbd-warning">(${tbdCount} TBD)</span>` : ''}</p>
+            </div>
+            <div class="page-actions">
+                <!-- Export dropdown -->
+                <div class="dropdown" style="position:relative;display:inline-block">
+                    <button class="btn" onclick="toggleExportMenu()">📤 Export ▼</button>
+                    <div id="exportMenu" class="dropdown-menu" style="display:none">
+                        <button class="dropdown-item" onclick="ExportManager.exportAllParts()">📤 Export All Parts (${DB.parts.length})</button>
+                        <button class="dropdown-item" onclick="ExportManager.exportFilteredParts()" ${filtered.length === DB.parts.length ? 'disabled' : ''}>📤 Export Filtered (${filtered.length})</button>
+                        <button class="dropdown-item" onclick="ExportManager.exportSelectedParts()" ${DB.selectedParts.size === 0 ? 'disabled' : ''}>📤 Export Selected (${DB.selectedParts.size})</button>
+                        <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+                        <button class="dropdown-item" onclick="ExportManager.exportDashboardReport()">📊 Dashboard Report</button>
+                        <button class="dropdown-item" onclick="ExportManager.exportFullDatabase()">💾 Full Database Export</button>
+                    </div>
+                </div>
+                
+                <button class="btn btn-danger ${DB.selectedParts.size === 0 ? 'hidden' : ''}" id="batchDeleteBtn" onclick="batchDeleteParts()">
+                    🗑️ Delete (${DB.selectedParts.size})
+                </button>
+                <button class="btn" onclick="clearAllFilters()">🔄 Clear Filters</button>
+                <button class="btn btn-primary" onclick="showModal('newPart')">➕ New Part</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header" style="flex-direction:column;gap:12px">
+                <div class="toolbar" style="width:100%">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="partsSearchInput" placeholder="Search parts, names, legacy PN..." value="${Utils.escapeHtml(DB.searchTerm)}" oninput="handlePartsSearch(this.value)">
+                    </div>
+                    <div style="flex:1"></div>
+                    <span style="font-size:12px;color:var(--text-muted)">Click column headers to sort</span>
+                </div>
+                <div class="filter-pills">
+                    <!-- Status filters -->
+                    <button class="filter-pill ${DB.filters.status === 'all' ? 'active' : ''}" onclick="setFilter('status', 'all')">All<span class="count">${statusCounts.all}</span></button>
+                    <button class="filter-pill ${DB.filters.status === 'draft' ? 'active' : ''}" onclick="setFilter('status', 'draft')">Draft<span class="count">${statusCounts.draft}</span></button>
+                    <button class="filter-pill ${DB.filters.status === 'released' ? 'active' : ''}" onclick="setFilter('status', 'released')">Released<span class="count">${statusCounts.released}</span></button>
+                    ${statusCounts.obsolete > 0 ? `<button class="filter-pill ${DB.filters.status === 'obsolete' ? 'active' : ''}" onclick="setFilter('status', 'obsolete')">Obsolete<span class="count">${statusCounts.obsolete}</span></button>` : ''}
+                    
+                    <span style="width:1px;height:20px;background:var(--border);margin:0 8px"></span>
+                    
+                    <!-- Class filters -->
+                    <button class="filter-pill ${DB.filters.bomFilter === 'all' ? 'active' : ''}" onclick="setFilter('bomFilter', 'all')" title="All items">📦 All</button>
+                    <button class="filter-pill ${DB.filters.bomFilter === 'products' ? 'active' : ''}" onclick="setFilter('bomFilter', 'products')" title="Product items">🎯 Products<span class="count">${bomCounts.products}</span></button>
+                    <button class="filter-pill ${DB.filters.bomFilter === 'assemblies' ? 'active' : ''}" onclick="setFilter('bomFilter', 'assemblies')" title="Items with BOMs">🔧 Assemblies<span class="count">${bomCounts.assemblies}</span></button>
+                    <button class="filter-pill ${DB.filters.bomFilter === 'parts' ? 'active' : ''}" onclick="setFilter('bomFilter', 'parts')" title="Items without BOMs">📄 Parts<span class="count">${bomCounts.parts}</span></button>
+                    
+                    <span style="width:1px;height:20px;background:var(--border);margin:0 8px"></span>
+                    
+                    <!-- TBD filter -->
+                    <button class="filter-pill ${DB.filters.tbdFilter ? 'active warning' : ''}" onclick="toggleTbdFilter()" title="Show only TBD items">⚠️ TBD Only<span class="count">${tbdCount}</span></button>
+                    
+                    <span style="width:1px;height:20px;background:var(--border);margin:0 8px"></span>
+                    
+                    <!-- Type filters -->
+                    ${types.map(t => `<button class="filter-pill ${DB.filters.type === t ? 'active' : ''}" onclick="setFilter('type', '${t}')">${t}</button>`).join('')}
+                    
+                    ${categories.length > 0 ? `
+                        <span style="width:1px;height:20px;background:var(--border);margin:0 8px"></span>
+                        <select class="form-select" style="padding:4px 8px;font-size:12px;width:auto" onchange="setFilter('category', this.value)">
+                            <option value="all">All Categories</option>
+                            ${categories.map(c => `<option value="${c}" ${DB.filters.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+                        </select>
+                    ` : ''}
+                </div>
+            </div>
+            <div class="table-container" style="max-height:calc(100vh - 380px);overflow:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:40px">
+                                <input type="checkbox" id="selectAllParts" 
+                                    ${allFilteredSelected ? 'checked' : ''} 
+                                    onchange="toggleSelectAllParts(this.checked, ${JSON.stringify(filtered.map(p => p.id)).replace(/"/g, '&quot;')})">
+                            </th>
+                            <th class="sortable ${DB.sort.column === 'class' ? 'active' : ''}" onclick="toggleSort('class')" style="width:70px">
+                                Class <span class="sort-icon">${getSortIcon('class')}</span>
+                            </th>
+                            <th class="sortable ${DB.sort.column === 'partNumber' ? 'active' : ''}" onclick="toggleSort('partNumber')">
+                                Part Number <span class="sort-icon">${getSortIcon('partNumber')}</span>
+                            </th>
+                            <th class="sortable ${DB.sort.column === 'legacyPartNumber' ? 'active' : ''}" onclick="toggleSort('legacyPartNumber')">
+                                Legacy PN <span class="sort-icon">${getSortIcon('legacyPartNumber')}</span>
+                            </th>
+                            <th class="sortable ${DB.sort.column === 'name' ? 'active' : ''}" onclick="toggleSort('name')">
+                                Name <span class="sort-icon">${getSortIcon('name')}</span>
+                            </th>
+                            <th class="sortable ${DB.sort.column === 'type' ? 'active' : ''}" onclick="toggleSort('type')">
+                                Type <span class="sort-icon">${getSortIcon('type')}</span>
+                            </th>
+                            <th class="sortable ${DB.sort.column === 'category' ? 'active' : ''}" onclick="toggleSort('category')">
+                                Category <span class="sort-icon">${getSortIcon('category')}</span>
+                            </th>
+                            <th class="sortable ${DB.sort.column === 'status' ? 'active' : ''}" onclick="toggleSort('status')">
+                                Status <span class="sort-icon">${getSortIcon('status')}</span>
+                            </th>
+                            <th class="sortable ${DB.sort.column === 'cost' ? 'active' : ''}" onclick="toggleSort('cost')">
+                                Cost <span class="sort-icon">${getSortIcon('cost')}</span>
+                            </th>
+                            <th class="sortable ${DB.sort.column === 'bom' ? 'active' : ''}" onclick="toggleSort('bom')">
+                                BOM <span class="sort-icon">${getSortIcon('bom')}</span>
+                            </th>
+                            <th class="sortable ${DB.sort.column === 'usedIn' ? 'active' : ''}" onclick="toggleSort('usedIn')">
+                                Used In <span class="sort-icon">${getSortIcon('usedIn')}</span>
+                            </th>
+                            <th style="width:100px">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filtered.map(p => {
+                            const whereUsed = Parts.getWhereUsed(p.id);
+                            const hasBom = p.bom && p.bom.length > 0;
+                            const cost = p.status === 'released' && p.cost > 0 ? p.cost : p.costAvg;
+                            const legacyPN = p.legacyPartNumber || '-';
+                            const isTbd = legacyPN.toUpperCase().includes('TBD');
+                            
+                            // Determine class
+                            let itemClass = 'PART';
+                            let classTag = '<span class="tag tag-part-class">PART</span>';
+                            if (p.isProduct) {
+                                itemClass = 'PROD';
+                                classTag = '<span class="tag tag-product">PROD</span>';
+                            } else if (hasBom) {
+                                itemClass = 'ASSY';
+                                classTag = '<span class="tag tag-assy">ASSY</span>';
+                            }
+                            
+                            return `
+                            <tr class="${DB.selectedParts.has(p.id) ? 'selected-row' : ''}">
+                                <td><input type="checkbox" class="part-cb" data-id="${p.id}" ${DB.selectedParts.has(p.id) ? 'checked' : ''} onchange="togglePartSelect('${p.id}', this.checked)"></td>
+                                <td>${classTag}</td>
+                                <td class="mono" style="color:var(--accent)">${Utils.escapeHtml(p.partNumber)}</td>
+                                <td class="mono ${isTbd ? 'tbd-warning' : ''}" style="font-size:11px;color:${isTbd ? 'var(--warning)' : 'var(--text-muted)'}">${Utils.escapeHtml(legacyPN)}</td>
+                                <td class="truncate" title="${Utils.escapeHtml(p.name)}">${Utils.escapeHtml(p.name)}</td>
+                                <td><span class="tag tag-type">${Utils.escapeHtml(p.type)}</span></td>
+                                <td style="font-size:11px;color:var(--text-muted)">${Utils.escapeHtml(p.category || '-')}</td>
+                                <td><span class="tag tag-${p.status}">${p.status}</span></td>
+                                <td class="mono">${Utils.formatCurrency(cost)}</td>
+                                <td>${hasBom ? `<span class="tag tag-assy" style="cursor:pointer" onclick="viewPartBom('${p.id}')" title="Click to view BOM tree">${p.bom.length}</span>` : '-'}</td>
+                                <td>${whereUsed.length > 0 ? `<span class="where-used-link" onclick="showWhereUsedPopup('${p.id}')">${whereUsed.length}</span>` : '-'}</td>
+                                <td class="nowrap row-actions">
+                                    <button class="btn btn-sm btn-icon" onclick="showModal('editPart', '${p.id}')" title="Edit Part">✏️</button>
+                                    ${hasBom ? `<button class="btn btn-sm btn-icon" onclick="viewPartBom('${p.id}')" title="View BOM Tree">🌳</button>` : ''}
+                                    <button class="btn btn-sm btn-icon" onclick="showModal('bomEditor', '${p.id}')" title="Edit BOM">📋</button>
+                                    <button class="btn btn-sm btn-icon" onclick="ExportManager.exportSinglePart('${p.id}')" title="Export Part">📤</button>
+                                    <button class="btn btn-sm btn-icon btn-danger" onclick="deletePart('${p.id}')" title="Delete">✕</button>
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+                ${filtered.length === 0 ? '<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-title">No parts found</div><p style="color:var(--text-muted)">Try adjusting your search or filters</p></div>' : ''}
+                ${filtered.length > 1000 ? `<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px">Showing ${filtered.length} parts. Use search/filters to find specific items faster.</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function toggleTbdFilter() {
+    DB.filters.tbdFilter = !DB.filters.tbdFilter;
+    renderPartsView();
+}
+
+function toggleExportMenu() {
+    const menu = document.getElementById('exportMenu');
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.dropdown')) {
+        const menus = document.querySelectorAll('.dropdown-menu');
+        menus.forEach(m => m.style.display = 'none');
+    }
+});
+
+function clearAllFilters() {
+    DB.searchTerm = '';
+    DB.filters.status = 'all';
+    DB.filters.type = 'all';
+    DB.filters.category = 'all';
+    DB.filters.bomFilter = 'all';
+    DB.filters.tbdFilter = false;
+    DB.sort.column = 'partNumber';
+    DB.sort.direction = 'asc';
+    renderPartsView();
+}
+
+// Products View
+function renderProductsView() {
+    const container = document.getElementById('view-products');
+    const products = Parts.getProducts();
+    
+    container.innerHTML = `
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Products</h1>
+                <p class="page-subtitle">${products.length} products</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary" onclick="showModal('newProduct')">➕ New Product</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Name</th>
+                            <th>Rev</th>
+                            <th>Status</th>
+                            <th>BOM Items</th>
+                            <th>Total Cost</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${products.map(p => {
+                            const cost = Parts.getRolledUpCost(p.id);
+                            const flatBom = Parts.generateFlatBom(p.id);
+                            return `
+                            <tr>
+                                <td class="mono" style="color:var(--accent)">${Utils.escapeHtml(p.partNumber)}</td>
+                                <td>${Utils.escapeHtml(p.name)}</td>
+                                <td><span class="rev-badge">${p.revision}</span></td>
+                                <td><span class="tag tag-${p.status}">${p.status}</span></td>
+                                <td>${flatBom.length} unique parts</td>
+                                <td class="mono" style="color:var(--success);font-weight:600">${Utils.formatCurrency(cost)}</td>
+                                <td class="nowrap">
+                                    <button class="btn btn-sm" onclick="DB.selectedProduct='${p.id}';document.getElementById('productSelect').value='${p.id}';showView('bom')">View BOM</button>
+                                    <button class="btn btn-sm btn-icon" onclick="showModal('editPart', '${p.id}')" title="Edit">✏️</button>
+                                    <button class="btn btn-sm" onclick="ImportExport.exportProductBom('${p.id}')">📤 Export</button>
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+                ${products.length === 0 ? '<div class="empty-state"><div class="empty-state-icon">🏭</div><div class="empty-state-title">No products yet</div><p style="color:var(--text-muted)">Create a part and mark it as a product</p></div>' : ''}
+            </div>
+        </div>
+    `;
+}
+
+// Indented BOM View
+function renderBomView() {
+    const container = document.getElementById('view-bom');
+    
+    // Get all parts that have BOMs (assemblies and products)
+    const partsWithBom = DB.parts.filter(p => p.bom && p.bom.length > 0);
+    const products = Parts.getProducts();
+    const assembliesOnly = partsWithBom.filter(p => !p.isProduct);
+    
+    // Use selectedBomPart or fall back to selectedProduct
+    const selectedId = DB.selectedBomPart || DB.selectedProduct;
+    const selectedPart = selectedId ? Parts.getById(selectedId) : null;
+    
+    // Part selector HTML
+    const selectorHtml = `
+        <div class="card" style="margin-bottom:24px">
+            <div class="card-header">
+                <span class="card-title">🌳 Select Part to View BOM</span>
+            </div>
+            <div class="card-body" style="padding:16px">
+                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                    <select class="form-select" style="flex:1;max-width:400px" onchange="selectBomPart(this.value)">
+                        <option value="">-- Select a part --</option>
+                        ${products.length > 0 ? `
+                            <optgroup label="🎯 Products (${products.length})">
+                                ${products.map(p => `
+                                    <option value="${p.id}" ${selectedId === p.id ? 'selected' : ''}>
+                                        ${Utils.escapeHtml(p.partNumber)} - ${Utils.escapeHtml(p.name)}
+                                    </option>
+                                `).join('')}
+                            </optgroup>
+                        ` : ''}
+                        ${assembliesOnly.length > 0 ? `
+                            <optgroup label="🔧 Assemblies (${assembliesOnly.length})">
+                                ${assembliesOnly.map(p => `
+                                    <option value="${p.id}" ${selectedId === p.id ? 'selected' : ''}>
+                                        ${Utils.escapeHtml(p.partNumber)} - ${Utils.escapeHtml(p.name)}
+                                    </option>
+                                `).join('')}
+                            </optgroup>
+                        ` : ''}
+                    </select>
+                    ${partsWithBom.length === 0 ? `
+                        <span style="color:var(--text-muted);font-size:13px">No assemblies found. Add parts to a BOM first.</span>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    if (!selectedPart) {
+        container.innerHTML = `
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">Indented BOM</h1>
+                    <p class="page-subtitle">View hierarchical bill of materials</p>
+                </div>
+            </div>
+            ${selectorHtml}
+            <div class="empty-state">
+                <div class="empty-state-icon">🌳</div>
+                <div class="empty-state-title">No Part Selected</div>
+                <p style="color:var(--text-muted)">Select a product or assembly above to view its BOM structure</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const hasBom = selectedPart.bom && selectedPart.bom.length > 0;
+    const totalCost = Parts.getRolledUpCost(selectedPart.id);
+    const flatBom = Parts.generateFlatBom(selectedPart.id);
+    
+    // Build tree HTML
+    function buildTreeHtml(partId, level = 0, parentQty = 1) {
+        const part = Parts.getById(partId);
+        if (!part) return '';
+        
+        const hasBom = part.bom && part.bom.length > 0;
+        const nodeKey = `${partId}-${level}`;
+        const isExpanded = DB.expandedBomNodes.has(nodeKey) || level === 0;
+        const cost = Parts.getEffectiveCost(part);
+        const extCost = cost * parentQty;
+        
+        // Determine class
+        let classTag = '';
+        if (part.isProduct) classTag = '<span class="tag tag-product" style="font-size:9px;margin-left:6px">PROD</span>';
+        else if (hasBom) classTag = '<span class="tag tag-assy" style="font-size:9px;margin-left:6px">ASSY</span>';
+        
+        let html = `
+            <div class="bom-row level-${Math.min(level, 4)}">
+                <div class="bom-expand ${hasBom ? '' : 'empty'}" onclick="toggleBomNode('${nodeKey}')">${hasBom ? (isExpanded ? '▼' : '▶') : ''}</div>
+                <div class="bom-info">
+                    <span class="bom-pn">${Utils.escapeHtml(part.partNumber)}</span>
+                    <span class="bom-name">${Utils.escapeHtml(part.name)}</span>
+                    <span class="tag tag-type" style="font-size:10px">${part.type}</span>
+                    ${classTag}
+                </div>
+                <div class="bom-qty">${parentQty}</div>
+                <div class="bom-cost">${Utils.formatCurrency(cost)}</div>
+                <div class="bom-ext">${Utils.formatCurrency(extCost)}</div>
+                <div class="bom-actions">
+                    ${hasBom ? `<button class="btn btn-xs" onclick="selectBomPart('${part.id}')" title="View this part's BOM">🔍</button>` : ''}
+                    <button class="btn btn-xs" onclick="showModal('bomEditor', '${part.id}')" title="Edit BOM">📋</button>
+                </div>
+            </div>
+        `;
+        
+        if (hasBom && isExpanded) {
+            for (const item of part.bom) {
+                html += buildTreeHtml(item.partId, level + 1, item.qty);
+            }
+        }
+        
+        return html;
+    }
+    
+    container.innerHTML = `
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Indented BOM</h1>
+                <p class="page-subtitle">${Utils.escapeHtml(selectedPart.partNumber)} - ${Utils.escapeHtml(selectedPart.name)}</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn" onclick="expandAllBom()">➕ Expand All</button>
+                <button class="btn" onclick="collapseAllBom()">➖ Collapse All</button>
+                <button class="btn" onclick="showModal('bomEditor', '${selectedPart.id}')">📋 Edit BOM</button>
+                <button class="btn btn-primary" onclick="ImportExport.exportProductBom('${selectedPart.id}')">📤 Export</button>
+            </div>
+        </div>
+        
+        ${selectorHtml}
+        
+        ${!hasBom ? `
+            <div class="empty-state">
+                <div class="empty-state-icon">📄</div>
+                <div class="empty-state-title">No BOM</div>
+                <p style="color:var(--text-muted)">This part has no bill of materials</p>
+                <button class="btn btn-primary" style="margin-top:16px" onclick="showModal('bomEditor', '${selectedPart.id}')">➕ Add Parts to BOM</button>
+            </div>
+        ` : `
+            <div class="stats-grid" style="max-width:800px;margin-bottom:24px">
+                <div class="stat-card"><div class="stat-label">Direct Items</div><div class="stat-value">${selectedPart.bom.length}</div></div>
+                <div class="stat-card"><div class="stat-label">Unique Parts</div><div class="stat-value">${flatBom.length}</div></div>
+                <div class="stat-card"><div class="stat-label">Total Qty</div><div class="stat-value">${flatBom.reduce((s, p) => s + p.qty, 0)}</div></div>
+                <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value accent">${Utils.formatCurrency(totalCost)}</div></div>
+            </div>
+            
+            <div class="bom-tree">
+                <div class="bom-row" style="background:var(--bg-tertiary);font-weight:600;font-size:12px;color:var(--text-secondary)">
+                    <div class="bom-expand"></div>
+                    <div class="bom-info">PART NUMBER / NAME</div>
+                    <div class="bom-qty">QTY</div>
+                    <div class="bom-cost">UNIT</div>
+                    <div class="bom-ext">EXT</div>
+                    <div class="bom-actions"></div>
+                </div>
+                ${buildTreeHtml(selectedPart.id)}
+            </div>
+        `}
+    `;
+}
+
+function selectBomPart(partId) {
+    DB.selectedBomPart = partId || null;
+    DB.expandedBomNodes.clear();
+    renderBomView();
+    showView('bom');
+}
+
+function viewPartBom(partId) {
+    DB.selectedBomPart = partId;
+    DB.expandedBomNodes.clear();
+    showView('bom');
+    renderBomView();
+}
+
+function toggleBomNode(nodeKey) {
+    if (DB.expandedBomNodes.has(nodeKey)) {
+        DB.expandedBomNodes.delete(nodeKey);
+    } else {
+        DB.expandedBomNodes.add(nodeKey);
+    }
+    renderBomView();
+}
+
+function expandAllBom() {
+    const selectedId = DB.selectedBomPart || DB.selectedProduct;
+    if (!selectedId) return;
+    
+    // Expand all nodes
+    function expandAll(partId, level = 0) {
+        const part = Parts.getById(partId);
+        if (!part) return;
+        DB.expandedBomNodes.add(`${partId}-${level}`);
+        if (part.bom) {
+            for (const item of part.bom) {
+                expandAll(item.partId, level + 1);
+            }
+        }
+    }
+    expandAll(selectedId);
+    renderBomView();
+}
+
+function collapseAllBom() {
+    DB.expandedBomNodes.clear();
+    renderBomView();
+}
+
+// Flat BOM View
+function renderFlatBomView() {
+    const container = document.getElementById('view-flatbom');
+    
+    if (!DB.selectedProduct) {
+        container.innerHTML = `
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">Flat BOM</h1>
+                    <p class="page-subtitle">Select a product to view flattened BOM</p>
+                </div>
+            </div>
+            <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <div class="empty-state-title">No Product Selected</div>
+            </div>
+        `;
+        return;
+    }
+    
+    const product = Parts.getById(DB.selectedProduct);
+    if (!product) return;
+    
+    const flatBom = Parts.generateFlatBom(product.id);
+    const totalCost = flatBom.reduce((sum, item) => sum + (item.qty * item.cost), 0);
+    const totalQty = flatBom.reduce((sum, item) => sum + item.qty, 0);
+    
+    container.innerHTML = `
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Flat BOM</h1>
+                <p class="page-subtitle">${Utils.escapeHtml(product.partNumber)} - ${flatBom.length} unique parts</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-primary" onclick="ImportExport.exportProductBom('${product.id}')">📤 Export</button>
+            </div>
+        </div>
+        
+        <div class="stats-grid" style="max-width:600px">
+            <div class="stat-card"><div class="stat-label">Total Quantity</div><div class="stat-value">${totalQty}</div></div>
+            <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value accent">${Utils.formatCurrency(totalCost)}</div></div>
+        </div>
+        
+        <div class="card">
+            <div class="table-container" style="max-height:calc(100vh - 320px);overflow:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th class="text-right">Qty</th>
+                            <th class="text-right">Unit Cost</th>
+                            <th class="text-right">Extended</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${flatBom.map(item => `
+                            <tr>
+                                <td class="mono" style="color:var(--accent)">${Utils.escapeHtml(item.partNumber)}</td>
+                                <td>${Utils.escapeHtml(item.name)}</td>
+                                <td><span class="tag tag-type">${item.type}</span></td>
+                                <td class="mono text-right">${item.qty}</td>
+                                <td class="mono text-right">${Utils.formatCurrency(item.cost)}</td>
+                                <td class="mono text-right" style="color:var(--success)">${Utils.formatCurrency(item.qty * item.cost)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tfoot>
+                        <tr style="font-weight:600;background:var(--bg-tertiary)">
+                            <td colspan="3">TOTAL</td>
+                            <td class="mono text-right">${totalQty}</td>
+                            <td></td>
+                            <td class="mono text-right" style="color:var(--success)">${Utils.formatCurrency(totalCost)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// Where Used View
+function renderWhereUsedView() {
+    const container = document.getElementById('view-whereused');
+    
+    // Find parts that are used in multiple assemblies
+    const usageData = DB.parts.map(p => ({
+        part: p,
+        usedIn: Parts.getWhereUsed(p.id)
+    })).filter(d => d.usedIn.length > 0).sort((a, b) => b.usedIn.length - a.usedIn.length);
+    
+    container.innerHTML = `
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Where Used</h1>
+                <p class="page-subtitle">See which parts are used in multiple assemblies</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="table-container" style="max-height:calc(100vh - 220px);overflow:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Part Number</th>
+                            <th>Name</th>
+                            <th>Used In</th>
+                            <th>Assemblies</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${usageData.map(d => `
+                            <tr>
+                                <td class="mono" style="color:var(--accent)">${Utils.escapeHtml(d.part.partNumber)}</td>
+                                <td>${Utils.escapeHtml(d.part.name)}</td>
+                                <td><span class="tag tag-assy">${d.usedIn.length} assemblies</span></td>
+                                <td style="font-size:12px;color:var(--text-secondary)">${d.usedIn.map(u => Utils.escapeHtml(u.part.partNumber)).join(', ')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                ${usageData.length === 0 ? '<div class="empty-state"><div class="empty-state-icon">🔗</div><div class="empty-state-title">No usage data</div><p style="color:var(--text-muted)">Add parts to assembly BOMs to see where they are used</p></div>' : ''}
+            </div>
+        </div>
+    `;
+}
+
+// History View
+function renderHistoryView() {
+    const container = document.getElementById('view-history');
+    
+    container.innerHTML = `
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Change Log</h1>
+                <p class="page-subtitle">${DB.history.length} entries</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-danger" onclick="History.clear()">🗑️ Clear History</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div style="max-height:calc(100vh - 220px);overflow:auto">
+                ${DB.history.map(h => `
+                    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start">
+                        <span style="font-size:20px">${h.action === 'create' ? '➕' : h.action === 'update' ? '✏️' : '🗑️'}</span>
+                        <div style="flex:1">
+                            <div style="font-weight:500">${Utils.escapeHtml(h.description)}</div>
+                            <div style="font-size:12px;color:var(--text-muted)">${Utils.formatDateTime(h.timestamp)} · ${h.type}</div>
+                        </div>
+                    </div>
+                `).join('') || '<div class="empty-state"><div class="empty-state-title">No history yet</div></div>'}
+            </div>
+        </div>
+    `;
+}
+
+// =============================================================================
+// MODALS
+// =============================================================================
+function showModal(type, data = null) {
+    const container = document.getElementById('modalContainer');
+    let html = '';
+    
+    if (type === 'newPart' || type === 'newProduct') {
+        const isProduct = type === 'newProduct';
+        html = `
+            <div class="modal-backdrop" onclick="closeModal(event)">
+                <div class="modal" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2 class="modal-title">${isProduct ? 'New Product' : 'New Part'}</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Part Number</label>
+                                <input class="form-input" id="newPartNumber" placeholder="Auto-generated if empty">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label required">Name</label>
+                                <input class="form-input" id="newPartName" placeholder="Part name/description">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Type</label>
+                                <select class="form-select" id="newPartType">
+                                    <option value="PP">PP - Purchased Part</option>
+                                    <option value="SA">SA - Sub-Assembly</option>
+                                    <option value="MD">MD - Manufactured</option>
+                                    <option value="UP">UP - Upgrade Part</option>
+                                    <option value="HS">HS - Hardware/Supplies</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Category</label>
+                                <input class="form-input" id="newPartCategory" placeholder="HEAD, TORSO, etc.">
+                            </div>
+                        </div>
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label class="form-label">Cost Low</label>
+                                <input type="number" step="0.01" class="form-input" id="newCostLow" placeholder="0.00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cost High</label>
+                                <input type="number" step="0.01" class="form-input" id="newCostHigh" placeholder="0.00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cost Avg</label>
+                                <input type="number" step="0.01" class="form-input" id="newCostAvg" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Notes</label>
+                            <textarea class="form-textarea" id="newPartNotes" placeholder="Development notes..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                                <input type="checkbox" id="newIsProduct" ${isProduct ? 'checked' : ''}>
+                                <span>This is a Product (top-level sellable item)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="closeModal()">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveNewPart()">Create</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    else if (type === 'editPart' && data) {
+        const part = Parts.getById(data);
+        if (!part) return;
+        
+        const whereUsed = Parts.getWhereUsed(part.id);
+        
+        html = `
+            <div class="modal-backdrop" onclick="closeModal(event)">
+                <div class="modal modal-lg" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Edit: ${Utils.escapeHtml(part.partNumber)}</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="tabs">
+                            <button class="tab active" onclick="switchEditTab('details', this)">Details</button>
+                            <button class="tab" onclick="switchEditTab('costs', this)">Costs</button>
+                            <button class="tab" onclick="switchEditTab('whereused', this)">Where Used (${whereUsed.length})</button>
+                        </div>
+                        
+                        <div id="editTab-details">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Part Number (System ID)</label>
+                                    <input class="form-input" id="editPartNumber" value="${Utils.escapeHtml(part.partNumber)}" style="background:var(--bg-tertiary);color:var(--text-muted)" readonly>
+                                    <div class="form-hint">Auto-generated, cannot be changed</div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Legacy Part Number</label>
+                                    <input class="form-input" id="editLegacyPartNumber" value="${Utils.escapeHtml(part.legacyPartNumber || '')}" placeholder="Original part number from old system" style="${(part.legacyPartNumber || '').toUpperCase().includes('TBD') ? 'border-color:var(--warning)' : ''}">
+                                    <div class="form-hint">${(part.legacyPartNumber || '').toUpperCase().includes('TBD') ? '⚠️ TBD - needs assignment' : 'From DEVBOM or legacy system'}</div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Name / Description</label>
+                                <input class="form-input" id="editPartName" value="${Utils.escapeHtml(part.name)}">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Type</label>
+                                    <select class="form-select" id="editPartType">
+                                        ${['PP','SA','MD','UP','HS'].map(t => `<option value="${t}" ${part.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Category</label>
+                                    <input class="form-input" id="editPartCategory" value="${Utils.escapeHtml(part.category || '')}">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Status</label>
+                                    <select class="form-select" id="editPartStatus">
+                                        <option value="draft" ${part.status === 'draft' ? 'selected' : ''}>Draft</option>
+                                        <option value="released" ${part.status === 'released' ? 'selected' : ''}>Released</option>
+                                        <option value="obsolete" ${part.status === 'obsolete' ? 'selected' : ''}>Obsolete</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Revision</label>
+                                    <input class="form-input" id="editPartRevision" value="${Utils.escapeHtml(part.revision)}">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Notes</label>
+                                <textarea class="form-textarea" id="editPartNotes">${Utils.escapeHtml(part.notes || '')}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                                    <input type="checkbox" id="editIsProduct" ${part.isProduct ? 'checked' : ''}>
+                                    <span>This is a Product (top-level sellable item)</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="editTab-costs" class="hidden">
+                            <div class="card" style="margin-bottom:16px;background:var(--bg-tertiary)">
+                                <div class="card-body">
+                                    <h4 style="margin-bottom:12px">Released Cost</h4>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label class="form-label">Cost</label>
+                                            <input type="number" step="0.01" class="form-input" id="editCost" value="${part.cost || ''}">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Costed Date</label>
+                                            <input type="date" class="form-input" id="editCostedDate" value="${part.costedDate ? part.costedDate.slice(0,10) : ''}">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <h4 style="margin-bottom:12px">Development Estimates</h4>
+                            <div class="form-row-3">
+                                <div class="form-group">
+                                    <label class="form-label">Cost Low</label>
+                                    <input type="number" step="0.01" class="form-input" id="editCostLow" value="${part.costLow || ''}">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Cost High</label>
+                                    <input type="number" step="0.01" class="form-input" id="editCostHigh" value="${part.costHigh || ''}">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Cost Avg</label>
+                                    <input type="number" step="0.01" class="form-input" id="editCostAvg" value="${part.costAvg || ''}">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="editTab-whereused" class="hidden">
+                            ${whereUsed.length === 0 
+                                ? '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🔗</div><div class="empty-state-title">Not used in any assemblies</div></div>'
+                                : `<table>
+                                    <thead><tr><th>Assembly</th><th>Name</th><th>Qty</th></tr></thead>
+                                    <tbody>
+                                        ${whereUsed.map(w => `
+                                            <tr>
+                                                <td class="mono" style="color:var(--accent)">${Utils.escapeHtml(w.part.partNumber)}</td>
+                                                <td>${Utils.escapeHtml(w.part.name)}</td>
+                                                <td class="mono">${w.qty}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>`
+                            }
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="closeModal()">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveEditPart('${part.id}')">💾 Save</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    else if (type === 'bomEditor' && data) {
+        const part = Parts.getById(data);
+        if (!part) return;
+        
+        const bomItems = (part.bom || []).map(item => {
+            const child = Parts.getById(item.partId);
+            return { ...item, child };
+        });
+        
+        html = `
+            <div class="modal-backdrop" onclick="closeModal(event)">
+                <div class="modal modal-lg" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2 class="modal-title">BOM Editor: ${Utils.escapeHtml(part.partNumber)}</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                            <span style="color:var(--text-secondary)">${bomItems.length} parts in BOM</span>
+                            <button class="btn btn-primary btn-sm" onclick="showAddToBomModal('${part.id}')">➕ Add Part</button>
+                        </div>
+                        
+                        <div class="table-container" style="max-height:400px;overflow:auto">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Part Number</th>
+                                        <th>Name</th>
+                                        <th style="width:80px">Qty</th>
+                                        <th>Unit Cost</th>
+                                        <th>Extended</th>
+                                        <th style="width:60px"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bomEditorBody">
+                                    ${bomItems.map(item => `
+                                        <tr>
+                                            <td class="mono" style="color:var(--accent)">${item.child ? Utils.escapeHtml(item.child.partNumber) : item.partId}</td>
+                                            <td>${item.child ? Utils.escapeHtml(item.child.name) : '-'}</td>
+                                            <td><input type="number" min="1" class="form-input" style="width:60px;padding:4px 8px" value="${item.qty}" onchange="Parts.updateBomQty('${part.id}', '${item.partId}', this.value);renderAll()"></td>
+                                            <td class="mono">${item.child ? Utils.formatCurrency(Parts.getEffectiveCost(item.child)) : '-'}</td>
+                                            <td class="mono" style="color:var(--success)">${item.child ? Utils.formatCurrency(Parts.getEffectiveCost(item.child) * item.qty) : '-'}</td>
+                                            <td><button class="btn btn-sm btn-danger btn-icon" onclick="Parts.removeFromBom('${part.id}', '${item.partId}');showModal('bomEditor', '${part.id}')"">✕</button></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                            ${bomItems.length === 0 ? '<div class="empty-state" style="padding:40px"><div class="empty-state-title">No parts in BOM</div><p style="color:var(--text-muted)">Click "Add Part" to add components</p></div>' : ''}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="closeModal()">Done</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    else if (type === 'import') {
+        html = `
+            <div class="modal-backdrop" onclick="closeModal(event)">
+                <div class="modal" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Import Data</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="tabs">
+                            <button class="tab active" onclick="switchImportTab('parts', this)">Parts</button>
+                            <button class="tab" onclick="switchImportTab('boms', this)">BOMs</button>
+                        </div>
+                        
+                        <div id="importTab-parts">
+                            <p style="color:var(--text-secondary);margin-bottom:16px">Import parts from Excel/CSV. Expected columns: Part_Number, Name/Description, Type, Category, Cost_Low, Cost_High, Cost_Avg</p>
+                            <div class="upload-zone" id="partsUploadZone" onclick="document.getElementById('partsFileInput').click()">
+                                <div class="upload-zone-icon">📄</div>
+                                <div class="upload-zone-text">Drop file here or click to browse</div>
+                                <div class="upload-zone-hint">Supports .xlsx, .xls, .csv</div>
+                                <input type="file" id="partsFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handlePartsImport(this.files[0])">
+                            </div>
+                        </div>
+                        
+                        <div id="importTab-boms" class="hidden">
+                            <p style="color:var(--text-secondary);margin-bottom:16px">Import BOM relationships. Expected columns: Assembly_Name/Parent, Part_Number/Child, Qty</p>
+                            <div class="upload-zone" id="bomsUploadZone" onclick="document.getElementById('bomsFileInput').click()">
+                                <div class="upload-zone-icon">📋</div>
+                                <div class="upload-zone-text">Drop file here or click to browse</div>
+                                <input type="file" id="bomsFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleBomsImport(this.files[0])">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="closeModal()">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    else if (type === 'export') {
+        html = `
+            <div class="modal-backdrop" onclick="closeModal(event)">
+                <div class="modal" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Export Data</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="card" style="margin-bottom:16px;cursor:pointer" onclick="ImportExport.exportAll();closeModal()">
+                            <div class="card-body" style="display:flex;align-items:center;gap:16px">
+                                <span style="font-size:32px">📦</span>
+                                <div>
+                                    <div style="font-weight:600">Export All Data</div>
+                                    <div style="font-size:13px;color:var(--text-secondary)">Parts, BOMs, and Products in one Excel file</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${DB.selectedProduct ? `
+                        <div class="card" style="cursor:pointer" onclick="ImportExport.exportProductBom('${DB.selectedProduct}');closeModal()">
+                            <div class="card-body" style="display:flex;align-items:center;gap:16px">
+                                <span style="font-size:32px">🌳</span>
+                                <div>
+                                    <div style="font-weight:600">Export Product BOM</div>
+                                    <div style="font-size:13px;color:var(--text-secondary)">Indented and Flat BOM for selected product</div>
+                                </div>
+                            </div>
+                        </div>
+                        ` : '<p style="color:var(--text-muted);text-align:center">Select a product to export its BOM</p>'}
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="closeModal()">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    else if (type === 'syncHelp') {
+        const lastExport = localStorage.getItem('plmLastExport');
+        const lastImport = localStorage.getItem('plmLastImport');
+        const username = localStorage.getItem('plmUsername') || 'Not set';
+        
+        html = `
+            <div class="modal-backdrop" onclick="closeModal(event)">
+                <div class="modal modal-lg" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2 class="modal-title">☁️ SharePoint Sync Guide</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div style="background:var(--bg-tertiary);padding:16px;border-radius:8px;margin-bottom:20px">
+                            <div style="font-weight:600;margin-bottom:8px">How Team Sync Works</div>
+                            <p style="color:var(--text-secondary);font-size:13px;margin:0">
+                                Your team shares a <code>plm_database.json</code> file on SharePoint. 
+                                Export your changes to upload, Import to get the latest from your team.
+                            </p>
+                        </div>
+                        
+                        <div class="workflow-steps" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
+                            <div style="background:var(--bg-tertiary);padding:16px;border-radius:8px;border-left:3px solid var(--success)">
+                                <div style="font-weight:600;margin-bottom:8px">⬇️ To Get Latest Data</div>
+                                <ol style="margin:0;padding-left:20px;color:var(--text-secondary);font-size:13px">
+                                    <li>Go to SharePoint → PLM_Data folder</li>
+                                    <li>Download <code>plm_database.json</code></li>
+                                    <li>Click <strong>⬆️ Import</strong> button above</li>
+                                    <li>Select the downloaded file</li>
+                                </ol>
+                            </div>
+                            <div style="background:var(--bg-tertiary);padding:16px;border-radius:8px;border-left:3px solid var(--accent)">
+                                <div style="font-weight:600;margin-bottom:8px">⬆️ To Share Your Changes</div>
+                                <ol style="margin:0;padding-left:20px;color:var(--text-secondary);font-size:13px">
+                                    <li>Click <strong>⬇️ Export</strong> button above</li>
+                                    <li>File downloads to your computer</li>
+                                    <li>Go to SharePoint → PLM_Data folder</li>
+                                    <li>Upload/replace <code>plm_database.json</code></li>
+                                </ol>
+                            </div>
+                        </div>
+                        
+                        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:20px">
+                            <div style="font-weight:600;margin-bottom:12px">📊 Database Status</div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
+                                <div>
+                                    <span style="color:var(--text-muted)">Version:</span>
+                                    <span style="margin-left:8px;font-weight:600;color:var(--accent)">${DB.version || 'Not set'}</span>
+                                </div>
+                                <div>
+                                    <span style="color:var(--text-muted)">Your Name:</span>
+                                    <span style="margin-left:8px">${Utils.escapeHtml(username)}</span>
+                                    <button class="btn btn-xs" style="margin-left:8px" onclick="localStorage.removeItem('plmUsername');alert('Name cleared. You\\'ll be prompted next time.')">Change</button>
+                                </div>
+                                <div>
+                                    <span style="color:var(--text-muted)">Last Export:</span>
+                                    <span style="margin-left:8px">${lastExport ? new Date(lastExport).toLocaleString() : 'Never'}</span>
+                                </div>
+                                <div>
+                                    <span style="color:var(--text-muted)">Last Import:</span>
+                                    <span style="margin-left:8px">${lastImport ? new Date(lastImport).toLocaleString() : 'Never'}</span>
+                                </div>
+                                <div>
+                                    <span style="color:var(--text-muted)">Last Modified By:</span>
+                                    <span style="margin-left:8px">${Utils.escapeHtml(DB.lastModifiedBy || 'Unknown')}</span>
+                                </div>
+                                <div>
+                                    <span style="color:var(--text-muted)">Checked Out By:</span>
+                                    <span style="margin-left:8px;${DB.checkedOutBy ? 'color:var(--warning);font-weight:600' : ''}">${DB.checkedOutBy ? Utils.escapeHtml(DB.checkedOutBy) : 'None'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background:rgba(210, 153, 34, 0.1);border:1px solid var(--warning);border-radius:8px;padding:16px">
+                            <div style="font-weight:600;color:var(--warning);margin-bottom:8px">⚠️ Important</div>
+                            <ul style="margin:0;padding-left:20px;color:var(--text-secondary);font-size:13px">
+                                <li>Always <strong>Import</strong> before making changes to avoid overwriting team updates</li>
+                                <li>Communicate with your team before doing major edits</li>
+                                <li>Each export increments the version number</li>
+                                <li>Check who last modified the database before importing</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="clearAllData()">🗑️ Clear Local Data</button>
+                        <div style="flex:1"></div>
+                        <button class="btn" onclick="closeModal()">Close</button>
+                        <button class="btn btn-primary" onclick="closeModal();quickExportJson()">⬇️ Export Now</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+    setupUploadZones();
+}
+
+function closeModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('modalContainer').innerHTML = '';
+    renderAll();
+}
+
+function switchEditTab(tab, btn) {
+    document.querySelectorAll('[id^="editTab-"]').forEach(el => el.classList.add('hidden'));
+    document.getElementById('editTab-' + tab).classList.remove('hidden');
+    btn.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+function switchImportTab(tab, btn) {
+    document.querySelectorAll('[id^="importTab-"]').forEach(el => el.classList.add('hidden'));
+    document.getElementById('importTab-' + tab).classList.remove('hidden');
+    btn.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+function saveNewPart() {
+    const name = document.getElementById('newPartName').value.trim();
+    if (!name) { alert('Name is required'); return; }
+    
+    Parts.create({
+        partNumber: document.getElementById('newPartNumber').value.trim(),
+        name: name,
+        type: document.getElementById('newPartType').value,
+        category: document.getElementById('newPartCategory').value.trim(),
+        costLow: document.getElementById('newCostLow').value,
+        costHigh: document.getElementById('newCostHigh').value,
+        costAvg: document.getElementById('newCostAvg').value,
+        notes: document.getElementById('newPartNotes').value.trim(),
+        isProduct: document.getElementById('newIsProduct').checked
+    });
+    
+    closeModal();
+}
+
+function saveEditPart(id) {
+    Parts.update(id, {
+        // partNumber is readonly - don't update it
+        legacyPartNumber: document.getElementById('editLegacyPartNumber').value.trim() || null,
+        name: document.getElementById('editPartName').value.trim(),
+        type: document.getElementById('editPartType').value,
+        category: document.getElementById('editPartCategory').value.trim(),
+        status: document.getElementById('editPartStatus').value,
+        revision: document.getElementById('editPartRevision').value.trim(),
+        notes: document.getElementById('editPartNotes').value.trim(),
+        isProduct: document.getElementById('editIsProduct').checked,
+        cost: parseFloat(document.getElementById('editCost').value) || 0,
+        costedDate: document.getElementById('editCostedDate').value || null,
+        costLow: parseFloat(document.getElementById('editCostLow').value) || 0,
+        costHigh: parseFloat(document.getElementById('editCostHigh').value) || 0,
+        costAvg: parseFloat(document.getElementById('editCostAvg').value) || 0
+    });
+    
+    closeModal();
+}
+
+function showAddToBomModal(parentId) {
+    const parent = Parts.getById(parentId);
+    if (!parent) return;
+    
+    // Store parent ID for later use
+    window._addToBomParentId = parentId;
+    window._addToBomSearchTerm = '';
+    window._addToBomMode = 'existing'; // 'existing' or 'new'
+    
+    renderAddToBomModal();
+}
+
+function renderAddToBomModal() {
+    const parentId = window._addToBomParentId;
+    const parent = Parts.getById(parentId);
+    const searchTerm = window._addToBomSearchTerm || '';
+    const mode = window._addToBomMode || 'existing';
+    
+    // Get parts not already in BOM
+    const existingIds = new Set((parent.bom || []).map(b => b.partId));
+    let available = DB.parts.filter(p => p.id !== parentId && !existingIds.has(p.id));
+    
+    // Filter by search term
+    if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        available = available.filter(p => 
+            p.partNumber.toLowerCase().includes(term) ||
+            p.name.toLowerCase().includes(term) ||
+            (p.legacyPartNumber || '').toLowerCase().includes(term)
+        );
+    }
+    
+    // Limit display for performance
+    const displayParts = available.slice(0, 50);
+    const hasMore = available.length > 50;
+    
+    const existingPartHtml = `
+        <div class="form-group">
+            <label class="form-label">Search Parts</label>
+            <div class="search-box" style="margin-bottom:12px">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="form-input" id="addToBomSearch" 
+                    placeholder="Search by part number, name, or legacy PN..." 
+                    value="${Utils.escapeHtml(searchTerm)}"
+                    oninput="window._addToBomSearchTerm = this.value; renderAddToBomModal()">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Select Part <span style="color:var(--text-muted);font-weight:normal">(${available.length} available)</span></label>
+            <div style="max-height:250px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+                ${displayParts.length === 0 
+                    ? `<div style="padding:24px;text-align:center;color:var(--text-muted)">
+                        ${searchTerm ? 'No parts match your search' : 'No parts available to add'}
+                        <br><br>
+                        <button class="btn btn-sm" onclick="window._addToBomMode='new';renderAddToBomModal()">➕ Create New Part</button>
+                       </div>`
+                    : displayParts.map(p => {
+                        const hasBom = p.bom && p.bom.length > 0;
+                        return `
+                        <div class="selectable-part-row" onclick="selectPartForBom('${p.id}')" data-id="${p.id}">
+                            <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+                                ${hasBom ? '<span class="tag tag-assy" style="padding:1px 4px;font-size:9px">ASSY</span>' : ''}
+                                <span class="mono" style="color:var(--accent);font-size:12px">${Utils.escapeHtml(p.partNumber)}</span>
+                                <span style="color:var(--text-muted);font-size:11px">${p.legacyPartNumber ? '(' + Utils.escapeHtml(p.legacyPartNumber) + ')' : ''}</span>
+                            </div>
+                            <div style="flex:2;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${Utils.escapeHtml(p.name)}</div>
+                            <div class="mono" style="font-size:12px;color:var(--success)">${Utils.formatCurrency(Parts.getEffectiveCost(p))}</div>
+                        </div>
+                    `}).join('')}
+                ${hasMore ? `<div style="padding:8px;text-align:center;color:var(--text-muted);font-size:12px;background:var(--bg-tertiary)">Showing first 50 of ${available.length} results. Refine your search to see more.</div>` : ''}
+            </div>
+        </div>
+        
+        <div class="form-group" id="selectedPartInfo" style="display:none;background:var(--bg-tertiary);padding:12px;border-radius:6px;margin-top:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <div style="font-weight:600" id="selectedPartName">-</div>
+                    <div style="font-size:12px;color:var(--text-muted)" id="selectedPartNumber">-</div>
+                </div>
+                <button class="btn btn-sm" onclick="clearPartSelection()">✕ Clear</button>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Quantity</label>
+            <input type="number" min="1" class="form-input" id="addToBomQty" value="1" style="width:100px">
+        </div>
+    `;
+    
+    const newPartHtml = `
+        <div style="background:var(--bg-tertiary);padding:12px;border-radius:6px;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:18px">✨</span>
+                <div>
+                    <div style="font-weight:600">Create New Part</div>
+                    <div style="font-size:12px;color:var(--text-muted)">This will add a new part to the database AND to this BOM</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Part Number <span style="color:var(--text-muted);font-weight:normal">(optional)</span></label>
+                <input type="text" class="form-input" id="newPartNumber" placeholder="Auto-generated if empty">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Legacy PN <span style="color:var(--text-muted);font-weight:normal">(optional)</span></label>
+                <input type="text" class="form-input" id="newPartLegacyPN" placeholder="From old system">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label required">Name / Description</label>
+            <input type="text" class="form-input" id="newPartName" placeholder="Part name or description">
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Type</label>
+                <select class="form-select" id="newPartType">
+                    <option value="PP">PP - Purchased Part</option>
+                    <option value="SA">SA - Sub-Assembly</option>
+                    <option value="MD">MD - Manufactured</option>
+                    <option value="HS">HS - Hardware/Standard</option>
+                    <option value="UP">UP - Unassigned</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <input type="text" class="form-input" id="newPartCategory" placeholder="e.g., HEAD, TORSO">
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Estimated Cost</label>
+                <input type="number" step="0.01" class="form-input" id="newPartCost" placeholder="0.00">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Quantity in BOM</label>
+                <input type="number" min="1" class="form-input" id="newPartQty" value="1">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Notes <span style="color:var(--text-muted);font-weight:normal">(optional)</span></label>
+            <input type="text" class="form-input" id="newPartNotes" placeholder="Any additional notes">
+        </div>
+    `;
+    
+    const html = `
+        <div class="modal-backdrop" onclick="closeAddToBomModal(event)" style="z-index:1001">
+            <div class="modal modal-lg" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2 class="modal-title">Add Part to: ${Utils.escapeHtml(parent.partNumber)}</h2>
+                    <button class="modal-close" onclick="closeAddToBomModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="tabs" style="margin-bottom:16px">
+                        <button class="tab ${mode === 'existing' ? 'active' : ''}" onclick="window._addToBomMode='existing';renderAddToBomModal()">
+                            📦 Existing Part
+                        </button>
+                        <button class="tab ${mode === 'new' ? 'active' : ''}" onclick="window._addToBomMode='new';renderAddToBomModal()">
+                            ✨ Create New Part
+                        </button>
+                    </div>
+                    
+                    ${mode === 'existing' ? existingPartHtml : newPartHtml}
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeAddToBomModal()">Cancel</button>
+                    ${mode === 'existing' 
+                        ? `<button class="btn btn-primary" onclick="confirmAddExistingToBom('${parentId}')">➕ Add to BOM</button>`
+                        : `<button class="btn btn-primary" onclick="confirmAddNewPartToBom('${parentId}')">✨ Create & Add</button>`
+                    }
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if present
+    const existingModal = document.querySelector('.modal-backdrop[style*="z-index:1001"]');
+    if (existingModal) existingModal.remove();
+    
+    document.getElementById('modalContainer').insertAdjacentHTML('beforeend', html);
+    
+    // Focus search input if in existing mode
+    if (mode === 'existing') {
+        setTimeout(() => {
+            const searchInput = document.getElementById('addToBomSearch');
+            if (searchInput) searchInput.focus();
+        }, 100);
+    }
+}
+
+// Store selected part
+window._selectedPartForBom = null;
+
+function selectPartForBom(partId) {
+    window._selectedPartForBom = partId;
+    const part = Parts.getById(partId);
+    
+    // Update visual selection
+    document.querySelectorAll('.selectable-part-row').forEach(row => {
+        row.classList.toggle('selected', row.dataset.id === partId);
+    });
+    
+    // Show selected part info
+    const infoDiv = document.getElementById('selectedPartInfo');
+    if (infoDiv && part) {
+        infoDiv.style.display = 'block';
+        document.getElementById('selectedPartName').textContent = part.name;
+        document.getElementById('selectedPartNumber').textContent = `${part.partNumber} • ${Utils.formatCurrency(Parts.getEffectiveCost(part))}`;
+    }
+}
+
+function clearPartSelection() {
+    window._selectedPartForBom = null;
+    document.querySelectorAll('.selectable-part-row').forEach(row => row.classList.remove('selected'));
+    const infoDiv = document.getElementById('selectedPartInfo');
+    if (infoDiv) infoDiv.style.display = 'none';
+}
+
+function closeAddToBomModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modals = document.querySelectorAll('.modal-backdrop');
+    if (modals.length > 1) modals[modals.length - 1].remove();
+    // Clear state
+    window._selectedPartForBom = null;
+    window._addToBomSearchTerm = '';
+}
+
+function confirmAddExistingToBom(parentId) {
+    const childId = window._selectedPartForBom;
+    const qty = parseInt(document.getElementById('addToBomQty').value) || 1;
+    
+    if (!childId) { 
+        showToast('Please select a part first', 'warning'); 
+        return; 
+    }
+    
+    Parts.addToBom(parentId, childId, qty);
+    closeAddToBomModal();
+    showToast('Part added to BOM', 'success');
+    showModal('bomEditor', parentId);
+}
+
+function confirmAddNewPartToBom(parentId) {
+    const name = document.getElementById('newPartName').value.trim();
+    const partNumber = document.getElementById('newPartNumber').value.trim();
+    const legacyPN = document.getElementById('newPartLegacyPN').value.trim();
+    const type = document.getElementById('newPartType').value;
+    const category = document.getElementById('newPartCategory').value.trim();
+    const cost = parseFloat(document.getElementById('newPartCost').value) || 0;
+    const qty = parseInt(document.getElementById('newPartQty').value) || 1;
+    const notes = document.getElementById('newPartNotes').value.trim();
+    
+    if (!name) {
+        showToast('Please enter a part name', 'warning');
+        return;
+    }
+    
+    // Create the new part
+    const newPart = Parts.create({
+        partNumber: partNumber || undefined, // Will auto-generate if empty
+        legacyPartNumber: legacyPN || null,
+        name: name,
+        type: type,
+        category: category,
+        costAvg: cost,
+        costLow: cost,
+        costHigh: cost,
+        notes: notes,
+        status: 'draft'
+    });
+    
+    // Add to BOM
+    Parts.addToBom(parentId, newPart.id, qty);
+    
+    closeAddToBomModal();
+    showToast(`Created "${name}" and added to BOM`, 'success');
+    showModal('bomEditor', parentId);
+}
+
+function showWhereUsedPopup(partId) {
+    const part = Parts.getById(partId);
+    const whereUsed = Parts.getWhereUsed(partId);
+    
+    const html = `
+        <div class="modal-backdrop" onclick="closeModal(event)">
+            <div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
+                <div class="modal-header">
+                    <h2 class="modal-title">Where Used: ${Utils.escapeHtml(part?.partNumber || partId)}</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    ${whereUsed.length === 0 
+                        ? '<div class="empty-state" style="padding:40px"><div class="empty-state-title">Not used in any assemblies</div></div>'
+                        : `<table>
+                            <thead><tr><th>Assembly</th><th>Name</th><th>Qty</th></tr></thead>
+                            <tbody>
+                                ${whereUsed.map(w => `
+                                    <tr style="cursor:pointer" onclick="closeModal();showModal('bomEditor', '${w.part.id}')">
+                                        <td class="mono" style="color:var(--accent)">${Utils.escapeHtml(w.part.partNumber)}</td>
+                                        <td>${Utils.escapeHtml(w.part.name)}</td>
+                                        <td class="mono">${w.qty}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>`
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeModal()">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modalContainer').innerHTML = html;
+}
+
+// =============================================================================
+// EVENT HANDLERS
+// =============================================================================
+function showView(viewId) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + viewId).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelector(`.nav-item[data-view="${viewId}"]`)?.classList.add('active');
+}
+
+const handlePartsSearch = Utils.debounce((value) => {
+    DB.searchTerm = value;
+    renderPartsView();
+}, 200);
+
+function setFilter(type, value) {
+    DB.filters[type] = value;
+    renderPartsView();
+}
+
+function toggleSelectAllParts(checked, filteredIds) {
+    // If filteredIds provided, only affect those items
+    const idsToToggle = filteredIds || Array.from(document.querySelectorAll('.part-cb')).map(cb => cb.dataset.id);
+    
+    if (checked) {
+        // Select all filtered items
+        idsToToggle.forEach(id => DB.selectedParts.add(id));
+    } else {
+        // Deselect all filtered items
+        idsToToggle.forEach(id => DB.selectedParts.delete(id));
+    }
+    
+    // Update checkboxes without full re-render for better performance
+    document.querySelectorAll('.part-cb').forEach(cb => {
+        cb.checked = DB.selectedParts.has(cb.dataset.id);
+    });
+    
+    renderPartsView();
+}
+
+function togglePartSelect(id, checked) {
+    if (checked) DB.selectedParts.add(id);
+    else DB.selectedParts.delete(id);
+    renderPartsView();
+}
+
+function batchDeleteParts() {
+    if (DB.selectedParts.size === 0) return;
+    if (!confirm(`Delete ${DB.selectedParts.size} parts?`)) return;
+    
+    for (const id of DB.selectedParts) {
+        Parts.delete(id);
+    }
+    DB.selectedParts.clear();
+    renderAll();
+}
+
+function deletePart(id) {
+    const part = Parts.getById(id);
+    if (!part) return;
+    
+    const whereUsed = Parts.getWhereUsed(id);
+    if (whereUsed.length > 0) {
+        if (!confirm(`This part is used in ${whereUsed.length} assemblies. Delete anyway?`)) return;
+    } else {
+        if (!confirm(`Delete ${part.partNumber}?`)) return;
+    }
+    
+    Parts.delete(id);
+    renderAll();
+}
+
+function setupUploadZones() {
+    ['partsUploadZone', 'bomsUploadZone'].forEach(id => {
+        const zone = document.getElementById(id);
+        if (!zone) return;
+        
+        zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('dragover'); };
+        zone.ondragleave = () => zone.classList.remove('dragover');
+        zone.ondrop = (e) => {
+            e.preventDefault();
+            zone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                if (id === 'partsUploadZone') handlePartsImport(file);
+                else handleBomsImport(file);
+            }
+        };
+    });
+}
+
+function handlePartsImport(file) {
+    if (!file) return;
+    ImportExport.importParts(file);
+    closeModal();
+}
+
+function handleBomsImport(file) {
+    if (!file) return;
+    ImportExport.importBoms(file);
+    closeModal();
+}
+
+// =============================================================================
+// TOAST NOTIFICATIONS
+// =============================================================================
+function showToast(message, type = 'info', duration = 3000) {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+    
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+    
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || icons.info}</span>
+        <span class="toast-message">${message}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+    `;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
+// =============================================================================
+// KEYBOARD SHORTCUTS
+// =============================================================================
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        // Don't trigger shortcuts when typing in inputs
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+            // Escape to blur input
+            if (e.key === 'Escape') {
+                e.target.blur();
+            }
+            return;
+        }
+        
+        // Ctrl/Cmd + S = Save
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            saveToStorage();
+            showToast('Saved to browser storage', 'success');
+        }
+        
+        // Ctrl/Cmd + E = Export
+        if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+            e.preventDefault();
+            quickExportJson();
+        }
+        
+        // Ctrl/Cmd + I = Import
+        if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+            e.preventDefault();
+            document.getElementById('quickImportInput').click();
+        }
+        
+        // Ctrl/Cmd + F = Focus search
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            const searchInput = document.getElementById('partsSearchInput');
+            if (searchInput) {
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
+            }
+        }
+        
+        // N = New part (when not in modal)
+        if (e.key === 'n' && !document.querySelector('.modal-backdrop')) {
+            showModal('newPart');
+        }
+        
+        // Escape = Close modal
+        if (e.key === 'Escape') {
+            const modal = document.querySelector('.modal-backdrop');
+            if (modal) {
+                closeModal();
+            }
+        }
+        
+        // ? = Show shortcuts help
+        if (e.key === '?' && e.shiftKey) {
+            showShortcutsHelp();
+        }
+    });
+}
+
+function showShortcutsHelp() {
+    const html = `
+        <div class="modal-backdrop" onclick="closeModal(event)">
+            <div class="modal" onclick="event.stopPropagation()" style="max-width:400px">
+                <div class="modal-header">
+                    <h2 class="modal-title">⌨️ Keyboard Shortcuts</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <table style="width:100%">
+                        <tr><td><kbd class="kbd">Ctrl</kbd> + <kbd class="kbd">S</kbd></td><td>Save to browser</td></tr>
+                        <tr><td><kbd class="kbd">Ctrl</kbd> + <kbd class="kbd">E</kbd></td><td>Export database</td></tr>
+                        <tr><td><kbd class="kbd">Ctrl</kbd> + <kbd class="kbd">I</kbd></td><td>Import database</td></tr>
+                        <tr><td><kbd class="kbd">Ctrl</kbd> + <kbd class="kbd">F</kbd></td><td>Focus search</td></tr>
+                        <tr><td><kbd class="kbd">N</kbd></td><td>New part</td></tr>
+                        <tr><td><kbd class="kbd">Esc</kbd></td><td>Close modal / blur input</td></tr>
+                        <tr><td><kbd class="kbd">?</kbd></td><td>Show this help</td></tr>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeModal()">Got it!</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = html;
+}
+
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Navigation
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => showView(item.dataset.view));
+    });
+    
+    // Load data
+    loadFromStorage();
+    updateSyncStatus();
+    renderAll();
+    
+    // Setup keyboard shortcuts
+    setupKeyboardShortcuts();
+    
+    // Warn on unsaved changes
+    window.addEventListener('beforeunload', (e) => {
+        if (DB.hasUnsavedChanges) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+    
+    // Auto-save every 30 seconds
+    setInterval(() => {
+        if (DB.hasUnsavedChanges) {
+            saveToStorage();
+            showToast('Auto-saved', 'info', 1500);
+        }
+    }, 30000);
+    
+    // Show welcome toast
+    setTimeout(() => {
+        if (DB.parts.length === 0) {
+            showToast('Welcome! Import data or create your first part.', 'info', 5000);
+        } else {
+            showToast(`Loaded ${DB.parts.length} parts`, 'success', 2000);
+        }
+    }, 500);
+});
+</script>
+</body>
+</html>

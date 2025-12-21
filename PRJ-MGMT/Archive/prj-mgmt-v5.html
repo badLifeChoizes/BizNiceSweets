@@ -1,0 +1,3725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRJ-MGMT Tool</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #0A1628;
+      --bg-surface: #0D1B2A;
+      --bg-card: #1B263B;
+      --bg-card-hover: #243447;
+      --text-primary: #E0E1DD;
+      --text-secondary: #778DA9;
+      --text-muted: #415A77;
+      --accent-blue: #00A8E8;
+      --accent-green: #00D26A;
+      --accent-yellow: #FFB703;
+      --accent-red: #E63946;
+      --accent-purple: #9D4EDD;
+      --border: #415A77;
+      --font-display: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-display);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* Header */
+    .header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-mark {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+    }
+
+    .logo h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+
+    .logo h1 span { color: var(--accent-blue); }
+
+    /* Project Selector */
+    .project-selector {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: var(--bg-card);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .project-selector label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .project-name-input {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 600;
+      width: 200px;
+      padding: 0.25rem;
+    }
+
+    .project-name-input:focus {
+      outline: none;
+      border-bottom: 1px solid var(--accent-blue);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-family: var(--font-display);
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .btn-primary {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #0095d0;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .btn-success {
+      background: var(--accent-green);
+      color: var(--bg-deep);
+    }
+
+    .btn-success:hover {
+      background: #00b85d;
+    }
+
+    /* Dropdown Menu */
+    .dropdown {
+      position: relative;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 0.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      min-width: 180px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      display: none;
+      z-index: 200;
+      overflow: hidden;
+    }
+
+    .dropdown-menu.show { display: block; }
+
+    .dropdown-item {
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background 0.15s ease;
+    }
+
+    .dropdown-item:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .dropdown-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0.25rem 0;
+    }
+
+    /* Main Layout */
+    .main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 1.5rem;
+      background: var(--bg-card);
+      padding: 0.25rem;
+      border-radius: 8px;
+      width: fit-content;
+    }
+
+    .tab {
+      padding: 0.6rem 1.25rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+    }
+
+    .tab:hover { color: var(--text-primary); }
+
+    .tab.active {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* KPI Section */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border-radius: 10px;
+      padding: 1.25rem;
+      text-align: center;
+      transition: transform 0.2s ease;
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .kpi-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      line-height: 1;
+    }
+
+    .kpi-value.complete { color: var(--accent-green); }
+    .kpi-value.progress { color: var(--accent-yellow); }
+    .kpi-value.pending { color: var(--text-muted); }
+    .kpi-value.total { color: var(--accent-blue); }
+
+    .kpi-label {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 0.4rem;
+    }
+
+    /* Section Headers */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .section-header h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      border-left: 4px solid var(--accent-blue);
+      padding-left: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .badge {
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      padding: 0.2rem 0.6rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      font-weight: 400;
+    }
+
+    /* Phases List */
+    .phases-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .phase-card {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 0.875rem 1rem;
+      display: grid;
+      grid-template-columns: 90px 1fr 180px 130px 32px;
+      align-items: center;
+      gap: 1rem;
+      transition: background 0.2s ease;
+    }
+
+    .phase-card:hover { background: var(--bg-card-hover); }
+
+    .phase-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .phase-name input {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      width: 100%;
+      padding: 0.2rem 0;
+      border-bottom: 1px solid transparent;
+    }
+
+    .phase-name input:hover { border-bottom-color: var(--border); }
+    .phase-name input:focus { outline: none; border-bottom-color: var(--accent-blue); }
+
+    /* Progress Slider */
+    .progress-control {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .progress-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--bg-deep);
+      cursor: pointer;
+    }
+
+    .progress-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent-blue);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    .progress-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+    .progress-value {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      min-width: 40px;
+      text-align: right;
+    }
+
+    /* Status Badge */
+    .status-select {
+      padding: 0.35rem 0.6rem;
+      border-radius: 5px;
+      font-family: var(--font-display);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-select.complete { background: var(--accent-green); color: var(--bg-deep); }
+    .status-select.progress { background: var(--accent-yellow); color: var(--bg-deep); }
+    .status-select.pending { background: var(--text-muted); color: var(--text-primary); }
+    .status-select option { background: var(--bg-card); color: var(--text-primary); }
+
+    /* Deliveries */
+    .deliveries-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .delivery-card {
+      background: var(--bg-card);
+      border-radius: 10px;
+      padding: 1.25rem;
+      border-top: 4px solid var(--accent-blue);
+      transition: transform 0.2s ease;
+    }
+
+    .delivery-card:hover { transform: translateY(-2px); }
+
+    .delivery-date-label {
+      font-size: 0.65rem;
+      color: var(--accent-blue);
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+
+    .delivery-date-input {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-weight: 600;
+      width: 100%;
+      padding: 0.2rem 0;
+      cursor: pointer;
+    }
+
+    .delivery-date-input:focus { outline: none; }
+
+    .delivery-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0.75rem 0;
+    }
+
+    .delivery-title input, .delivery-dest input {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      width: 100%;
+      padding: 0.2rem 0;
+      border-bottom: 1px solid transparent;
+    }
+
+    .delivery-title input { font-size: 0.95rem; font-weight: 600; }
+    .delivery-dest input { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; }
+    .delivery-title input:hover, .delivery-dest input:hover { border-bottom-color: var(--border); }
+    .delivery-title input:focus, .delivery-dest input:focus { outline: none; border-bottom-color: var(--accent-blue); }
+
+    .delivery-countdown {
+      margin-top: 0.75rem;
+      padding: 0.4rem 0.6rem;
+      background: var(--bg-deep);
+      border-radius: 5px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .delivery-countdown.urgent { background: rgba(230, 57, 70, 0.2); color: var(--accent-red); }
+    .delivery-countdown.soon { background: rgba(255, 183, 3, 0.2); color: var(--accent-yellow); }
+
+    /* Notes */
+    .notes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .notes-card {
+      background: var(--bg-card);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+
+    .notes-card h3 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent-blue);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.75rem;
+    }
+
+    .notes-card:nth-child(2) h3 { color: var(--accent-yellow); }
+    .notes-card:nth-child(3) h3 { color: var(--accent-green); }
+
+    .notes-card textarea {
+      width: 100%;
+      height: 100px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      padding: 0.6rem;
+      resize: none;
+      line-height: 1.5;
+    }
+
+    .notes-card textarea:focus { outline: none; border-color: var(--accent-blue); }
+
+    /* Add Buttons */
+    .add-btn {
+      width: 100%;
+      padding: 0.6rem;
+      background: transparent;
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .add-btn:hover {
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+      background: rgba(0, 168, 232, 0.1);
+    }
+
+    /* Delete Button */
+    .delete-btn {
+      opacity: 0;
+      background: transparent;
+      border: none;
+      color: var(--accent-red);
+      cursor: pointer;
+      padding: 0.25rem;
+      font-size: 1rem;
+      transition: opacity 0.2s ease;
+    }
+
+    .phase-card:hover .delete-btn,
+    .delivery-card:hover .delete-btn { opacity: 1; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 300;
+    }
+
+    .modal-overlay.show { display: flex; }
+
+    .modal {
+      background: var(--bg-surface);
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 90%;
+      max-width: 500px;
+      border: 1px solid var(--border);
+    }
+
+    .modal h3 {
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 1.25rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.4rem;
+    }
+
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      padding: 0.6rem;
+    }
+
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    /* Saved Projects List */
+    .projects-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+    }
+
+    .project-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem;
+      background: var(--bg-card);
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .project-item:hover { background: var(--bg-card-hover); }
+
+    .project-item-info h4 {
+      font-size: 0.9rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .project-item-info span {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .project-item-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .project-item-actions button {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0.25rem;
+      font-size: 0.9rem;
+    }
+
+    .project-item-actions button:hover { color: var(--accent-red); }
+
+    /* Presentation Mode */
+    body.presentation-mode .header-actions,
+    body.presentation-mode .tabs,
+    body.presentation-mode .add-btn,
+    body.presentation-mode .delete-btn,
+    body.presentation-mode .section-header .btn { display: none; }
+
+    body.presentation-mode .phase-name input,
+    body.presentation-mode .delivery-title input,
+    body.presentation-mode .delivery-dest input,
+    body.presentation-mode .delivery-date-input,
+    body.presentation-mode .progress-slider,
+    body.presentation-mode .status-select,
+    body.presentation-mode .notes-card textarea { pointer-events: none; }
+
+    body.presentation-mode .main { max-width: 1600px; }
+    body.presentation-mode .kpi-value { font-size: 3.5rem; }
+
+    .exit-presentation {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 400;
+    }
+
+    body.presentation-mode .exit-presentation { display: block; }
+
+    /* Responsive */
+    @media (max-width: 1000px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .phase-card {
+        grid-template-columns: 70px 1fr;
+        gap: 0.75rem;
+      }
+      .progress-control, .status-select, .delete-btn { grid-column: 2; }
+    }
+
+    @media (max-width: 600px) {
+      .header { flex-direction: column; gap: 0.75rem; padding: 0.75rem; }
+      .project-selector { width: 100%; justify-content: center; }
+      .header-actions { flex-wrap: wrap; justify-content: center; }
+      .main { padding: 1rem; }
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .phase-card, .delivery-card, .kpi-card, .notes-card {
+      animation: fadeIn 0.3s ease forwards;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: var(--text-secondary);
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-size: 1.1rem;
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Tooltips */
+    [data-tooltip] {
+      position: relative;
+    }
+
+    [data-tooltip]::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0.4rem 0.6rem;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-size: 0.7rem;
+      font-weight: 400;
+      white-space: nowrap;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+      z-index: 500;
+      pointer-events: none;
+      margin-bottom: 0.5rem;
+    }
+
+    [data-tooltip]:hover::after {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* Save Indicator */
+    .save-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      padding: 0.4rem 0.75rem;
+      background: var(--bg-card);
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+
+    .save-indicator.saving {
+      color: var(--accent-yellow);
+    }
+
+    .save-indicator.saved {
+      color: var(--accent-green);
+    }
+
+    .save-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s ease;
+    }
+
+    .save-indicator.saving .save-indicator-dot {
+      background: var(--accent-yellow);
+      animation: pulse 1s infinite;
+    }
+
+    .save-indicator.saved .save-indicator-dot {
+      background: var(--accent-green);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Toast Notifications */
+    .toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .toast {
+      padding: 0.75rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      animation: slideIn 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .toast.success { border-left: 3px solid var(--accent-green); }
+    .toast.error { border-left: 3px solid var(--accent-red); }
+    .toast.warning { border-left: 3px solid var(--accent-yellow); }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(100%); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Confirm Modal */
+    .confirm-modal {
+      background: var(--bg-surface);
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 90%;
+      max-width: 400px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .confirm-modal h3 {
+      margin-bottom: 0.75rem;
+      color: var(--text-primary);
+    }
+
+    .confirm-modal p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .confirm-modal .item-name {
+      color: var(--accent-blue);
+      font-weight: 600;
+    }
+
+    .confirm-modal-actions {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+
+    .btn-danger {
+      background: var(--accent-red);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #d32f3f;
+    }
+
+    /* Sort Controls */
+    .sort-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .sort-btn {
+      padding: 0.35rem 0.6rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .sort-btn:hover, .sort-btn.active {
+      background: var(--accent-blue);
+      color: white;
+      border-color: var(--accent-blue);
+    }
+
+    /* Validation Errors */
+    .input-error {
+      border-color: var(--accent-red) !important;
+    }
+
+    .error-message {
+      color: var(--accent-red);
+      font-size: 0.7rem;
+      margin-top: 0.25rem;
+    }
+
+    /* ===== PHASE 2: LIGHT THEME ===== */
+    body.light-theme {
+      --bg-deep: #F5F7FA;
+      --bg-surface: #FFFFFF;
+      --bg-card: #FFFFFF;
+      --bg-card-hover: #F0F4F8;
+      --text-primary: #1A202C;
+      --text-secondary: #4A5568;
+      --text-muted: #A0AEC0;
+      --border: #E2E8F0;
+    }
+
+    body.light-theme .header {
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    body.light-theme .phase-card,
+    body.light-theme .delivery-card,
+    body.light-theme .kpi-card,
+    body.light-theme .notes-card {
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .theme-toggle {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.6rem;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+    }
+
+    .theme-toggle:hover {
+      background: var(--bg-card-hover);
+    }
+
+    /* ===== PHASE 2: UNDO/REDO ===== */
+    .undo-redo-controls {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .undo-redo-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.35rem 0.5rem;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      transition: all 0.2s ease;
+    }
+
+    .undo-redo-btn:hover:not(:disabled) {
+      background: var(--bg-card-hover);
+      color: var(--text-primary);
+    }
+
+    .undo-redo-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* ===== PHASE 2: SEARCH & FILTER ===== */
+    .search-filter-bar {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 0.6rem 0.75rem 0.6rem 2.25rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .filter-select {
+      padding: 0.6rem 0.75rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .filter-select:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    .clear-filters-btn {
+      padding: 0.6rem 0.75rem;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .clear-filters-btn:hover {
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
+    /* ===== PHASE 2: PRIORITY BADGES ===== */
+    .priority-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .priority-high {
+      background: rgba(230, 57, 70, 0.2);
+      color: var(--accent-red);
+    }
+
+    .priority-medium {
+      background: rgba(255, 183, 3, 0.2);
+      color: var(--accent-yellow);
+    }
+
+    .priority-low {
+      background: rgba(0, 168, 232, 0.2);
+      color: var(--accent-blue);
+    }
+
+    .priority-select {
+      padding: 0.25rem 0.4rem;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 0.7rem;
+      cursor: pointer;
+    }
+
+    /* ===== PHASE 2: DELIVERY STATUS ===== */
+    .delivery-status-badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 0.5rem;
+    }
+
+    .delivery-status-shipped {
+      background: rgba(0, 210, 106, 0.2);
+      color: var(--accent-green);
+    }
+
+    .delivery-status-pending {
+      background: rgba(255, 183, 3, 0.2);
+      color: var(--accent-yellow);
+    }
+
+    .delivery-status-delayed {
+      background: rgba(230, 57, 70, 0.2);
+      color: var(--accent-red);
+    }
+
+    .delivery-status-select {
+      width: 100%;
+      margin-top: 0.5rem;
+      padding: 0.35rem 0.5rem;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    /* ===== PHASE 2: BULK ACTIONS ===== */
+    .bulk-actions-bar {
+      display: none;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: var(--accent-blue);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      animation: slideDown 0.2s ease;
+    }
+
+    .bulk-actions-bar.show {
+      display: flex;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .bulk-actions-bar .selected-count {
+      color: white;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .bulk-actions-bar .btn {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: none;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+    }
+
+    .bulk-actions-bar .btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
+    .bulk-checkbox {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: var(--accent-blue);
+    }
+
+    .phase-card.selected,
+    .delivery-card.selected {
+      outline: 2px solid var(--accent-blue);
+      outline-offset: 2px;
+    }
+
+    /* ===== PHASE 2: ARCHIVE ===== */
+    .archived-item {
+      opacity: 0.5;
+      position: relative;
+    }
+
+    .archived-item::after {
+      content: 'ARCHIVED';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-15deg);
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      pointer-events: none;
+    }
+
+    .archive-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    .archive-toggle input {
+      accent-color: var(--accent-blue);
+    }
+
+    /* ===== PHASE 2: DRAG & DROP ===== */
+    .phase-card.dragging,
+    .delivery-card.dragging {
+      opacity: 0.5;
+      transform: scale(1.02);
+    }
+
+    .phase-card.drag-over,
+    .delivery-card.drag-over {
+      border: 2px dashed var(--accent-blue);
+    }
+
+    .drag-handle {
+      cursor: grab;
+      color: var(--text-muted);
+      padding: 0.25rem;
+      font-size: 1rem;
+      user-select: none;
+    }
+
+    .drag-handle:active {
+      cursor: grabbing;
+    }
+
+    /* Updated phase card grid for new elements */
+    .phase-card {
+      grid-template-columns: 24px 24px 80px 1fr 180px 100px 80px 32px;
+    }
+
+    @media (max-width: 1200px) {
+      .phase-card {
+        grid-template-columns: 24px 24px 70px 1fr 150px 90px 70px 28px;
+      }
+    }
+
+    @media (max-width: 1000px) {
+      .phase-card {
+        grid-template-columns: 24px 1fr;
+        gap: 0.5rem;
+      }
+      .phase-card > * {
+        grid-column: 2;
+      }
+      .phase-card .bulk-checkbox,
+      .phase-card .drag-handle {
+        grid-column: 1;
+        grid-row: 1;
+      }
+    }
+
+    /* ===== PHASE 3: TAGS/LABELS ===== */
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      margin-top: 0.5rem;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.65rem;
+      font-weight: 500;
+      cursor: default;
+    }
+
+    .tag-remove {
+      cursor: pointer;
+      opacity: 0.7;
+      font-size: 0.7rem;
+    }
+
+    .tag-remove:hover {
+      opacity: 1;
+    }
+
+    .tag-red { background: rgba(230, 57, 70, 0.2); color: #E63946; }
+    .tag-orange { background: rgba(255, 183, 3, 0.2); color: #FFB703; }
+    .tag-green { background: rgba(0, 210, 106, 0.2); color: #00D26A; }
+    .tag-blue { background: rgba(0, 168, 232, 0.2); color: #00A8E8; }
+    .tag-purple { background: rgba(157, 78, 221, 0.2); color: #9D4EDD; }
+    .tag-gray { background: rgba(119, 141, 169, 0.2); color: #778DA9; }
+
+    .add-tag-btn {
+      padding: 0.15rem 0.4rem;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .add-tag-btn:hover {
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
+    .tag-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem;
+      z-index: 100;
+      min-width: 150px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .tag-dropdown input {
+      width: 100%;
+      padding: 0.4rem;
+      margin-bottom: 0.5rem;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 0.8rem;
+    }
+
+    .tag-color-options {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .tag-color-option {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.15s ease;
+    }
+
+    .tag-color-option:hover {
+      transform: scale(1.2);
+    }
+
+    .tag-color-option.selected {
+      border-color: var(--text-primary);
+    }
+
+    /* ===== PHASE 3: SUBTASKS ===== */
+    .subtasks-container {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .subtask-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0;
+      font-size: 0.8rem;
+    }
+
+    .subtask-item input[type="checkbox"] {
+      accent-color: var(--accent-green);
+    }
+
+    .subtask-item input[type="text"] {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 0.8rem;
+      padding: 0.2rem;
+    }
+
+    .subtask-item input[type="text"]:focus {
+      outline: none;
+      border-bottom: 1px solid var(--accent-blue);
+    }
+
+    .subtask-item.completed span {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+
+    .subtask-delete {
+      opacity: 0;
+      background: none;
+      border: none;
+      color: var(--accent-red);
+      cursor: pointer;
+      font-size: 0.75rem;
+      padding: 0.2rem;
+    }
+
+    .subtask-item:hover .subtask-delete {
+      opacity: 1;
+    }
+
+    .add-subtask-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.35rem 0;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+
+    .add-subtask-btn:hover {
+      color: var(--accent-blue);
+    }
+
+    .subtask-progress {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+    }
+
+    .subtask-progress-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--bg-deep);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .subtask-progress-fill {
+      height: 100%;
+      background: var(--accent-green);
+      transition: width 0.3s ease;
+    }
+
+    /* ===== PHASE 3: TEMPLATES ===== */
+    .templates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .template-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .template-card:hover {
+      border-color: var(--accent-blue);
+      transform: translateY(-2px);
+    }
+
+    .template-card h4 {
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .template-card p {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .template-card .template-phases {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    /* ===== PHASE 3: DUE DATE ALERTS ===== */
+    .alert-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      animation: pulse-alert 2s infinite;
+    }
+
+    .alert-overdue {
+      background: rgba(230, 57, 70, 0.3);
+      color: var(--accent-red);
+    }
+
+    .alert-today {
+      background: rgba(255, 183, 3, 0.3);
+      color: var(--accent-yellow);
+    }
+
+    .alert-soon {
+      background: rgba(0, 168, 232, 0.2);
+      color: var(--accent-blue);
+    }
+
+    @keyframes pulse-alert {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .alerts-panel {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-left: 4px solid var(--accent-yellow);
+    }
+
+    .alerts-panel h3 {
+      font-size: 0.85rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .alert-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+
+    .alert-item:last-child {
+      border-bottom: none;
+    }
+
+    /* ===== PHASE 3: DEPENDENCIES ===== */
+    .dependency-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    .dependency-blocked {
+      color: var(--accent-red);
+    }
+
+    .dependency-ready {
+      color: var(--accent-green);
+    }
+
+    .dependency-select {
+      padding: 0.25rem 0.4rem;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 0.7rem;
+      cursor: pointer;
+      max-width: 120px;
+    }
+
+    /* ===== PHASE 3: PROJECT CATEGORIES ===== */
+    .category-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.2rem 0.5rem;
+      background: var(--bg-deep);
+      border-radius: 4px;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+    }
+
+    .category-select {
+      padding: 0.4rem 0.6rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .category-header {
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-surface);
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Expanded phase card for subtasks */
+    .phase-card.expanded {
+      grid-template-columns: 1fr;
+      padding: 1rem;
+    }
+
+    .phase-card.expanded .phase-main-row {
+      display: grid;
+      grid-template-columns: 24px 24px 80px 1fr 180px 100px 80px 32px;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    @media (max-width: 1200px) {
+      .phase-card.expanded .phase-main-row {
+        grid-template-columns: 24px 24px 70px 1fr 150px 90px 70px 28px;
+      }
+    }
+
+    .phase-expand-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 0.2rem;
+      transition: transform 0.2s ease;
+    }
+
+    .phase-expand-btn.expanded {
+      transform: rotate(90deg);
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo">
+      <div class="logo-mark">PRJ</div>
+      <h1>PRJ-<span>MGMT</span> Tool</h1>
+    </div>
+
+    <div class="project-selector">
+      <label>Project:</label>
+      <input type="text" class="project-name-input" id="projectName" value="New Project" onchange="updateProjectName(this.value)">
+      <select class="category-select" id="projectCategory" onchange="updateProjectCategory(this.value)" title="Project Category">
+        <option value="none">📁 Category</option>
+        <option value="work">💼 Work</option>
+        <option value="personal">🏠 Personal</option>
+        <option value="client">🤝 Client</option>
+        <option value="internal">🔒 Internal</option>
+      </select>
+    </div>
+
+    <div class="header-actions">
+      <div class="undo-redo-controls">
+        <button class="undo-redo-btn" onclick="undo()" id="undoBtn" disabled data-tooltip="Ctrl+Z">↶</button>
+        <button class="undo-redo-btn" onclick="redo()" id="redoBtn" disabled data-tooltip="Ctrl+Y">↷</button>
+      </div>
+
+      <div class="save-indicator" id="saveIndicator">
+        <span class="save-indicator-dot"></span>
+        <span id="saveIndicatorText">Saved</span>
+      </div>
+      
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle" data-tooltip="Toggle theme">🌙</button>
+      
+      <button class="btn btn-secondary" onclick="showTemplatesModal()" data-tooltip="Start from template">📋 Templates</button>
+      <button class="btn btn-secondary" onclick="showProjectsModal()" data-tooltip="Manage saved projects">📂 Projects</button>
+      
+      <div class="dropdown">
+        <button class="btn btn-secondary" onclick="toggleDropdown('importDropdown')" data-tooltip="Import project data">📥 Import ▾</button>
+        <div class="dropdown-menu" id="importDropdown">
+          <div class="dropdown-item" onclick="document.getElementById('importJson').click(); closeDropdowns();">
+            📄 Import JSON
+          </div>
+          <div class="dropdown-item" onclick="document.getElementById('importCsv').click(); closeDropdowns();">
+            📊 Import CSV (Phases)
+          </div>
+          <div class="dropdown-item" onclick="document.getElementById('importDeliveriesCsv').click(); closeDropdowns();">
+            📦 Import CSV (Deliveries)
+          </div>
+        </div>
+      </div>
+      
+      <div class="dropdown">
+        <button class="btn btn-secondary" onclick="toggleDropdown('exportDropdown')" data-tooltip="Export project data">📤 Export ▾</button>
+        <div class="dropdown-menu" id="exportDropdown">
+          <div class="dropdown-item" onclick="exportJSON(); closeDropdowns();">📄 Export JSON</div>
+          <div class="dropdown-item" onclick="exportCSV('phases'); closeDropdowns();">📊 Export Phases CSV</div>
+          <div class="dropdown-item" onclick="exportCSV('deliveries'); closeDropdowns();">📦 Export Deliveries CSV</div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" onclick="exportCSV('all'); closeDropdowns();">📝 Export All CSV</div>
+        </div>
+      </div>
+
+      <button class="btn btn-success" onclick="saveProject()" data-tooltip="Ctrl+S">💾 Save</button>
+      <button class="btn btn-primary" onclick="togglePresentationMode()" data-tooltip="Ctrl+P">🎬 Present</button>
+    </div>
+
+    <input type="file" id="importJson" accept=".json" style="display:none" onchange="importJSON(event)">
+    <input type="file" id="importCsv" accept=".csv" style="display:none" onchange="importCSV(event, 'phases')">
+    <input type="file" id="importDeliveriesCsv" accept=".csv" style="display:none" onchange="importCSV(event, 'deliveries')">
+  </header>
+
+  <button class="btn btn-secondary exit-presentation" onclick="togglePresentationMode()">âœ• Exit</button>
+
+  <main class="main">
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
+      <button class="tab" onclick="switchTab('phases')">Phases</button>
+      <button class="tab" onclick="switchTab('deliveries')">Deliveries</button>
+      <button class="tab" onclick="switchTab('notes')">Notes</button>
+    </div>
+
+    <!-- Dashboard Tab -->
+    <div class="tab-content active" id="tab-dashboard">
+      <!-- Alerts Panel -->
+      <div class="alerts-panel" id="alertsPanel" style="display: none;">
+        <h3>⚠️ Upcoming Deadlines</h3>
+        <div id="alertsList"></div>
+      </div>
+
+      <div class="kpi-grid" id="kpiGrid"></div>
+
+      <section style="margin-bottom: 1.5rem;">
+        <div class="section-header">
+          <h2>Phases <span class="badge" id="phaseCountDash">0</span></h2>
+        </div>
+        <div class="phases-list" id="phasesListDash"></div>
+      </section>
+
+      <section>
+        <div class="section-header">
+          <h2>Upcoming Deliveries <span class="badge" id="deliveryCountDash">0</span></h2>
+        </div>
+        <div class="deliveries-grid" id="deliveriesGridDash"></div>
+      </section>
+    </div>
+
+    <!-- Phases Tab -->
+    <div class="tab-content" id="tab-phases">
+      <div class="section-header">
+        <h2>Project Phases <span class="badge" id="phaseCount">0</span></h2>
+        <label class="archive-toggle">
+          <input type="checkbox" id="showArchivedPhases" onchange="renderPhases('phasesList', true)">
+          Show archived
+        </label>
+      </div>
+      
+      <div class="search-filter-bar">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" class="search-input" id="phaseSearch" placeholder="Search phases..." oninput="filterPhases()">
+        </div>
+        <select class="filter-select" id="phaseStatusFilter" onchange="filterPhases()">
+          <option value="">All Statuses</option>
+          <option value="complete">Complete</option>
+          <option value="progress">In Progress</option>
+          <option value="pending">Pending</option>
+        </select>
+        <select class="filter-select" id="phasePriorityFilter" onchange="filterPhases()">
+          <option value="">All Priorities</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select class="filter-select" id="phaseTagFilter" onchange="filterPhases()">
+          <option value="">All Tags</option>
+        </select>
+        <button class="clear-filters-btn" onclick="clearPhaseFilters()">Clear Filters</button>
+      </div>
+
+      <div class="bulk-actions-bar" id="phaseBulkActions">
+        <span class="selected-count"><span id="phaseSelectedCount">0</span> selected</span>
+        <button class="btn" onclick="bulkSetPhaseStatus('complete')">✓ Complete</button>
+        <button class="btn" onclick="bulkSetPhaseStatus('progress')">◐ In Progress</button>
+        <button class="btn" onclick="bulkArchivePhases()">📁 Archive</button>
+        <button class="btn" onclick="bulkDeletePhases()">🗑️ Delete</button>
+        <button class="btn" onclick="clearPhaseSelection()">✕ Cancel</button>
+      </div>
+
+      <div class="phases-list" id="phasesList"></div>
+      <button class="add-btn" onclick="addPhase()">+ Add Phase</button>
+    </div>
+
+    <!-- Deliveries Tab -->
+    <div class="tab-content" id="tab-deliveries">
+      <div class="section-header">
+        <h2>Deliveries <span class="badge" id="deliveryCount">0</span></h2>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <label class="archive-toggle">
+            <input type="checkbox" id="showArchivedDeliveries" onchange="renderDeliveries('deliveriesGrid', true)">
+            Show archived
+          </label>
+          <div class="sort-controls">
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort:</span>
+            <button class="sort-btn active" onclick="setSortOrder('date')" id="sortDateBtn">By Date</button>
+            <button class="sort-btn" onclick="setSortOrder('name')" id="sortNameBtn">By Name</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="search-filter-bar">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" class="search-input" id="deliverySearch" placeholder="Search deliveries..." oninput="filterDeliveries()">
+        </div>
+        <select class="filter-select" id="deliveryStatusFilter" onchange="filterDeliveries()">
+          <option value="">All Statuses</option>
+          <option value="shipped">Shipped</option>
+          <option value="pending">Pending</option>
+          <option value="delayed">Delayed</option>
+        </select>
+        <select class="filter-select" id="deliveryPriorityFilter" onchange="filterDeliveries()">
+          <option value="">All Priorities</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select class="filter-select" id="deliveryTagFilter" onchange="filterDeliveries()">
+          <option value="">All Tags</option>
+        </select>
+        <button class="clear-filters-btn" onclick="clearDeliveryFilters()">Clear Filters</button>
+      </div>
+
+      <div class="bulk-actions-bar" id="deliveryBulkActions">
+        <span class="selected-count"><span id="deliverySelectedCount">0</span> selected</span>
+        <button class="btn" onclick="bulkSetDeliveryStatus('shipped')">✓ Shipped</button>
+        <button class="btn" onclick="bulkSetDeliveryStatus('delayed')">⚠ Delayed</button>
+        <button class="btn" onclick="bulkArchiveDeliveries()">📁 Archive</button>
+        <button class="btn" onclick="bulkDeleteDeliveries()">🗑️ Delete</button>
+        <button class="btn" onclick="clearDeliverySelection()">✕ Cancel</button>
+      </div>
+
+      <div class="deliveries-grid" id="deliveriesGrid"></div>
+      <button class="add-btn" onclick="addDelivery()">+ Add Delivery</button>
+    </div>
+
+    <!-- Notes Tab -->
+    <div class="tab-content" id="tab-notes">
+      <div class="section-header">
+        <h2>Project Notes</h2>
+      </div>
+      <div class="notes-grid">
+        <div class="notes-card">
+          <h3>Current Focus</h3>
+          <textarea id="notesFocus" placeholder="Enter current focus items..." onchange="updateNotes()"></textarea>
+        </div>
+        <div class="notes-card">
+          <h3>Upcoming Milestones</h3>
+          <textarea id="notesMilestones" placeholder="Enter upcoming milestones..." onchange="updateNotes()"></textarea>
+        </div>
+        <div class="notes-card">
+          <h3>Future Plans</h3>
+          <textarea id="notesFuture" placeholder="Enter future plans..." onchange="updateNotes()"></textarea>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Projects Modal -->
+  <div class="modal-overlay" id="projectsModal">
+    <div class="modal">
+      <h3>📂 Saved Projects</h3>
+      <div class="projects-list" id="projectsList"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="newProject()">+ New Project</button>
+        <button class="btn btn-secondary" onclick="closeModal('projectsModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Modal -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="confirm-modal">
+      <h3 id="confirmTitle">Confirm Action</h3>
+      <p id="confirmMessage">Are you sure?</p>
+      <div class="confirm-modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('confirmModal')">Cancel</button>
+        <button class="btn btn-danger" id="confirmBtn" onclick="executeConfirm()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Templates Modal -->
+  <div class="modal-overlay" id="templatesModal">
+    <div class="modal" style="max-width: 600px;">
+      <h3>📋 Project Templates</h3>
+      <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Start with a pre-built structure or create from scratch</p>
+      <div class="templates-grid" id="templatesGrid"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('templatesModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tag Modal -->
+  <div class="modal-overlay" id="tagModal">
+    <div class="modal" style="max-width: 350px;">
+      <h3>🏷️ Add Tag</h3>
+      <div class="form-group">
+        <label>Tag Name</label>
+        <input type="text" id="tagNameInput" placeholder="Enter tag name..." maxlength="20">
+      </div>
+      <div class="form-group">
+        <label>Color</label>
+        <div class="tag-color-options" id="tagColorOptions">
+          <div class="tag-color-option selected" data-color="blue" style="background: #00A8E8;"></div>
+          <div class="tag-color-option" data-color="green" style="background: #00D26A;"></div>
+          <div class="tag-color-option" data-color="yellow" style="background: #FFB703;"></div>
+          <div class="tag-color-option" data-color="red" style="background: #E63946;"></div>
+          <div class="tag-color-option" data-color="purple" style="background: #9D4EDD;"></div>
+          <div class="tag-color-option" data-color="gray" style="background: #778DA9;"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('tagModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmAddTag()">Add Tag</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    // Current Project Data
+    let currentProject = {
+      id: generateId(),
+      name: "New Project",
+      created: new Date().toISOString(),
+      modified: new Date().toISOString(),
+      phases: [],
+      deliveries: [],
+      notes: { focus: "", milestones: "", future: "" }
+    };
+
+    let nextPhaseId = 1;
+    let nextDeliveryId = 1;
+    let autoSaveTimer = null;
+    let deliverySortOrder = 'date'; // 'date' or 'name'
+    let confirmCallback = null;
+
+    // Phase 2: New state variables
+    let historyStack = [];
+    let historyIndex = -1;
+    const MAX_HISTORY = 50;
+    let selectedPhases = new Set();
+    let selectedDeliveries = new Set();
+    let isDarkTheme = true;
+    let draggedItem = null;
+    let draggedType = null;
+
+    // Phase 3: New state variables
+    let currentTagTarget = null; // {type: 'phase'|'delivery', id: number}
+    let selectedTagColor = 'blue';
+    let expandedPhases = new Set();
+
+    // Phase 3: Project Templates
+    const PROJECT_TEMPLATES = [
+      {
+        id: 'blank',
+        name: 'Blank Project',
+        icon: '📄',
+        description: 'Start from scratch',
+        phases: []
+      },
+      {
+        id: 'software',
+        name: 'Software Development',
+        icon: '💻',
+        description: 'Agile-style software project',
+        phases: [
+          { name: 'Planning & Requirements', progress: 0, status: 'pending' },
+          { name: 'Design & Architecture', progress: 0, status: 'pending' },
+          { name: 'Development Sprint 1', progress: 0, status: 'pending' },
+          { name: 'Development Sprint 2', progress: 0, status: 'pending' },
+          { name: 'Testing & QA', progress: 0, status: 'pending' },
+          { name: 'Deployment & Launch', progress: 0, status: 'pending' }
+        ]
+      },
+      {
+        id: 'marketing',
+        name: 'Marketing Campaign',
+        icon: '📣',
+        description: 'Product launch or campaign',
+        phases: [
+          { name: 'Market Research', progress: 0, status: 'pending' },
+          { name: 'Strategy Development', progress: 0, status: 'pending' },
+          { name: 'Content Creation', progress: 0, status: 'pending' },
+          { name: 'Campaign Launch', progress: 0, status: 'pending' },
+          { name: 'Monitoring & Optimization', progress: 0, status: 'pending' },
+          { name: 'Analysis & Reporting', progress: 0, status: 'pending' }
+        ]
+      },
+      {
+        id: 'event',
+        name: 'Event Planning',
+        icon: '🎉',
+        description: 'Conference, workshop, or party',
+        phases: [
+          { name: 'Concept & Budget', progress: 0, status: 'pending' },
+          { name: 'Venue & Vendors', progress: 0, status: 'pending' },
+          { name: 'Invitations & Marketing', progress: 0, status: 'pending' },
+          { name: 'Logistics & Setup', progress: 0, status: 'pending' },
+          { name: 'Event Day', progress: 0, status: 'pending' },
+          { name: 'Follow-up & Review', progress: 0, status: 'pending' }
+        ]
+      },
+      {
+        id: 'product',
+        name: 'Product Launch',
+        icon: '🚀',
+        description: 'New product introduction',
+        phases: [
+          { name: 'Product Development', progress: 0, status: 'pending' },
+          { name: 'Beta Testing', progress: 0, status: 'pending' },
+          { name: 'Marketing Prep', progress: 0, status: 'pending' },
+          { name: 'Sales Enablement', progress: 0, status: 'pending' },
+          { name: 'Launch', progress: 0, status: 'pending' },
+          { name: 'Post-Launch Support', progress: 0, status: 'pending' }
+        ]
+      },
+      {
+        id: 'research',
+        name: 'Research Project',
+        icon: '🔬',
+        description: 'Academic or business research',
+        phases: [
+          { name: 'Literature Review', progress: 0, status: 'pending' },
+          { name: 'Methodology Design', progress: 0, status: 'pending' },
+          { name: 'Data Collection', progress: 0, status: 'pending' },
+          { name: 'Data Analysis', progress: 0, status: 'pending' },
+          { name: 'Writing & Documentation', progress: 0, status: 'pending' },
+          { name: 'Review & Publication', progress: 0, status: 'pending' }
+        ]
+      }
+    ];
+
+    // Project Categories
+    const PROJECT_CATEGORIES = [
+      { id: 'none', name: 'Uncategorized', icon: '📁' },
+      { id: 'work', name: 'Work', icon: '💼' },
+      { id: 'personal', name: 'Personal', icon: '🏠' },
+      { id: 'client', name: 'Client', icon: '🤝' },
+      { id: 'internal', name: 'Internal', icon: '🔒' }
+    ];
+
+    // Utility Functions
+    function generateId() {
+      return 'prj_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    function getDaysUntil(dateStr) {
+      const target = new Date(dateStr);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      target.setHours(0, 0, 0, 0);
+      return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+    }
+
+    // Toast Notifications
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `
+        <span>${type === 'success' ? '✓' : type === 'error' ? '✗' : '⚠'}</span>
+        <span>${message}</span>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Auto-save with debounce
+    function triggerAutoSave() {
+      const indicator = document.getElementById('saveIndicator');
+      const text = document.getElementById('saveIndicatorText');
+      indicator.className = 'save-indicator saving';
+      text.textContent = 'Saving...';
+      
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        autoSaveToStorage();
+        indicator.className = 'save-indicator saved';
+        text.textContent = 'Saved';
+      }, 2000);
+    }
+
+    function autoSaveToStorage() {
+      updateNotes();
+      currentProject.modified = new Date().toISOString();
+      let projects = getSavedProjects();
+      const existingIndex = projects.findIndex(p => p.id === currentProject.id);
+      if (existingIndex >= 0) {
+        projects[existingIndex] = currentProject;
+      } else {
+        projects.push(currentProject);
+      }
+      localStorage.setItem('prj_mgmt_projects', JSON.stringify(projects));
+    }
+
+    // Confirm Dialog
+    function showConfirm(title, message, callback, btnText = 'Delete') {
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmMessage').innerHTML = message;
+      document.getElementById('confirmBtn').textContent = btnText;
+      confirmCallback = callback;
+      document.getElementById('confirmModal').classList.add('show');
+    }
+
+    function executeConfirm() {
+      if (confirmCallback) {
+        confirmCallback();
+        confirmCallback = null;
+      }
+      closeModal('confirmModal');
+    }
+
+    // Sort deliveries
+    function setSortOrder(order) {
+      deliverySortOrder = order;
+      document.getElementById('sortDateBtn').classList.toggle('active', order === 'date');
+      document.getElementById('sortNameBtn').classList.toggle('active', order === 'name');
+      renderDeliveries('deliveriesGrid', true);
+      renderDeliveries('deliveriesGridDash', false);
+    }
+
+    function getSortedDeliveries() {
+      const deliveries = [...currentProject.deliveries];
+      if (deliverySortOrder === 'date') {
+        deliveries.sort((a, b) => new Date(a.date) - new Date(b.date));
+      } else {
+        deliveries.sort((a, b) => a.title.localeCompare(b.title));
+      }
+      return deliveries;
+    }
+
+    // Data Validation
+    function validatePhase(name) {
+      if (!name || name.trim() === '') {
+        return { valid: false, error: 'Phase name cannot be empty' };
+      }
+      return { valid: true };
+    }
+
+    function validateDelivery(date, title) {
+      const errors = [];
+      if (!title || title.trim() === '') {
+        errors.push('Title cannot be empty');
+      }
+      if (!date) {
+        errors.push('Date is required');
+      } else {
+        const dateObj = new Date(date);
+        if (isNaN(dateObj.getTime())) {
+          errors.push('Invalid date format');
+        }
+      }
+      return errors.length > 0 ? { valid: false, errors } : { valid: true };
+    }
+
+    // ===== PHASE 2: UNDO/REDO =====
+    function saveToHistory() {
+      // Remove any future history if we're not at the end
+      if (historyIndex < historyStack.length - 1) {
+        historyStack = historyStack.slice(0, historyIndex + 1);
+      }
+      
+      // Add current state to history
+      historyStack.push(JSON.stringify(currentProject));
+      
+      // Limit history size
+      if (historyStack.length > MAX_HISTORY) {
+        historyStack.shift();
+      } else {
+        historyIndex++;
+      }
+      
+      updateUndoRedoButtons();
+    }
+
+    function undo() {
+      if (historyIndex > 0) {
+        historyIndex--;
+        currentProject = JSON.parse(historyStack[historyIndex]);
+        renderAll();
+        updateUndoRedoButtons();
+        showToast('Undone', 'success');
+        triggerAutoSave();
+      }
+    }
+
+    function redo() {
+      if (historyIndex < historyStack.length - 1) {
+        historyIndex++;
+        currentProject = JSON.parse(historyStack[historyIndex]);
+        renderAll();
+        updateUndoRedoButtons();
+        showToast('Redone', 'success');
+        triggerAutoSave();
+      }
+    }
+
+    function updateUndoRedoButtons() {
+      document.getElementById('undoBtn').disabled = historyIndex <= 0;
+      document.getElementById('redoBtn').disabled = historyIndex >= historyStack.length - 1;
+    }
+
+    // ===== PHASE 2: THEME TOGGLE =====
+    function toggleTheme() {
+      isDarkTheme = !isDarkTheme;
+      document.body.classList.toggle('light-theme', !isDarkTheme);
+      document.getElementById('themeToggle').textContent = isDarkTheme ? '🌙' : '☀️';
+      localStorage.setItem('prj_mgmt_theme', isDarkTheme ? 'dark' : 'light');
+    }
+
+    function loadTheme() {
+      const saved = localStorage.getItem('prj_mgmt_theme');
+      if (saved === 'light') {
+        isDarkTheme = false;
+        document.body.classList.add('light-theme');
+        document.getElementById('themeToggle').textContent = '☀️';
+      }
+    }
+
+    // ===== PHASE 2: SEARCH & FILTER =====
+    function filterPhases() {
+      renderPhases('phasesList', true);
+    }
+
+    function filterDeliveries() {
+      renderDeliveries('deliveriesGrid', true);
+    }
+
+    // Update tag filter dropdowns with available tags
+    function updateTagFilters() {
+      const phaseTags = new Set();
+      const deliveryTags = new Set();
+      
+      currentProject.phases.forEach(p => {
+        if (p.tags) p.tags.forEach(t => phaseTags.add(t.name));
+      });
+      
+      currentProject.deliveries.forEach(d => {
+        if (d.tags) d.tags.forEach(t => deliveryTags.add(t.name));
+      });
+      
+      const phaseTagFilter = document.getElementById('phaseTagFilter');
+      if (phaseTagFilter) {
+        const currentValue = phaseTagFilter.value;
+        phaseTagFilter.innerHTML = '<option value="">All Tags</option>' + 
+          Array.from(phaseTags).sort().map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+        phaseTagFilter.value = currentValue;
+      }
+      
+      const deliveryTagFilter = document.getElementById('deliveryTagFilter');
+      if (deliveryTagFilter) {
+        const currentValue = deliveryTagFilter.value;
+        deliveryTagFilter.innerHTML = '<option value="">All Tags</option>' + 
+          Array.from(deliveryTags).sort().map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+        deliveryTagFilter.value = currentValue;
+      }
+    }
+
+    function getFilteredPhases() {
+      const searchTerm = document.getElementById('phaseSearch')?.value?.toLowerCase() || '';
+      const statusFilter = document.getElementById('phaseStatusFilter')?.value || '';
+      const priorityFilter = document.getElementById('phasePriorityFilter')?.value || '';
+      const tagFilter = document.getElementById('phaseTagFilter')?.value || '';
+      const showArchived = document.getElementById('showArchivedPhases')?.checked || false;
+
+      return currentProject.phases.filter(phase => {
+        const matchesSearch = phase.name.toLowerCase().includes(searchTerm);
+        const matchesStatus = !statusFilter || phase.status === statusFilter;
+        const matchesPriority = !priorityFilter || phase.priority === priorityFilter;
+        const matchesTag = !tagFilter || (phase.tags && phase.tags.some(t => t.name === tagFilter));
+        const matchesArchived = showArchived || !phase.archived;
+        return matchesSearch && matchesStatus && matchesPriority && matchesTag && matchesArchived;
+      });
+    }
+
+    function getFilteredDeliveries() {
+      const searchTerm = document.getElementById('deliverySearch')?.value?.toLowerCase() || '';
+      const statusFilter = document.getElementById('deliveryStatusFilter')?.value || '';
+      const priorityFilter = document.getElementById('deliveryPriorityFilter')?.value || '';
+      const tagFilter = document.getElementById('deliveryTagFilter')?.value || '';
+      const showArchived = document.getElementById('showArchivedDeliveries')?.checked || false;
+
+      let deliveries = currentProject.deliveries.filter(delivery => {
+        const matchesSearch = delivery.title.toLowerCase().includes(searchTerm) || 
+                             (delivery.destination || '').toLowerCase().includes(searchTerm);
+        const matchesStatus = !statusFilter || delivery.status === statusFilter;
+        const matchesPriority = !priorityFilter || delivery.priority === priorityFilter;
+        const matchesTag = !tagFilter || (delivery.tags && delivery.tags.some(t => t.name === tagFilter));
+        const matchesArchived = showArchived || !delivery.archived;
+        return matchesSearch && matchesStatus && matchesPriority && matchesTag && matchesArchived;
+      });
+
+      // Apply sorting
+      if (deliverySortOrder === 'date') {
+        deliveries.sort((a, b) => new Date(a.date) - new Date(b.date));
+      } else {
+        deliveries.sort((a, b) => a.title.localeCompare(b.title));
+      }
+
+      return deliveries;
+    }
+
+    function clearPhaseFilters() {
+      document.getElementById('phaseSearch').value = '';
+      document.getElementById('phaseStatusFilter').value = '';
+      document.getElementById('phasePriorityFilter').value = '';
+      document.getElementById('phaseTagFilter').value = '';
+      filterPhases();
+      showToast('Filters cleared', 'success');
+    }
+
+    function clearDeliveryFilters() {
+      document.getElementById('deliverySearch').value = '';
+      document.getElementById('deliveryStatusFilter').value = '';
+      document.getElementById('deliveryPriorityFilter').value = '';
+      document.getElementById('deliveryTagFilter').value = '';
+      filterDeliveries();
+      showToast('Filters cleared', 'success');
+    }
+
+    // ===== PHASE 2: BULK ACTIONS =====
+    function togglePhaseSelection(id, event) {
+      event.stopPropagation();
+      if (selectedPhases.has(id)) {
+        selectedPhases.delete(id);
+      } else {
+        selectedPhases.add(id);
+      }
+      updatePhaseBulkUI();
+    }
+
+    function toggleDeliverySelection(id, event) {
+      event.stopPropagation();
+      if (selectedDeliveries.has(id)) {
+        selectedDeliveries.delete(id);
+      } else {
+        selectedDeliveries.add(id);
+      }
+      updateDeliveryBulkUI();
+    }
+
+    function updatePhaseBulkUI() {
+      const bar = document.getElementById('phaseBulkActions');
+      const count = document.getElementById('phaseSelectedCount');
+      count.textContent = selectedPhases.size;
+      bar.classList.toggle('show', selectedPhases.size > 0);
+      
+      // Update checkboxes
+      document.querySelectorAll('.phase-checkbox').forEach(cb => {
+        cb.checked = selectedPhases.has(parseInt(cb.dataset.id));
+      });
+      
+      // Update card selection state
+      document.querySelectorAll('.phase-card').forEach(card => {
+        const id = parseInt(card.dataset.id);
+        card.classList.toggle('selected', selectedPhases.has(id));
+      });
+    }
+
+    function updateDeliveryBulkUI() {
+      const bar = document.getElementById('deliveryBulkActions');
+      const count = document.getElementById('deliverySelectedCount');
+      count.textContent = selectedDeliveries.size;
+      bar.classList.toggle('show', selectedDeliveries.size > 0);
+      
+      document.querySelectorAll('.delivery-checkbox').forEach(cb => {
+        cb.checked = selectedDeliveries.has(parseInt(cb.dataset.id));
+      });
+      
+      document.querySelectorAll('.delivery-card').forEach(card => {
+        const id = parseInt(card.dataset.id);
+        card.classList.toggle('selected', selectedDeliveries.has(id));
+      });
+    }
+
+    function clearPhaseSelection() {
+      selectedPhases.clear();
+      updatePhaseBulkUI();
+    }
+
+    function clearDeliverySelection() {
+      selectedDeliveries.clear();
+      updateDeliveryBulkUI();
+    }
+
+    function bulkSetPhaseStatus(status) {
+      saveToHistory();
+      selectedPhases.forEach(id => {
+        const phase = currentProject.phases.find(p => p.id === id);
+        if (phase) phase.status = status;
+      });
+      clearPhaseSelection();
+      renderAll();
+      showToast(`${selectedPhases.size || 'Phases'} updated to ${status}`, 'success');
+      triggerAutoSave();
+    }
+
+    function bulkSetDeliveryStatus(status) {
+      saveToHistory();
+      selectedDeliveries.forEach(id => {
+        const delivery = currentProject.deliveries.find(d => d.id === id);
+        if (delivery) delivery.status = status;
+      });
+      clearDeliverySelection();
+      renderAll();
+      showToast('Deliveries updated', 'success');
+      triggerAutoSave();
+    }
+
+    function bulkArchivePhases() {
+      saveToHistory();
+      selectedPhases.forEach(id => {
+        const phase = currentProject.phases.find(p => p.id === id);
+        if (phase) phase.archived = true;
+      });
+      const count = selectedPhases.size;
+      clearPhaseSelection();
+      renderAll();
+      showToast(`${count} phase(s) archived`, 'success');
+      triggerAutoSave();
+    }
+
+    function bulkArchiveDeliveries() {
+      saveToHistory();
+      selectedDeliveries.forEach(id => {
+        const delivery = currentProject.deliveries.find(d => d.id === id);
+        if (delivery) delivery.archived = true;
+      });
+      const count = selectedDeliveries.size;
+      clearDeliverySelection();
+      renderAll();
+      showToast(`${count} delivery(ies) archived`, 'success');
+      triggerAutoSave();
+    }
+
+    function bulkDeletePhases() {
+      showConfirm(
+        'Delete Phases?',
+        `Are you sure you want to delete <span class="item-name">${selectedPhases.size} phase(s)</span>? This cannot be undone.`,
+        () => {
+          saveToHistory();
+          currentProject.phases = currentProject.phases.filter(p => !selectedPhases.has(p.id));
+          clearPhaseSelection();
+          renderAll();
+          showToast('Phases deleted', 'success');
+          triggerAutoSave();
+        }
+      );
+    }
+
+    function bulkDeleteDeliveries() {
+      showConfirm(
+        'Delete Deliveries?',
+        `Are you sure you want to delete <span class="item-name">${selectedDeliveries.size} delivery(ies)</span>? This cannot be undone.`,
+        () => {
+          saveToHistory();
+          currentProject.deliveries = currentProject.deliveries.filter(d => !selectedDeliveries.has(d.id));
+          clearDeliverySelection();
+          renderAll();
+          showToast('Deliveries deleted', 'success');
+          triggerAutoSave();
+        }
+      );
+    }
+
+    // ===== PHASE 2: ARCHIVE =====
+    function toggleArchivePhase(id) {
+      saveToHistory();
+      const phase = currentProject.phases.find(p => p.id === id);
+      if (phase) {
+        phase.archived = !phase.archived;
+        renderAll();
+        showToast(phase.archived ? 'Phase archived' : 'Phase restored', 'success');
+        triggerAutoSave();
+      }
+    }
+
+    function toggleArchiveDelivery(id) {
+      saveToHistory();
+      const delivery = currentProject.deliveries.find(d => d.id === id);
+      if (delivery) {
+        delivery.archived = !delivery.archived;
+        renderAll();
+        showToast(delivery.archived ? 'Delivery archived' : 'Delivery restored', 'success');
+        triggerAutoSave();
+      }
+    }
+
+    // ===== PHASE 2: DRAG & DROP =====
+    function handleDragStart(e, type, id) {
+      draggedItem = id;
+      draggedType = type;
+      e.target.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDragEnd(e) {
+      e.target.classList.remove('dragging');
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      draggedItem = null;
+      draggedType = null;
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const card = e.target.closest('.phase-card, .delivery-card');
+      if (card && !card.classList.contains('dragging')) {
+        card.classList.add('drag-over');
+      }
+    }
+
+    function handleDragLeave(e) {
+      const card = e.target.closest('.phase-card, .delivery-card');
+      if (card) card.classList.remove('drag-over');
+    }
+
+    function handleDrop(e, type, targetId) {
+      e.preventDefault();
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      
+      if (draggedType !== type || draggedItem === targetId) return;
+      
+      saveToHistory();
+      
+      const items = type === 'phase' ? currentProject.phases : currentProject.deliveries;
+      const draggedIndex = items.findIndex(item => item.id === draggedItem);
+      const targetIndex = items.findIndex(item => item.id === targetId);
+      
+      if (draggedIndex === -1 || targetIndex === -1) return;
+      
+      // Reorder
+      const [removed] = items.splice(draggedIndex, 1);
+      items.splice(targetIndex, 0, removed);
+      
+      renderAll();
+      showToast('Item reordered', 'success');
+      triggerAutoSave();
+    }
+
+    // ===== PHASE 2: PRIORITY =====
+    function updatePhasePriority(id, priority) {
+      saveToHistory();
+      const phase = currentProject.phases.find(p => p.id === id);
+      if (phase) {
+        phase.priority = priority;
+        triggerAutoSave();
+      }
+    }
+
+    function updateDeliveryPriority(id, priority) {
+      saveToHistory();
+      const delivery = currentProject.deliveries.find(d => d.id === id);
+      if (delivery) {
+        delivery.priority = priority;
+        triggerAutoSave();
+      }
+    }
+
+    // ===== PHASE 2: DELIVERY STATUS =====
+    function updateDeliveryStatus(id, status) {
+      saveToHistory();
+      const delivery = currentProject.deliveries.find(d => d.id === id);
+      if (delivery) {
+        delivery.status = status;
+        renderDeliveries('deliveriesGrid', true);
+        renderDeliveries('deliveriesGridDash', false);
+        triggerAutoSave();
+      }
+    }
+
+    // ===== PHASE 3: TAGS =====
+    function showTagModal(type, id) {
+      currentTagTarget = { type, id };
+      selectedTagColor = 'blue';
+      document.getElementById('tagNameInput').value = '';
+      document.querySelectorAll('.tag-color-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.color === 'blue');
+      });
+      document.getElementById('tagModal').classList.add('show');
+      document.getElementById('tagNameInput').focus();
+    }
+
+    function selectTagColor(color) {
+      selectedTagColor = color;
+      document.querySelectorAll('.tag-color-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.color === color);
+      });
+    }
+
+    // Initialize tag color selection
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('tag-color-option')) {
+        selectTagColor(e.target.dataset.color);
+      }
+    });
+
+    function confirmAddTag() {
+      const name = document.getElementById('tagNameInput').value.trim();
+      if (!name) {
+        showToast('Please enter a tag name', 'error');
+        return;
+      }
+
+      saveToHistory();
+      const tag = { name, color: selectedTagColor };
+
+      if (currentTagTarget.type === 'phase') {
+        const phase = currentProject.phases.find(p => p.id === currentTagTarget.id);
+        if (phase) {
+          if (!phase.tags) phase.tags = [];
+          if (!phase.tags.some(t => t.name === name)) {
+            phase.tags.push(tag);
+          }
+        }
+      } else {
+        const delivery = currentProject.deliveries.find(d => d.id === currentTagTarget.id);
+        if (delivery) {
+          if (!delivery.tags) delivery.tags = [];
+          if (!delivery.tags.some(t => t.name === name)) {
+            delivery.tags.push(tag);
+          }
+        }
+      }
+
+      closeModal('tagModal');
+      renderAll();
+      showToast('Tag added', 'success');
+      triggerAutoSave();
+    }
+
+    function removeTag(type, itemId, tagName) {
+      saveToHistory();
+      if (type === 'phase') {
+        const phase = currentProject.phases.find(p => p.id === itemId);
+        if (phase && phase.tags) {
+          phase.tags = phase.tags.filter(t => t.name !== tagName);
+        }
+      } else {
+        const delivery = currentProject.deliveries.find(d => d.id === itemId);
+        if (delivery && delivery.tags) {
+          delivery.tags = delivery.tags.filter(t => t.name !== tagName);
+        }
+      }
+      renderAll();
+      triggerAutoSave();
+    }
+
+    function renderTags(tags, type, itemId) {
+      if (!tags || tags.length === 0) {
+        return `<button class="add-tag-btn" onclick="showTagModal('${type}', ${itemId})">+ Tag</button>`;
+      }
+      return tags.map(tag => `
+        <span class="tag tag-${tag.color}">
+          ${escapeHtml(tag.name)}
+          <span class="tag-remove" onclick="removeTag('${type}', ${itemId}, '${escapeHtml(tag.name)}')">&times;</span>
+        </span>
+      `).join('') + `<button class="add-tag-btn" onclick="showTagModal('${type}', ${itemId})">+</button>`;
+    }
+
+    // ===== PHASE 3: SUBTASKS =====
+    function togglePhaseExpand(phaseId) {
+      if (expandedPhases.has(phaseId)) {
+        expandedPhases.delete(phaseId);
+      } else {
+        expandedPhases.add(phaseId);
+      }
+      renderPhases('phasesList', true);
+    }
+
+    function addSubtask(phaseId) {
+      saveToHistory();
+      const phase = currentProject.phases.find(p => p.id === phaseId);
+      if (phase) {
+        if (!phase.subtasks) phase.subtasks = [];
+        phase.subtasks.push({
+          id: Date.now(),
+          text: '',
+          completed: false
+        });
+        renderPhases('phasesList', true);
+        triggerAutoSave();
+      }
+    }
+
+    function updateSubtask(phaseId, subtaskId, field, value) {
+      const phase = currentProject.phases.find(p => p.id === phaseId);
+      if (phase && phase.subtasks) {
+        const subtask = phase.subtasks.find(s => s.id === subtaskId);
+        if (subtask) {
+          subtask[field] = value;
+          
+          // Auto-update phase progress based on subtask completion
+          if (field === 'completed') {
+            const totalSubtasks = phase.subtasks.length;
+            const completedSubtasks = phase.subtasks.filter(s => s.completed).length;
+            if (totalSubtasks > 0) {
+              phase.progress = Math.round((completedSubtasks / totalSubtasks) * 100);
+              if (phase.progress === 100) {
+                phase.status = 'complete';
+              } else if (phase.progress > 0) {
+                phase.status = 'progress';
+              }
+            }
+          }
+          
+          renderPhases('phasesList', true);
+          renderPhases('phasesListDash', false);
+          renderKPIs();
+          triggerAutoSave();
+        }
+      }
+    }
+
+    function deleteSubtask(phaseId, subtaskId) {
+      saveToHistory();
+      const phase = currentProject.phases.find(p => p.id === phaseId);
+      if (phase && phase.subtasks) {
+        phase.subtasks = phase.subtasks.filter(s => s.id !== subtaskId);
+        renderPhases('phasesList', true);
+        triggerAutoSave();
+      }
+    }
+
+    function renderSubtasks(phase) {
+      if (!phase.subtasks || phase.subtasks.length === 0) {
+        return `
+          <div class="subtasks-container">
+            <button class="add-subtask-btn" onclick="addSubtask(${phase.id})">+ Add subtask</button>
+          </div>
+        `;
+      }
+
+      const completed = phase.subtasks.filter(s => s.completed).length;
+      const total = phase.subtasks.length;
+      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return `
+        <div class="subtasks-container">
+          <div class="subtask-progress">
+            <span>${completed}/${total} completed</span>
+            <div class="subtask-progress-bar">
+              <div class="subtask-progress-fill" style="width: ${percent}%"></div>
+            </div>
+          </div>
+          ${phase.subtasks.map(subtask => `
+            <div class="subtask-item ${subtask.completed ? 'completed' : ''}">
+              <input type="checkbox" ${subtask.completed ? 'checked' : ''} 
+                onchange="updateSubtask(${phase.id}, ${subtask.id}, 'completed', this.checked)">
+              <input type="text" value="${escapeHtml(subtask.text)}" placeholder="Subtask description..."
+                onchange="updateSubtask(${phase.id}, ${subtask.id}, 'text', this.value)">
+              <button class="subtask-delete" onclick="deleteSubtask(${phase.id}, ${subtask.id})">✕</button>
+            </div>
+          `).join('')}
+          <button class="add-subtask-btn" onclick="addSubtask(${phase.id})">+ Add subtask</button>
+        </div>
+      `;
+    }
+
+    // ===== PHASE 3: TEMPLATES =====
+    function showTemplatesModal() {
+      renderTemplates();
+      document.getElementById('templatesModal').classList.add('show');
+    }
+
+    function renderTemplates() {
+      const container = document.getElementById('templatesGrid');
+      container.innerHTML = PROJECT_TEMPLATES.map(template => `
+        <div class="template-card" onclick="applyTemplate('${template.id}')">
+          <h4>${template.icon} ${template.name}</h4>
+          <p>${template.description}</p>
+          <div class="template-phases">${template.phases.length} phases</div>
+        </div>
+      `).join('');
+    }
+
+    function applyTemplate(templateId) {
+      const template = PROJECT_TEMPLATES.find(t => t.id === templateId);
+      if (!template) return;
+
+      saveToHistory();
+      
+      // Reset project with template phases
+      currentProject.phases = template.phases.map((phase, index) => ({
+        id: index + 1,
+        name: phase.name,
+        progress: phase.progress,
+        status: phase.status,
+        priority: '',
+        archived: false,
+        tags: [],
+        subtasks: []
+      }));
+      
+      nextPhaseId = currentProject.phases.length + 1;
+      
+      closeModal('templatesModal');
+      renderAll();
+      showToast(`Applied "${template.name}" template`, 'success');
+      triggerAutoSave();
+    }
+
+    // ===== PHASE 3: DUE DATE ALERTS =====
+    function renderAlerts() {
+      const alertsPanel = document.getElementById('alertsPanel');
+      const alertsList = document.getElementById('alertsList');
+      
+      const alerts = [];
+      
+      // Check deliveries for upcoming/overdue dates
+      currentProject.deliveries.forEach(delivery => {
+        if (delivery.archived || delivery.status === 'shipped') return;
+        
+        const daysUntil = getDaysUntil(delivery.date);
+        
+        if (daysUntil < 0) {
+          alerts.push({
+            type: 'overdue',
+            title: delivery.title,
+            message: `Overdue by ${Math.abs(daysUntil)} day(s)`,
+            daysUntil
+          });
+        } else if (daysUntil === 0) {
+          alerts.push({
+            type: 'today',
+            title: delivery.title,
+            message: 'Due today!',
+            daysUntil
+          });
+        } else if (daysUntil <= 7) {
+          alerts.push({
+            type: 'soon',
+            title: delivery.title,
+            message: `Due in ${daysUntil} day(s)`,
+            daysUntil
+          });
+        }
+      });
+
+      // Sort by urgency (overdue first, then by days until)
+      alerts.sort((a, b) => a.daysUntil - b.daysUntil);
+
+      if (alerts.length === 0) {
+        alertsPanel.style.display = 'none';
+        return;
+      }
+
+      alertsPanel.style.display = 'block';
+      alertsList.innerHTML = alerts.map(alert => `
+        <div class="alert-item">
+          <span>${escapeHtml(alert.title)}</span>
+          <span class="alert-badge alert-${alert.type}">${alert.message}</span>
+        </div>
+      `).join('');
+    }
+
+    // ===== PHASE 3: DEPENDENCIES =====
+    function updatePhaseDependency(phaseId, dependsOnId) {
+      saveToHistory();
+      const phase = currentProject.phases.find(p => p.id === phaseId);
+      if (phase) {
+        phase.dependsOn = dependsOnId ? parseInt(dependsOnId) : null;
+        renderPhases('phasesList', true);
+        renderPhases('phasesListDash', false);
+        triggerAutoSave();
+      }
+    }
+
+    function isDependencyMet(phase) {
+      if (!phase.dependsOn) return true;
+      const dependency = currentProject.phases.find(p => p.id === phase.dependsOn);
+      return dependency && dependency.status === 'complete';
+    }
+
+    function getDependencyStatus(phase) {
+      if (!phase.dependsOn) return '';
+      const dependency = currentProject.phases.find(p => p.id === phase.dependsOn);
+      if (!dependency) return '';
+      
+      if (dependency.status === 'complete') {
+        return `<span class="dependency-indicator dependency-ready">✓ ${escapeHtml(dependency.name)} complete</span>`;
+      } else {
+        return `<span class="dependency-indicator dependency-blocked">⏸ Waiting on: ${escapeHtml(dependency.name)}</span>`;
+      }
+    }
+
+    function renderDependencySelect(phase) {
+      const otherPhases = currentProject.phases.filter(p => p.id !== phase.id && !p.archived);
+      if (otherPhases.length === 0) return '';
+      
+      return `
+        <select class="dependency-select" onchange="updatePhaseDependency(${phase.id}, this.value)" title="Depends on">
+          <option value="">No dependency</option>
+          ${otherPhases.map(p => `
+            <option value="${p.id}" ${phase.dependsOn === p.id ? 'selected' : ''}>
+              After: ${escapeHtml(p.name.substring(0, 15))}${p.name.length > 15 ? '...' : ''}
+            </option>
+          `).join('')}
+        </select>
+      `;
+    }
+
+    // ===== PHASE 3: PROJECT CATEGORIES =====
+    function updateProjectCategory(category) {
+      currentProject.category = category;
+      triggerAutoSave();
+    }
+
+    function getCategoryBadge(categoryId) {
+      const category = PROJECT_CATEGORIES.find(c => c.id === categoryId) || PROJECT_CATEGORIES[0];
+      return `<span class="category-badge">${category.icon} ${category.name}</span>`;
+    }
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.tab-content#tab-${tabName}`).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    // Dropdown Management
+    function toggleDropdown(id) {
+      closeDropdowns();
+      document.getElementById(id).classList.toggle('show');
+    }
+
+    function closeDropdowns() {
+      document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show'));
+    }
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.dropdown')) closeDropdowns();
+    });
+
+    // Render Functions
+    function renderKPIs() {
+      const complete = currentProject.phases.filter(p => p.status === "complete").length;
+      const inProgress = currentProject.phases.filter(p => p.status === "progress").length;
+      const pending = currentProject.phases.filter(p => p.status === "pending").length;
+      const total = currentProject.phases.length;
+
+      document.getElementById("kpiGrid").innerHTML = `
+        <div class="kpi-card">
+          <div class="kpi-value complete">${complete}</div>
+          <div class="kpi-label">Complete</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value progress">${inProgress}</div>
+          <div class="kpi-label">In Progress</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value pending">${pending}</div>
+          <div class="kpi-label">Pending</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value total">${total}</div>
+          <div class="kpi-label">Total Phases</div>
+        </div>
+      `;
+    }
+
+    function renderPhases(targetId = 'phasesList', showDelete = true) {
+      const container = document.getElementById(targetId);
+      if (!container) return;
+
+      // Use filtered phases for main list, all phases for dashboard
+      const phases = targetId === 'phasesList' ? getFilteredPhases() : 
+        currentProject.phases.filter(p => !p.archived);
+
+      if (phases.length === 0) {
+        const allCount = currentProject.phases.filter(p => !p.archived).length;
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <h3>${allCount > 0 ? 'No matching phases' : 'No phases yet'}</h3>
+            <p>${allCount > 0 ? 'Try adjusting your filters' : 'Add your first phase to start tracking progress'}</p>
+            ${showDelete && allCount === 0 ? `
+              <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                <button class="btn btn-primary" onclick="addPhase()">+ Add Phase</button>
+                <button class="btn btn-secondary" onclick="showTemplatesModal()">📋 Use Template</button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+        document.getElementById("phaseCount").textContent = currentProject.phases.filter(p => !p.archived).length;
+        document.getElementById("phaseCountDash").textContent = currentProject.phases.filter(p => !p.archived).length;
+        return;
+      }
+
+      container.innerHTML = phases.map((phase, index) => {
+        const isExpanded = expandedPhases.has(phase.id);
+        const hasSubtasks = phase.subtasks && phase.subtasks.length > 0;
+        
+        return `
+        <div class="phase-card ${phase.archived ? 'archived-item' : ''} ${selectedPhases.has(phase.id) ? 'selected' : ''} ${isExpanded ? 'expanded' : ''}" 
+             data-id="${phase.id}"
+             draggable="${showDelete}"
+             ondragstart="handleDragStart(event, 'phase', ${phase.id})"
+             ondragend="handleDragEnd(event)"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event, 'phase', ${phase.id})">
+          ${isExpanded ? `<div class="phase-main-row">` : ''}
+          ${showDelete ? `<input type="checkbox" class="bulk-checkbox phase-checkbox" data-id="${phase.id}" 
+            ${selectedPhases.has(phase.id) ? 'checked' : ''} 
+            onclick="togglePhaseSelection(${phase.id}, event)">` : ''}
+          ${showDelete ? `<span class="drag-handle" title="Drag to reorder">⋮⋮</span>` : ''}
+          <div class="phase-label" style="display: flex; align-items: center; gap: 0.25rem;">
+            ${showDelete ? `<button class="phase-expand-btn ${isExpanded ? 'expanded' : ''}" onclick="togglePhaseExpand(${phase.id})" title="Expand/Collapse">▶</button>` : ''}
+            PHASE ${currentProject.phases.indexOf(phase) + 1}
+          </div>
+          <div class="phase-name">
+            <input type="text" value="${escapeHtml(phase.name)}" onchange="updatePhase(${phase.id}, 'name', this.value)" onblur="validatePhaseInput(this, ${phase.id})">
+            ${getDependencyStatus(phase)}
+          </div>
+          <div class="progress-control">
+            <input type="range" class="progress-slider" min="0" max="100" value="${phase.progress}" 
+              oninput="updatePhase(${phase.id}, 'progress', parseInt(this.value)); this.nextElementSibling.textContent = this.value + '%'">
+            <span class="progress-value">${phase.progress}%</span>
+          </div>
+          <select class="status-select ${phase.status}" onchange="updatePhase(${phase.id}, 'status', this.value); this.className = 'status-select ' + this.value">
+            <option value="complete" ${phase.status === "complete" ? "selected" : ""}>Complete</option>
+            <option value="progress" ${phase.status === "progress" ? "selected" : ""}>In Progress</option>
+            <option value="pending" ${phase.status === "pending" ? "selected" : ""}>Pending</option>
+          </select>
+          <select class="priority-select" onchange="updatePhasePriority(${phase.id}, this.value)" style="padding: 0.25rem; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 0.7rem;">
+            <option value="" ${!phase.priority ? 'selected' : ''}>Priority</option>
+            <option value="high" ${phase.priority === 'high' ? 'selected' : ''}>🔴 High</option>
+            <option value="medium" ${phase.priority === 'medium' ? 'selected' : ''}>🟡 Medium</option>
+            <option value="low" ${phase.priority === 'low' ? 'selected' : ''}>🔵 Low</option>
+          </select>
+          ${showDelete ? `
+            <div style="display: flex; gap: 0.25rem;">
+              <button class="delete-btn" style="opacity: 1;" onclick="toggleArchivePhase(${phase.id})" title="${phase.archived ? 'Restore' : 'Archive'}">${phase.archived ? '↩️' : '📁'}</button>
+              <button class="delete-btn" onclick="confirmDeletePhase(${phase.id}, '${escapeHtml(phase.name)}')">✕</button>
+            </div>
+          ` : ''}
+          ${isExpanded ? `</div>` : ''}
+          ${isExpanded && showDelete ? `
+            <div style="margin-top: 0.75rem; padding-left: 48px;">
+              <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                <div class="tags-container">${renderTags(phase.tags, 'phase', phase.id)}</div>
+                ${renderDependencySelect(phase)}
+              </div>
+              ${renderSubtasks(phase)}
+            </div>
+          ` : ''}
+        </div>
+      `;
+      }).join("");
+
+      document.getElementById("phaseCount").textContent = currentProject.phases.filter(p => !p.archived).length;
+      document.getElementById("phaseCountDash").textContent = currentProject.phases.filter(p => !p.archived).length;
+    }
+
+    function renderDeliveries(targetId = 'deliveriesGrid', showDelete = true) {
+      const container = document.getElementById(targetId);
+      if (!container) return;
+
+      if (currentProject.deliveries.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📦</div>
+            <h3>No deliveries yet</h3>
+            <p>Add deliverables with target dates to track your shipments</p>
+            ${showDelete ? '<button class="btn btn-primary" onclick="addDelivery()">+ Add Delivery</button>' : ''}
+          </div>
+        `;
+        document.getElementById("deliveryCount").textContent = '0';
+        document.getElementById("deliveryCountDash").textContent = '0';
+        return;
+      }
+
+      // Use filtered deliveries for main list, sorted deliveries for dashboard
+      const deliveries = targetId === 'deliveriesGrid' ? getFilteredDeliveries() : 
+        currentProject.deliveries.filter(d => !d.archived).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      if (deliveries.length === 0 && targetId === 'deliveriesGrid') {
+        const allCount = currentProject.deliveries.filter(d => !d.archived).length;
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📦</div>
+            <h3>${allCount > 0 ? 'No matching deliveries' : 'No deliveries yet'}</h3>
+            <p>${allCount > 0 ? 'Try adjusting your filters' : 'Add deliverables with target dates'}</p>
+          </div>
+        `;
+        return;
+      }
+
+      const colors = ['#00A8E8', '#FFB703', '#00D26A', '#9D4EDD', '#E63946'];
+      
+      container.innerHTML = deliveries.map((delivery, index) => {
+        const daysUntil = getDaysUntil(delivery.date);
+        const color = colors[index % colors.length];
+        let countdownClass = "";
+        if (daysUntil <= 7 && daysUntil >= 0) countdownClass = "urgent";
+        else if (daysUntil <= 30 && daysUntil > 7) countdownClass = "soon";
+
+        const statusBadgeClass = delivery.status ? `delivery-status-${delivery.status}` : '';
+        const statusText = delivery.status ? delivery.status.charAt(0).toUpperCase() + delivery.status.slice(1) : '';
+
+        return `
+          <div class="delivery-card ${delivery.archived ? 'archived-item' : ''} ${selectedDeliveries.has(delivery.id) ? 'selected' : ''}" 
+               style="border-top-color: ${color}"
+               data-id="${delivery.id}"
+               draggable="${showDelete}"
+               ondragstart="handleDragStart(event, 'delivery', ${delivery.id})"
+               ondragend="handleDragEnd(event)"
+               ondragover="handleDragOver(event)"
+               ondragleave="handleDragLeave(event)"
+               ondrop="handleDrop(event, 'delivery', ${delivery.id})">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                ${showDelete ? `<input type="checkbox" class="bulk-checkbox delivery-checkbox" data-id="${delivery.id}" 
+                  ${selectedDeliveries.has(delivery.id) ? 'checked' : ''} 
+                  onclick="toggleDeliverySelection(${delivery.id}, event)">` : ''}
+                ${showDelete ? `<span class="drag-handle" title="Drag to reorder">⋮⋮</span>` : ''}
+                <div>
+                  <div class="delivery-date-label" style="color: ${color}">Ship Date</div>
+                  <input type="date" class="delivery-date-input" value="${delivery.date}" 
+                    onchange="updateDelivery(${delivery.id}, 'date', this.value)">
+                </div>
+              </div>
+              ${showDelete ? `
+                <div style="display: flex; gap: 0.25rem;">
+                  <button class="delete-btn" style="opacity: 1;" onclick="toggleArchiveDelivery(${delivery.id})" title="${delivery.archived ? 'Restore' : 'Archive'}">${delivery.archived ? '↩️' : '📁'}</button>
+                  <button class="delete-btn" onclick="confirmDeleteDelivery(${delivery.id}, '${escapeHtml(delivery.title)}')">✕</button>
+                </div>
+              ` : ''}
+            </div>
+            <div class="delivery-divider"></div>
+            <div class="delivery-title">
+              <input type="text" value="${escapeHtml(delivery.title)}" placeholder="Deliverable name" onchange="updateDelivery(${delivery.id}, 'title', this.value)" onblur="validateDeliveryInput(this, ${delivery.id})">
+            </div>
+            <div class="delivery-dest">
+              <input type="text" value="${escapeHtml(delivery.destination || '')}" placeholder="Destination" onchange="updateDelivery(${delivery.id}, 'destination', this.value)">
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+              <select class="priority-select" onchange="updateDeliveryPriority(${delivery.id}, this.value)" style="flex: 1; min-width: 80px; padding: 0.25rem; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 0.7rem;">
+                <option value="" ${!delivery.priority ? 'selected' : ''}>Priority</option>
+                <option value="high" ${delivery.priority === 'high' ? 'selected' : ''}>🔴 High</option>
+                <option value="medium" ${delivery.priority === 'medium' ? 'selected' : ''}>🟡 Medium</option>
+                <option value="low" ${delivery.priority === 'low' ? 'selected' : ''}>🔵 Low</option>
+              </select>
+              <select class="delivery-status-select" onchange="updateDeliveryStatus(${delivery.id}, this.value)" style="flex: 1; min-width: 80px;">
+                <option value="" ${!delivery.status ? 'selected' : ''}>Status</option>
+                <option value="pending" ${delivery.status === 'pending' ? 'selected' : ''}>⏳ Pending</option>
+                <option value="shipped" ${delivery.status === 'shipped' ? 'selected' : ''}>✅ Shipped</option>
+                <option value="delayed" ${delivery.status === 'delayed' ? 'selected' : ''}>⚠️ Delayed</option>
+              </select>
+            </div>
+            ${showDelete ? `<div class="tags-container" style="margin-top: 0.5rem;">${renderTags(delivery.tags, 'delivery', delivery.id)}</div>` : ''}
+            <div class="delivery-countdown ${countdownClass}">
+              ${daysUntil > 0 ? `${daysUntil} days` : daysUntil === 0 ? "Today!" : `${Math.abs(daysUntil)} days ago`}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      document.getElementById("deliveryCount").textContent = currentProject.deliveries.filter(d => !d.archived).length;
+      document.getElementById("deliveryCountDash").textContent = currentProject.deliveries.filter(d => !d.archived).length;
+    }
+
+    function renderNotes() {
+      document.getElementById("notesFocus").value = currentProject.notes.focus || "";
+      document.getElementById("notesMilestones").value = currentProject.notes.milestones || "";
+      document.getElementById("notesFuture").value = currentProject.notes.future || "";
+    }
+
+    function renderAll() {
+      document.getElementById("projectName").value = currentProject.name;
+      document.getElementById("projectCategory").value = currentProject.category || 'none';
+      updateTagFilters();
+      renderAlerts();
+      renderKPIs();
+      renderPhases('phasesList', true);
+      renderPhases('phasesListDash', false);
+      renderDeliveries('deliveriesGrid', true);
+      renderDeliveries('deliveriesGridDash', false);
+      renderNotes();
+    }
+
+    // Update Functions
+    function updateProjectName(name) {
+      currentProject.name = name;
+      currentProject.modified = new Date().toISOString();
+      triggerAutoSave();
+    }
+
+    function updatePhase(id, field, value) {
+      saveToHistory();
+      const phase = currentProject.phases.find(p => p.id === id);
+      if (phase) {
+        phase[field] = value;
+        currentProject.modified = new Date().toISOString();
+        
+        // Auto-status: 100% progress → Complete
+        if (field === "progress" && value === 100 && phase.status !== "complete") {
+          phase.status = "complete";
+          showToast('Phase marked as complete!', 'success');
+        }
+        // Auto-status: 0% progress → Pending
+        if (field === "progress" && value === 0 && phase.status !== "pending") {
+          phase.status = "pending";
+        }
+        // If progress > 0 and < 100 and status is pending, set to in progress
+        if (field === "progress" && value > 0 && value < 100 && phase.status === "pending") {
+          phase.status = "progress";
+        }
+        
+        if (field === "status" || field === "progress") {
+          renderPhases('phasesList', true);
+          renderPhases('phasesListDash', false);
+        }
+        renderKPIs();
+        triggerAutoSave();
+      }
+    }
+
+    function updateDelivery(id, field, value) {
+      saveToHistory();
+      const delivery = currentProject.deliveries.find(d => d.id === id);
+      if (delivery) {
+        delivery[field] = value;
+        currentProject.modified = new Date().toISOString();
+        renderDeliveries('deliveriesGrid', true);
+        renderDeliveries('deliveriesGridDash', false);
+        triggerAutoSave();
+      }
+    }
+
+    function updateNotes() {
+      currentProject.notes = {
+        focus: document.getElementById("notesFocus").value,
+        milestones: document.getElementById("notesMilestones").value,
+        future: document.getElementById("notesFuture").value
+      };
+      currentProject.modified = new Date().toISOString();
+      triggerAutoSave();
+    }
+
+    // Validation helpers
+    function validatePhaseInput(input, id) {
+      const validation = validatePhase(input.value);
+      if (!validation.valid) {
+        input.classList.add('input-error');
+        showToast(validation.error, 'error');
+        const phase = currentProject.phases.find(p => p.id === id);
+        if (phase) input.value = phase.name; // Restore old value
+      } else {
+        input.classList.remove('input-error');
+      }
+    }
+
+    function validateDeliveryInput(input, id) {
+      if (!input.value || input.value.trim() === '') {
+        input.classList.add('input-error');
+        showToast('Title cannot be empty', 'error');
+        const delivery = currentProject.deliveries.find(d => d.id === id);
+        if (delivery) input.value = delivery.title;
+      } else {
+        input.classList.remove('input-error');
+      }
+    }
+
+    // Confirm delete functions
+    function confirmDeletePhase(id, name) {
+      showConfirm(
+        'Delete Phase?',
+        `Are you sure you want to delete <span class="item-name">"${name}"</span>? This cannot be undone.`,
+        () => deletePhase(id)
+      );
+    }
+
+    function confirmDeleteDelivery(id, title) {
+      showConfirm(
+        'Delete Delivery?',
+        `Are you sure you want to delete <span class="item-name">"${title}"</span>? This cannot be undone.`,
+        () => deleteDelivery(id)
+      );
+    }
+
+    // Add/Delete Functions
+    function addPhase() {
+      saveToHistory();
+      currentProject.phases.push({
+        id: nextPhaseId++,
+        name: "New Phase",
+        progress: 0,
+        status: "pending",
+        priority: "",
+        archived: false,
+        tags: [],
+        subtasks: [],
+        dependsOn: null
+      });
+      renderPhases('phasesList', true);
+      renderPhases('phasesListDash', false);
+      renderKPIs();
+      triggerAutoSave();
+    }
+
+    function deletePhase(id) {
+      saveToHistory();
+      currentProject.phases = currentProject.phases.filter(p => p.id !== id);
+      // Clear any dependencies pointing to this phase
+      currentProject.phases.forEach(p => {
+        if (p.dependsOn === id) p.dependsOn = null;
+      });
+      renderPhases('phasesList', true);
+      renderPhases('phasesListDash', false);
+      renderKPIs();
+      showToast('Phase deleted', 'success');
+      triggerAutoSave();
+    }
+
+    function addDelivery() {
+      saveToHistory();
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      currentProject.deliveries.push({
+        id: nextDeliveryId++,
+        date: nextWeek.toISOString().split('T')[0],
+        title: "New Deliverable",
+        destination: "",
+        status: "pending",
+        priority: "",
+        archived: false,
+        tags: []
+      });
+      renderDeliveries('deliveriesGrid', true);
+      renderDeliveries('deliveriesGridDash', false);
+      renderAlerts();
+      triggerAutoSave();
+    }
+
+    function deleteDelivery(id) {
+      saveToHistory();
+      currentProject.deliveries = currentProject.deliveries.filter(d => d.id !== id);
+      renderDeliveries('deliveriesGrid', true);
+      renderDeliveries('deliveriesGridDash', false);
+      renderAlerts();
+      showToast('Delivery deleted', 'success');
+      triggerAutoSave();
+    }
+
+    // Project Management
+    function getSavedProjects() {
+      const saved = localStorage.getItem('prj_mgmt_projects');
+      return saved ? JSON.parse(saved) : [];
+    }
+
+    function saveProject() {
+      updateNotes();
+      currentProject.modified = new Date().toISOString();
+      
+      let projects = getSavedProjects();
+      const existingIndex = projects.findIndex(p => p.id === currentProject.id);
+      
+      if (existingIndex >= 0) {
+        projects[existingIndex] = currentProject;
+      } else {
+        projects.push(currentProject);
+      }
+      
+      localStorage.setItem('prj_mgmt_projects', JSON.stringify(projects));
+      
+      const indicator = document.getElementById('saveIndicator');
+      const text = document.getElementById('saveIndicatorText');
+      indicator.className = 'save-indicator saved';
+      text.textContent = 'Saved';
+      
+      showToast('Project saved!', 'success');
+    }
+
+    function duplicateProject(id) {
+      const projects = getSavedProjects();
+      const project = projects.find(p => p.id === id);
+      if (project) {
+        const duplicate = JSON.parse(JSON.stringify(project));
+        duplicate.id = generateId();
+        duplicate.name = project.name + ' (Copy)';
+        duplicate.created = new Date().toISOString();
+        duplicate.modified = new Date().toISOString();
+        
+        // Reset phase and delivery IDs
+        let phaseId = 1;
+        let deliveryId = 1;
+        duplicate.phases.forEach(p => p.id = phaseId++);
+        duplicate.deliveries.forEach(d => d.id = deliveryId++);
+        
+        projects.push(duplicate);
+        localStorage.setItem('prj_mgmt_projects', JSON.stringify(projects));
+        
+        showToast('Project duplicated!', 'success');
+        renderProjectsList();
+      }
+    }
+
+    function loadProject(id) {
+      const projects = getSavedProjects();
+      const project = projects.find(p => p.id === id);
+      if (project) {
+        currentProject = JSON.parse(JSON.stringify(project));
+        nextPhaseId = Math.max(...currentProject.phases.map(p => p.id), 0) + 1;
+        nextDeliveryId = Math.max(...currentProject.deliveries.map(d => d.id), 0) + 1;
+        renderAll();
+        closeModal('projectsModal');
+      }
+    }
+
+    function deleteProject(id) {
+      const projects = getSavedProjects();
+      const project = projects.find(p => p.id === id);
+      const projectName = project ? project.name : 'this project';
+      
+      showConfirm(
+        'Delete Project?',
+        `Are you sure you want to delete <span class="item-name">"${escapeHtml(projectName)}"</span>? This cannot be undone.`,
+        () => {
+          let updatedProjects = getSavedProjects();
+          updatedProjects = updatedProjects.filter(p => p.id !== id);
+          localStorage.setItem('prj_mgmt_projects', JSON.stringify(updatedProjects));
+          showToast('Project deleted', 'success');
+          renderProjectsList();
+        }
+      );
+    }
+
+    function newProject() {
+      currentProject = {
+        id: generateId(),
+        name: "New Project",
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+        phases: [],
+        deliveries: [],
+        notes: { focus: "", milestones: "", future: "" }
+      };
+      nextPhaseId = 1;
+      nextDeliveryId = 1;
+      renderAll();
+      closeModal('projectsModal');
+    }
+
+    function showProjectsModal() {
+      renderProjectsList();
+      document.getElementById('projectsModal').classList.add('show');
+    }
+
+    function renderProjectsList() {
+      const projects = getSavedProjects();
+      const container = document.getElementById('projectsList');
+      
+      if (projects.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state" style="padding: 2rem;">
+            <div class="empty-state-icon">📁</div>
+            <h3>No saved projects</h3>
+            <p>Create a new project to get started</p>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = projects.map(p => `
+        <div class="project-item" onclick="loadProject('${p.id}')">
+          <div class="project-item-info">
+            <h4>${escapeHtml(p.name)}</h4>
+            <span>${p.phases?.length || 0} phases · Modified ${new Date(p.modified).toLocaleDateString()}</span>
+          </div>
+          <div class="project-item-actions" onclick="event.stopPropagation()">
+            <button onclick="duplicateProject('${p.id}')" title="Duplicate" style="color: var(--accent-blue);">📋</button>
+            <button onclick="deleteProject('${p.id}')" title="Delete">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('show');
+    }
+
+    // Import/Export JSON
+    function exportJSON() {
+      updateNotes();
+      const dataStr = JSON.stringify(currentProject, null, 2);
+      downloadFile(dataStr, `${currentProject.name.replace(/\s+/g, '_')}.json`, 'application/json');
+    }
+
+    function importJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          currentProject = imported;
+          currentProject.id = currentProject.id || generateId();
+          nextPhaseId = Math.max(...(currentProject.phases?.map(p => p.id) || [0]), 0) + 1;
+          nextDeliveryId = Math.max(...(currentProject.deliveries?.map(d => d.id) || [0]), 0) + 1;
+          renderAll();
+        } catch (err) {
+          alert('Error importing JSON file: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = "";
+    }
+
+    // Import/Export CSV
+    function exportCSV(type) {
+      updateNotes();
+      let csv = '';
+      const name = currentProject.name.replace(/\s+/g, '_');
+      
+      if (type === 'phases' || type === 'all') {
+        csv = 'Phase,Name,Progress,Status\n';
+        currentProject.phases.forEach((p, i) => {
+          csv += `${i + 1},"${p.name.replace(/"/g, '""')}",${p.progress},${p.status}\n`;
+        });
+        if (type === 'phases') {
+          downloadFile(csv, `${name}_phases.csv`, 'text/csv');
+          return;
+        }
+      }
+      
+      if (type === 'deliveries' || type === 'all') {
+        let deliveriesCsv = 'Date,Title,Destination\n';
+        currentProject.deliveries.forEach(d => {
+          deliveriesCsv += `${d.date},"${d.title.replace(/"/g, '""')}","${(d.destination || '').replace(/"/g, '""')}"\n`;
+        });
+        if (type === 'deliveries') {
+          downloadFile(deliveriesCsv, `${name}_deliveries.csv`, 'text/csv');
+          return;
+        }
+        if (type === 'all') {
+          downloadFile(csv, `${name}_phases.csv`, 'text/csv');
+          setTimeout(() => downloadFile(deliveriesCsv, `${name}_deliveries.csv`, 'text/csv'), 100);
+        }
+      }
+    }
+
+    function importCSV(event, type) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const lines = e.target.result.split('\n').filter(l => l.trim());
+          const headers = parseCSVLine(lines[0]);
+          
+          if (type === 'phases') {
+            currentProject.phases = [];
+            for (let i = 1; i < lines.length; i++) {
+              const values = parseCSVLine(lines[i]);
+              if (values.length >= 2) {
+                currentProject.phases.push({
+                  id: nextPhaseId++,
+                  name: values[1] || `Phase ${i}`,
+                  progress: parseInt(values[2]) || 0,
+                  status: values[3] || 'pending'
+                });
+              }
+            }
+          } else if (type === 'deliveries') {
+            currentProject.deliveries = [];
+            for (let i = 1; i < lines.length; i++) {
+              const values = parseCSVLine(lines[i]);
+              if (values.length >= 2) {
+                currentProject.deliveries.push({
+                  id: nextDeliveryId++,
+                  date: values[0] || new Date().toISOString().split('T')[0],
+                  title: values[1] || `Deliverable ${i}`,
+                  destination: values[2] || ''
+                });
+              }
+            }
+          }
+          renderAll();
+        } catch (err) {
+          alert('Error importing CSV: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = "";
+    }
+
+    function parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    function downloadFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Presentation Mode
+    function togglePresentationMode() {
+      document.body.classList.toggle('presentation-mode');
+      if (document.body.classList.contains('presentation-mode')) {
+        switchTab('dashboard');
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    }
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        if (document.body.classList.contains('presentation-mode')) {
+          togglePresentationMode();
+        }
+        closeDropdowns();
+        clearPhaseSelection();
+        clearDeliverySelection();
+        document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('show'));
+      }
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        saveProject();
+      }
+      if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        togglePresentationMode();
+      }
+      if (e.ctrlKey && e.key === 'z') {
+        e.preventDefault();
+        undo();
+      }
+      if (e.ctrlKey && e.key === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    });
+
+    // Initialize
+    loadTheme();
+    saveToHistory(); // Save initial state
+    renderAll();
+    updateUndoRedoButtons();
+  </script>
+</body>
+</html>

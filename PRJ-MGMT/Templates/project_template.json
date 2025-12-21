@@ -1,0 +1,45 @@
+{
+  "id": "",
+  "name": "Project Name",
+  "created": "",
+  "modified": "",
+  "phases": [
+    {
+      "id": 1,
+      "name": "Phase 1 Name",
+      "progress": 0,
+      "status": "pending"
+    },
+    {
+      "id": 2,
+      "name": "Phase 2 Name",
+      "progress": 0,
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "name": "Phase 3 Name",
+      "progress": 0,
+      "status": "pending"
+    }
+  ],
+  "deliveries": [
+    {
+      "id": 1,
+      "date": "2026-01-01",
+      "title": "Deliverable 1",
+      "destination": "Destination 1"
+    },
+    {
+      "id": 2,
+      "date": "2026-02-01",
+      "title": "Deliverable 2",
+      "destination": "Destination 2"
+    }
+  ],
+  "notes": {
+    "focus": "• Current focus item 1\n• Current focus item 2\n• Current focus item 3",
+    "milestones": "• Upcoming milestone 1\n• Upcoming milestone 2\n• Upcoming milestone 3",
+    "future": "• Future plan 1\n• Future plan 2\n• Future plan 3"
+  }
+}

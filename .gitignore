@@ -1,0 +1,19 @@
+# Archives and backups
+*.zip
+*.bak
+*.backup
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+
+# Local settings (keep .claude/settings.json but ignore local overrides)
+.claude/settings.local.json
+
+# Temporary files
+*.tmp
+*.temp
+*~

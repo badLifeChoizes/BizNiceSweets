@@ -1,0 +1,3677 @@
+{
+  "id": "prj_crisis_2_0",
+  "name": "Crisis 2.0 Development",
+  "category": "work",
+  "created": "2025-03-01T00:00:00.000Z",
+  "modified": "2025-12-21T00:33:30.653196Z",
+  "phases": [
+    {
+      "id": 1,
+      "name": "Prototype v1 Demo Unit - SESAM",
+      "progress": 100,
+      "status": "complete",
+      "assignees": [
+        3,
+        5,
+        7
+      ],
+      "budget": {
+        "estimated": 0,
+        "actual": 0,
+        "estimatedHours": 0,
+        "notes": "March 1 - June 16, 2025. Initial prototype for SESAM conference."
+      },
+      "timeEntries": [],
+      "dependencies": [],
+      "subtasks": [
+        {
+          "id": 509,
+          "name": "Measure reused components (Limbs and Head)",
+          "completed": true,
+          "jiraKey": "C20-2",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-03-09"
+        },
+        {
+          "id": 2,
+          "name": "Develop Proto BOM (initial)",
+          "completed": true,
+          "jiraKey": "C20-5"
+        },
+        {
+          "id": 508,
+          "name": "Generate Systems Requirement Doc",
+          "completed": true,
+          "jiraKey": "C20-6",
+          "assignee": "Zackariah Jackson",
+          "dueDate": "2025-03-03"
+        },
+        {
+          "id": 507,
+          "name": "Generate Dimensions Documentation",
+          "completed": true,
+          "jiraKey": "C20-7",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-03-26"
+        },
+        {
+          "id": 506,
+          "name": "Application Mockup Documentation",
+          "completed": true,
+          "jiraKey": "C20-8",
+          "assignee": "Zackariah Jackson",
+          "dueDate": "2024-12-30"
+        },
+        {
+          "id": 1,
+          "name": "Measure/Review IO Lower Leg for Use in Crisis 2.0",
+          "completed": true,
+          "jiraKey": "C20-9"
+        },
+        {
+          "id": 505,
+          "name": "Scan IO Lower Leg",
+          "completed": true,
+          "jiraKey": "C20-10",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-03-25"
+        },
+        {
+          "id": 504,
+          "name": "Test Strething Arm Skin for 59\" Female",
+          "completed": true,
+          "jiraKey": "C20-11",
+          "assignee": "Chris Pohlman",
+          "dueDate": "2025-02-19"
+        },
+        {
+          "id": 503,
+          "name": "Test Arm Skin Stretching on 62\" Arm",
+          "completed": true,
+          "jiraKey": "C20-12",
+          "assignee": "Chris Pohlman",
+          "dueDate": "2025-02-14"
+        },
+        {
+          "id": 502,
+          "name": "Test increasing leg thickness with foam",
+          "completed": true,
+          "jiraKey": "C20-13",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-03-01"
+        },
+        {
+          "id": 501,
+          "name": "Approval of Extended Limbs With Existing Skins",
+          "completed": true,
+          "jiraKey": "C20-15",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-02-28"
+        },
+        {
+          "id": 500,
+          "name": "Scan Extended Limbs",
+          "completed": true,
+          "jiraKey": "C20-16",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-02-28"
+        },
+        {
+          "id": 499,
+          "name": "Lung Bag Volume Analysis",
+          "completed": true,
+          "jiraKey": "C20-18",
+          "assignee": "James Perez-Rogers",
+          "dueDate": "2025-03-12"
+        },
+        {
+          "id": 498,
+          "name": "Max Power Assumptions for Pelican",
+          "completed": true,
+          "jiraKey": "C20-19",
+          "assignee": "William Platt",
+          "dueDate": "2025-03-07"
+        },
+        {
+          "id": 497,
+          "name": "Resources For Pelican",
+          "completed": true,
+          "jiraKey": "C20-20",
+          "assignee": "Zackariah Jackson",
+          "dueDate": "2025-02-03"
+        },
+        {
+          "id": 4,
+          "name": "Neck v1",
+          "completed": true,
+          "jiraKey": "C20-22"
+        },
+        {
+          "id": 496,
+          "name": "Defib/ECG Guidance for Pelican",
+          "completed": true,
+          "jiraKey": "C20-23",
+          "assignee": "William Platt",
+          "dueDate": "2025-03-12"
+        },
+        {
+          "id": 495,
+          "name": "Supply Pelican with typical Nasco defib equipment",
+          "completed": true,
+          "jiraKey": "C20-24",
+          "assignee": "Zackariah Jackson",
+          "dueDate": "2025-03-21"
+        },
+        {
+          "id": 8,
+          "name": "Genitals v1",
+          "completed": true,
+          "jiraKey": "C20-26"
+        },
+        {
+          "id": 3,
+          "name": "Head Skin v1",
+          "completed": true,
+          "jiraKey": "C20-29"
+        },
+        {
+          "id": 494,
+          "name": "Design/3D Print Inserts for Head Skin Mold ",
+          "completed": true,
+          "jiraKey": "C20-32",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-05-24"
+        },
+        {
+          "id": 5,
+          "name": "Torso v1",
+          "completed": true,
+          "jiraKey": "C20-39"
+        },
+        {
+          "id": 6,
+          "name": "CPR Module v1",
+          "completed": true,
+          "jiraKey": "C20-43"
+        },
+        {
+          "id": 7,
+          "name": "Lungs & Stomach v1",
+          "completed": true,
+          "jiraKey": "C20-73"
+        }
+      ],
+      "startDate": "2025-03-02",
+      "dueDate": "2025-06-16"
+    },
+    {
+      "id": 2,
+      "name": "Prototype v2 Demo Units - EMS World",
+      "progress": 100,
+      "status": "complete",
+      "assignees": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "budget": {
+        "estimated": 0,
+        "actual": 0,
+        "estimatedHours": 0,
+        "notes": "June 17 - Oct 15, 2025. Major development phase with full team. EMS World demo Oct 15."
+      },
+      "timeEntries": [],
+      "dependencies": [
+        1
+      ],
+      "subtasks": [
+        {
+          "id": 556,
+          "name": "Work with digital sculptor to generate 3D model of Torso",
+          "completed": true,
+          "jiraKey": "C20-4",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-03-28"
+        },
+        {
+          "id": 29,
+          "name": "Proto BOM Development (ongoing)",
+          "completed": false,
+          "jiraKey": "C20-5",
+          "assignee": "Zackariah Jackson",
+          "dueDate": "2025-10-20"
+        },
+        {
+          "id": 555,
+          "name": "Develop Hand Placement System for CPR",
+          "completed": true,
+          "jiraKey": "C20-14",
+          "assignee": "William Platt",
+          "dueDate": "2025-04-20"
+        },
+        {
+          "id": 554,
+          "name": "Lung bag selection",
+          "completed": true,
+          "jiraKey": "C20-17",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-06-30"
+        },
+        {
+          "id": 10,
+          "name": "Neck v2 refinement",
+          "completed": true,
+          "jiraKey": "C20-22",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-08-15"
+        },
+        {
+          "id": 16,
+          "name": "Hip Joint",
+          "completed": true,
+          "jiraKey": "C20-25",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-08-22"
+        },
+        {
+          "id": 23,
+          "name": "Genitals v2",
+          "completed": true,
+          "jiraKey": "C20-26",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-08-06"
+        },
+        {
+          "id": 553,
+          "name": "Model Hip Joint Receiver into MDCRISISTBD1 TORSO",
+          "completed": true,
+          "jiraKey": "C20-27",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-08-01"
+        },
+        {
+          "id": 552,
+          "name": "Prototype Chestplate Mechanism & Mounting",
+          "completed": true,
+          "jiraKey": "C20-28",
+          "assignee": "Jonathan Matoke",
+          "dueDate": "2025-06-06"
+        },
+        {
+          "id": 11,
+          "name": "Head Skin v2 refinement",
+          "completed": true,
+          "jiraKey": "C20-29",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-08-22"
+        },
+        {
+          "id": 551,
+          "name": "Create a drawing for the pressure sensors ",
+          "completed": true,
+          "jiraKey": "C20-30",
+          "assignee": "Angelina Fontana",
+          "dueDate": "2025-06-23"
+        },
+        {
+          "id": 550,
+          "name": "Drawing for Crisis BP Arm Cable",
+          "completed": true,
+          "jiraKey": "C20-31",
+          "assignee": "Angelina Fontana",
+          "dueDate": "2025-06-25"
+        },
+        {
+          "id": 549,
+          "name": "Build limbs for Crisis Demo",
+          "completed": true,
+          "jiraKey": "C20-33",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-06-18"
+        },
+        {
+          "id": 548,
+          "name": "Head and Neck for Crisis Demo",
+          "completed": true,
+          "jiraKey": "C20-34",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-06-19"
+        },
+        {
+          "id": 547,
+          "name": "REQUISITION COMPONENTS FOR CRISIS FOR SESAM DEMO",
+          "completed": true,
+          "jiraKey": "C20-36",
+          "assignee": "Angelina Fontana",
+          "dueDate": "2025-06-16"
+        },
+        {
+          "id": 546,
+          "name": "CRISIS SESAM DEMO BUILD",
+          "completed": true,
+          "jiraKey": "C20-37",
+          "assignee": "Zackariah Jackson",
+          "dueDate": "2025-06-12"
+        },
+        {
+          "id": 545,
+          "name": "Build MD046 CRISIS HEAD SKIN 2.0 with Airway",
+          "completed": true,
+          "jiraKey": "C20-38",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-06-10"
+        },
+        {
+          "id": 12,
+          "name": "Torso MD047 v2",
+          "completed": true,
+          "jiraKey": "C20-39",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-10-27"
+        },
+        {
+          "id": 18,
+          "name": "Shoulder Structural Backing",
+          "completed": true,
+          "jiraKey": "C20-40",
+          "assignee": "Jonathan Matoke",
+          "dueDate": "2025-08-22"
+        },
+        {
+          "id": 15,
+          "name": "Hip Structural Backing",
+          "completed": true,
+          "jiraKey": "C20-41",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-08-13"
+        },
+        {
+          "id": 24,
+          "name": "CPR Module v2",
+          "completed": true,
+          "jiraKey": "C20-43",
+          "assignee": "Jonathan Matoke",
+          "dueDate": "2025-09-01"
+        },
+        {
+          "id": 14,
+          "name": "Torso Structural Backing",
+          "completed": true,
+          "jiraKey": "C20-44",
+          "assignee": "Jonathan Matoke",
+          "dueDate": "2025-08-22"
+        },
+        {
+          "id": 13,
+          "name": "Torso Overlay SA2517",
+          "completed": true,
+          "jiraKey": "C20-47",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-09-30"
+        },
+        {
+          "id": 544,
+          "name": "REDUCE HIP GAP",
+          "completed": true,
+          "jiraKey": "C20-48",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-07-09"
+        },
+        {
+          "id": 26,
+          "name": "C3 Common Core Control Board",
+          "completed": true,
+          "jiraKey": "C20-51",
+          "assignee": "Sean McGovern",
+          "dueDate": "2025-08-29"
+        },
+        {
+          "id": 543,
+          "name": "TORSO MASTER PATTERN 3D MODEL ",
+          "completed": true,
+          "jiraKey": "C20-54",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-08-06"
+        },
+        {
+          "id": 30,
+          "name": "Neck Tooling",
+          "completed": true,
+          "jiraKey": "C20-55",
+          "assignee": "Greg Zindulka",
+          "dueDate": "2025-08-16"
+        },
+        {
+          "id": 31,
+          "name": "Head Skin Tooling",
+          "completed": true,
+          "jiraKey": "C20-56",
+          "assignee": "Greg Zindulka"
+        },
+        {
+          "id": 32,
+          "name": "Hip Structural Backing Tooling",
+          "completed": true,
+          "jiraKey": "C20-57",
+          "assignee": "Greg Zindulka",
+          "dueDate": "2025-08-13"
+        },
+        {
+          "id": 17,
+          "name": "Abdominal Structural Backing",
+          "completed": true,
+          "jiraKey": "C20-60",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-08-11"
+        },
+        {
+          "id": 19,
+          "name": "Upper Arm Extended MD1002",
+          "completed": true,
+          "jiraKey": "C20-62",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-08-12"
+        },
+        {
+          "id": 20,
+          "name": "Lower Arm Extended MD1003",
+          "completed": true,
+          "jiraKey": "C20-64",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-08-12"
+        },
+        {
+          "id": 35,
+          "name": "CPR Module Tooling",
+          "completed": false,
+          "jiraKey": "C20-68",
+          "dueDate": "2025-09-01"
+        },
+        {
+          "id": 25,
+          "name": "Lungs & Stomach v2",
+          "completed": true,
+          "jiraKey": "C20-73",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-09-30"
+        },
+        {
+          "id": 33,
+          "name": "Genitals Tooling",
+          "completed": true,
+          "jiraKey": "C20-74",
+          "assignee": "Greg Zindulka",
+          "dueDate": "2025-08-06"
+        },
+        {
+          "id": 21,
+          "name": "Chest Cover Plate",
+          "completed": true,
+          "jiraKey": "C20-75",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-08-08"
+        },
+        {
+          "id": 22,
+          "name": "Abdomen Cover Plate",
+          "completed": true,
+          "jiraKey": "C20-76",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-08-08"
+        },
+        {
+          "id": 542,
+          "name": "BRAINSTORMING ACTION ITEMS",
+          "completed": true,
+          "jiraKey": "C20-78",
+          "dueDate": "2025-07-04"
+        },
+        {
+          "id": 541,
+          "name": "QUOTE COMPRESSION PLATE",
+          "completed": true,
+          "jiraKey": "C20-80",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-07-22"
+        },
+        {
+          "id": 540,
+          "name": "MAXIMUM SPRING SQUARE DIMENSIONS",
+          "completed": true,
+          "jiraKey": "C20-82",
+          "assignee": "Jonathan Matoke",
+          "dueDate": "2025-06-30"
+        },
+        {
+          "id": 539,
+          "name": "TORSO CONFIGURATION FOR HIP GAP REDUCTION",
+          "completed": true,
+          "jiraKey": "C20-83",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-07-26"
+        },
+        {
+          "id": 36,
+          "name": "Chest Panel Master Pattern 3D Model",
+          "completed": true,
+          "jiraKey": "C20-84",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-07-30"
+        },
+        {
+          "id": 37,
+          "name": "Abdominal Panel Master Pattern 3D Model",
+          "completed": true,
+          "jiraKey": "C20-85",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-07-30"
+        },
+        {
+          "id": 538,
+          "name": "FLEXIBLE CHEST MEAT PROTOTYPE",
+          "completed": true,
+          "jiraKey": "C20-86",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-07-30"
+        },
+        {
+          "id": 537,
+          "name": "MATERIAL ANALYSIS",
+          "completed": true,
+          "jiraKey": "C20-87",
+          "assignee": "Zackariah Jackson",
+          "dueDate": "2025-07-23"
+        },
+        {
+          "id": 536,
+          "name": "CPR PROTOTYPE COLUMNS",
+          "completed": true,
+          "jiraKey": "C20-88",
+          "assignee": "Jonathan Matoke",
+          "dueDate": "2025-07-31"
+        },
+        {
+          "id": 535,
+          "name": "CPR PROTOTYPE NO COLUMNS",
+          "completed": true,
+          "jiraKey": "C20-89",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-07-18"
+        },
+        {
+          "id": 28,
+          "name": "Carotid Pulse",
+          "completed": false,
+          "jiraKey": "C20-91",
+          "assignee": "Sean McGovern",
+          "dueDate": "2025-09-30"
+        },
+        {
+          "id": 34,
+          "name": "Breast Inserts for Overlay",
+          "completed": true,
+          "jiraKey": "C20-98",
+          "assignee": "Greg Zindulka",
+          "dueDate": "2025-08-20"
+        },
+        {
+          "id": 27,
+          "name": "Hand Placement Detection System",
+          "completed": true,
+          "jiraKey": "C20-99",
+          "dueDate": "2025-09-11"
+        },
+        {
+          "id": 534,
+          "name": "PROTOTYPE HAND PLACEMENT",
+          "completed": true,
+          "jiraKey": "C20-100",
+          "assignee": "William Platt",
+          "dueDate": "2025-06-30"
+        },
+        {
+          "id": 533,
+          "name": "TORSO OVERLAY MASTER PATTERN 3D MODEL",
+          "completed": true,
+          "jiraKey": "C20-103",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-08-20"
+        },
+        {
+          "id": 532,
+          "name": "3D PRINT OVERLAY PARTS",
+          "completed": true,
+          "jiraKey": "C20-104",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-08-28"
+        },
+        {
+          "id": 38,
+          "name": "EMS World Demo Prep",
+          "completed": true,
+          "jiraKey": "C20-115",
+          "assignee": "Zackariah Jackson"
+        },
+        {
+          "id": 39,
+          "name": "Color Matching",
+          "completed": true,
+          "jiraKey": "C20-116",
+          "assignee": "Zackariah Jackson",
+          "dueDate": "2025-08-15"
+        },
+        {
+          "id": 531,
+          "name": "TORSO MASTER PATTERN PREP",
+          "completed": true,
+          "jiraKey": "C20-121",
+          "assignee": "Greg Zindulka",
+          "dueDate": "2025-08-15"
+        },
+        {
+          "id": 530,
+          "name": "PRINT MASTER PATTERN",
+          "completed": true,
+          "jiraKey": "C20-138",
+          "assignee": "Angelina Fontana"
+        },
+        {
+          "id": 529,
+          "name": "PRINT MASTER PATTERN",
+          "completed": true,
+          "jiraKey": "C20-139",
+          "assignee": "Angelina Fontana"
+        },
+        {
+          "id": 528,
+          "name": "GRAVITY POUR PLATFORM PROTOTYPE (MD901)",
+          "completed": true,
+          "jiraKey": "C20-146",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-08-27"
+        },
+        {
+          "id": 527,
+          "name": "SECTIONAL FRAME ASSEMBLY PROTOTYPE (MD901)",
+          "completed": true,
+          "jiraKey": "C20-147",
+          "assignee": "Jonathan Matoke",
+          "dueDate": "2025-08-27"
+        },
+        {
+          "id": 526,
+          "name": "CREATE JIG FOR SUPPORTING TORSO DURING GRAVITY POUR",
+          "completed": true,
+          "jiraKey": "C20-148",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-08-13"
+        },
+        {
+          "id": 525,
+          "name": "CREATE A CAST PART",
+          "completed": true,
+          "jiraKey": "C20-149",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-08-19"
+        },
+        {
+          "id": 524,
+          "name": "DEVELOPMENT DOCUMENTATION OF POUR CONCEPT",
+          "completed": true,
+          "jiraKey": "C20-151",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-08-27"
+        },
+        {
+          "id": 523,
+          "name": "DEVELOPMENT DOCUMENTATION",
+          "completed": true,
+          "jiraKey": "C20-154",
+          "assignee": "Jonathan Matoke",
+          "dueDate": "2025-08-27"
+        },
+        {
+          "id": 522,
+          "name": "SCAN EXISTING MD901 BODY AFTER CNC",
+          "completed": true,
+          "jiraKey": "C20-155",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-08-13"
+        },
+        {
+          "id": 521,
+          "name": "TORSO MASTER PATTERN 3D SCAN CHECK (PRE-PLATING PREP)",
+          "completed": true,
+          "jiraKey": "C20-158",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-08-14"
+        },
+        {
+          "id": 520,
+          "name": "TORSO OVERLAY MANDREL 3D MODEL",
+          "completed": true,
+          "jiraKey": "C20-159",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-08-20"
+        },
+        {
+          "id": 519,
+          "name": "LOWER ARM EXTENDED 3D SCAN PRE-PREP",
+          "completed": true,
+          "jiraKey": "C20-160",
+          "assignee": "Nicholas Dennis"
+        },
+        {
+          "id": 518,
+          "name": "LOWER ARM EXTENDED MASTER PATTERN PREP",
+          "completed": true,
+          "jiraKey": "C20-161",
+          "assignee": "Greg Zindulka"
+        },
+        {
+          "id": 517,
+          "name": "UPPER ARM EXTENDED MASTER PATTERN 3D SCAN PRE-PREP",
+          "completed": true,
+          "jiraKey": "C20-162",
+          "assignee": "Nicholas Dennis"
+        },
+        {
+          "id": 516,
+          "name": "UPPER ARM EXTENDED MASTER PATTERN PREP",
+          "completed": true,
+          "jiraKey": "C20-163",
+          "assignee": "Greg Zindulka"
+        },
+        {
+          "id": 515,
+          "name": "UPPER ARM EXTENDED MASTER PATTERN 3D SCAN POST-PREP",
+          "completed": true,
+          "jiraKey": "C20-165",
+          "assignee": "Nicholas Dennis"
+        },
+        {
+          "id": 514,
+          "name": "LOWER ARM EXTENDED 3D SCAN POST-PREP",
+          "completed": true,
+          "jiraKey": "C20-167",
+          "assignee": "Nicholas Dennis"
+        },
+        {
+          "id": 513,
+          "name": "TORSO MASTER PATTERN 3D SCAN CHECK (POST-PLATING PREP)",
+          "completed": true,
+          "jiraKey": "C20-170",
+          "assignee": "Nicholas Dennis"
+        },
+        {
+          "id": 512,
+          "name": "1/4-20 TORSO MOUNTING HARDWARE ",
+          "completed": true,
+          "jiraKey": "C20-171",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-09-15"
+        },
+        {
+          "id": 40,
+          "name": "Crisis Feedback Session Changes",
+          "completed": false,
+          "jiraKey": "C20-182",
+          "assignee": "Zackariah Jackson",
+          "dueDate": "2025-09-26"
+        },
+        {
+          "id": 511,
+          "name": "PM-REPORTS",
+          "completed": false,
+          "jiraKey": "C20-189",
+          "assignee": "Zackariah Jackson"
+        },
+        {
+          "id": 510,
+          "name": "Test",
+          "completed": true,
+          "jiraKey": "C20-190"
+        }
+      ],
+      "startDate": "2025-06-30",
+      "dueDate": "2025-10-10"
+    },
+    {
+      "id": 3,
+      "name": "Prototype v3 Demo Unitw - IMSH",
+      "progress": 95,
+      "status": "progress",
+      "assignees": [
+        2,
+        3,
+        5,
+        7,
+        8,
+        9,
+        10
+      ],
+      "budget": {
+        "estimated": 0,
+        "actual": 0,
+        "estimatedHours": 0,
+        "notes": "Started Oct 20, 2025. Final prototype refinements for IMSH Jan 2026."
+      },
+      "timeEntries": [],
+      "dependencies": [
+        2
+      ],
+      "subtasks": [
+        {
+          "id": 569,
+          "name": "FIX HEAD MANDREL FOR MOUTH SHAPE",
+          "completed": true,
+          "jiraKey": "C20-52",
+          "assignee": "Nicholas Dennis"
+        },
+        {
+          "id": 568,
+          "name": "TORSO OVERLAY TOOLING",
+          "completed": true,
+          "jiraKey": "C20-59",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-09-10"
+        },
+        {
+          "id": 567,
+          "name": "UPPER ARM EXTENDED TOOLING & LID",
+          "completed": true,
+          "jiraKey": "C20-63",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-08-12"
+        },
+        {
+          "id": 566,
+          "name": "LOWER ARM EXTENDED TOOLING & LID",
+          "completed": true,
+          "jiraKey": "C20-65",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-08-12"
+        },
+        {
+          "id": 565,
+          "name": "FUNCTIONALLY PROTOTYPE & CLEAN UP CAD / MASTER PATTERN 3D MODEL",
+          "completed": true,
+          "jiraKey": "C20-90",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-08-20"
+        },
+        {
+          "id": 72,
+          "name": "Design New Guide Post and Sleeve (CPR)",
+          "completed": false,
+          "jiraKey": "C20-97",
+          "assignee": "Jonathan Matoke",
+          "dueDate": "2025-08-12"
+        },
+        {
+          "id": 564,
+          "name": "3D PRINTED TORSO PROTOTYPE",
+          "completed": true,
+          "jiraKey": "C20-119",
+          "assignee": "Alexander Cefarelli",
+          "dueDate": "2025-09-30"
+        },
+        {
+          "id": 50,
+          "name": "Jigs and Fixtures for Torso",
+          "completed": true,
+          "jiraKey": "C20-122",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-10-27"
+        },
+        {
+          "id": 563,
+          "name": "TORSO ELECTROFORMING",
+          "completed": true,
+          "jiraKey": "C20-124",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-10-13"
+        },
+        {
+          "id": 562,
+          "name": "TORSO TOOLING & LID",
+          "completed": true,
+          "jiraKey": "C20-140",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-09-26"
+        },
+        {
+          "id": 51,
+          "name": "Torso Offset Model (Final Part Representation)",
+          "completed": true,
+          "jiraKey": "C20-143",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-08-13"
+        },
+        {
+          "id": 561,
+          "name": "ROTOMOLDED STRUCTURAL BACKING PROTOYPE",
+          "completed": true,
+          "jiraKey": "C20-144",
+          "assignee": "Greg Zindulka"
+        },
+        {
+          "id": 560,
+          "name": "STRUCTURAL PROOF OF CONCEPT (MD901)",
+          "completed": true,
+          "jiraKey": "C20-145",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-09-17"
+        },
+        {
+          "id": 69,
+          "name": "Hip Joint Master Pattern 3D Model",
+          "completed": false,
+          "jiraKey": "C20-150",
+          "assignee": "Alexander Cefarelli",
+          "notes": "Mold new hip joint for IMSH and Dubai units. Can 3D print mold or part."
+        },
+        {
+          "id": 70,
+          "name": "Hip Structural Backing Master Pattern 3D Model",
+          "completed": false,
+          "jiraKey": "C20-152",
+          "assignee": "Alexander Cefarelli",
+          "notes": "3D print part for now. Will need new mold in near future."
+        },
+        {
+          "id": 71,
+          "name": "Abdominal Structural Backing Master Pattern 3D Model",
+          "completed": false,
+          "jiraKey": "C20-153",
+          "assignee": "Austin Khlaifat",
+          "notes": "LOW priority - can 3D print. Print L & R parts."
+        },
+        {
+          "id": 73,
+          "name": "Design/Source Counter-bore Plug Options for 4 Butt Locations",
+          "completed": false,
+          "jiraKey": "C20-164",
+          "assignee": "Austin Khlaifat"
+        },
+        {
+          "id": 559,
+          "name": "UPPER ARM EXTENDED ELECTROFORMING",
+          "completed": true,
+          "jiraKey": "C20-166"
+        },
+        {
+          "id": 558,
+          "name": "LOWER ARM EXTENDED ELECTROFORMING",
+          "completed": true,
+          "jiraKey": "C20-168"
+        },
+        {
+          "id": 67,
+          "name": "Chest Structural Backing",
+          "completed": false,
+          "jiraKey": "C20-174",
+          "assignee": "Jonathan Matoke",
+          "notes": "Have casted part in hand - needs validation. Can use 3D print as backup."
+        },
+        {
+          "id": 65,
+          "name": "Neck Rod PP10052",
+          "completed": false,
+          "jiraKey": "C20-175",
+          "assignee": "Nicholas Dennis",
+          "notes": "Editing mold pins for pulse board mounting - may need smaller than 7/64\". Order new pins."
+        },
+        {
+          "id": 66,
+          "name": "Head Skin Snaps",
+          "completed": false,
+          "jiraKey": "C20-176",
+          "assignee": "Nicholas Dennis"
+        },
+        {
+          "id": 56,
+          "name": "Improved Capacitive Sensors for Hand Placement",
+          "completed": false,
+          "jiraKey": "C20-183",
+          "assignee": "Angelina Fontana",
+          "dueDate": "2025-09-30"
+        },
+        {
+          "id": 57,
+          "name": "Improve ECG Enclosure",
+          "completed": false,
+          "jiraKey": "C20-185",
+          "assignee": "Austin Khlaifat"
+        },
+        {
+          "id": 58,
+          "name": "ECG Signal Not Appearing on Monitor",
+          "completed": false,
+          "jiraKey": "C20-186",
+          "assignee": "William Platt"
+        },
+        {
+          "id": 59,
+          "name": "Add Tibia IO Leg to Crisis",
+          "completed": false,
+          "jiraKey": "C20-187",
+          "assignee": "Zackariah Jackson"
+        },
+        {
+          "id": 60,
+          "name": "Fix Thumb Orientation",
+          "completed": false,
+          "jiraKey": "C20-188",
+          "assignee": "Greg Zindulka"
+        },
+        {
+          "id": 52,
+          "name": "MD1003 Lower Arm Extended Validation",
+          "completed": false,
+          "jiraKey": "C20-191",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-10-29"
+        },
+        {
+          "id": 53,
+          "name": "MD1002 Upper Arm Extended Validation",
+          "completed": false,
+          "jiraKey": "C20-192",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-10-29"
+        },
+        {
+          "id": 54,
+          "name": "MD1002 Upper Arm Extended CNC Drawing",
+          "completed": false,
+          "jiraKey": "C20-193",
+          "assignee": "Austin Khlaifat"
+        },
+        {
+          "id": 61,
+          "name": "Tongue Insert for Airway",
+          "completed": false,
+          "jiraKey": "C20-194",
+          "assignee": "Nicholas Dennis",
+          "notes": "Will need pour jig for tongue insert. HIGHEST priority for IMSH."
+        },
+        {
+          "id": 62,
+          "name": "UI Panel on Torso",
+          "completed": false,
+          "jiraKey": "C20-195",
+          "assignee": "Alexander Cefarelli"
+        },
+        {
+          "id": 63,
+          "name": "Different Eyes for Crisis Heads",
+          "completed": false,
+          "jiraKey": "C20-196",
+          "assignee": "Sebastian Hernandez",
+          "notes": "Make insert to fit Lucy eyes. Need hex eye inserts printed."
+        },
+        {
+          "id": 55,
+          "name": "MD1003 Lower Arm Extended CNC Drawings",
+          "completed": false,
+          "jiraKey": "C20-197",
+          "assignee": "Austin Khlaifat"
+        },
+        {
+          "id": 64,
+          "name": "Develop Modular TSB Version",
+          "completed": false,
+          "jiraKey": "C20-198",
+          "assignee": "Nicholas Dennis"
+        },
+        {
+          "id": 68,
+          "name": "Chest Panel Hole Alignment Jig",
+          "completed": false,
+          "jiraKey": "C20-199",
+          "assignee": "Austin Khlaifat"
+        },
+        {
+          "id": 557,
+          "name": "NECK BACKING",
+          "completed": true,
+          "jiraKey": "C20-200",
+          "assignee": "Jonathan Matoke"
+        },
+        {
+          "id": 570,
+          "name": "IMSH Critical - Roto Torso Dark Tone Cast",
+          "completed": false,
+          "assignee": "Greg Zindulka",
+          "dueDate": "2026-01-03",
+          "notes": "Rotocast dark tone torso. Hand cut and drill. Print shelf drill jig. Design/print counterbores drill jig. Hand cut using existing cavity marking jig."
+        },
+        {
+          "id": 571,
+          "name": "IMSH Critical - Head Skin Dark Tone Cast",
+          "completed": false,
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2026-01-03",
+          "notes": "Cast dark tone with different eye insert to match IMSH eyeballs. Print hex eye inserts."
+        },
+        {
+          "id": 572,
+          "name": "IMSH Critical - Genitalia Pour",
+          "completed": false,
+          "assignee": "Greg Zindulka",
+          "dueDate": "2025-12-26",
+          "notes": "1st pour scheduled Thursday. Critical for IMSH demo unit."
+        },
+        {
+          "id": 573,
+          "name": "IMSH Critical - Genital Structural Backing",
+          "completed": false,
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-12-30",
+          "notes": "Moved from Phase 4. Required structural component for genitalia assembly."
+        }
+      ],
+      "startDate": "2025-10-17",
+      "dueDate": "2026-01-07"
+    },
+    {
+      "id": 4,
+      "name": "V3 Demo Deliveries & Production Tool Development",
+      "progress": 25,
+      "status": "progress",
+      "assignees": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "budget": {
+        "estimated": 0,
+        "actual": 0,
+        "estimatedHours": 0,
+        "notes": "Parallel tooling development, demo unit builds for Dubai and Tender."
+      },
+      "timeEntries": [],
+      "dependencies": [
+        3
+      ],
+      "subtasks": [
+        {
+          "id": 84,
+          "name": "Cable Routing",
+          "completed": false,
+          "jiraKey": "C20-46",
+          "assignee": "Angelina Fontana",
+          "dueDate": "2025-09-30"
+        },
+        {
+          "id": 92,
+          "name": "Shoulder Structural Backing Tooling",
+          "completed": false,
+          "jiraKey": "C20-58",
+          "dueDate": "2026-01-20",
+          "notes": "HIGH priority. Pour mold. Can 3D print interim parts. Print master pattern in near future."
+        },
+        {
+          "id": 93,
+          "name": "Abdominal Structural Backing Tooling",
+          "completed": false,
+          "jiraKey": "C20-61",
+          "dueDate": "2026-02-01",
+          "notes": "LOW priority - can 3D print parts."
+        },
+        {
+          "id": 94,
+          "name": "Hip Joint Tooling",
+          "completed": false,
+          "jiraKey": "C20-67",
+          "dueDate": "2026-01-25",
+          "notes": "MED priority. Pour mold. Mold new hip joint for IMSH and Dubai units. Can 3D print."
+        },
+        {
+          "id": 95,
+          "name": "Torso Structural Backing Tooling",
+          "completed": false,
+          "jiraKey": "C20-69",
+          "dueDate": "2026-01-15",
+          "notes": "HIGHEST priority. Pour mold. Can 3D print interim parts."
+        },
+        {
+          "id": 106,
+          "name": "Hand Placement Redesign",
+          "completed": false,
+          "jiraKey": "C20-101",
+          "assignee": "William Platt",
+          "dueDate": "2025-08-20"
+        },
+        {
+          "id": 107,
+          "name": "Test Chest Deformation Effect on ToF Sensor Accuracy",
+          "completed": false,
+          "jiraKey": "C20-102",
+          "assignee": "Angelina Fontana",
+          "dueDate": "2025-07-30"
+        },
+        {
+          "id": 82,
+          "name": "Feature Documentation and Demo Instructions",
+          "completed": false,
+          "jiraKey": "C20-117",
+          "assignee": "Zackariah Jackson",
+          "dueDate": "2025-10-14"
+        },
+        {
+          "id": 83,
+          "name": "Packing and Shipping",
+          "completed": false,
+          "jiraKey": "C20-118",
+          "assignee": "Angelina Fontana",
+          "dueDate": "2025-10-15"
+        },
+        {
+          "id": 85,
+          "name": "Defib/ECG Cables",
+          "completed": false,
+          "jiraKey": "C20-126",
+          "assignee": "William Platt",
+          "dueDate": "2025-10-22"
+        },
+        {
+          "id": 87,
+          "name": "ECG/Defib to Manikin Cable Drawing",
+          "completed": false,
+          "jiraKey": "C20-127",
+          "assignee": "Angelina Fontana"
+        },
+        {
+          "id": 88,
+          "name": "ECG to Monitor Cable Drawing",
+          "completed": false,
+          "jiraKey": "C20-128",
+          "assignee": "Angelina Fontana"
+        },
+        {
+          "id": 89,
+          "name": "Defib to Monitor Cable Drawing",
+          "completed": false,
+          "jiraKey": "C20-129",
+          "assignee": "Angelina Fontana"
+        },
+        {
+          "id": 90,
+          "name": "Develop Simulated ECG/Defib Pads",
+          "completed": false,
+          "jiraKey": "C20-130",
+          "assignee": "William Platt"
+        },
+        {
+          "id": 86,
+          "name": "ECG/Defib to Manikin Cable Development",
+          "completed": false,
+          "jiraKey": "C20-131",
+          "assignee": "William Platt"
+        },
+        {
+          "id": 103,
+          "name": "C3 Firmware Phase 1",
+          "completed": false,
+          "jiraKey": "C20-132"
+        },
+        {
+          "id": 104,
+          "name": "C3 PCB Design Phase 1",
+          "completed": false,
+          "jiraKey": "C20-133",
+          "assignee": "William Platt"
+        },
+        {
+          "id": 105,
+          "name": "C3 Documentation Phase 1",
+          "completed": false,
+          "jiraKey": "C20-134"
+        },
+        {
+          "id": 80,
+          "name": "Demo Units for Feedback",
+          "completed": false,
+          "jiraKey": "C20-141",
+          "assignee": "Austin Khlaifat",
+          "dueDate": "2025-10-15"
+        },
+        {
+          "id": 81,
+          "name": "Requisition Parts for Demo Units",
+          "completed": false,
+          "jiraKey": "C20-142",
+          "dueDate": "2025-09-10"
+        },
+        {
+          "id": 97,
+          "name": "Check Pelican Deliverables",
+          "completed": false,
+          "jiraKey": "C20-169",
+          "assignee": "Alexander Cefarelli"
+        },
+        {
+          "id": 96,
+          "name": "3D Print Quotes for Demo",
+          "completed": false,
+          "jiraKey": "C20-172",
+          "assignee": "Austin Khlaifat"
+        },
+        {
+          "id": 98,
+          "name": "Pelican Close Out",
+          "completed": false,
+          "jiraKey": "C20-177",
+          "assignee": "Zackariah Jackson"
+        },
+        {
+          "id": 99,
+          "name": "Confirm Flashing of Firmware for Every Device",
+          "completed": false,
+          "jiraKey": "C20-178",
+          "assignee": "William Platt"
+        },
+        {
+          "id": 100,
+          "name": "Confirm Factory Reset for Every Device",
+          "completed": false,
+          "jiraKey": "C20-179",
+          "assignee": "William Platt"
+        },
+        {
+          "id": 101,
+          "name": "Confirm Pelican Deliverables",
+          "completed": false,
+          "jiraKey": "C20-180",
+          "assignee": "Austin Khlaifat"
+        },
+        {
+          "id": 102,
+          "name": "Alternate Vendors for Pelican Devices",
+          "completed": false,
+          "jiraKey": "C20-181",
+          "assignee": "Sebastian Hernandez"
+        },
+        {
+          "id": 91,
+          "name": "Paddle Option for Mock Defib Cables",
+          "completed": false,
+          "jiraKey": "C20-184",
+          "assignee": "Alexander Cefarelli"
+        },
+        {
+          "id": 130,
+          "name": "Dubai Build - Part Ordering (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 131,
+          "name": "Dubai Build - Head Assembly (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 132,
+          "name": "Dubai Build - Torso Assembly (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 133,
+          "name": "Dubai Build - Limb Assembly (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 134,
+          "name": "Dubai Build - Electronics Integration (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 135,
+          "name": "Dubai Build - Final Assembly and QC (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 136,
+          "name": "Dubai Build - Skin Tone Variants (Dark/Med/Light)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 137,
+          "name": "Dubai Build - Packing and Shipping",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 138,
+          "name": "Dubai Build - Documentation Package",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 140,
+          "name": "Tender Build - Part Ordering (2 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 141,
+          "name": "Tender Build - Head Assembly (2 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 142,
+          "name": "Tender Build - Torso Assembly (2 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 143,
+          "name": "Tender Build - Limb Assembly (2 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 144,
+          "name": "Tender Build - Electronics Integration (2 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 145,
+          "name": "Tender Build - Final Assembly and QC (2 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 146,
+          "name": "Tender Build - Packing and Shipping",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 147,
+          "name": "Tender Build - Documentation Package",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 150,
+          "name": "Tooling Kickoff - Skull",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "LOW priority. Spincast. Need to modify for jaw clicking (may have one done). Future: new skull mold or jaw modification."
+        },
+        {
+          "id": 151,
+          "name": "Tooling Kickoff - Airway",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "HIGHEST priority. Pour mold. Will need pour jig for tongue insert.",
+          "dueDate": "2026-01-15"
+        },
+        {
+          "id": 152,
+          "name": "Tooling Kickoff - Chest Structural Backing",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "HIGH priority. Pour mold. Have casted part - needs validation. Can 3D print backup.",
+          "dueDate": "2026-01-15"
+        },
+        {
+          "id": 153,
+          "name": "Tooling Kickoff - Chest Plate",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "HIGHEST priority. 3D print. Check TPU fitment in rotomolded torso.",
+          "dueDate": "2026-01-10"
+        },
+        {
+          "id": 154,
+          "name": "Tooling Kickoff - Abdomen Plate",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "HIGH priority. 3D print. Try 3D printed mold. Have prints ready for backup.",
+          "dueDate": "2026-01-20"
+        },
+        {
+          "id": 155,
+          "name": "Tooling Kickoff - Ab Column L",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "LOW priority. 3D print L part.",
+          "dueDate": "2026-02-01"
+        },
+        {
+          "id": 156,
+          "name": "Tooling Kickoff - Ab Column R",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "LOW priority. 3D print R part.",
+          "dueDate": "2026-02-01"
+        },
+        {
+          "id": 158,
+          "name": "Tooling Kickoff - Female Genital",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "HIGH priority. Pour mold. 1st pour scheduled.",
+          "dueDate": "2026-01-10"
+        },
+        {
+          "id": 159,
+          "name": "Tooling Kickoff - Eye",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "MED priority. Make insert to fit Lucy eyes.",
+          "dueDate": "2026-01-25"
+        },
+        {
+          "id": 160,
+          "name": "Tooling Kickoff - Shoulder Structural Backing L",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "HIGH priority. Pour mold. Print L part. Can 3D print interim.",
+          "dueDate": "2026-01-20"
+        },
+        {
+          "id": 161,
+          "name": "Tooling Kickoff - Shoulder Structural Backing R",
+          "completed": false,
+          "jiraKey": "",
+          "notes": "HIGH priority. Pour mold. Print R part. Can 3D print interim.",
+          "dueDate": "2026-01-20"
+        },
+        {
+          "id": 574,
+          "name": "Torso Backing Modular Plate - Vendor Order",
+          "completed": false,
+          "dueDate": "2026-01-10",
+          "notes": "HIGHEST priority. Quoted with Boyi - 8 day lead time for 50. Order 5x ($34 per)."
+        },
+        {
+          "id": 575,
+          "name": "Hip Joint Washer Tooling",
+          "completed": false,
+          "dueDate": "2026-01-25",
+          "notes": "MED priority. Could die cut or quote metal. Can print part or 3D print mold."
+        },
+        {
+          "id": 576,
+          "name": "Torso Overlay - IMSH Part",
+          "completed": false,
+          "dueDate": "2026-01-05",
+          "notes": "HIGHEST priority. Determine material removal for zipper tightness. Use light tone for testing."
+        },
+        {
+          "id": 577,
+          "name": "Neck Mold Pin Modification",
+          "completed": false,
+          "dueDate": "2026-01-30",
+          "notes": "MED priority. Edit mold pins for pulse board mounting - may need smaller than 7/64\". Order new pins."
+        },
+        {
+          "id": 578,
+          "name": "Breast Inserts - Pour",
+          "completed": false,
+          "dueDate": "2026-02-05",
+          "notes": "LOW priority. Casted pour mold."
+        }
+      ],
+      "startDate": "2025-12-11",
+      "dueDate": "2026-02-17"
+    },
+    {
+      "id": 5,
+      "name": "Early Production Units & Manufacturing Support",
+      "progress": 0,
+      "status": "pending",
+      "assignees": [],
+      "budget": {
+        "estimated": 0,
+        "actual": 0,
+        "estimatedHours": 0,
+        "notes": "Build 3x validation units, production documentation."
+      },
+      "timeEntries": [],
+      "dependencies": [
+        4
+      ],
+      "subtasks": [
+        {
+          "id": 127,
+          "name": "Packaging",
+          "completed": false,
+          "jiraKey": "C20-21",
+          "assignee": "Jonathan Matoke",
+          "dueDate": "2026-01-02"
+        },
+        {
+          "id": 122,
+          "name": "Airway/Tubing Routing",
+          "completed": false,
+          "jiraKey": "C20-72"
+        },
+        {
+          "id": 115,
+          "name": "Anatomical Proportions Measurement for Verification",
+          "completed": false,
+          "jiraKey": "C20-93",
+          "assignee": "Nicholas Dennis",
+          "dueDate": "2025-09-30"
+        },
+        {
+          "id": 116,
+          "name": "Measurement of Prototype Body Dimension",
+          "completed": false,
+          "jiraKey": "C20-94"
+        },
+        {
+          "id": 117,
+          "name": "Scan of Prototype Crisis for Comparison to Digital Model",
+          "completed": false,
+          "jiraKey": "C20-95"
+        },
+        {
+          "id": 118,
+          "name": "Documentation and Report of Comparison",
+          "completed": false,
+          "jiraKey": "C20-96"
+        },
+        {
+          "id": 110,
+          "name": "Production Readiness",
+          "completed": false,
+          "jiraKey": "C20-105"
+        },
+        {
+          "id": 111,
+          "name": "W.I. Supplementary Material",
+          "completed": false,
+          "jiraKey": "C20-106"
+        },
+        {
+          "id": 112,
+          "name": "Production BOM Documents",
+          "completed": false,
+          "jiraKey": "C20-107"
+        },
+        {
+          "id": 113,
+          "name": "Sample Unit Build with Manufacturing and Production",
+          "completed": false,
+          "jiraKey": "C20-108"
+        },
+        {
+          "id": 114,
+          "name": "Sub Assembly Review with MFG",
+          "completed": false,
+          "jiraKey": "C20-110"
+        },
+        {
+          "id": 119,
+          "name": "Airway Sensor",
+          "completed": false,
+          "jiraKey": "C20-111",
+          "assignee": "Alexander Cefarelli"
+        },
+        {
+          "id": 120,
+          "name": "Airway Sensor Assembly Design Finalization",
+          "completed": false,
+          "jiraKey": "C20-112"
+        },
+        {
+          "id": 121,
+          "name": "Airway Sensor Production Readiness",
+          "completed": false,
+          "jiraKey": "C20-114"
+        },
+        {
+          "id": 123,
+          "name": "C3 Firmware Phase 2",
+          "completed": false,
+          "jiraKey": "C20-135"
+        },
+        {
+          "id": 124,
+          "name": "C3 PCB Design Phase 2",
+          "completed": false,
+          "jiraKey": "C20-136"
+        },
+        {
+          "id": 125,
+          "name": "C3 Documentation Phase 3",
+          "completed": false,
+          "jiraKey": "C20-137"
+        },
+        {
+          "id": 126,
+          "name": "Documentation of Roto Mold Inner Shell Concept",
+          "completed": false,
+          "jiraKey": "C20-157",
+          "assignee": "Greg Zindulka"
+        },
+        {
+          "id": 128,
+          "name": "Design and Source Carry Case",
+          "completed": false,
+          "jiraKey": "C20-173"
+        },
+        {
+          "id": 200,
+          "name": "Validation Units - Part Ordering (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 201,
+          "name": "Validation Units - Head Assembly (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 202,
+          "name": "Validation Units - Torso Assembly (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 203,
+          "name": "Validation Units - Limb Assembly (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 204,
+          "name": "Validation Units - Electronics Integration (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 205,
+          "name": "Validation Units - Final Assembly and QC (3 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 210,
+          "name": "Part Documentation - Head Components Drawing Package",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 211,
+          "name": "Part Documentation - Torso Components Drawing Package",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 212,
+          "name": "Part Documentation - Limb Components Drawing Package",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 213,
+          "name": "Part Documentation - Electronics Components Specs",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 214,
+          "name": "Part Documentation - Soft Goods Specs (Skins, Overlays)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 220,
+          "name": "Assembly Documentation - Head Assembly Work Instructions",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 221,
+          "name": "Assembly Documentation - Torso Assembly Work Instructions",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 222,
+          "name": "Assembly Documentation - Limb Assembly Work Instructions",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 223,
+          "name": "Assembly Documentation - Electronics Integration Work Instructions",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 224,
+          "name": "Assembly Documentation - Final Assembly Work Instructions",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 225,
+          "name": "Assembly Documentation - QC Checklist and Inspection Criteria",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 230,
+          "name": "3D Print Interim - Head Skin (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 231,
+          "name": "3D Print Interim - Skull (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 232,
+          "name": "3D Print Interim - Airway (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 233,
+          "name": "3D Print Interim - Neck (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 234,
+          "name": "3D Print Interim - Torso Structural Backing (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 235,
+          "name": "3D Print Interim - Shoulder Structural Backing L (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 236,
+          "name": "3D Print Interim - Shoulder Structural Backing R (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 237,
+          "name": "3D Print Interim - Chest Structural Backing (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 238,
+          "name": "3D Print Interim - Chest Plate (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 239,
+          "name": "3D Print Interim - Abdomen Plate (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 240,
+          "name": "3D Print Interim - Abdomen Structural Backing (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 241,
+          "name": "3D Print Interim - Ab Column L (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 242,
+          "name": "3D Print Interim - Ab Column R (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 243,
+          "name": "3D Print Interim - Hip Structural Backing (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 244,
+          "name": "3D Print Interim - Genital Structural Backing (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 245,
+          "name": "3D Print Interim - Female Genital (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 246,
+          "name": "3D Print Interim - Eye (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 247,
+          "name": "3D Print Interim - Hip Joint (Bridge Until Tooling)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 250,
+          "name": "Manufacturing Training - Molding Operations",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 251,
+          "name": "Manufacturing Training - Assembly Operations",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 252,
+          "name": "Manufacturing Training - Electronics Integration",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 253,
+          "name": "Manufacturing Training - QC Procedures",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 254,
+          "name": "Manufacturing Handoff - Process Documentation Review",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 255,
+          "name": "Manufacturing Handoff - First Article Sign-Off",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 260,
+          "name": "QC Procedure Documentation - Incoming Inspection Criteria",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 261,
+          "name": "QC Procedure Documentation - In-Process Inspection Points",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 262,
+          "name": "QC Procedure Documentation - Final Inspection Checklist",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 263,
+          "name": "QC Procedure Documentation - Functional Test Procedures",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 270,
+          "name": "Supplier Qualification - Silicone/Urethane Vendor",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 271,
+          "name": "Supplier Qualification - Electronics Components Vendor",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 272,
+          "name": "Supplier Qualification - Machined Parts Vendor",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 273,
+          "name": "Supplier Qualification - 3D Print Vendor (Interim Parts)",
+          "completed": false,
+          "jiraKey": ""
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Validated Mold Set for Production",
+      "progress": 0,
+      "status": "pending",
+      "assignees": [
+        9
+      ],
+      "budget": {
+        "estimated": 0,
+        "actual": 0,
+        "estimatedHours": 0,
+        "notes": "Deliver 1-up mold set to production. FAI and Fit & Function validation for all components."
+      },
+      "timeEntries": [],
+      "dependencies": [
+        5
+      ],
+      "subtasks": [
+        {
+          "id": 300,
+          "name": "Mold Validation - Head Skin (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 301,
+          "name": "Mold Validation - Skull (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 302,
+          "name": "Mold Validation - Airway (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 303,
+          "name": "Mold Validation - Neck (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 304,
+          "name": "Mold Validation - Torso Structural Backing (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 305,
+          "name": "Mold Validation - Shoulder Structural Backing L (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 306,
+          "name": "Mold Validation - Shoulder Structural Backing R (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 307,
+          "name": "Mold Validation - Chest Structural Backing (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 308,
+          "name": "Mold Validation - Chest Plate (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 309,
+          "name": "Mold Validation - Abdomen Plate (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 310,
+          "name": "Mold Validation - Abdomen Structural Backing (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 311,
+          "name": "Mold Validation - Ab Column L (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 312,
+          "name": "Mold Validation - Ab Column R (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 313,
+          "name": "Mold Validation - Hip Structural Backing (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 314,
+          "name": "Mold Validation - Genital Structural Backing (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 315,
+          "name": "Mold Validation - Female Genital (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 316,
+          "name": "Mold Validation - Eye (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 317,
+          "name": "Mold Validation - Hip Joint (FAI + Fit & Function)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 320,
+          "name": "Mold Set Documentation - Mold Specifications and Settings",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 321,
+          "name": "Mold Set Documentation - Maintenance Schedule",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 322,
+          "name": "Mold Set Documentation - Troubleshooting Guide",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 325,
+          "name": "MFG Validation Sign-Off - Head Assembly Components",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 326,
+          "name": "MFG Validation Sign-Off - Torso Assembly Components",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 327,
+          "name": "MFG Validation Sign-Off - Lower Body Components",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 328,
+          "name": "QI Validation Sign-Off - Dimensional Inspection Results",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 329,
+          "name": "QI Validation Sign-Off - Material Property Verification",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 330,
+          "name": "QI Validation Sign-Off - Functional Test Results",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 335,
+          "name": "Production Transfer - Mold Set Release to Production",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 336,
+          "name": "Production Transfer - Process Parameter Lock-In",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 337,
+          "name": "Production Transfer - Production Pilot Run (5 Units)",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 338,
+          "name": "Production Transfer - Pilot Run Evaluation and Sign-Off",
+          "completed": false,
+          "jiraKey": ""
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Secondary Tool Design for Larger Volumes",
+      "progress": 0,
+      "status": "pending",
+      "assignees": [],
+      "budget": {
+        "estimated": 0,
+        "actual": 0,
+        "estimatedHours": 0,
+        "notes": "Scale-up tooling design for production volumes. Multi-cavity molds, assembly jigs, cooling jigs, CNC fixtures."
+      },
+      "timeEntries": [],
+      "dependencies": [
+        6
+      ],
+      "subtasks": [
+        {
+          "id": 400,
+          "name": "Multi-Cavity Mold Design - Head Skin",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 401,
+          "name": "Multi-Cavity Mold Design - Skull",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 402,
+          "name": "Multi-Cavity Mold Design - Airway",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 403,
+          "name": "Multi-Cavity Mold Design - Neck",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 404,
+          "name": "Multi-Cavity Mold Design - Torso Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 405,
+          "name": "Multi-Cavity Mold Design - Shoulder Structural Backing L",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 406,
+          "name": "Multi-Cavity Mold Design - Shoulder Structural Backing R",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 407,
+          "name": "Multi-Cavity Mold Design - Chest Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 408,
+          "name": "Multi-Cavity Mold Design - Chest Plate",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 409,
+          "name": "Multi-Cavity Mold Design - Abdomen Plate",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 410,
+          "name": "Multi-Cavity Mold Design - Abdomen Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 411,
+          "name": "Multi-Cavity Mold Design - Ab Column L",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 412,
+          "name": "Multi-Cavity Mold Design - Ab Column R",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 413,
+          "name": "Multi-Cavity Mold Design - Hip Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 414,
+          "name": "Multi-Cavity Mold Design - Genital Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 415,
+          "name": "Multi-Cavity Mold Design - Female Genital",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 416,
+          "name": "Multi-Cavity Mold Design - Eye",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 417,
+          "name": "Multi-Cavity Mold Design - Hip Joint",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 420,
+          "name": "Assembly Jig - Head Skin",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 421,
+          "name": "Assembly Jig - Skull",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 422,
+          "name": "Assembly Jig - Airway",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 423,
+          "name": "Assembly Jig - Neck",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 424,
+          "name": "Assembly Jig - Torso Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 425,
+          "name": "Assembly Jig - Shoulder Structural Backing L",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 426,
+          "name": "Assembly Jig - Shoulder Structural Backing R",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 427,
+          "name": "Assembly Jig - Chest Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 428,
+          "name": "Assembly Jig - Chest Plate",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 429,
+          "name": "Assembly Jig - Abdomen Plate",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 430,
+          "name": "Assembly Jig - Abdomen Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 431,
+          "name": "Assembly Jig - Ab Column L",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 432,
+          "name": "Assembly Jig - Ab Column R",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 433,
+          "name": "Assembly Jig - Hip Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 434,
+          "name": "Assembly Jig - Genital Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 435,
+          "name": "Assembly Jig - Female Genital",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 436,
+          "name": "Assembly Jig - Eye",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 437,
+          "name": "Assembly Jig - Hip Joint",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 440,
+          "name": "Cooling Jig - Head Skin",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 441,
+          "name": "Cooling Jig - Skull",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 442,
+          "name": "Cooling Jig - Airway",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 443,
+          "name": "Cooling Jig - Neck",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 444,
+          "name": "Cooling Jig - Torso Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 445,
+          "name": "Cooling Jig - Shoulder Structural Backing L",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 446,
+          "name": "Cooling Jig - Shoulder Structural Backing R",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 447,
+          "name": "Cooling Jig - Chest Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 448,
+          "name": "Cooling Jig - Chest Plate",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 449,
+          "name": "Cooling Jig - Abdomen Plate",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 450,
+          "name": "Cooling Jig - Abdomen Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 451,
+          "name": "Cooling Jig - Ab Column L",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 452,
+          "name": "Cooling Jig - Ab Column R",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 453,
+          "name": "Cooling Jig - Hip Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 454,
+          "name": "Cooling Jig - Genital Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 455,
+          "name": "Cooling Jig - Female Genital",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 456,
+          "name": "Cooling Jig - Eye",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 457,
+          "name": "Cooling Jig - Hip Joint",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 460,
+          "name": "CNC Fixture - Head Skin",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 461,
+          "name": "CNC Fixture - Skull",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 462,
+          "name": "CNC Fixture - Airway",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 463,
+          "name": "CNC Fixture - Neck",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 464,
+          "name": "CNC Fixture - Torso Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 465,
+          "name": "CNC Fixture - Shoulder Structural Backing L",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 466,
+          "name": "CNC Fixture - Shoulder Structural Backing R",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 467,
+          "name": "CNC Fixture - Chest Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 468,
+          "name": "CNC Fixture - Chest Plate",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 469,
+          "name": "CNC Fixture - Abdomen Plate",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 470,
+          "name": "CNC Fixture - Abdomen Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 471,
+          "name": "CNC Fixture - Ab Column L",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 472,
+          "name": "CNC Fixture - Ab Column R",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 473,
+          "name": "CNC Fixture - Hip Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 474,
+          "name": "CNC Fixture - Genital Structural Backing",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 475,
+          "name": "CNC Fixture - Female Genital",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 476,
+          "name": "CNC Fixture - Eye",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 477,
+          "name": "CNC Fixture - Hip Joint",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 480,
+          "name": "Volume Planning - Target Production Rate Analysis",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 481,
+          "name": "Volume Planning - Cavity Count Determination per Component",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 482,
+          "name": "Volume Planning - Capital Equipment Requirements",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 483,
+          "name": "Volume Planning - Floor Space and Layout",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 485,
+          "name": "Automation Assessment - Head Assembly Station",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 486,
+          "name": "Automation Assessment - Torso Assembly Station",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 487,
+          "name": "Automation Assessment - Final Assembly Station",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 488,
+          "name": "Automation Assessment - QC Inspection Station",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 490,
+          "name": "Secondary Tooling Documentation - Design Specifications",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 491,
+          "name": "Secondary Tooling Documentation - Vendor Quotes and Selection",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 492,
+          "name": "Secondary Tooling Documentation - Lead Time Schedule",
+          "completed": false,
+          "jiraKey": ""
+        },
+        {
+          "id": 493,
+          "name": "Secondary Tooling Documentation - Budget and ROI Analysis",
+          "completed": false,
+          "jiraKey": ""
+        }
+      ]
+    }
+  ],
+  "deliveries": [
+    {
+      "id": 1,
+      "date": "2026-01-07",
+      "title": "1x Dark Tone Unit",
+      "destination": "IMSH Conference",
+      "status": "pending",
+      "assignees": [
+        5,
+        7
+      ]
+    },
+    {
+      "id": 2,
+      "date": "2026-01-16",
+      "title": "3x Units (Dark/Med/Light)",
+      "destination": "Dubai Distributor Training",
+      "status": "pending",
+      "assignees": [
+        7
+      ]
+    },
+    {
+      "id": 3,
+      "date": "2026-02-18",
+      "title": "2x Units for Tender",
+      "destination": "Tender Submission",
+      "status": "pending",
+      "assignees": []
+    }
+  ],
+  "notes": {
+    "focus": "# Current Focus (Phase 3 - IMSH)\n\n## IMSH CRITICAL TOOLING - MUST COMPLETE\n- Roto Torso Dark Tone Cast - due Jan 3\n- Head Skin Dark Tone Cast - due Jan 3  \n- Genitalia Pour - due Dec 26 (1st pour Thursday)\n- Genital Structural Backing - due Dec 30\n\n## Other Phase 3 Items\n- Complete v3 prototype refinements (95%)\n- Resolve ECG signal issues (C20-186)\n- Improved capacitive sensors (C20-183)\n- Tongue insert for airway (ID 61)\n- Different eyes for Crisis heads (ID 63)\n\n# Active Component Work\n- Torso UI panel integration (C20-195)\n- Arm validation - MD1002/MD1003\n- Modular TSB development (C20-198)",
+    "milestones": "# Key Dates\n- IMSH delivery: Jan 7, 2026\n- Dubai training: Jan 16, 2026\n- Tender submission: Feb 18, 2026\n\n# Completed\n- SESAM demo: June 16, 2025 (Complete)\n- EMS World demo: Oct 15, 2025 (Complete)\n- Phase 3 kickoff: Oct 20, 2025",
+    "future": "# Production Readiness (C20-105)\n- Build 3x validation units\n- W.I. supplementary material\n- Production BOM documents\n- Sample unit build with MFG\n- Sub assembly review with MFG\n- Packaging (C20-21) and carry case (C20-173)\n\n# Scale-up\n- Secondary tooling design for volume"
+  },
+  "team": [
+    {
+      "id": 1,
+      "name": "Sean McGovern",
+      "email": "",
+      "role": "Software/Electrical Engineer",
+      "hourlyRate": 0,
+      "color": "#00a8e8"
+    },
+    {
+      "id": 2,
+      "name": "Alexander Cefarelli",
+      "email": "",
+      "role": "Mechanical Engineer",
+      "hourlyRate": 0,
+      "color": "#9D4EDD"
+    },
+    {
+      "id": 3,
+      "name": "Nicholas Dennis",
+      "email": "",
+      "role": "Mechanical Engineer",
+      "hourlyRate": 0,
+      "color": "#00d26a"
+    },
+    {
+      "id": 4,
+      "name": "Jonathan Matoke",
+      "email": "",
+      "role": "Mechanical Engineer",
+      "hourlyRate": 0,
+      "color": "#FFB703"
+    },
+    {
+      "id": 5,
+      "name": "Austin Khlaifat",
+      "email": "",
+      "role": "Mechanical Engineer",
+      "hourlyRate": 0,
+      "color": "#e63946"
+    },
+    {
+      "id": 6,
+      "name": "Angelina Fontana",
+      "email": "",
+      "role": "Electrical Engineer",
+      "hourlyRate": 0,
+      "color": "#fb8500"
+    },
+    {
+      "id": 7,
+      "name": "Zackariah Jackson",
+      "email": "",
+      "role": "System Architect/Project Manager",
+      "hourlyRate": 0,
+      "color": "#023e8a"
+    },
+    {
+      "id": 8,
+      "name": "William Platt",
+      "email": "",
+      "role": "Electrical Engineer",
+      "hourlyRate": 0,
+      "color": "#2EC4B6"
+    },
+    {
+      "id": 9,
+      "name": "Greg Zindulka",
+      "email": "",
+      "role": "Tooling Engineer",
+      "hourlyRate": 0,
+      "color": "#8338EC"
+    },
+    {
+      "id": 10,
+      "name": "Sebastian Hernandez",
+      "email": "",
+      "role": "Engineer",
+      "hourlyRate": 0,
+      "color": "#FF6B6B"
+    },
+    {
+      "id": 11,
+      "name": "Chris Pohlman",
+      "email": "",
+      "role": "Engineer",
+      "hourlyRate": 0,
+      "color": "#E07A5F"
+    },
+    {
+      "id": 12,
+      "name": "James Perez-Rogers",
+      "email": "",
+      "role": "Engineer",
+      "hourlyRate": 0,
+      "color": "#81B29A"
+    }
+  ],
+  "risks": [
+    {
+      "id": 1,
+      "name": "IMSH Delivery Timeline",
+      "description": "Phase 3 at 95% with Jan 7 deadline. ECG signal issues (C20-186) and capacitive sensor improvements (C20-183) still pending.",
+      "likelihood": 2,
+      "impact": 4,
+      "mitigation": "Daily standups on critical path items, parallel work streams",
+      "ownerId": 7,
+      "status": "mitigating",
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Dubai Multi-Unit Build",
+      "description": "3 units with different skin tones required by Jan 16. Color matching and material availability risks.",
+      "likelihood": 3,
+      "impact": 3,
+      "mitigation": "Early part ordering, color matching validation complete (C20-116)",
+      "ownerId": 5,
+      "status": "open",
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "name": "Tooling Lead Times",
+      "description": "Multiple tooling kickoffs in Phase 4. Vendor capacity and lead times may impact Phase 5/6 timeline.",
+      "likelihood": 3,
+      "impact": 3,
+      "mitigation": "3D printed interim parts strategy, early vendor engagement",
+      "ownerId": 9,
+      "status": "open",
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "name": "Pelican Close Out",
+      "description": "C20-177: Firmware flashing and factory reset confirmation still pending",
+      "likelihood": 3,
+      "impact": 3,
+      "mitigation": "Dedicated verification tasks assigned, alternate vendors identified (C20-181)",
+      "ownerId": 7,
+      "status": "open",
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "name": "Hand Placement Sensor Redesign",
+      "description": "C20-101/C20-102: Chest deformation affects ToF sensor accuracy, redesign may be needed",
+      "likelihood": 3,
+      "impact": 3,
+      "mitigation": "Improved capacitive sensors in development (C20-183)",
+      "ownerId": 6,
+      "status": "mitigating",
+      "created": "2025-12-20T00:00:00.000Z"
+    }
+  ],
+  "milestones": [
+    {
+      "id": 1,
+      "name": "Prototype v1 - SESAM Ship",
+      "date": "2025-06-16",
+      "description": "First prototype shipped for SESAM conference",
+      "phaseId": 1,
+      "status": "reached",
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Prototype v2 - EMS World Demo",
+      "date": "2025-10-15",
+      "description": "Second prototype demonstration at EMS World",
+      "phaseId": 2,
+      "status": "reached",
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "name": "Phase 3 Kickoff",
+      "date": "2025-10-20",
+      "description": "Started v3 prototype development for IMSH",
+      "phaseId": 3,
+      "status": "reached",
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "name": "IMSH Conference Demo",
+      "date": "2026-01-07",
+      "description": "Deliver 1x Dark Tone Unit for IMSH demonstration",
+      "phaseId": 3,
+      "status": "pending",
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "name": "Dubai Distributor Training",
+      "date": "2026-01-16",
+      "description": "Deliver 3x units (Dark/Med/Light) for distributor training",
+      "phaseId": 4,
+      "status": "pending",
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 6,
+      "name": "Tender Submission",
+      "date": "2026-02-18",
+      "description": "Deliver 2x units for tender submission",
+      "phaseId": 4,
+      "status": "pending",
+      "created": "2025-12-20T00:00:00.000Z"
+    }
+  ],
+  "decisions": [
+    {
+      "id": 1,
+      "title": "Reuse IO Lower Leg Design",
+      "date": "2025-03-31",
+      "rationale": "C20-9: Measured and reviewed existing IO Lower Leg - decided to adapt for Crisis 2.0 rather than new development",
+      "madeById": 3,
+      "phaseId": 1,
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "title": "Add Tibia IO Leg Capability",
+      "date": "2025-09-26",
+      "rationale": "C20-182/C20-187: Based on Sept 26 feedback session, decided to add tibia IO leg to Crisis",
+      "madeById": 7,
+      "phaseId": 2,
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "title": "Modular Torso Structural Backing",
+      "date": "2025-10-25",
+      "rationale": "C20-198: Develop modular TSB version for easier assembly and maintenance",
+      "madeById": 3,
+      "phaseId": 3,
+      "created": "2025-12-20T00:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "title": "Paddle Option for Defib Cables",
+      "date": "2025-11-01",
+      "rationale": "C20-184: Add paddle option as alternative to pads for mock defib cables",
+      "madeById": 2,
+      "phaseId": 3,
+      "created": "2025-12-20T00:00:00.000Z"
+    }
+  ],
+  "recurringTemplates": [
+    {
+      "id": 1,
+      "name": "Weekly PM Status Report",
+      "description": "C20-189: Weekly project management status report",
+      "frequency": "weekly",
+      "duration": 2,
+      "created": "2025-12-20T00:00:00.000Z"
+    }
+  ],
+  "activity": [
+    {
+      "id": 1766255576797,
+      "type": "edit",
+      "action": "Updated team member",
+      "details": "Zackariah Jackson",
+      "user": "You",
+      "timestamp": "2025-12-20T18:32:56.797Z"
+    },
+    {
+      "id": 1766255567181,
+      "type": "edit",
+      "action": "Updated team member",
+      "details": "Angelina Fontana",
+      "user": "You",
+      "timestamp": "2025-12-20T18:32:47.181Z"
+    },
+    {
+      "id": 1766255560111,
+      "type": "edit",
+      "action": "Updated team member",
+      "details": "Austin Khlaifat",
+      "user": "You",
+      "timestamp": "2025-12-20T18:32:40.111Z"
+    },
+    {
+      "id": 1766255548513,
+      "type": "edit",
+      "action": "Updated team member",
+      "details": "Nicholas Dennis",
+      "user": "You",
+      "timestamp": "2025-12-20T18:32:28.513Z"
+    },
+    {
+      "id": 1766255536706,
+      "type": "edit",
+      "action": "Updated team member",
+      "details": "Sean McGovern",
+      "user": "You",
+      "timestamp": "2025-12-20T18:32:16.706Z"
+    },
+    {
+      "id": 1766255082443,
+      "type": "edit",
+      "action": "Updated name of phase",
+      "details": "Prototype v3 Demo Unitw - IMSH",
+      "user": "You",
+      "timestamp": "2025-12-20T18:24:42.443Z"
+    }
+  ],
+  "budgetSettings": {
+    "currency": "USD",
+    "hourlyRate": 0,
+    "taxRate": 0
+  },
+  "resources": [],
+  "expenses": [
+    {
+      "id": "exp-001",
+      "name": "FRAMED NICKEL CRISIS UPPER ARM  AND  FOREARM MOLDS",
+      "category": "materials",
+      "amount": 6050.0,
+      "currency": "USD",
+      "date": "2025-10-24",
+      "vendor": "Advanced Electroforming",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 74055",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.907616Z"
+    },
+    {
+      "id": "exp-002",
+      "name": "Crisis extended forearm",
+      "category": "materials",
+      "amount": 12950.0,
+      "currency": "USD",
+      "date": "2025-09-19",
+      "vendor": "Advanced Electroforming",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 74035; PO: P124985",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.907777Z"
+    },
+    {
+      "id": "exp-003",
+      "name": "Philips heartstart ",
+      "category": "equipment",
+      "amount": 2675.0,
+      "currency": "USD",
+      "date": "2025-03-05",
+      "vendor": "All State M.E.D",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 11252; PO: P120474",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.907872Z"
+    },
+    {
+      "id": "exp-004",
+      "name": "Pjilips heartstart MRX defib with pacing",
+      "category": "equipment",
+      "amount": 2500.0,
+      "currency": "USD",
+      "date": "2025-09-15",
+      "vendor": "All State M.E.D",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 5152; PO: P123558",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.907954Z"
+    },
+    {
+      "id": "exp-005",
+      "name": "Electrode Red dot cloth adult, latex free foam trainer pads",
+      "category": "materials",
+      "amount": 94.91,
+      "currency": "USD",
+      "date": "2025-03-11",
+      "vendor": "Amazon",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908031Z"
+    },
+    {
+      "id": "exp-006",
+      "name": "Billable materials for R&D-Crisis customer kickoff meeting",
+      "category": "services",
+      "amount": 11388.75,
+      "currency": "USD",
+      "date": "2025-03-25",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-003NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908100Z"
+    },
+    {
+      "id": "exp-007",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 18887.17,
+      "currency": "USD",
+      "date": "2025-03-28",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-004NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908187Z"
+    },
+    {
+      "id": "exp-008",
+      "name": "Circuit analysis and review, designing, circuit",
+      "category": "services",
+      "amount": 20614.34,
+      "currency": "USD",
+      "date": "2025-04-10",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-006NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908269Z"
+    },
+    {
+      "id": "exp-009",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 31199.8,
+      "currency": "USD",
+      "date": "2025-04-25",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-010NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908342Z"
+    },
+    {
+      "id": "exp-010",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 22880.62,
+      "currency": "USD",
+      "date": "2025-05-07",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-011NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908413Z"
+    },
+    {
+      "id": "exp-011",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 18539.02,
+      "currency": "USD",
+      "date": "2025-05-29",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-012NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908482Z"
+    },
+    {
+      "id": "exp-012",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 19307.29,
+      "currency": "USD",
+      "date": "2025-06-16",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-015NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908549Z"
+    },
+    {
+      "id": "exp-013",
+      "name": "Head replacement board",
+      "category": "services",
+      "amount": 783.54,
+      "currency": "USD",
+      "date": "2025-06-05",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-017nhc; PO: P122468",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908625Z"
+    },
+    {
+      "id": "exp-014",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 16106.38,
+      "currency": "USD",
+      "date": "2025-07-08",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-019NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908719Z"
+    },
+    {
+      "id": "exp-015",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 9347.79,
+      "currency": "USD",
+      "date": "2025-07-18",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-023NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908789Z"
+    },
+    {
+      "id": "exp-016",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 7844.17,
+      "currency": "USD",
+      "date": "2025-08-05",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-032NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908856Z"
+    },
+    {
+      "id": "exp-017",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 12775.0,
+      "currency": "USD",
+      "date": "2025-08-05",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-034NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908924Z"
+    },
+    {
+      "id": "exp-018",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 9275.0,
+      "currency": "USD",
+      "date": "2025-09-05",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-039NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.908991Z"
+    },
+    {
+      "id": "exp-019",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 3893.75,
+      "currency": "USD",
+      "date": "2025-09-09",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-046NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909059Z"
+    },
+    {
+      "id": "exp-020",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 1925.0,
+      "currency": "USD",
+      "date": "2025-09-23",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-052NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909126Z"
+    },
+    {
+      "id": "exp-021",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 5250.0,
+      "currency": "USD",
+      "date": "2025-10-03",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-054NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909194Z"
+    },
+    {
+      "id": "exp-022",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 1029.36,
+      "currency": "USD",
+      "date": "2025-10-21",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-058NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909266Z"
+    },
+    {
+      "id": "exp-023",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 6218.8,
+      "currency": "USD",
+      "date": "2025-10-21",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-059NHC; PO: P124858",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909335Z"
+    },
+    {
+      "id": "exp-024",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 5489.0,
+      "currency": "USD",
+      "date": "2025-10-21",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-061NHC; PO: P124858",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909409Z"
+    },
+    {
+      "id": "exp-025",
+      "name": "Billable materials for R&D-Crisis enclosure",
+      "category": "services",
+      "amount": 2800.0,
+      "currency": "USD",
+      "date": "2025-11-03",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-063NHC; PO: P120185",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909478Z"
+    },
+    {
+      "id": "exp-026",
+      "name": "Ran manual pick and place machine for protoype boards",
+      "category": "services",
+      "amount": 437.5,
+      "currency": "USD",
+      "date": "2025-11-12",
+      "vendor": "Pelican Engineering",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 2025-066NHC; PO: P124858",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909546Z"
+    },
+    {
+      "id": "exp-027",
+      "name": "Swift developers",
+      "category": "services",
+      "amount": 82720.0,
+      "currency": "USD",
+      "date": "2025-02-25",
+      "vendor": "Programming.com",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 5247; PO: P118596",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909614Z"
+    },
+    {
+      "id": "exp-028",
+      "name": "Project Nasco Healthcare for developers",
+      "category": "services",
+      "amount": 41360.0,
+      "currency": "USD",
+      "date": "2025-03-24",
+      "vendor": "Programming.com",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 5311; PO: P118596",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909698Z"
+    },
+    {
+      "id": "exp-029",
+      "name": "Project Nasco Healthcare for developers",
+      "category": "services",
+      "amount": 25960.0,
+      "currency": "USD",
+      "date": "2025-04-09",
+      "vendor": "Programming.com",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 5324; PO: P118596",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909768Z"
+    },
+    {
+      "id": "exp-030",
+      "name": "Project Nasco Healthcare for developers",
+      "category": "services",
+      "amount": 26296.4,
+      "currency": "USD",
+      "date": "2025-05-14",
+      "vendor": "Programming.com",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 5392; PO: P118596",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909836Z"
+    },
+    {
+      "id": "exp-031",
+      "name": "Project Nasco Healthcare for developers",
+      "category": "services",
+      "amount": 25960.0,
+      "currency": "USD",
+      "date": "2025-08-06",
+      "vendor": "Programming.com",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 5494; PO: P118596",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909903Z"
+    },
+    {
+      "id": "exp-032",
+      "name": "Project Nasco Healthcare for developers",
+      "category": "services",
+      "amount": 25960.0,
+      "currency": "USD",
+      "date": "2025-11-05",
+      "vendor": "Programming.com",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 5553; PO: P118596",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.909970Z"
+    },
+    {
+      "id": "exp-033",
+      "name": "Project Nasco Healthcare for developers",
+      "category": "services",
+      "amount": 25960.0,
+      "currency": "USD",
+      "date": "2025-11-05",
+      "vendor": "Programming.com",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 5623; PO: P118596",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.910038Z"
+    },
+    {
+      "id": "exp-034",
+      "name": "Printer",
+      "category": "equipment",
+      "amount": 5953.57,
+      "currency": "USD",
+      "date": "2025-08-08",
+      "vendor": "Prusa Research",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 1750448189; PO: P123240",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.910111Z"
+    },
+    {
+      "id": "exp-035",
+      "name": "2-toolhead 3d printer",
+      "category": "equipment",
+      "amount": 2999.0,
+      "currency": "USD",
+      "date": "2025-03-11",
+      "vendor": "Prusa Research",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.910179Z"
+    },
+    {
+      "id": "exp-036",
+      "name": "Dani blank head dark",
+      "category": "materials",
+      "amount": 559.12,
+      "currency": "USD",
+      "date": "2025-10-15",
+      "vendor": "RS Alberts",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 49109; PO: P125120",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.910246Z"
+    },
+    {
+      "id": "exp-037",
+      "name": "Crisis Torso skin",
+      "category": "materials",
+      "amount": 652.56,
+      "currency": "USD",
+      "date": "2025-11-11",
+      "vendor": "RS Alberts",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 49308; PO: P125261",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.910320Z"
+    },
+    {
+      "id": "exp-038",
+      "name": "Crisis dummy digital model",
+      "category": "services",
+      "amount": 3550.0,
+      "currency": "USD",
+      "date": "2025-03-31",
+      "vendor": "Simon Goodall",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 661; PO: P120564",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.910389Z"
+    },
+    {
+      "id": "exp-039",
+      "name": "Crisis Torso",
+      "category": "services",
+      "amount": 4755.0,
+      "currency": "USD",
+      "date": "2025-09-05",
+      "vendor": "Stratasys",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 465504-IN; PO: P124267",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.910455Z"
+    },
+    {
+      "id": "exp-040",
+      "name": "Crisis Torso master pattern",
+      "category": "services",
+      "amount": 4938.0,
+      "currency": "USD",
+      "date": "2025-11-06",
+      "vendor": "Stratasys",
+      "status": "approved",
+      "notes": "CAPEX: NY-24-111; Invoice: 467670-IN; PO: P125125",
+      "attachments": [],
+      "createdAt": "2025-12-20T21:33:45.910523Z"
+    }
+  ]
+}

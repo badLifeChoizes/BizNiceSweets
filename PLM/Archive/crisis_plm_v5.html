@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRISIS PLM - Bill of Materials Manager</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #131316;
+            --bg-tertiary: #1a1a1f;
+            --bg-elevated: #222228;
+            --border: #2a2a32;
+            --border-light: #3a3a44;
+            --text-primary: #e8e8ec;
+            --text-secondary: #9898a4;
+            --text-muted: #606068;
+            --accent: #00d4aa;
+            --accent-dim: #00a888;
+            --accent-glow: rgba(0, 212, 170, 0.15);
+            --warning: #ffaa00;
+            --error: #ff4466;
+            --success: #00dd88;
+            --part-color: #4488ff;
+            --subassy-color: #aa66ff;
+            --version-color: #ff88cc;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .logo { display: flex; align-items: center; gap: 12px; }
+        .logo-icon {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 14px; color: var(--bg-primary);
+        }
+        .logo-text { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 15px; }
+        .logo-text span { color: var(--text-muted); font-weight: 400; }
+        
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .header-status { display: flex; align-items: center; gap: 12px; margin-right: 16px; padding-right: 16px; border-right: 1px solid var(--border); }
+        .status-indicator { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status-dot.saved { background: var(--success); }
+        .status-dot.unsaved { background: var(--warning); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .btn {
+            font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
+            padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--bg-tertiary); color: var(--text-primary);
+            cursor: pointer; transition: all 0.15s ease;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn:hover { background: var(--bg-elevated); border-color: var(--border-light); }
+        .btn-primary { background: var(--accent); color: var(--bg-primary); border-color: var(--accent); font-weight: 600; }
+        .btn-primary:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-success { background: var(--success); border-color: var(--success); color: var(--bg-primary); }
+        .btn-warning { background: var(--warning); border-color: var(--warning); color: var(--bg-primary); }
+        .btn-danger { background: var(--error); border-color: var(--error); color: white; }
+        .btn-sm { padding: 6px 10px; font-size: 12px; }
+        .btn-xs { padding: 4px 8px; font-size: 11px; }
+        
+        .main { display: flex; height: calc(100vh - 56px); }
+        
+        .sidebar {
+            width: 220px; background: var(--bg-secondary); border-right: 1px solid var(--border);
+            padding: 16px 0; flex-shrink: 0; display: flex; flex-direction: column;
+        }
+        .nav-section { margin-bottom: 24px; }
+        .nav-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); padding: 0 16px; margin-bottom: 8px; }
+        .nav-item {
+            display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+            color: var(--text-secondary); cursor: pointer; transition: all 0.15s ease;
+            border-left: 2px solid transparent;
+        }
+        .nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .nav-item.active { background: var(--accent-glow); color: var(--accent); border-left-color: var(--accent); }
+        .nav-badge { margin-left: auto; font-size: 11px; font-weight: 600; background: var(--bg-elevated); padding: 2px 6px; border-radius: 4px; color: var(--text-muted); }
+        .nav-item.active .nav-badge { background: var(--accent); color: var(--bg-primary); }
+        .sidebar-footer { margin-top: auto; padding: 16px; border-top: 1px solid var(--border); }
+        
+        .content { flex: 1; overflow: auto; padding: 24px; }
+        
+        .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
+        .page-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+        .page-subtitle { color: var(--text-secondary); font-size: 14px; }
+        .page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        
+        .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .card-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        .card-body { padding: 16px; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+        .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+        .stat-value { font-size: 28px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+        .stat-value.accent { color: var(--accent); }
+        
+        .table-wrap { overflow-x: auto; max-height: calc(100vh - 320px); }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px 12px; background: var(--bg-tertiary); color: var(--text-secondary); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text-primary); }
+        tr:hover td { background: var(--bg-tertiary); }
+        .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .tag-part { background: rgba(68, 136, 255, 0.15); color: var(--part-color); }
+        .tag-subassy { background: rgba(170, 102, 255, 0.15); color: var(--subassy-color); }
+        .tag-direct { background: rgba(0, 221, 136, 0.15); color: var(--success); }
+        .tag-user { background: rgba(255, 170, 0, 0.15); color: var(--warning); }
+        .tag-version { background: rgba(255, 136, 204, 0.15); color: var(--version-color); }
+        .tag-draft { background: rgba(255, 170, 0, 0.2); color: var(--warning); }
+        .tag-released { background: rgba(0, 221, 136, 0.2); color: var(--success); }
+        .tag-obsolete { background: rgba(255, 68, 102, 0.2); color: var(--error); }
+        
+        .search-box { position: relative; }
+        .search-box input { width: 250px; padding: 10px 12px 10px 36px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); font-size: 13px; }
+        .search-box input:focus { outline: none; border-color: var(--accent); }
+        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+        
+        .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+        .filter-pill { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); }
+        .filter-pill:hover { border-color: var(--border-light); color: var(--text-primary); }
+        .filter-pill.active { background: var(--accent); border-color: var(--accent); color: var(--bg-primary); }
+        
+        .builder-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        @media (max-width: 1024px) { .builder-grid { grid-template-columns: 1fr; } .sidebar { display: none; } }
+        
+        .builder-panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; max-height: calc(100vh - 200px); }
+        .panel-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+        .panel-title { font-weight: 600; font-size: 14px; }
+        .panel-body { flex: 1; overflow-y: auto; padding: 8px; }
+        
+        .selectable-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: all 0.15s ease; border: 1px solid transparent; }
+        .selectable-item:hover { background: var(--bg-tertiary); }
+        .item-info { flex: 1; min-width: 0; }
+        .item-name { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .item-meta { font-size: 11px; color: var(--text-muted); }
+        .item-cost { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); }
+        
+        .assembly-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 8px; }
+        .qty-input { width: 60px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: center; }
+        .qty-input:focus { outline: none; border-color: var(--accent); }
+        .remove-btn { padding: 6px 10px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-radius: 4px; font-size: 16px; }
+        .remove-btn:hover { background: rgba(255, 68, 102, 0.15); color: var(--error); }
+        
+        .totals-bar { background: var(--bg-tertiary); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .total-item { text-align: center; }
+        .total-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
+        .total-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 600; }
+        .total-value.highlight { color: var(--accent); }
+        
+        .empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        
+        .hidden { display: none !important; }
+        
+        /* Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+        .modal { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; }
+        .modal-lg { max-width: 900px; }
+        .modal-xl { max-width: 1100px; }
+        .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .modal-title { font-size: 18px; font-weight: 600; }
+        .modal-close { background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; padding: 4px; line-height: 1; }
+        .modal-close:hover { color: var(--text-primary); }
+        .modal-body { padding: 24px; overflow-y: auto; flex: 1; }
+        .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; }
+        
+        /* Forms */
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); }
+        .form-label.required::after { content: ' *'; color: var(--error); }
+        .form-input, .form-select, .form-textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); font-size: 14px; font-family: inherit; }
+        .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--accent); }
+        .form-textarea { min-height: 80px; resize: vertical; }
+        .form-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+        
+        /* Upload */
+        .upload-area { border: 2px dashed var(--border); border-radius: 8px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s ease; margin-bottom: 20px; }
+        .upload-area:hover, .upload-area.dragover { border-color: var(--accent); background: var(--accent-glow); }
+        .upload-area .icon { font-size: 32px; margin-bottom: 8px; }
+        
+        /* Version Control Specific */
+        .version-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace; background: rgba(255, 136, 204, 0.15); color: var(--version-color); }
+        
+        .history-item { display: flex; gap: 16px; padding: 16px; border-bottom: 1px solid var(--border); }
+        .history-item:last-child { border-bottom: none; }
+        .history-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+        .history-icon.create { background: rgba(0, 221, 136, 0.15); }
+        .history-icon.update { background: rgba(68, 136, 255, 0.15); }
+        .history-icon.delete { background: rgba(255, 68, 102, 0.15); }
+        .history-icon.release { background: rgba(170, 102, 255, 0.15); }
+        .history-icon.snapshot { background: rgba(255, 170, 0, 0.15); }
+        .history-content { flex: 1; }
+        .history-title { font-weight: 500; margin-bottom: 4px; }
+        .history-meta { font-size: 12px; color: var(--text-muted); }
+        .history-details { font-size: 13px; color: var(--text-secondary); margin-top: 8px; padding: 8px 12px; background: var(--bg-tertiary); border-radius: 6px; }
+        
+        .snapshot-card { border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; background: var(--bg-tertiary); }
+        .snapshot-card:hover { border-color: var(--border-light); }
+        .snapshot-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .snapshot-name { font-weight: 600; font-size: 14px; }
+        .snapshot-date { font-size: 12px; color: var(--text-muted); }
+        .snapshot-stats { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); }
+        .snapshot-actions { margin-top: 12px; display: flex; gap: 8px; }
+        
+        .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .compare-panel { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .compare-header { padding: 12px 16px; background: var(--bg-tertiary); font-weight: 600; font-size: 13px; display: flex; justify-content: space-between; }
+        .compare-body { padding: 16px; max-height: 400px; overflow-y: auto; }
+        .diff-add { background: rgba(0, 221, 136, 0.1); border-left: 3px solid var(--success); padding: 4px 8px; margin: 2px 0; }
+        .diff-remove { background: rgba(255, 68, 102, 0.1); border-left: 3px solid var(--error); padding: 4px 8px; margin: 2px 0; }
+        .diff-change { background: rgba(255, 170, 0, 0.1); border-left: 3px solid var(--warning); padding: 4px 8px; margin: 2px 0; }
+        
+        .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+        .tab { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-secondary); background: transparent; border: 1px solid transparent; }
+        .tab:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .tab.active { background: var(--accent); color: var(--bg-primary); }
+        
+        .bom-builder { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .bom-header { padding: 12px; background: var(--bg-tertiary); display: flex; justify-content: space-between; align-items: center; }
+        .bom-list { max-height: 200px; overflow-y: auto; }
+        .bom-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        .bom-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+        
+        .mapping-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+        .mapping-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-tertiary); border-radius: 6px; }
+        .mapping-label { font-size: 12px; color: var(--text-muted); min-width: 100px; }
+        .mapping-value { font-size: 13px; font-weight: 500; color: var(--accent); }
+        .mapping-value.unmapped { color: var(--text-muted); font-style: italic; }
+        
+        .preview-wrap { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; margin-top: 16px; }
+        .preview-count { font-size: 13px; color: var(--text-secondary); margin-top: 12px; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">C</div>
+            <div class="logo-text">CRISIS PLM <span>/ v2.0</span></div>
+        </div>
+        <div class="header-actions">
+            <div class="header-status">
+                <div class="status-indicator">
+                    <span class="status-dot" id="saveStatus"></span>
+                    <span id="saveStatusText">No changes</span>
+                </div>
+            </div>
+            <button class="btn btn-sm" onclick="saveToLocalStorage()" title="Save to browser">💾 Save</button>
+            <label class="btn btn-sm">
+                📁 Import
+                <input type="file" id="fileInput" accept=".xlsx,.xls,.json" style="display:none">
+            </label>
+        </div>
+    </header>
+    
+    <div class="main">
+        <nav class="sidebar">
+            <div class="nav-section">
+                <div class="nav-label">Overview</div>
+                <div class="nav-item active" data-view="dashboard">📊 <span>Dashboard</span></div>
+            </div>
+            <div class="nav-section">
+                <div class="nav-label">Data</div>
+                <div class="nav-item" data-view="parts">📦 <span>Parts</span><span class="nav-badge" id="partsCount">0</span></div>
+                <div class="nav-item" data-view="assemblies">🔧 <span>Assemblies</span><span class="nav-badge" id="assyCount">0</span></div>
+            </div>
+            <div class="nav-section">
+                <div class="nav-label">Build</div>
+                <div class="nav-item" data-view="builder">🛠️ <span>Product Builder</span></div>
+                <div class="nav-item" data-view="flatbom">📋 <span>Flat BOM</span><span class="nav-badge" id="flatbomCount">0</span></div>
+            </div>
+            <div class="nav-section">
+                <div class="nav-label">Version Control</div>
+                <div class="nav-item" data-view="history">📜 <span>Change History</span><span class="nav-badge" id="historyCount">0</span></div>
+                <div class="nav-item" data-view="snapshots">📸 <span>Snapshots</span><span class="nav-badge" id="snapshotCount">0</span></div>
+            </div>
+            <div class="sidebar-footer">
+                <button class="btn" style="width: 100%; margin-bottom: 8px;" onclick="showModal('create-snapshot')">📸 Create Snapshot</button>
+                <button class="btn btn-primary" style="width: 100%;" onclick="exportAllData()">📥 Export All</button>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <!-- Dashboard -->
+            <div id="view-dashboard" class="view">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Dashboard</h1>
+                        <p class="page-subtitle">Overview of your BOM data</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn" onclick="showModal('import-parts')">📥 Import Parts</button>
+                        <button class="btn" onclick="showModal('import-assemblies')">📥 Import Assemblies</button>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">Total Parts</div><div class="stat-value" id="statParts">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Assemblies</div><div class="stat-value" id="statAssy">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Product Items</div><div class="stat-value" id="statProduct">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Snapshots</div><div class="stat-value accent" id="statSnapshots">0</div></div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">Released Parts</div><div class="stat-value" id="statReleased">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Draft Parts</div><div class="stat-value" id="statDraft">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Changes Today</div><div class="stat-value" id="statChanges">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value accent" id="statCost">$0</div></div>
+                </div>
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header"><span style="font-weight: 600;">Quick Actions</span></div>
+                    <div style="padding: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+                        <button class="btn" onclick="showModal('new-part')" style="justify-content: center; padding: 16px;">➕ New Part</button>
+                        <button class="btn" onclick="showModal('new-assembly')" style="justify-content: center; padding: 16px;">🔧 New Assembly</button>
+                        <button class="btn" onclick="showModal('import-parts')" style="justify-content: center; padding: 16px;">📄 Import CSV</button>
+                        <button class="btn" onclick="showModal('create-snapshot')" style="justify-content: center; padding: 16px;">📸 Snapshot</button>
+                    </div>
+                </div>
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header"><span style="font-weight: 600;">Recent Changes</span></div>
+                    <div id="recentChanges" style="max-height: 300px; overflow-y: auto;"></div>
+                </div>
+            </div>
+            
+            <!-- Parts View -->
+            <div id="view-parts" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Parts</h1>
+                        <p class="page-subtitle" id="partsSubtitle">0 parts</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-primary" onclick="showModal('new-part')">➕ New Part</button>
+                        <button class="btn" onclick="showModal('import-parts')">📥 Import CSV</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="partsSearch" placeholder="Search parts...">
+                        </div>
+                        <div class="filter-pills" id="statusFilters">
+                            <button class="filter-pill active" data-status="all">All</button>
+                            <button class="filter-pill" data-status="draft">Draft</button>
+                            <button class="filter-pill" data-status="released">Released</button>
+                            <button class="filter-pill" data-status="obsolete">Obsolete</button>
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Part Number</th>
+                                    <th>Description</th>
+                                    <th>Rev</th>
+                                    <th>Status</th>
+                                    <th>Type</th>
+                                    <th>Cost</th>
+                                    <th>Modified</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="partsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Assemblies View -->
+            <div id="view-assemblies" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Assemblies</h1>
+                        <p class="page-subtitle" id="assySubtitle">0 assemblies</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-primary" onclick="showModal('new-assembly')">➕ New Assembly</button>
+                        <button class="btn" onclick="showModal('import-assemblies')">📥 Import CSV</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>ID</th>
+                                    <th>Rev</th>
+                                    <th>Status</th>
+                                    <th>Parts</th>
+                                    <th>Cost</th>
+                                    <th>Modified</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="assyTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Builder View -->
+            <div id="view-builder" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Product Builder</h1>
+                        <p class="page-subtitle">Build your product configuration</p>
+                    </div>
+                    <button class="btn btn-primary" id="exportBtn" disabled onclick="exportFlatBom()">📥 Export Flat BOM</button>
+                </div>
+                <div class="builder-grid">
+                    <div class="builder-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">Available Items</span>
+                            <div class="tabs" style="margin: 0;">
+                                <div class="tab active" data-tab="assy" onclick="switchBuilderTab('assy')">Assemblies</div>
+                                <div class="tab" data-tab="parts" onclick="switchBuilderTab('parts')">Parts</div>
+                            </div>
+                        </div>
+                        <div class="panel-body" id="availableItems"></div>
+                    </div>
+                    <div class="builder-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">Current Product</span>
+                            <span style="color: var(--text-muted); font-size: 12px;" id="productCount">0 items</span>
+                        </div>
+                        <div class="panel-body" id="productItems"></div>
+                        <div class="totals-bar">
+                            <div class="total-item"><div class="total-label">Items</div><div class="total-value" id="totalItems">0</div></div>
+                            <div class="total-item"><div class="total-label">Parts</div><div class="total-value" id="totalParts">0</div></div>
+                            <div class="total-item"><div class="total-label">Qty</div><div class="total-value" id="totalQty">0</div></div>
+                            <div class="total-item"><div class="total-label">Cost</div><div class="total-value highlight" id="totalCost">$0</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Flat BOM View -->
+            <div id="view-flatbom" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Flat BOM</h1>
+                        <p class="page-subtitle" id="flatbomSubtitle">0 line items</p>
+                    </div>
+                    <button class="btn btn-primary" id="exportBtn2" disabled onclick="exportFlatBom()">📥 Export</button>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr><th>Part Number</th><th>Description</th><th>Source</th><th>Qty/Src</th><th>Src Qty</th><th>Extended</th><th>Cost</th><th>Line Cost</th></tr>
+                            </thead>
+                            <tbody id="flatbomTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- History View -->
+            <div id="view-history" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Change History</h1>
+                        <p class="page-subtitle" id="historySubtitle">All changes are tracked automatically</p>
+                    </div>
+                    <button class="btn" onclick="clearHistory()">🗑️ Clear History</button>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="filter-pills" id="historyFilters">
+                            <button class="filter-pill active" data-type="all">All</button>
+                            <button class="filter-pill" data-type="create">Created</button>
+                            <button class="filter-pill" data-type="update">Updated</button>
+                            <button class="filter-pill" data-type="delete">Deleted</button>
+                            <button class="filter-pill" data-type="release">Released</button>
+                        </div>
+                    </div>
+                    <div id="historyList" style="max-height: calc(100vh - 300px); overflow-y: auto;"></div>
+                </div>
+            </div>
+            
+            <!-- Snapshots View -->
+            <div id="view-snapshots" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Snapshots</h1>
+                        <p class="page-subtitle">Save and restore database states</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showModal('create-snapshot')">📸 Create Snapshot</button>
+                </div>
+                <div id="snapshotsList"></div>
+            </div>
+        </main>
+    </div>
+    
+    <div id="modalContainer"></div>
+
+    <script>
+        // =====================================================================
+        // STATE
+        // =====================================================================
+        const state = {
+            parts: [],
+            assemblies: {},
+            product: [],
+            history: [],
+            snapshots: [],
+            searchTerm: '',
+            statusFilter: 'all',
+            historyFilter: 'all',
+            builderTab: 'assy',
+            hasUnsavedChanges: false
+        };
+        
+        let partIdCounter = 1;
+        let assyIdCounter = 1;
+        
+        // Column aliases for import
+        const PART_COLUMN_ALIASES = {
+            partNumber: ['part_number', 'partnumber', 'part number', 'part#', 'part_num', 'partnum', 'pn', 'item', 'sku'],
+            description: ['description', 'desc', 'name', 'part_name', 'title'],
+            partType: ['part_type', 'parttype', 'type', 'category'],
+            region: ['region', 'module', 'area', 'location'],
+            costHigh: ['cost_high', 'costhigh', 'high_cost', 'max_cost'],
+            costLow: ['cost_low', 'costlow', 'low_cost', 'min_cost'],
+            costAvg: ['cost_avg', 'costavg', 'avg_cost', 'cost', 'unit_cost', 'price'],
+            units: ['units', 'unit', 'uom'],
+            notes: ['notes', 'note', 'comments']
+        };
+        
+        const ASSY_COLUMN_ALIASES = {
+            name: ['name', 'assembly_name', 'assy_name', 'subassembly', 'title'],
+            id: ['id', 'assembly_id', 'assy_id'],
+            module: ['module', 'region', 'type', 'category'],
+            description: ['description', 'desc', 'notes']
+        };
+        
+        // =====================================================================
+        // UTILITIES
+        // =====================================================================
+        const formatCurrency = (v) => v == null || isNaN(v) ? '-' : '$' + Number(v).toFixed(2);
+        const escapeHtml = (s) => s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : '';
+        const generatePartId = () => `P${String(partIdCounter++).padStart(4, '0')}`;
+        const generateAssyId = () => `SA${String(assyIdCounter++).padStart(4, '0')}`;
+        const formatDate = (d) => new Date(d).toLocaleString();
+        const formatDateShort = (d) => new Date(d).toLocaleDateString();
+        
+        function findColumn(headers, aliases) {
+            const norm = headers.map(h => h ? String(h).toLowerCase().trim().replace(/[^a-z0-9]/g, '_') : '');
+            for (const a of aliases) {
+                const idx = norm.findIndex(h => h === a.replace(/[^a-z0-9]/g, '_'));
+                if (idx !== -1) return idx;
+            }
+            return -1;
+        }
+        
+        function mapColumns(headers, aliases) {
+            const m = {};
+            for (const [f, a] of Object.entries(aliases)) m[f] = findColumn(headers, a);
+            return m;
+        }
+        
+        // =====================================================================
+        // VERSION CONTROL
+        // =====================================================================
+        function addHistory(action, itemType, itemId, details, oldValue = null, newValue = null) {
+            state.history.unshift({
+                id: Date.now(),
+                timestamp: new Date().toISOString(),
+                action,
+                itemType,
+                itemId,
+                details,
+                oldValue: oldValue ? JSON.parse(JSON.stringify(oldValue)) : null,
+                newValue: newValue ? JSON.parse(JSON.stringify(newValue)) : null
+            });
+            markUnsaved();
+        }
+        
+        function createSnapshot(name, description = '') {
+            const snapshot = {
+                id: Date.now(),
+                name,
+                description,
+                timestamp: new Date().toISOString(),
+                data: {
+                    parts: JSON.parse(JSON.stringify(state.parts)),
+                    assemblies: JSON.parse(JSON.stringify(state.assemblies)),
+                    partIdCounter,
+                    assyIdCounter
+                },
+                stats: {
+                    partsCount: state.parts.length,
+                    assembliesCount: Object.keys(state.assemblies).length,
+                    releasedCount: state.parts.filter(p => p.status === 'released').length
+                }
+            };
+            state.snapshots.unshift(snapshot);
+            addHistory('snapshot', 'system', snapshot.id, `Created snapshot: ${name}`);
+            updateAllViews();
+            return snapshot;
+        }
+        
+        function restoreSnapshot(id) {
+            const snapshot = state.snapshots.find(s => s.id === id);
+            if (!snapshot) return;
+            
+            if (!confirm(`Restore snapshot "${snapshot.name}"? Current data will be replaced.`)) return;
+            
+            state.parts = JSON.parse(JSON.stringify(snapshot.data.parts));
+            state.assemblies = JSON.parse(JSON.stringify(snapshot.data.assemblies));
+            partIdCounter = snapshot.data.partIdCounter || 1;
+            assyIdCounter = snapshot.data.assyIdCounter || 1;
+            
+            addHistory('restore', 'system', snapshot.id, `Restored snapshot: ${snapshot.name}`);
+            updateAllViews();
+        }
+        
+        function deleteSnapshot(id) {
+            if (!confirm('Delete this snapshot?')) return;
+            const idx = state.snapshots.findIndex(s => s.id === id);
+            if (idx !== -1) state.snapshots.splice(idx, 1);
+            updateAllViews();
+        }
+        
+        function compareSnapshots(id1, id2) {
+            const s1 = state.snapshots.find(s => s.id === id1);
+            const s2 = id2 === 'current' ? { data: { parts: state.parts, assemblies: state.assemblies }, name: 'Current' } : state.snapshots.find(s => s.id === id2);
+            if (!s1 || !s2) return;
+            showCompareModal(s1, s2);
+        }
+        
+        // =====================================================================
+        // PART MANAGEMENT WITH VERSIONING
+        // =====================================================================
+        function createPart(data, addToHistory = true) {
+            const part = {
+                id: generatePartId(),
+                partNumber: data.partNumber || '',
+                description: data.description || 'New Part',
+                partType: data.partType || '',
+                region: data.region || '',
+                costHigh: Number(data.costHigh) || 0,
+                costLow: Number(data.costLow) || 0,
+                costAvg: Number(data.costAvg) || 0,
+                units: data.units || 'EA',
+                notes: data.notes || '',
+                revision: 'A',
+                status: 'draft',
+                created: new Date().toISOString(),
+                modified: new Date().toISOString(),
+                source: data.source || 'user'
+            };
+            if (!part.partNumber) part.partNumber = part.id;
+            state.parts.push(part);
+            if (addToHistory) addHistory('create', 'part', part.id, `Created part: ${part.partNumber}`, null, part);
+            markUnsaved();
+            return part;
+        }
+        
+        function updatePart(id, changes) {
+            const idx = state.parts.findIndex(p => p.id === id);
+            if (idx === -1) return;
+            const old = JSON.parse(JSON.stringify(state.parts[idx]));
+            Object.assign(state.parts[idx], changes, { modified: new Date().toISOString() });
+            addHistory('update', 'part', id, `Updated part: ${state.parts[idx].partNumber}`, old, state.parts[idx]);
+            markUnsaved();
+            updateAllViews();
+        }
+        
+        function releasePart(id) {
+            const part = state.parts.find(p => p.id === id);
+            if (!part) return;
+            const old = JSON.parse(JSON.stringify(part));
+            part.status = 'released';
+            part.modified = new Date().toISOString();
+            addHistory('release', 'part', id, `Released part: ${part.partNumber} Rev ${part.revision}`, old, part);
+            markUnsaved();
+            updateAllViews();
+        }
+        
+        function revisionPart(id) {
+            const part = state.parts.find(p => p.id === id);
+            if (!part) return;
+            const old = JSON.parse(JSON.stringify(part));
+            const nextRev = String.fromCharCode(part.revision.charCodeAt(0) + 1);
+            part.revision = nextRev;
+            part.status = 'draft';
+            part.modified = new Date().toISOString();
+            addHistory('update', 'part', id, `New revision: ${part.partNumber} Rev ${nextRev}`, old, part);
+            markUnsaved();
+            updateAllViews();
+        }
+        
+        function deletePart(idx) {
+            if (!confirm('Delete this part?')) return;
+            const part = state.parts[idx];
+            addHistory('delete', 'part', part.id, `Deleted part: ${part.partNumber}`, part, null);
+            state.parts.splice(idx, 1);
+            markUnsaved();
+            updateAllViews();
+        }
+        
+        // =====================================================================
+        // ASSEMBLY MANAGEMENT WITH VERSIONING
+        // =====================================================================
+        function createAssembly(data, addToHistory = true) {
+            const id = generateAssyId();
+            const assy = {
+                id,
+                name: data.name || 'New Assembly',
+                module: data.module || '',
+                description: data.description || '',
+                parts: data.parts || [],
+                revision: 'A',
+                status: 'draft',
+                created: new Date().toISOString(),
+                modified: new Date().toISOString(),
+                source: data.source || 'user'
+            };
+            state.assemblies[assy.name] = assy;
+            if (addToHistory) addHistory('create', 'assembly', assy.id, `Created assembly: ${assy.name}`, null, assy);
+            markUnsaved();
+            return assy;
+        }
+        
+        function releaseAssembly(name) {
+            const assy = state.assemblies[name];
+            if (!assy) return;
+            const old = JSON.parse(JSON.stringify(assy));
+            assy.status = 'released';
+            assy.modified = new Date().toISOString();
+            addHistory('release', 'assembly', assy.id, `Released assembly: ${assy.name} Rev ${assy.revision}`, old, assy);
+            markUnsaved();
+            updateAllViews();
+        }
+        
+        function deleteAssembly(name) {
+            if (!confirm('Delete this assembly?')) return;
+            const assy = state.assemblies[name];
+            addHistory('delete', 'assembly', assy.id, `Deleted assembly: ${name}`, assy, null);
+            delete state.assemblies[name];
+            markUnsaved();
+            updateAllViews();
+        }
+        
+        // =====================================================================
+        // PERSISTENCE
+        // =====================================================================
+        function markUnsaved() {
+            state.hasUnsavedChanges = true;
+            document.getElementById('saveStatus').className = 'status-dot unsaved';
+            document.getElementById('saveStatusText').textContent = 'Unsaved changes';
+        }
+        
+        function markSaved() {
+            state.hasUnsavedChanges = false;
+            document.getElementById('saveStatus').className = 'status-dot saved';
+            document.getElementById('saveStatusText').textContent = 'All saved';
+        }
+        
+        function saveToLocalStorage() {
+            const data = {
+                parts: state.parts,
+                assemblies: state.assemblies,
+                history: state.history,
+                snapshots: state.snapshots,
+                product: state.product,
+                partIdCounter,
+                assyIdCounter,
+                savedAt: new Date().toISOString()
+            };
+            localStorage.setItem('crisisPlmData', JSON.stringify(data));
+            markSaved();
+            alert('Saved to browser storage');
+        }
+        
+        function loadFromLocalStorage() {
+            const saved = localStorage.getItem('crisisPlmData');
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    state.parts = data.parts || [];
+                    state.assemblies = data.assemblies || {};
+                    state.history = data.history || [];
+                    state.snapshots = data.snapshots || [];
+                    state.product = data.product || [];
+                    partIdCounter = data.partIdCounter || 1;
+                    assyIdCounter = data.assyIdCounter || 1;
+                    markSaved();
+                    return true;
+                } catch (e) { console.error('Load error:', e); }
+            }
+            return false;
+        }
+        
+        function exportAllData() {
+            const wb = XLSX.utils.book_new();
+            
+            // Parts
+            const partsData = state.parts.map(p => ({
+                Part_ID: p.id, Part_Number: p.partNumber, Description: p.description,
+                Revision: p.revision, Status: p.status, Part_Type: p.partType, Region: p.region,
+                Cost_High: p.costHigh, Cost_Low: p.costLow, Cost_Avg: p.costAvg,
+                Units: p.units, Notes: p.notes, Created: p.created, Modified: p.modified
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partsData), 'Parts');
+            
+            // Assemblies
+            const assyData = Object.values(state.assemblies).map(a => ({
+                Assembly_ID: a.id, Name: a.name, Module: a.module, Description: a.description,
+                Revision: a.revision, Status: a.status, Parts_Count: a.parts.length,
+                Created: a.created, Modified: a.modified
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(assyData), 'Assemblies');
+            
+            // History
+            const histData = state.history.map(h => ({
+                Timestamp: h.timestamp, Action: h.action, Type: h.itemType, Item_ID: h.itemId, Details: h.details
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(histData), 'History');
+            
+            XLSX.writeFile(wb, `CRISIS_PLM_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+        
+        function exportFlatBom() {
+            const flatBom = generateFlatBom();
+            const wb = XLSX.utils.book_new();
+            const data = flatBom.map(i => ({
+                Part_Number: i.partNumber, Description: i.description, Source_Type: i.sourceType,
+                Source_Name: i.sourceName, Qty_In_Source: i.qtyInSource, Source_Qty: i.sourceQty,
+                Extended_Qty: i.extendedQty, Unit_Cost: i.costAvg, Line_Cost: i.lineCost
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Flat_BOM');
+            XLSX.writeFile(wb, 'CRISIS_FlatBOM.xlsx');
+        }
+        
+        function clearHistory() {
+            if (!confirm('Clear all history? This cannot be undone.')) return;
+            state.history = [];
+            markUnsaved();
+            updateAllViews();
+        }
+        
+        // =====================================================================
+        // PRODUCT BUILDER & FLAT BOM
+        // =====================================================================
+        function addToProduct(item, type) {
+            const existing = state.product.find(p => type === 'part' ? p.partNumber === item.partNumber : p.name === item.name);
+            if (existing) { existing.qty += 1; }
+            else {
+                if (type === 'part') {
+                    state.product.push({ type: 'PART', partNumber: item.partNumber, description: item.description, costAvg: item.costAvg || 0, qty: 1 });
+                } else {
+                    const cost = item.parts.reduce((s, p) => s + (p.qty * p.costAvg), 0);
+                    state.product.push({ type: 'SUB-ASSY', name: item.name, module: item.module, costAvg: cost, parts: item.parts, qty: 1 });
+                }
+            }
+            markUnsaved();
+            updateAllViews();
+        }
+        
+        function updateProductQty(idx, qty) { state.product[idx].qty = Math.max(1, parseInt(qty) || 1); markUnsaved(); updateAllViews(); }
+        function removeFromProduct(idx) { state.product.splice(idx, 1); markUnsaved(); updateAllViews(); }
+        
+        function generateFlatBom() {
+            const items = [];
+            state.product.forEach(item => {
+                if (item.type === 'PART') {
+                    items.push({ partNumber: item.partNumber, description: item.description, sourceType: 'DIRECT', sourceName: 'Product', qtyInSource: 1, sourceQty: item.qty, extendedQty: item.qty, costAvg: item.costAvg, lineCost: item.qty * item.costAvg });
+                } else if (item.parts) {
+                    item.parts.forEach(p => {
+                        items.push({ partNumber: p.partNumber, description: p.description, sourceType: 'SUB-ASSY', sourceName: item.name, qtyInSource: p.qty, sourceQty: item.qty, extendedQty: p.qty * item.qty, costAvg: p.costAvg, lineCost: p.qty * item.qty * p.costAvg });
+                    });
+                }
+            });
+            return items;
+        }
+        
+        function getTotals() {
+            const fb = generateFlatBom();
+            return { lineItems: fb.length, totalQty: fb.reduce((s, i) => s + i.extendedQty, 0), totalCost: fb.reduce((s, i) => s + i.lineCost, 0) };
+        }
+        
+        // =====================================================================
+        // IMPORT
+        // =====================================================================
+        function parseFile(file, cb) {
+            const r = new FileReader();
+            r.onload = e => { try { cb(XLSX.read(e.target.result, { type: 'array' })); } catch (err) { alert('Error: ' + err.message); } };
+            r.readAsArrayBuffer(file);
+        }
+        
+        function importFromCrisisBom(file) {
+            parseFile(file, wb => {
+                if (wb.Sheets['Master_Parts']) {
+                    XLSX.utils.sheet_to_json(wb.Sheets['Master_Parts'], { defval: '' }).forEach(row => {
+                        createPart({ partNumber: row.Part_Number, description: row.Description, partType: row.Part_Type, region: row.Region, costHigh: row.Cost_High, costLow: row.Cost_Low, costAvg: row.Cost_Avg, units: row.Units, notes: row.Notes, source: 'imported' }, false);
+                    });
+                }
+                const sheets = wb.SheetNames.filter(n => n.includes('Basic') || n.includes('Injection') || n.includes('CPR') || n.includes('Sternal') || n.includes('RGB') || n.includes('BP') || n.includes('ECG') || n.includes('Auscultation') || n.includes('Genital'));
+                sheets.forEach(sn => {
+                    const json = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1 });
+                    const name = json[5]?.[1] || sn, module = json[6]?.[1] || '';
+                    const parts = [];
+                    for (let i = 13; i < json.length; i++) {
+                        const row = json[i];
+                        if (row?.[1]) parts.push({ partNumber: row[1], description: row[2] || '', qty: Number(row[3]) || 1, partType: row[4] || '', region: row[5] || '', costAvg: Number(row[9]) || 0 });
+                    }
+                    if (parts.length || name) createAssembly({ name, module, parts, source: 'imported' }, false);
+                });
+                addHistory('create', 'system', 'import', `Imported from: ${file.name}`);
+                updateAllViews();
+            });
+        }
+        
+        // =====================================================================
+        // MODALS
+        // =====================================================================
+        function showModal(type) {
+            const c = document.getElementById('modalContainer');
+            let h = '';
+            
+            if (type === 'new-part') {
+                h = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()">
+                    <div class="modal-header"><h2 class="modal-title">New Part</h2><button class="modal-close" onclick="closeModal()">&times;</button></div>
+                    <div class="modal-body">
+                        <div class="form-row"><div class="form-group"><label class="form-label">Part Number</label><input class="form-input" id="npNum" placeholder="Auto-generated if empty"></div>
+                        <div class="form-group"><label class="form-label required">Description</label><input class="form-input" id="npDesc"></div></div>
+                        <div class="form-row"><div class="form-group"><label class="form-label">Type</label><input class="form-input" id="npType" placeholder="PP, SA, MD..."></div>
+                        <div class="form-group"><label class="form-label">Region</label><input class="form-input" id="npRegion"></div></div>
+                        <div class="form-row-3"><div class="form-group"><label class="form-label">Cost High</label><input type="number" step="0.01" class="form-input" id="npCostH"></div>
+                        <div class="form-group"><label class="form-label">Cost Low</label><input type="number" step="0.01" class="form-input" id="npCostL"></div>
+                        <div class="form-group"><label class="form-label">Cost Avg</label><input type="number" step="0.01" class="form-input" id="npCostA"></div></div>
+                        <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="npNotes"></textarea></div>
+                    </div>
+                    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveNewPart()">Create Part</button></div>
+                </div></div>`;
+            }
+            else if (type === 'new-assembly') {
+                h = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal modal-lg" onclick="event.stopPropagation()">
+                    <div class="modal-header"><h2 class="modal-title">New Assembly</h2><button class="modal-close" onclick="closeModal()">&times;</button></div>
+                    <div class="modal-body">
+                        <div class="form-row"><div class="form-group"><label class="form-label required">Assembly Name</label><input class="form-input" id="naName"></div>
+                        <div class="form-group"><label class="form-label">Module</label><input class="form-input" id="naModule"></div></div>
+                        <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="naDesc"></div>
+                        <div class="bom-builder" style="margin-top:20px"><div class="bom-header"><span style="font-weight:600">Bill of Materials</span><button class="btn btn-sm" onclick="showAddPartModal()">➕ Add Part</button></div>
+                        <div class="bom-list" id="assyBomList"><div class="bom-empty">No parts added</div></div></div>
+                    </div>
+                    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveNewAssembly()">Create Assembly</button></div>
+                </div></div>`;
+                window._assyBomParts = [];
+            }
+            else if (type === 'create-snapshot') {
+                h = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()">
+                    <div class="modal-header"><h2 class="modal-title">Create Snapshot</h2><button class="modal-close" onclick="closeModal()">&times;</button></div>
+                    <div class="modal-body">
+                        <div class="form-group"><label class="form-label required">Snapshot Name</label><input class="form-input" id="snapName" placeholder="e.g., v1.0 Release, Before major changes..."></div>
+                        <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="snapDesc" placeholder="What's included in this snapshot..."></textarea></div>
+                        <div style="padding:16px;background:var(--bg-tertiary);border-radius:8px;margin-top:16px">
+                            <div style="font-weight:600;margin-bottom:8px">Current State</div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;color:var(--text-secondary)">
+                                <div>Parts: ${state.parts.length}</div><div>Assemblies: ${Object.keys(state.assemblies).length}</div>
+                                <div>Released: ${state.parts.filter(p=>p.status==='released').length}</div><div>Draft: ${state.parts.filter(p=>p.status==='draft').length}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveSnapshot()">📸 Create Snapshot</button></div>
+                </div></div>`;
+            }
+            else if (type === 'import-parts') {
+                h = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal modal-lg" onclick="event.stopPropagation()">
+                    <div class="modal-header"><h2 class="modal-title">Import Parts</h2><button class="modal-close" onclick="closeModal()">&times;</button></div>
+                    <div class="modal-body">
+                        <div class="upload-area" id="partsUploadArea" onclick="document.getElementById('partsFileInput').click()">
+                            <div class="icon">📄</div><div class="text">Drop CSV or Excel file here</div><div class="hint">or click to browse</div>
+                            <input type="file" id="partsFileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleFileUploadWithSheets(this.files[0], 'parts')">
+                        </div>
+                        <div id="partsSheetSelect" class="hidden" style="margin-bottom:16px">
+                            <div class="form-group"><label class="form-label">Select Sheet</label><select class="form-select" id="partsSheetDropdown" onchange="processSelectedSheet('parts')"></select></div>
+                        </div>
+                        <div id="partsImportPreview" class="hidden">
+                            <h4 style="margin-bottom:12px">Column Mapping</h4>
+                            <div class="mapping-grid" id="partsMappingGrid"></div>
+                            <div class="preview-wrap" id="partsPreviewTable"></div>
+                            <div class="preview-count" id="partsPreviewCount"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" id="importPartsBtn" disabled onclick="confirmImportParts()">Import</button></div>
+                </div></div>`;
+                window._partsImportData = null;
+                window._partsWorkbook = null;
+            }
+            else if (type === 'import-assemblies') {
+                h = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal modal-lg" onclick="event.stopPropagation()">
+                    <div class="modal-header"><h2 class="modal-title">Import Assemblies</h2><button class="modal-close" onclick="closeModal()">&times;</button></div>
+                    <div class="modal-body">
+                        <div class="upload-area" id="assyUploadArea" onclick="document.getElementById('assyFileInput').click()">
+                            <div class="icon">📄</div><div class="text">Drop CSV or Excel file here</div>
+                            <input type="file" id="assyFileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleFileUploadWithSheets(this.files[0], 'assy')">
+                        </div>
+                        <div id="assySheetSelect" class="hidden" style="margin-bottom:16px">
+                            <div class="form-group"><label class="form-label">Select Sheet</label><select class="form-select" id="assySheetDropdown" onchange="processSelectedSheet('assy')"></select></div>
+                        </div>
+                        <div id="assyImportPreview" class="hidden">
+                            <div class="mapping-grid" id="assyMappingGrid"></div>
+                            <div class="preview-wrap" id="assyPreviewTable"></div>
+                            <div class="preview-count" id="assyPreviewCount"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" id="importAssyBtn" disabled onclick="confirmImportAssy()">Import</button></div>
+                </div></div>`;
+                window._assyImportData = null;
+                window._assyWorkbook = null;
+            }
+            
+            c.innerHTML = h;
+            setupUploadAreas();
+        }
+        
+        function closeModal(e) { if (e && e.target !== e.currentTarget) return; document.getElementById('modalContainer').innerHTML = ''; }
+        
+        function setupUploadAreas() {
+            ['partsUploadArea', 'assyUploadArea'].forEach(id => {
+                const a = document.getElementById(id);
+                if (a) {
+                    a.ondragover = e => { e.preventDefault(); a.classList.add('dragover'); };
+                    a.ondragleave = () => a.classList.remove('dragover');
+                    a.ondrop = e => { e.preventDefault(); a.classList.remove('dragover'); const f = e.dataTransfer.files[0]; if (f) handleFileUploadWithSheets(f, id.includes('parts') ? 'parts' : 'assy'); };
+                }
+            });
+        }
+        
+        function saveNewPart() {
+            const desc = document.getElementById('npDesc').value.trim();
+            const num = document.getElementById('npNum').value.trim();
+            if (!desc && !num) { alert('Enter description or part number'); return; }
+            createPart({ partNumber: num, description: desc || 'New Part', partType: document.getElementById('npType').value.trim(), region: document.getElementById('npRegion').value.trim(), costHigh: document.getElementById('npCostH').value, costLow: document.getElementById('npCostL').value, costAvg: document.getElementById('npCostA').value, notes: document.getElementById('npNotes').value.trim() });
+            closeModal(); updateAllViews();
+        }
+        
+        function saveNewAssembly() {
+            const name = document.getElementById('naName').value.trim();
+            if (!name) { alert('Enter assembly name'); return; }
+            createAssembly({ name, module: document.getElementById('naModule').value.trim(), description: document.getElementById('naDesc').value.trim(), parts: window._assyBomParts || [] });
+            closeModal(); updateAllViews();
+        }
+        
+        function saveSnapshot() {
+            const name = document.getElementById('snapName').value.trim();
+            if (!name) { alert('Enter snapshot name'); return; }
+            createSnapshot(name, document.getElementById('snapDesc').value.trim());
+            closeModal(); alert('Snapshot created!');
+        }
+        
+        function showAddPartModal() {
+            const opts = state.parts.map((p, i) => `<option value="${i}">${escapeHtml(p.partNumber)} - ${escapeHtml(p.description)}</option>`).join('');
+            const h = `<div class="modal-overlay" onclick="closeAddPartModal(event)" style="z-index:1001"><div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
+                <div class="modal-header"><h2 class="modal-title">Add Part</h2><button class="modal-close" onclick="closeAddPartModal()">&times;</button></div>
+                <div class="modal-body">
+                    <div class="form-group"><label class="form-label">Select Part</label><select class="form-select" id="apSelect"><option value="">-- Select --</option>${opts}</select></div>
+                    <div class="form-group"><label class="form-label">Or enter manually:</label><input class="form-input" id="apNum" placeholder="Part number"></div>
+                    <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="apDesc"></div>
+                    <div class="form-row"><div class="form-group"><label class="form-label">Qty</label><input type="number" class="form-input" id="apQty" value="1" min="1"></div>
+                    <div class="form-group"><label class="form-label">Unit Cost</label><input type="number" step="0.01" class="form-input" id="apCost"></div></div>
+                </div>
+                <div class="modal-footer"><button class="btn" onclick="closeAddPartModal()">Cancel</button><button class="btn btn-primary" onclick="confirmAddPart()">Add</button></div>
+            </div></div>`;
+            document.getElementById('modalContainer').insertAdjacentHTML('beforeend', h);
+        }
+        
+        function closeAddPartModal(e) { if (e && e.target !== e.currentTarget) return; const o = document.querySelectorAll('.modal-overlay'); if (o.length > 1) o[o.length - 1].remove(); }
+        
+        function confirmAddPart() {
+            const sel = document.getElementById('apSelect').value;
+            const num = document.getElementById('apNum').value.trim();
+            const desc = document.getElementById('apDesc').value.trim();
+            const qty = parseInt(document.getElementById('apQty').value) || 1;
+            const cost = parseFloat(document.getElementById('apCost').value) || 0;
+            let part;
+            if (sel) { const p = state.parts[parseInt(sel)]; part = { partNumber: p.partNumber, description: p.description, qty, costAvg: cost || p.costAvg }; }
+            else if (num || desc) { part = { partNumber: num || 'TBD', description: desc || num, qty, costAvg: cost }; }
+            else { alert('Select or enter a part'); return; }
+            window._assyBomParts.push(part);
+            updateAssyBomList();
+            closeAddPartModal();
+        }
+        
+        function updateAssyBomList() {
+            const l = document.getElementById('assyBomList');
+            if (!window._assyBomParts?.length) { l.innerHTML = '<div class="bom-empty">No parts added</div>'; return; }
+            l.innerHTML = window._assyBomParts.map((p, i) => `<div class="bom-item"><span class="tag tag-part">P</span><div class="item-info"><div class="item-name">${escapeHtml(p.partNumber)}</div><div class="item-meta">${escapeHtml(p.description)}</div></div><input type="number" class="qty-input" value="${p.qty}" min="1" onchange="window._assyBomParts[${i}].qty=parseInt(this.value)||1"><span class="item-cost">${formatCurrency(p.costAvg)}</span><button class="remove-btn" onclick="window._assyBomParts.splice(${i},1);updateAssyBomList()">✕</button></div>`).join('');
+        }
+        
+        function handleFileUploadWithSheets(file, importType) {
+            if (!file) return;
+            parseFile(file, wb => {
+                const sheetNames = wb.SheetNames;
+                
+                // Get row counts for each sheet (excluding header)
+                const sheetInfo = sheetNames.map(name => {
+                    const data = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1 });
+                    const rows = data.length > 1 ? data.length - 1 : 0;
+                    return { name, rows };
+                });
+                
+                if (importType === 'parts') {
+                    window._partsWorkbook = wb;
+                    document.getElementById('partsUploadArea').classList.add('hidden');
+                    
+                    if (sheetNames.length > 1) {
+                        document.getElementById('partsSheetSelect').classList.remove('hidden');
+                        const dropdown = document.getElementById('partsSheetDropdown');
+                        dropdown.innerHTML = sheetInfo.map((s, i) => `<option value="${i}">${escapeHtml(s.name)} (${s.rows} rows)</option>`).join('');
+                        // Auto-select "Parts" sheet if it exists, skip Instructions
+                        const partsIdx = sheetNames.findIndex(n => n.toLowerCase() === 'parts' || (n.toLowerCase().includes('part') && !n.toLowerCase().includes('instruction')));
+                        if (partsIdx >= 0) dropdown.value = partsIdx;
+                        processSelectedSheet('parts');
+                    } else {
+                        processSheetForParts(wb.Sheets[sheetNames[0]]);
+                    }
+                } else {
+                    window._assyWorkbook = wb;
+                    document.getElementById('assyUploadArea').classList.add('hidden');
+                    
+                    if (sheetNames.length > 1) {
+                        document.getElementById('assySheetSelect').classList.remove('hidden');
+                        const dropdown = document.getElementById('assySheetDropdown');
+                        dropdown.innerHTML = sheetInfo.map((s, i) => `<option value="${i}">${escapeHtml(s.name)} (${s.rows} rows)</option>`).join('');
+                        // Auto-select "Assemblies" sheet if it exists
+                        const assyIdx = sheetNames.findIndex(n => n.toLowerCase() === 'assemblies' || (n.toLowerCase().includes('assembl') && !n.toLowerCase().includes('bom')));
+                        if (assyIdx >= 0) dropdown.value = assyIdx;
+                        processSelectedSheet('assy');
+                    } else {
+                        processSheetForAssy(wb.Sheets[sheetNames[0]]);
+                    }
+                }
+            });
+        }
+        
+        function processSelectedSheet(importType) {
+            if (importType === 'parts') {
+                const wb = window._partsWorkbook;
+                const sheetIdx = parseInt(document.getElementById('partsSheetDropdown').value);
+                const sheetName = wb.SheetNames[sheetIdx];
+                processSheetForParts(wb.Sheets[sheetName]);
+            } else {
+                const wb = window._assyWorkbook;
+                const sheetIdx = parseInt(document.getElementById('assySheetDropdown').value);
+                const sheetName = wb.SheetNames[sheetIdx];
+                processSheetForAssy(wb.Sheets[sheetName]);
+            }
+        }
+        
+        function processSheetForParts(sheet) {
+            const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (data.length < 2) { 
+                document.getElementById('partsImportPreview').classList.remove('hidden');
+                document.getElementById('partsMappingGrid').innerHTML = '<div style="color: var(--warning); padding: 12px;">⚠️ Sheet appears empty or has no data rows</div>';
+                document.getElementById('partsPreviewTable').innerHTML = '';
+                document.getElementById('partsPreviewCount').textContent = '';
+                document.getElementById('importPartsBtn').disabled = true;
+                return; 
+            }
+            const headers = data[0], mapping = mapColumns(headers, PART_COLUMN_ALIASES), rows = data.slice(1).filter(r => r.some(c => c));
+            window._partsImportData = { headers, mapping, rows };
+            document.getElementById('partsImportPreview').classList.remove('hidden');
+            
+            const hasPartNum = mapping.partNumber !== -1;
+            const hasDesc = mapping.description !== -1;
+            const hasCost = mapping.costAvg !== -1;
+            
+            let warningHtml = '';
+            if (!hasPartNum && !hasDesc) {
+                warningHtml = '<div style="color: var(--warning); padding: 12px; margin-bottom: 12px; background: rgba(255,170,0,0.1); border-radius: 6px;">⚠️ No Part_Number or Description column found. This may not be a parts sheet.</div>';
+            }
+            
+            document.getElementById('partsMappingGrid').innerHTML = warningHtml + Object.entries(PART_COLUMN_ALIASES).map(([f]) => { const idx = mapping[f], m = idx !== -1 ? headers[idx] : null; return `<div class="mapping-item"><span class="mapping-label">${f}:</span><span class="mapping-value ${m?'':'unmapped'}">${m||'not found'}</span></div>`; }).join('');
+            let t = '<table><thead><tr>' + headers.map(h => `<th>${escapeHtml(h)}</th>`).join('') + '</tr></thead><tbody>' + rows.slice(0, 5).map(r => '<tr>' + headers.map((_, i) => `<td>${escapeHtml(r[i]||'')}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
+            document.getElementById('partsPreviewTable').innerHTML = t;
+            
+            // Count valid rows (those with partNumber or description)
+            const validRows = rows.filter(r => {
+                const pn = hasPartNum ? r[mapping.partNumber] : null;
+                const desc = hasDesc ? r[mapping.description] : null;
+                return pn || desc;
+            }).length;
+            
+            document.getElementById('partsPreviewCount').textContent = `${validRows} valid parts will be imported (${rows.length} total rows)`;
+            document.getElementById('importPartsBtn').disabled = validRows === 0;
+        }
+        
+        function processSheetForAssy(sheet) {
+            const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (data.length < 2) { 
+                document.getElementById('assyImportPreview').classList.remove('hidden');
+                document.getElementById('assyMappingGrid').innerHTML = '<div style="color: var(--warning); padding: 12px;">⚠️ Sheet appears empty or has no data rows</div>';
+                document.getElementById('assyPreviewTable').innerHTML = '';
+                document.getElementById('assyPreviewCount').textContent = '';
+                document.getElementById('importAssyBtn').disabled = true;
+                return; 
+            }
+            const headers = data[0], mapping = mapColumns(headers, ASSY_COLUMN_ALIASES), rows = data.slice(1).filter(r => r.some(c => c));
+            window._assyImportData = { headers, mapping, rows };
+            document.getElementById('assyImportPreview').classList.remove('hidden');
+            
+            const hasName = mapping.name !== -1;
+            
+            let warningHtml = '';
+            if (!hasName) {
+                warningHtml = '<div style="color: var(--warning); padding: 12px; margin-bottom: 12px; background: rgba(255,170,0,0.1); border-radius: 6px;">⚠️ No Name column found. This may not be an assemblies sheet.</div>';
+            }
+            
+            document.getElementById('assyMappingGrid').innerHTML = warningHtml + Object.entries(ASSY_COLUMN_ALIASES).map(([f]) => { const idx = mapping[f], m = idx !== -1 ? headers[idx] : null; return `<div class="mapping-item"><span class="mapping-label">${f}:</span><span class="mapping-value ${m?'':'unmapped'}">${m||'not found'}</span></div>`; }).join('');
+            let t = '<table><thead><tr>' + headers.map(h => `<th>${escapeHtml(h)}</th>`).join('') + '</tr></thead><tbody>' + rows.slice(0, 5).map(r => '<tr>' + headers.map((_, i) => `<td>${escapeHtml(r[i]||'')}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
+            document.getElementById('assyPreviewTable').innerHTML = t;
+            
+            // Count valid rows (those with name)
+            const validRows = hasName ? rows.filter(r => r[mapping.name]).length : 0;
+            
+            document.getElementById('assyPreviewCount').textContent = `${validRows} valid assemblies will be imported (${rows.length} total rows)`;
+            document.getElementById('importAssyBtn').disabled = validRows === 0;
+        }
+        
+        function handlePartsUpload(file) { handleFileUploadWithSheets(file, 'parts'); }
+        
+        function handleAssyUpload(file) { handleFileUploadWithSheets(file, 'assy'); }
+        
+        function confirmImportParts() {
+            const d = window._partsImportData; if (!d) return;
+            const m = d.mapping; let n = 0;
+            d.rows.forEach(r => {
+                const desc = m.description !== -1 ? r[m.description] : '', num = m.partNumber !== -1 ? r[m.partNumber] : '';
+                if (desc || num) { createPart({ partNumber: num, description: desc || num || 'Imported', partType: m.partType !== -1 ? r[m.partType] : '', region: m.region !== -1 ? r[m.region] : '', costHigh: m.costHigh !== -1 ? Number(r[m.costHigh]) : 0, costLow: m.costLow !== -1 ? Number(r[m.costLow]) : 0, costAvg: m.costAvg !== -1 ? Number(r[m.costAvg]) : 0, units: m.units !== -1 ? r[m.units] : 'EA', notes: m.notes !== -1 ? r[m.notes] : '', source: 'csv-import' }, false); n++; }
+            });
+            addHistory('create', 'system', 'import', `Imported ${n} parts from CSV`);
+            closeModal(); updateAllViews(); alert(`Imported ${n} parts`);
+        }
+        
+        function confirmImportAssy() {
+            const d = window._assyImportData; if (!d) return;
+            const m = d.mapping; let n = 0;
+            d.rows.forEach(r => {
+                const name = m.name !== -1 ? r[m.name] : '';
+                if (name) { createAssembly({ name, module: m.module !== -1 ? r[m.module] : '', description: m.description !== -1 ? r[m.description] : '', parts: [], source: 'csv-import' }, false); n++; }
+            });
+            addHistory('create', 'system', 'import', `Imported ${n} assemblies from CSV`);
+            closeModal(); updateAllViews(); alert(`Imported ${n} assemblies`);
+        }
+        
+        function showCompareModal(s1, s2) {
+            const p1 = s1.data.parts, p2 = s2.data.parts;
+            const ids1 = new Set(p1.map(p => p.id)), ids2 = new Set(p2.map(p => p.id));
+            const added = p2.filter(p => !ids1.has(p.id)), removed = p1.filter(p => !ids2.has(p.id));
+            const changed = p2.filter(p => { const o = p1.find(x => x.id === p.id); return o && JSON.stringify(o) !== JSON.stringify(p); });
+            
+            const h = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal modal-xl" onclick="event.stopPropagation()">
+                <div class="modal-header"><h2 class="modal-title">Compare: ${escapeHtml(s1.name)} → ${escapeHtml(s2.name)}</h2><button class="modal-close" onclick="closeModal()">&times;</button></div>
+                <div class="modal-body">
+                    <div class="stats-grid" style="margin-bottom:24px">
+                        <div class="stat-card"><div class="stat-label">Added</div><div class="stat-value" style="color:var(--success)">${added.length}</div></div>
+                        <div class="stat-card"><div class="stat-label">Removed</div><div class="stat-value" style="color:var(--error)">${removed.length}</div></div>
+                        <div class="stat-card"><div class="stat-label">Changed</div><div class="stat-value" style="color:var(--warning)">${changed.length}</div></div>
+                    </div>
+                    <div style="max-height:400px;overflow-y:auto">
+                        ${added.map(p => `<div class="diff-add">➕ Added: ${escapeHtml(p.partNumber)} - ${escapeHtml(p.description)}</div>`).join('')}
+                        ${removed.map(p => `<div class="diff-remove">➖ Removed: ${escapeHtml(p.partNumber)} - ${escapeHtml(p.description)}</div>`).join('')}
+                        ${changed.map(p => `<div class="diff-change">📝 Changed: ${escapeHtml(p.partNumber)} - ${escapeHtml(p.description)}</div>`).join('')}
+                        ${!added.length && !removed.length && !changed.length ? '<div style="text-align:center;padding:24px;color:var(--text-muted)">No differences found</div>' : ''}
+                    </div>
+                </div>
+                <div class="modal-footer"><button class="btn" onclick="closeModal()">Close</button></div>
+            </div></div>`;
+            document.getElementById('modalContainer').innerHTML = h;
+        }
+        
+        // =====================================================================
+        // VIEW UPDATES
+        // =====================================================================
+        function updateAllViews() {
+            const t = getTotals(), fb = generateFlatBom(), ac = Object.keys(state.assemblies).length;
+            const today = new Date().toDateString();
+            const todayChanges = state.history.filter(h => new Date(h.timestamp).toDateString() === today).length;
+            
+            // Nav badges
+            document.getElementById('partsCount').textContent = state.parts.length;
+            document.getElementById('assyCount').textContent = ac;
+            document.getElementById('flatbomCount').textContent = fb.length;
+            document.getElementById('historyCount').textContent = state.history.length;
+            document.getElementById('snapshotCount').textContent = state.snapshots.length;
+            
+            // Dashboard
+            document.getElementById('statParts').textContent = state.parts.length;
+            document.getElementById('statAssy').textContent = ac;
+            document.getElementById('statProduct').textContent = state.product.length;
+            document.getElementById('statSnapshots').textContent = state.snapshots.length;
+            document.getElementById('statReleased').textContent = state.parts.filter(p => p.status === 'released').length;
+            document.getElementById('statDraft').textContent = state.parts.filter(p => p.status === 'draft').length;
+            document.getElementById('statChanges').textContent = todayChanges;
+            document.getElementById('statCost').textContent = formatCurrency(t.totalCost);
+            
+            // Recent changes
+            document.getElementById('recentChanges').innerHTML = state.history.slice(0, 5).map(h => renderHistoryItem(h)).join('') || '<div style="padding:24px;text-align:center;color:var(--text-muted)">No changes yet</div>';
+            
+            updatePartsTable();
+            updateAssyTable();
+            updateAvailableItems();
+            updateProductItems();
+            updateFlatBomTable();
+            updateHistoryList();
+            updateSnapshotsList();
+            
+            document.getElementById('partsSubtitle').textContent = `${state.parts.length} parts`;
+            document.getElementById('assySubtitle').textContent = `${ac} assemblies`;
+            document.getElementById('flatbomSubtitle').textContent = `${fb.length} items · ${formatCurrency(t.totalCost)}`;
+            document.getElementById('productCount').textContent = `${state.product.length} items`;
+            document.getElementById('totalItems').textContent = state.product.length;
+            document.getElementById('totalParts').textContent = fb.length;
+            document.getElementById('totalQty').textContent = t.totalQty;
+            document.getElementById('totalCost').textContent = formatCurrency(t.totalCost);
+            
+            const canExport = fb.length > 0;
+            document.getElementById('exportBtn').disabled = !canExport;
+            document.getElementById('exportBtn2').disabled = !canExport;
+        }
+        
+        function renderHistoryItem(h) {
+            const icons = { create: '➕', update: '📝', delete: '🗑️', release: '🚀', snapshot: '📸', restore: '⏪' };
+            const iconClass = { create: 'create', update: 'update', delete: 'delete', release: 'release', snapshot: 'snapshot', restore: 'snapshot' };
+            return `<div class="history-item"><div class="history-icon ${iconClass[h.action] || ''}">${icons[h.action] || '📋'}</div><div class="history-content"><div class="history-title">${escapeHtml(h.details)}</div><div class="history-meta">${formatDate(h.timestamp)} · ${h.itemType}</div></div></div>`;
+        }
+        
+        function updatePartsTable() {
+            const filtered = state.parts.filter(p => {
+                const ms = !state.searchTerm || p.partNumber?.toLowerCase().includes(state.searchTerm.toLowerCase()) || p.description?.toLowerCase().includes(state.searchTerm.toLowerCase());
+                const mst = state.statusFilter === 'all' || p.status === state.statusFilter;
+                return ms && mst;
+            });
+            document.getElementById('partsTableBody').innerHTML = filtered.slice(0, 200).map((p, i) => `<tr>
+                <td class="mono">${escapeHtml(p.partNumber) || '-'}</td>
+                <td>${escapeHtml(p.description) || '-'}</td>
+                <td><span class="version-badge">${p.revision || 'A'}</span></td>
+                <td><span class="tag tag-${p.status || 'draft'}">${p.status || 'draft'}</span></td>
+                <td>${p.partType ? `<span class="tag tag-part">${escapeHtml(p.partType)}</span>` : '-'}</td>
+                <td class="mono">${formatCurrency(p.costAvg)}</td>
+                <td style="font-size:11px;color:var(--text-muted)">${p.modified ? formatDateShort(p.modified) : '-'}</td>
+                <td>
+                    <button class="btn btn-xs" onclick="addPartToProduct(${state.parts.indexOf(p)})">+ Add</button>
+                    ${p.status === 'draft' ? `<button class="btn btn-xs btn-success" onclick="releasePart('${p.id}')" style="margin-left:4px">Release</button>` : ''}
+                    ${p.status === 'released' ? `<button class="btn btn-xs" onclick="revisionPart('${p.id}')" style="margin-left:4px">New Rev</button>` : ''}
+                    <button class="btn btn-xs btn-danger" onclick="deletePart(${state.parts.indexOf(p)})" style="margin-left:4px">✕</button>
+                </td>
+            </tr>`).join('');
+        }
+        
+        window.addPartToProduct = (i) => addToProduct(state.parts[i], 'part');
+        window.addAssyToProduct = (n) => addToProduct(state.assemblies[n], 'assy');
+        
+        function updateAssyTable() {
+            document.getElementById('assyTableBody').innerHTML = Object.values(state.assemblies).map(a => {
+                const cost = a.parts.reduce((s, p) => s + (p.qty * p.costAvg), 0);
+                return `<tr>
+                    <td><span class="tag tag-subassy">SA</span> ${escapeHtml(a.name)}</td>
+                    <td class="mono">${escapeHtml(a.id)}</td>
+                    <td><span class="version-badge">${a.revision || 'A'}</span></td>
+                    <td><span class="tag tag-${a.status || 'draft'}">${a.status || 'draft'}</span></td>
+                    <td class="mono">${a.parts.length}</td>
+                    <td class="mono">${formatCurrency(cost)}</td>
+                    <td style="font-size:11px;color:var(--text-muted)">${a.modified ? formatDateShort(a.modified) : '-'}</td>
+                    <td>
+                        <button class="btn btn-xs" onclick="addAssyToProduct('${escapeHtml(a.name)}')">+ Add</button>
+                        ${a.status === 'draft' ? `<button class="btn btn-xs btn-success" onclick="releaseAssembly('${escapeHtml(a.name)}')" style="margin-left:4px">Release</button>` : ''}
+                        <button class="btn btn-xs btn-danger" onclick="deleteAssembly('${escapeHtml(a.name)}')" style="margin-left:4px">✕</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+        
+        function switchBuilderTab(tab) {
+            state.builderTab = tab;
+            document.querySelectorAll('.panel-header .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+            updateAvailableItems();
+        }
+        
+        function updateAvailableItems() {
+            const c = document.getElementById('availableItems');
+            if (state.builderTab === 'assy') {
+                c.innerHTML = Object.values(state.assemblies).map(a => {
+                    const cost = a.parts.reduce((s, p) => s + (p.qty * p.costAvg), 0);
+                    return `<div class="selectable-item" onclick="addAssyToProduct('${escapeHtml(a.name)}')"><span class="tag tag-subassy">SA</span><div class="item-info"><div class="item-name">${escapeHtml(a.name)}</div><div class="item-meta">${a.parts.length} parts · Rev ${a.revision || 'A'}</div></div><div class="item-cost">${formatCurrency(cost)}</div></div>`;
+                }).join('') || '<div class="empty-state"><div class="icon">🔧</div><div>No assemblies</div></div>';
+            } else {
+                c.innerHTML = state.parts.slice(0, 100).map((p, i) => `<div class="selectable-item" onclick="addPartToProduct(${i})"><span class="tag tag-part">P</span><div class="item-info"><div class="item-name">${escapeHtml(p.partNumber)}</div><div class="item-meta">${escapeHtml(p.description)} · Rev ${p.revision || 'A'}</div></div><div class="item-cost">${formatCurrency(p.costAvg)}</div></div>`).join('') || '<div class="empty-state"><div class="icon">📦</div><div>No parts</div></div>';
+            }
+        }
+        
+        function updateProductItems() {
+            const c = document.getElementById('productItems');
+            if (!state.product.length) { c.innerHTML = '<div class="empty-state"><div class="icon">📦</div><div>No items added</div></div>'; return; }
+            c.innerHTML = state.product.map((item, i) => `<div class="assembly-item"><span class="tag ${item.type === 'PART' ? 'tag-part' : 'tag-subassy'}">${item.type === 'PART' ? 'P' : 'SA'}</span><div class="item-info"><div class="item-name">${escapeHtml(item.type === 'PART' ? item.partNumber : item.name)}</div><div class="item-meta">${escapeHtml(item.description || item.module || '')}</div></div><input type="number" class="qty-input" value="${item.qty}" min="1" onchange="updateProductQty(${i}, this.value)"><div class="item-cost">${formatCurrency(item.qty * item.costAvg)}</div><button class="remove-btn" onclick="removeFromProduct(${i})">✕</button></div>`).join('');
+        }
+        
+        function updateFlatBomTable() {
+            const fb = generateFlatBom();
+            document.getElementById('flatbomTableBody').innerHTML = fb.length ? fb.map(i => `<tr><td class="mono">${escapeHtml(i.partNumber)}</td><td>${escapeHtml(i.description) || '-'}</td><td><span class="tag ${i.sourceType === 'DIRECT' ? 'tag-direct' : 'tag-subassy'}">${i.sourceType}</span> <span style="font-size:12px;color:var(--text-secondary)">${escapeHtml(i.sourceName)}</span></td><td class="mono">${i.qtyInSource}</td><td class="mono">${i.sourceQty}</td><td class="mono" style="font-weight:600">${i.extendedQty}</td><td class="mono">${formatCurrency(i.costAvg)}</td><td class="mono" style="color:var(--accent)">${formatCurrency(i.lineCost)}</td></tr>`).join('') : '<tr><td colspan="8" style="text-align:center;padding:48px;color:var(--text-muted)">No items</td></tr>';
+        }
+        
+        function updateHistoryList() {
+            const filtered = state.history.filter(h => state.historyFilter === 'all' || h.action === state.historyFilter);
+            document.getElementById('historyList').innerHTML = filtered.map(h => renderHistoryItem(h)).join('') || '<div style="padding:48px;text-align:center;color:var(--text-muted)">No history</div>';
+        }
+        
+        function updateSnapshotsList() {
+            document.getElementById('snapshotsList').innerHTML = state.snapshots.map(s => `<div class="snapshot-card">
+                <div class="snapshot-header"><div><div class="snapshot-name">${escapeHtml(s.name)}</div><div class="snapshot-date">${formatDate(s.timestamp)}</div></div><span class="version-badge">v${state.snapshots.length - state.snapshots.indexOf(s)}</span></div>
+                ${s.description ? `<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">${escapeHtml(s.description)}</div>` : ''}
+                <div class="snapshot-stats"><span>📦 ${s.stats.partsCount} parts</span><span>🔧 ${s.stats.assembliesCount} assemblies</span><span>✅ ${s.stats.releasedCount} released</span></div>
+                <div class="snapshot-actions">
+                    <button class="btn btn-sm btn-primary" onclick="restoreSnapshot(${s.id})">⏪ Restore</button>
+                    <button class="btn btn-sm" onclick="compareSnapshots(${s.id}, 'current')">🔍 Compare to Current</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteSnapshot(${s.id})">🗑️</button>
+                </div>
+            </div>`).join('') || '<div class="empty-state"><div class="icon">📸</div><div>No snapshots yet</div><div style="font-size:13px;margin-top:8px">Create a snapshot to save the current state</div></div>';
+        }
+        
+        function showView(v) {
+            document.querySelectorAll('.view').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-' + v).classList.remove('hidden');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.querySelector(`.nav-item[data-view="${v}"]`)?.classList.add('active');
+        }
+        
+        // =====================================================================
+        // INIT
+        // =====================================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.nav-item').forEach(n => n.addEventListener('click', () => showView(n.dataset.view)));
+            document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) { const f = e.target.files[0]; if (f.name.endsWith('.json')) { const r = new FileReader(); r.onload = ev => { try { const d = JSON.parse(ev.target.result); Object.assign(state, d); updateAllViews(); } catch (e) { alert('Invalid JSON'); } }; r.readAsText(f); } else { importFromCrisisBom(f); } } });
+            document.getElementById('partsSearch').addEventListener('input', e => { state.searchTerm = e.target.value; updatePartsTable(); });
+            document.querySelectorAll('#statusFilters .filter-pill').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#statusFilters .filter-pill').forEach(x => x.classList.remove('active')); b.classList.add('active'); state.statusFilter = b.dataset.status; updatePartsTable(); }));
+            document.querySelectorAll('#historyFilters .filter-pill').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#historyFilters .filter-pill').forEach(x => x.classList.remove('active')); b.classList.add('active'); state.historyFilter = b.dataset.type; updateHistoryList(); }));
+            
+            // Load saved data
+            if (loadFromLocalStorage()) { console.log('Loaded from localStorage'); }
+            updateAllViews();
+            
+            // Warn on unsaved changes
+            window.addEventListener('beforeunload', e => { if (state.hasUnsavedChanges) { e.preventDefault(); e.returnValue = ''; } });
+        });
+    </script>
+</body>
+</html>

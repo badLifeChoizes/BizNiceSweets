@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRISIS PLM - Bill of Materials Manager</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #131316;
+            --bg-tertiary: #1a1a1f;
+            --bg-elevated: #222228;
+            --border: #2a2a32;
+            --border-light: #3a3a44;
+            --text-primary: #e8e8ec;
+            --text-secondary: #9898a4;
+            --text-muted: #606068;
+            --accent: #00d4aa;
+            --accent-dim: #00a888;
+            --accent-glow: rgba(0, 212, 170, 0.15);
+            --warning: #ffaa00;
+            --error: #ff4466;
+            --success: #00dd88;
+            --part-color: #4488ff;
+            --subassy-color: #aa66ff;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--bg-primary);
+        }
+        
+        .logo-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 15px;
+            letter-spacing: -0.5px;
+        }
+        
+        .logo-text span {
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        /* Buttons */
+        .btn {
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn:hover {
+            background: var(--bg-elevated);
+            border-color: var(--border-light);
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-primary);
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+        
+        .btn-primary:hover {
+            background: var(--accent-dim);
+            border-color: var(--accent-dim);
+        }
+        
+        .btn-icon {
+            padding: 8px;
+        }
+        
+        /* Main Layout */
+        .main {
+            display: flex;
+            height: calc(100vh - 56px);
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 16px 0;
+            flex-shrink: 0;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .nav-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            padding: 0 16px;
+            margin-bottom: 8px;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border-left: 2px solid transparent;
+        }
+        
+        .nav-item:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        
+        .nav-item.active {
+            background: var(--accent-glow);
+            color: var(--accent);
+            border-left-color: var(--accent);
+        }
+        
+        .nav-item svg {
+            width: 18px;
+            height: 18px;
+            opacity: 0.7;
+        }
+        
+        .nav-item.active svg {
+            opacity: 1;
+        }
+        
+        .nav-badge {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--bg-elevated);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--text-muted);
+        }
+        
+        .nav-item.active .nav-badge {
+            background: var(--accent);
+            color: var(--bg-primary);
+        }
+        
+        /* Content Area */
+        .content {
+            flex: 1;
+            overflow: auto;
+            padding: 24px;
+        }
+        
+        /* Page Header */
+        .page-header {
+            margin-bottom: 24px;
+        }
+        
+        .page-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        /* Cards */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .card-body {
+            padding: 16px;
+        }
+        
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+        }
+        
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+        
+        tr:hover td {
+            background: var(--bg-tertiary);
+        }
+        
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+        }
+        
+        /* Tags */
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .tag-part {
+            background: rgba(68, 136, 255, 0.15);
+            color: var(--part-color);
+        }
+        
+        .tag-subassy {
+            background: rgba(170, 102, 255, 0.15);
+            color: var(--subassy-color);
+        }
+        
+        .tag-direct {
+            background: rgba(0, 221, 136, 0.15);
+            color: var(--success);
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .stat-value.accent {
+            color: var(--accent);
+        }
+        
+        /* Assembly Builder */
+        .builder-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        
+        .builder-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 200px);
+        }
+        
+        .panel-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        
+        .panel-title {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+        
+        /* Selectable Items */
+        .selectable-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+        }
+        
+        .selectable-item:hover {
+            background: var(--bg-tertiary);
+        }
+        
+        .selectable-item.selected {
+            background: var(--accent-glow);
+            border-color: var(--accent);
+        }
+        
+        .item-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .item-name {
+            font-weight: 500;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .item-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        
+        .item-cost {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--accent);
+        }
+        
+        /* Assembly Item */
+        .assembly-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        
+        .assembly-item .item-info {
+            flex: 1;
+        }
+        
+        .qty-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .qty-control input {
+            width: 60px;
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            text-align: center;
+        }
+        
+        .qty-control input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .remove-btn {
+            padding: 6px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s ease;
+        }
+        
+        .remove-btn:hover {
+            background: rgba(255, 68, 102, 0.15);
+            color: var(--error);
+        }
+        
+        /* Search */
+        .search-box {
+            position: relative;
+            margin-bottom: 12px;
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 10px 12px 10px 36px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .search-box input::placeholder {
+            color: var(--text-muted);
+        }
+        
+        .search-box svg {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            color: var(--text-muted);
+        }
+        
+        /* Upload Zone */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 48px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .upload-zone:hover {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+        
+        .upload-zone.dragover {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+        
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 16px;
+            color: var(--text-muted);
+        }
+        
+        .upload-text {
+            font-size: 15px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        
+        .upload-hint {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+        }
+        
+        .tab {
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+        }
+        
+        .tab:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        
+        .tab.active {
+            background: var(--accent);
+            color: var(--bg-primary);
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-muted);
+        }
+        
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        /* Totals Bar */
+        .totals-bar {
+            background: var(--bg-tertiary);
+            border-top: 1px solid var(--border);
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .total-item {
+            text-align: center;
+        }
+        
+        .total-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .total-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .total-value.highlight {
+            color: var(--accent);
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-light);
+        }
+        
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .builder-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                display: none;
+            }
+        }
+        
+        /* Filter Pills */
+        .filter-pills {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-pill {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+        }
+        
+        .filter-pill:hover {
+            border-color: var(--border-light);
+            color: var(--text-primary);
+        }
+        
+        .filter-pill.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg-primary);
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+    
+    <script type="module">
+        import { createRoot } from 'https://esm.sh/react-dom@18/client';
+        import React, { useState, useEffect, useMemo } from 'https://esm.sh/react@18';
+        import htm from 'https://esm.sh/htm';
+        
+        const html = htm.bind(React.createElement);
+        
+        // Icons
+        const Icons = {
+            upload: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+            download: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+            box: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27,6.96 12,12.01 20.73,6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`,
+            layers: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12,2 2,7 12,12 22,7 12,2"/><polyline points="2,17 12,22 22,17"/><polyline points="2,12 12,17 22,12"/></svg>`,
+            list: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`,
+            build: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`,
+            search: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+            plus: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+            x: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+            chart: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+            file: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>`,
+        };
+        
+        // Format currency
+        const formatCurrency = (val) => {
+            if (val === null || val === undefined) return '-';
+            return '$' + Number(val).toFixed(2);
+        };
+        
+        // Main App Component
+        function App() {
+            const [data, setData] = useState(null);
+            const [view, setView] = useState('dashboard');
+            const [assembly, setAssembly] = useState([]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [typeFilter, setTypeFilter] = useState('all');
+            const [regionFilter, setRegionFilter] = useState('all');
+            
+            // Parse Excel data
+            const parseExcel = (file) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    
+                    // Parse Master_Parts
+                    const mpSheet = wb.Sheets['Master_Parts'];
+                    const masterParts = XLSX.utils.sheet_to_json(mpSheet, { defval: '' });
+                    
+                    // Parse sub-assembly sheets
+                    const subAssemblies = {};
+                    const subAssySheets = wb.SheetNames.filter(n => 
+                        n.includes('Basic') || n.includes('Injection') || n.includes('CPR') || 
+                        n.includes('Sternal') || n.includes('RGB') || n.includes('BP') ||
+                        n.includes('ECG') || n.includes('Auscultation') || n.includes('Genital')
+                    );
+                    
+                    subAssySheets.forEach(sheetName => {
+                        const sheet = wb.Sheets[sheetName];
+                        const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                        
+                        // Get name from B6
+                        const name = json[5]?.[1] || sheetName;
+                        const module = json[6]?.[1] || '';
+                        
+                        // Get parts from row 14 onwards (index 13)
+                        const parts = [];
+                        for (let i = 13; i < json.length; i++) {
+                            const row = json[i];
+                            if (row && row[1]) { // Part number in column B
+                                parts.push({
+                                    partNum: row[1],
+                                    description: row[2] || '',
+                                    qty: row[3] || 1,
+                                    partType: row[4] || '',
+                                    region: row[5] || '',
+                                    costHigh: row[7] || 0,
+                                    costLow: row[8] || 0,
+                                    costAvg: row[9] || 0,
+                                });
+                            }
+                        }
+                        
+                        if (parts.length > 0) {
+                            subAssemblies[name] = {
+                                sheetName,
+                                name,
+                                module,
+                                parts,
+                                totalCostAvg: parts.reduce((sum, p) => sum + (p.qty * p.costAvg), 0)
+                            };
+                        }
+                    });
+                    
+                    setData({ masterParts, subAssemblies, fileName: file.name });
+                };
+                reader.readAsArrayBuffer(file);
+            };
+            
+            // Handle file drop
+            const handleDrop = (e) => {
+                e.preventDefault();
+                const file = e.dataTransfer?.files[0] || e.target.files[0];
+                if (file) parseExcel(file);
+            };
+            
+            // Add item to assembly
+            const addToAssembly = (item, type) => {
+                const existing = assembly.find(a => 
+                    type === 'part' ? a.partNum === item.Part_Number : a.name === item.name
+                );
+                
+                if (existing) {
+                    setAssembly(assembly.map(a => 
+                        a === existing ? { ...a, qty: a.qty + 1 } : a
+                    ));
+                } else {
+                    if (type === 'part') {
+                        setAssembly([...assembly, {
+                            type: 'PART',
+                            partNum: item.Part_Number,
+                            description: item.Description,
+                            costAvg: item.Cost_Avg || 0,
+                            costHigh: item.Cost_High || 0,
+                            costLow: item.Cost_Low || 0,
+                            qty: 1
+                        }]);
+                    } else {
+                        setAssembly([...assembly, {
+                            type: 'SUB-ASSY',
+                            name: item.name,
+                            module: item.module,
+                            costAvg: item.totalCostAvg,
+                            parts: item.parts,
+                            qty: 1
+                        }]);
+                    }
+                }
+            };
+            
+            // Update quantity
+            const updateQty = (index, qty) => {
+                const newQty = Math.max(1, parseInt(qty) || 1);
+                setAssembly(assembly.map((a, i) => i === index ? { ...a, qty: newQty } : a));
+            };
+            
+            // Remove from assembly
+            const removeFromAssembly = (index) => {
+                setAssembly(assembly.filter((_, i) => i !== index));
+            };
+            
+            // Generate Flat BOM
+            const flatBom = useMemo(() => {
+                const items = [];
+                assembly.forEach(item => {
+                    if (item.type === 'PART') {
+                        items.push({
+                            partNum: item.partNum,
+                            description: item.description,
+                            sourceType: 'DIRECT',
+                            sourceName: 'Final Assembly',
+                            qtyInSource: 1,
+                            sourceQty: item.qty,
+                            extendedQty: item.qty,
+                            costAvg: item.costAvg,
+                            lineCost: item.qty * item.costAvg
+                        });
+                    } else if (item.type === 'SUB-ASSY' && item.parts) {
+                        item.parts.forEach(part => {
+                            items.push({
+                                partNum: part.partNum,
+                                description: part.description,
+                                sourceType: 'SUB-ASSY',
+                                sourceName: item.name,
+                                qtyInSource: part.qty,
+                                sourceQty: item.qty,
+                                extendedQty: part.qty * item.qty,
+                                costAvg: part.costAvg,
+                                lineCost: part.qty * item.qty * part.costAvg
+                            });
+                        });
+                    }
+                });
+                return items;
+            }, [assembly]);
+            
+            // Totals
+            const totals = useMemo(() => ({
+                lineItems: flatBom.length,
+                totalQty: flatBom.reduce((sum, i) => sum + i.extendedQty, 0),
+                totalCost: flatBom.reduce((sum, i) => sum + i.lineCost, 0)
+            }), [flatBom]);
+            
+            // Filtered parts
+            const filteredParts = useMemo(() => {
+                if (!data?.masterParts) return [];
+                return data.masterParts.filter(p => {
+                    const matchesSearch = !searchTerm || 
+                        p.Part_Number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        p.Description?.toLowerCase().includes(searchTerm.toLowerCase());
+                    const matchesType = typeFilter === 'all' || p.Part_Type === typeFilter;
+                    const matchesRegion = regionFilter === 'all' || p.Region === regionFilter;
+                    return matchesSearch && matchesType && matchesRegion;
+                });
+            }, [data?.masterParts, searchTerm, typeFilter, regionFilter]);
+            
+            // Get unique values for filters
+            const partTypes = useMemo(() => {
+                if (!data?.masterParts) return [];
+                return [...new Set(data.masterParts.map(p => p.Part_Type).filter(Boolean))];
+            }, [data?.masterParts]);
+            
+            const regions = useMemo(() => {
+                if (!data?.masterParts) return [];
+                return [...new Set(data.masterParts.map(p => p.Region).filter(Boolean))];
+            }, [data?.masterParts]);
+            
+            // Export to Excel
+            const exportExcel = () => {
+                const wb = XLSX.utils.book_new();
+                
+                // Flat BOM sheet
+                const flatData = flatBom.map(item => ({
+                    'Part Number': item.partNum,
+                    'Description': item.description,
+                    'Source Type': item.sourceType,
+                    'Source Name': item.sourceName,
+                    'Qty in Source': item.qtyInSource,
+                    'Source Qty': item.sourceQty,
+                    'Extended Qty': item.extendedQty,
+                    'Unit Cost': item.costAvg,
+                    'Line Cost': item.lineCost
+                }));
+                
+                const ws = XLSX.utils.json_to_sheet(flatData);
+                XLSX.utils.book_append_sheet(wb, ws, 'Flat_BOM');
+                
+                // Assembly summary
+                const assyData = assembly.map(item => ({
+                    'Type': item.type,
+                    'Part#/Name': item.type === 'PART' ? item.partNum : item.name,
+                    'Description': item.description || item.module || '',
+                    'Qty': item.qty,
+                    'Unit Cost': item.costAvg,
+                    'Line Cost': item.qty * item.costAvg
+                }));
+                
+                const ws2 = XLSX.utils.json_to_sheet(assyData);
+                XLSX.utils.book_append_sheet(wb, ws2, 'Assembly_Config');
+                
+                XLSX.writeFile(wb, 'CRISIS_FlatBOM_Export.xlsx');
+            };
+            
+            // Upload Zone Component
+            const UploadZone = () => html`
+                <div 
+                    class="upload-zone"
+                    onDrop=${handleDrop}
+                    onDragOver=${(e) => e.preventDefault()}
+                    onClick=${() => document.getElementById('fileInput').click()}
+                >
+                    <div class="upload-icon">${Icons.upload}</div>
+                    <div class="upload-text">Drop your CRISIS BOM Excel file here</div>
+                    <div class="upload-hint">or click to browse</div>
+                    <input 
+                        type="file" 
+                        id="fileInput" 
+                        accept=".xlsx,.xls" 
+                        style="display:none"
+                        onChange=${handleDrop}
+                    />
+                </div>
+            `;
+            
+            // Dashboard View
+            const Dashboard = () => html`
+                <div>
+                    <div class="page-header">
+                        <h1 class="page-title">Dashboard</h1>
+                        <p class="page-subtitle">Overview of your BOM data</p>
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Master Parts</div>
+                            <div class="stat-value">${data?.masterParts?.length || 0}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Sub-Assemblies</div>
+                            <div class="stat-value">${Object.keys(data?.subAssemblies || {}).length}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Assembly Items</div>
+                            <div class="stat-value">${assembly.length}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Flat BOM Lines</div>
+                            <div class="stat-value accent">${flatBom.length}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Extended Qty</div>
+                            <div class="stat-value">${totals.totalQty}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Cost (Avg)</div>
+                            <div class="stat-value accent">${formatCurrency(totals.totalCost)}</div>
+                        </div>
+                    </div>
+                    
+                    ${!data && html`
+                        <div style="margin-top: 32px;">
+                            <${UploadZone} />
+                        </div>
+                    `}
+                </div>
+            `;
+            
+            // Parts View
+            const PartsView = () => html`
+                <div>
+                    <div class="page-header">
+                        <h1 class="page-title">Master Parts</h1>
+                        <p class="page-subtitle">${data?.masterParts?.length || 0} parts in database</p>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="search-box" style="width: 300px; margin: 0;">
+                                ${Icons.search}
+                                <input 
+                                    type="text" 
+                                    placeholder="Search parts..."
+                                    value=${searchTerm}
+                                    onInput=${(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <div class="filter-pills">
+                                <button 
+                                    class="filter-pill ${typeFilter === 'all' ? 'active' : ''}"
+                                    onClick=${() => setTypeFilter('all')}
+                                >All Types</button>
+                                ${partTypes.map(t => html`
+                                    <button 
+                                        key=${t}
+                                        class="filter-pill ${typeFilter === t ? 'active' : ''}"
+                                        onClick=${() => setTypeFilter(t)}
+                                    >${t}</button>
+                                `)}
+                            </div>
+                        </div>
+                        <div class="table-container" style="max-height: calc(100vh - 300px); overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Part Number</th>
+                                        <th>Description</th>
+                                        <th>Type</th>
+                                        <th>Region</th>
+                                        <th>Cost (Avg)</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${filteredParts.slice(0, 100).map(part => html`
+                                        <tr key=${part.Part_ID}>
+                                            <td class="mono">${part.Part_Number}</td>
+                                            <td>${part.Description || '-'}</td>
+                                            <td><span class="tag tag-part">${part.Part_Type}</span></td>
+                                            <td>${part.Region}</td>
+                                            <td class="mono">${formatCurrency(part.Cost_Avg)}</td>
+                                            <td>
+                                                <button 
+                                                    class="btn btn-icon"
+                                                    onClick=${() => addToAssembly(part, 'part')}
+                                                    title="Add to assembly"
+                                                >${Icons.plus}</button>
+                                            </td>
+                                        </tr>
+                                    `)}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Sub-Assemblies View
+            const SubAssembliesView = () => html`
+                <div>
+                    <div class="page-header">
+                        <h1 class="page-title">Sub-Assemblies</h1>
+                        <p class="page-subtitle">${Object.keys(data?.subAssemblies || {}).length} assemblies available</p>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="table-container" style="max-height: calc(100vh - 250px); overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Module</th>
+                                        <th>Parts Count</th>
+                                        <th>Total Cost</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${Object.values(data?.subAssemblies || {}).map(sa => html`
+                                        <tr key=${sa.name}>
+                                            <td>
+                                                <span class="tag tag-subassy" style="margin-right: 8px;">SA</span>
+                                                ${sa.name}
+                                            </td>
+                                            <td>${sa.module}</td>
+                                            <td class="mono">${sa.parts.length}</td>
+                                            <td class="mono">${formatCurrency(sa.totalCostAvg)}</td>
+                                            <td>
+                                                <button 
+                                                    class="btn btn-icon"
+                                                    onClick=${() => addToAssembly(sa, 'subassy')}
+                                                    title="Add to assembly"
+                                                >${Icons.plus}</button>
+                                            </td>
+                                        </tr>
+                                    `)}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Assembly Builder View
+            const BuilderView = () => html`
+                <div>
+                    <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h1 class="page-title">Assembly Builder</h1>
+                            <p class="page-subtitle">Build your product configuration</p>
+                        </div>
+                        <button class="btn btn-primary" onClick=${exportExcel} disabled=${flatBom.length === 0}>
+                            ${Icons.download} Export Flat BOM
+                        </button>
+                    </div>
+                    
+                    <div class="builder-grid">
+                        <!-- Available Items -->
+                        <div class="builder-panel">
+                            <div class="panel-header">
+                                <span class="panel-title">Available Items</span>
+                            </div>
+                            <div class="panel-body">
+                                <div class="tabs">
+                                    <div class="tab active">Sub-Assemblies</div>
+                                </div>
+                                ${Object.values(data?.subAssemblies || {}).map(sa => html`
+                                    <div 
+                                        key=${sa.name}
+                                        class="selectable-item"
+                                        onClick=${() => addToAssembly(sa, 'subassy')}
+                                    >
+                                        <span class="tag tag-subassy">SA</span>
+                                        <div class="item-info">
+                                            <div class="item-name">${sa.name}</div>
+                                            <div class="item-meta">${sa.parts.length} parts · ${sa.module}</div>
+                                        </div>
+                                        <div class="item-cost">${formatCurrency(sa.totalCostAvg)}</div>
+                                    </div>
+                                `)}
+                            </div>
+                        </div>
+                        
+                        <!-- Current Assembly -->
+                        <div class="builder-panel">
+                            <div class="panel-header">
+                                <span class="panel-title">Current Assembly</span>
+                                <span style="color: var(--text-muted); font-size: 12px;">${assembly.length} items</span>
+                            </div>
+                            <div class="panel-body">
+                                ${assembly.length === 0 ? html`
+                                    <div class="empty-state">
+                                        ${Icons.box}
+                                        <div>No items added yet</div>
+                                        <div style="font-size: 12px; margin-top: 4px;">Click items on the left to add</div>
+                                    </div>
+                                ` : assembly.map((item, idx) => html`
+                                    <div class="assembly-item" key=${idx}>
+                                        <span class="tag ${item.type === 'PART' ? 'tag-part' : 'tag-subassy'}">
+                                            ${item.type === 'PART' ? 'P' : 'SA'}
+                                        </span>
+                                        <div class="item-info">
+                                            <div class="item-name">${item.type === 'PART' ? item.partNum : item.name}</div>
+                                            <div class="item-meta">${item.description || item.module || ''}</div>
+                                        </div>
+                                        <div class="qty-control">
+                                            <input 
+                                                type="number" 
+                                                value=${item.qty}
+                                                min="1"
+                                                onChange=${(e) => updateQty(idx, e.target.value)}
+                                            />
+                                        </div>
+                                        <div class="item-cost">${formatCurrency(item.qty * item.costAvg)}</div>
+                                        <button class="remove-btn" onClick=${() => removeFromAssembly(idx)}>
+                                            ${Icons.x}
+                                        </button>
+                                    </div>
+                                `)}
+                            </div>
+                            <div class="totals-bar">
+                                <div class="total-item">
+                                    <div class="total-label">Items</div>
+                                    <div class="total-value">${assembly.length}</div>
+                                </div>
+                                <div class="total-item">
+                                    <div class="total-label">Flat Parts</div>
+                                    <div class="total-value">${flatBom.length}</div>
+                                </div>
+                                <div class="total-item">
+                                    <div class="total-label">Total Qty</div>
+                                    <div class="total-value">${totals.totalQty}</div>
+                                </div>
+                                <div class="total-item">
+                                    <div class="total-label">Total Cost</div>
+                                    <div class="total-value highlight">${formatCurrency(totals.totalCost)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Flat BOM View
+            const FlatBomView = () => html`
+                <div>
+                    <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h1 class="page-title">Flat BOM</h1>
+                            <p class="page-subtitle">${flatBom.length} line items · Total: ${formatCurrency(totals.totalCost)}</p>
+                        </div>
+                        <button class="btn btn-primary" onClick=${exportExcel} disabled=${flatBom.length === 0}>
+                            ${Icons.download} Export to Excel
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="table-container" style="max-height: calc(100vh - 250px); overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Part Number</th>
+                                        <th>Description</th>
+                                        <th>Source</th>
+                                        <th>Qty/Source</th>
+                                        <th>Source Qty</th>
+                                        <th>Extended</th>
+                                        <th>Unit Cost</th>
+                                        <th>Line Cost</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${flatBom.map((item, idx) => html`
+                                        <tr key=${idx}>
+                                            <td class="mono">${item.partNum}</td>
+                                            <td>${item.description || '-'}</td>
+                                            <td>
+                                                <span class="tag ${item.sourceType === 'DIRECT' ? 'tag-direct' : 'tag-subassy'}">
+                                                    ${item.sourceType}
+                                                </span>
+                                                <span style="margin-left: 6px; font-size: 12px; color: var(--text-secondary);">
+                                                    ${item.sourceName}
+                                                </span>
+                                            </td>
+                                            <td class="mono">${item.qtyInSource}</td>
+                                            <td class="mono">${item.sourceQty}</td>
+                                            <td class="mono" style="font-weight: 600;">${item.extendedQty}</td>
+                                            <td class="mono">${formatCurrency(item.costAvg)}</td>
+                                            <td class="mono" style="color: var(--accent);">${formatCurrency(item.lineCost)}</td>
+                                        </tr>
+                                    `)}
+                                </tbody>
+                            </table>
+                            ${flatBom.length === 0 && html`
+                                <div class="empty-state">
+                                    ${Icons.list}
+                                    <div>No items in Flat BOM</div>
+                                    <div style="font-size: 12px; margin-top: 4px;">Add parts or sub-assemblies in the Builder</div>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Render current view
+            const renderView = () => {
+                if (!data && view !== 'dashboard') return html`<${Dashboard} />`;
+                switch (view) {
+                    case 'parts': return html`<${PartsView} />`;
+                    case 'subassemblies': return html`<${SubAssembliesView} />`;
+                    case 'builder': return html`<${BuilderView} />`;
+                    case 'flatbom': return html`<${FlatBomView} />`;
+                    default: return html`<${Dashboard} />`;
+                }
+            };
+            
+            return html`
+                <div>
+                    <!-- Header -->
+                    <header class="header">
+                        <div class="logo">
+                            <div class="logo-icon">C</div>
+                            <div class="logo-text">CRISIS PLM <span>/ BOM Manager</span></div>
+                        </div>
+                        <div class="header-actions">
+                            ${data && html`
+                                <span style="color: var(--text-muted); font-size: 12px; margin-right: 12px;">
+                                    ${data.fileName}
+                                </span>
+                            `}
+                            <label class="btn">
+                                ${Icons.upload} Load Excel
+                                <input 
+                                    type="file" 
+                                    accept=".xlsx,.xls" 
+                                    style="display:none"
+                                    onChange=${handleDrop}
+                                />
+                            </label>
+                        </div>
+                    </header>
+                    
+                    <div class="main">
+                        <!-- Sidebar -->
+                        <nav class="sidebar">
+                            <div class="nav-section">
+                                <div class="nav-label">Overview</div>
+                                <div 
+                                    class="nav-item ${view === 'dashboard' ? 'active' : ''}"
+                                    onClick=${() => setView('dashboard')}
+                                >
+                                    ${Icons.chart}
+                                    <span>Dashboard</span>
+                                </div>
+                            </div>
+                            
+                            <div class="nav-section">
+                                <div class="nav-label">Data</div>
+                                <div 
+                                    class="nav-item ${view === 'parts' ? 'active' : ''}"
+                                    onClick=${() => setView('parts')}
+                                >
+                                    ${Icons.box}
+                                    <span>Master Parts</span>
+                                    <span class="nav-badge">${data?.masterParts?.length || 0}</span>
+                                </div>
+                                <div 
+                                    class="nav-item ${view === 'subassemblies' ? 'active' : ''}"
+                                    onClick=${() => setView('subassemblies')}
+                                >
+                                    ${Icons.layers}
+                                    <span>Sub-Assemblies</span>
+                                    <span class="nav-badge">${Object.keys(data?.subAssemblies || {}).length}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="nav-section">
+                                <div class="nav-label">Build</div>
+                                <div 
+                                    class="nav-item ${view === 'builder' ? 'active' : ''}"
+                                    onClick=${() => setView('builder')}
+                                >
+                                    ${Icons.build}
+                                    <span>Assembly Builder</span>
+                                </div>
+                                <div 
+                                    class="nav-item ${view === 'flatbom' ? 'active' : ''}"
+                                    onClick=${() => setView('flatbom')}
+                                >
+                                    ${Icons.list}
+                                    <span>Flat BOM</span>
+                                    <span class="nav-badge">${flatBom.length}</span>
+                                </div>
+                            </div>
+                        </nav>
+                        
+                        <!-- Content -->
+                        <main class="content">
+                            ${renderView()}
+                        </main>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Mount app
+        const root = createRoot(document.getElementById('app'));
+        root.render(React.createElement(App));
+    </script>
+</body>
+</html>

@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRISIS PLM - Bill of Materials Manager</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #131316;
+            --bg-tertiary: #1a1a1f;
+            --bg-elevated: #222228;
+            --border: #2a2a32;
+            --border-light: #3a3a44;
+            --text-primary: #e8e8ec;
+            --text-secondary: #9898a4;
+            --text-muted: #606068;
+            --accent: #00d4aa;
+            --accent-dim: #00a888;
+            --accent-glow: rgba(0, 212, 170, 0.15);
+            --warning: #ffaa00;
+            --error: #ff4466;
+            --success: #00dd88;
+            --part-color: #4488ff;
+            --subassy-color: #aa66ff;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--bg-primary);
+        }
+        
+        .logo-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 15px;
+        }
+        
+        .logo-text span { color: var(--text-muted); font-weight: 400; }
+        
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        
+        .file-name {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-right: 12px;
+        }
+        
+        .btn {
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn:hover { background: var(--bg-elevated); border-color: var(--border-light); }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-primary);
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+        
+        .btn-primary:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .main { display: flex; height: calc(100vh - 56px); }
+        
+        .sidebar {
+            width: 220px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 16px 0;
+            flex-shrink: 0;
+        }
+        
+        .nav-section { margin-bottom: 24px; }
+        
+        .nav-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            padding: 0 16px;
+            margin-bottom: 8px;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border-left: 2px solid transparent;
+        }
+        
+        .nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        
+        .nav-item.active {
+            background: var(--accent-glow);
+            color: var(--accent);
+            border-left-color: var(--accent);
+        }
+        
+        .nav-badge {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--bg-elevated);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--text-muted);
+        }
+        
+        .nav-item.active .nav-badge { background: var(--accent); color: var(--bg-primary); }
+        
+        .content { flex: 1; overflow: auto; padding: 24px; }
+        
+        .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .page-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+        .page-subtitle { color: var(--text-secondary); font-size: 14px; }
+        
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        
+        .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+        .stat-value { font-size: 28px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+        .stat-value.accent { color: var(--accent); }
+        
+        .table-wrap { overflow-x: auto; max-height: calc(100vh - 300px); }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+        }
+        
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+        
+        tr:hover td { background: var(--bg-tertiary); }
+        
+        .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .tag-part { background: rgba(68, 136, 255, 0.15); color: var(--part-color); }
+        .tag-subassy { background: rgba(170, 102, 255, 0.15); color: var(--subassy-color); }
+        .tag-direct { background: rgba(0, 221, 136, 0.15); color: var(--success); }
+        
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 48px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 32px;
+        }
+        
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+        
+        .upload-icon { font-size: 48px; margin-bottom: 16px; }
+        .upload-text { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+        .upload-hint { font-size: 13px; color: var(--text-muted); }
+        
+        .search-box {
+            position: relative;
+        }
+        
+        .search-box input {
+            width: 250px;
+            padding: 10px 12px 10px 36px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+        
+        .search-box input:focus { outline: none; border-color: var(--accent); }
+        .search-box input::placeholder { color: var(--text-muted); }
+        
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+        
+        .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+        
+        .filter-pill {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+        }
+        
+        .filter-pill:hover { border-color: var(--border-light); color: var(--text-primary); }
+        .filter-pill.active { background: var(--accent); border-color: var(--accent); color: var(--bg-primary); }
+        
+        .builder-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        
+        @media (max-width: 1024px) {
+            .builder-grid { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+        }
+        
+        .builder-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 200px);
+        }
+        
+        .panel-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        
+        .panel-title { font-weight: 600; font-size: 14px; }
+        .panel-body { flex: 1; overflow-y: auto; padding: 8px; }
+        
+        .selectable-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+        }
+        
+        .selectable-item:hover { background: var(--bg-tertiary); }
+        
+        .item-info { flex: 1; min-width: 0; }
+        .item-name { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .item-meta { font-size: 11px; color: var(--text-muted); }
+        .item-cost { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); }
+        
+        .assembly-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        
+        .qty-input {
+            width: 60px;
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            text-align: center;
+        }
+        
+        .qty-input:focus { outline: none; border-color: var(--accent); }
+        
+        .remove-btn {
+            padding: 6px 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        .remove-btn:hover { background: rgba(255, 68, 102, 0.15); color: var(--error); }
+        
+        .totals-bar {
+            background: var(--bg-tertiary);
+            border-top: 1px solid var(--border);
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .total-item { text-align: center; }
+        .total-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
+        .total-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 600; }
+        .total-value.highlight { color: var(--accent); }
+        
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-muted);
+        }
+        
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        
+        .hidden { display: none !important; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">C</div>
+            <div class="logo-text">CRISIS PLM <span>/ BOM Manager</span></div>
+        </div>
+        <div class="header-actions">
+            <span id="fileName" class="file-name"></span>
+            <label class="btn">
+                📁 Load Excel
+                <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+            </label>
+        </div>
+    </header>
+    
+    <div class="main">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="nav-section">
+                <div class="nav-label">Overview</div>
+                <div class="nav-item active" data-view="dashboard">
+                    📊 <span>Dashboard</span>
+                </div>
+            </div>
+            <div class="nav-section">
+                <div class="nav-label">Data</div>
+                <div class="nav-item" data-view="parts">
+                    📦 <span>Master Parts</span>
+                    <span class="nav-badge" id="partsCount">0</span>
+                </div>
+                <div class="nav-item" data-view="subassemblies">
+                    🔧 <span>Sub-Assemblies</span>
+                    <span class="nav-badge" id="subassyCount">0</span>
+                </div>
+            </div>
+            <div class="nav-section">
+                <div class="nav-label">Build</div>
+                <div class="nav-item" data-view="builder">
+                    🛠️ <span>Assembly Builder</span>
+                </div>
+                <div class="nav-item" data-view="flatbom">
+                    📋 <span>Flat BOM</span>
+                    <span class="nav-badge" id="flatbomCount">0</span>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Content -->
+        <main class="content">
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="view">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Dashboard</h1>
+                        <p class="page-subtitle">Overview of your BOM data</p>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Master Parts</div>
+                        <div class="stat-value" id="statParts">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Sub-Assemblies</div>
+                        <div class="stat-value" id="statSubassy">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Assembly Items</div>
+                        <div class="stat-value" id="statAssembly">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Flat BOM Lines</div>
+                        <div class="stat-value accent" id="statFlatbom">0</div>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Extended Qty</div>
+                        <div class="stat-value" id="statQty">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Cost (Avg)</div>
+                        <div class="stat-value accent" id="statCost">$0.00</div>
+                    </div>
+                </div>
+                <div id="uploadZone" class="upload-zone">
+                    <div class="upload-icon">📂</div>
+                    <div class="upload-text">Drop your CRISIS BOM Excel file here</div>
+                    <div class="upload-hint">or click to browse</div>
+                </div>
+            </div>
+            
+            <!-- Parts View -->
+            <div id="view-parts" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Master Parts</h1>
+                        <p class="page-subtitle" id="partsSubtitle">0 parts in database</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="partsSearch" placeholder="Search parts...">
+                        </div>
+                        <div class="filter-pills" id="typeFilters"></div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Part Number</th>
+                                    <th>Description</th>
+                                    <th>Type</th>
+                                    <th>Region</th>
+                                    <th>Cost (Avg)</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="partsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sub-Assemblies View -->
+            <div id="view-subassemblies" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Sub-Assemblies</h1>
+                        <p class="page-subtitle" id="subassySubtitle">0 assemblies available</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Module</th>
+                                    <th>Parts Count</th>
+                                    <th>Total Cost</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="subassyTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Builder View -->
+            <div id="view-builder" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Assembly Builder</h1>
+                        <p class="page-subtitle">Build your product configuration</p>
+                    </div>
+                    <button class="btn btn-primary" id="exportBtn" disabled>📥 Export Flat BOM</button>
+                </div>
+                <div class="builder-grid">
+                    <div class="builder-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">Available Sub-Assemblies</span>
+                        </div>
+                        <div class="panel-body" id="availableItems"></div>
+                    </div>
+                    <div class="builder-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">Current Assembly</span>
+                            <span style="color: var(--text-muted); font-size: 12px;" id="assemblyCount">0 items</span>
+                        </div>
+                        <div class="panel-body" id="assemblyItems">
+                            <div class="empty-state">
+                                <div class="icon">📦</div>
+                                <div>No items added yet</div>
+                                <div style="font-size: 12px; margin-top: 4px;">Click items on the left to add</div>
+                            </div>
+                        </div>
+                        <div class="totals-bar">
+                            <div class="total-item">
+                                <div class="total-label">Items</div>
+                                <div class="total-value" id="totalItems">0</div>
+                            </div>
+                            <div class="total-item">
+                                <div class="total-label">Flat Parts</div>
+                                <div class="total-value" id="totalParts">0</div>
+                            </div>
+                            <div class="total-item">
+                                <div class="total-label">Total Qty</div>
+                                <div class="total-value" id="totalQty">0</div>
+                            </div>
+                            <div class="total-item">
+                                <div class="total-label">Total Cost</div>
+                                <div class="total-value highlight" id="totalCost">$0.00</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Flat BOM View -->
+            <div id="view-flatbom" class="view hidden">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Flat BOM</h1>
+                        <p class="page-subtitle" id="flatbomSubtitle">0 line items</p>
+                    </div>
+                    <button class="btn btn-primary" id="exportBtn2" disabled>📥 Export to Excel</button>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Part Number</th>
+                                    <th>Description</th>
+                                    <th>Source</th>
+                                    <th>Qty/Src</th>
+                                    <th>Src Qty</th>
+                                    <th>Extended</th>
+                                    <th>Unit Cost</th>
+                                    <th>Line Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody id="flatbomTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // =====================================================================
+        // State
+        // =====================================================================
+        let appData = {
+            masterParts: [],
+            subAssemblies: {},
+            fileName: ''
+        };
+        
+        let assembly = [];
+        let currentView = 'dashboard';
+        let searchTerm = '';
+        let typeFilter = 'all';
+        
+        // =====================================================================
+        // Utility Functions
+        // =====================================================================
+        const formatCurrency = (val) => {
+            if (val === null || val === undefined || isNaN(val)) return '-';
+            return '$' + Number(val).toFixed(2);
+        };
+        
+        const escapeHtml = (str) => {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        };
+        
+        // =====================================================================
+        // Excel Parsing
+        // =====================================================================
+        function parseExcel(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    
+                    // Parse Master_Parts
+                    const mpSheet = wb.Sheets['Master_Parts'];
+                    if (mpSheet) {
+                        appData.masterParts = XLSX.utils.sheet_to_json(mpSheet, { defval: '' });
+                    }
+                    
+                    // Parse sub-assembly sheets
+                    appData.subAssemblies = {};
+                    const subAssySheets = wb.SheetNames.filter(n => 
+                        n.includes('Basic') || n.includes('Injection') || n.includes('CPR') || 
+                        n.includes('Sternal') || n.includes('RGB') || n.includes('BP') ||
+                        n.includes('ECG') || n.includes('Auscultation') || n.includes('Genital')
+                    );
+                    
+                    subAssySheets.forEach(sheetName => {
+                        const sheet = wb.Sheets[sheetName];
+                        const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                        
+                        const name = json[5]?.[1] || sheetName;
+                        const module = json[6]?.[1] || '';
+                        
+                        const parts = [];
+                        for (let i = 13; i < json.length; i++) {
+                            const row = json[i];
+                            if (row && row[1]) {
+                                parts.push({
+                                    partNum: row[1],
+                                    description: row[2] || '',
+                                    qty: Number(row[3]) || 1,
+                                    partType: row[4] || '',
+                                    region: row[5] || '',
+                                    costHigh: Number(row[7]) || 0,
+                                    costLow: Number(row[8]) || 0,
+                                    costAvg: Number(row[9]) || 0,
+                                });
+                            }
+                        }
+                        
+                        if (parts.length > 0) {
+                            appData.subAssemblies[name] = {
+                                sheetName,
+                                name,
+                                module,
+                                parts,
+                                totalCostAvg: parts.reduce((sum, p) => sum + (p.qty * p.costAvg), 0)
+                            };
+                        }
+                    });
+                    
+                    appData.fileName = file.name;
+                    document.getElementById('fileName').textContent = file.name;
+                    document.getElementById('uploadZone').classList.add('hidden');
+                    
+                    updateAllViews();
+                    
+                } catch (err) {
+                    alert('Error parsing Excel file: ' + err.message);
+                    console.error(err);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        // =====================================================================
+        // Flat BOM Generation
+        // =====================================================================
+        function generateFlatBom() {
+            const items = [];
+            assembly.forEach(item => {
+                if (item.type === 'PART') {
+                    items.push({
+                        partNum: item.partNum,
+                        description: item.description,
+                        sourceType: 'DIRECT',
+                        sourceName: 'Final Assembly',
+                        qtyInSource: 1,
+                        sourceQty: item.qty,
+                        extendedQty: item.qty,
+                        costAvg: item.costAvg,
+                        lineCost: item.qty * item.costAvg
+                    });
+                } else if (item.type === 'SUB-ASSY' && item.parts) {
+                    item.parts.forEach(part => {
+                        items.push({
+                            partNum: part.partNum,
+                            description: part.description,
+                            sourceType: 'SUB-ASSY',
+                            sourceName: item.name,
+                            qtyInSource: part.qty,
+                            sourceQty: item.qty,
+                            extendedQty: part.qty * item.qty,
+                            costAvg: part.costAvg,
+                            lineCost: part.qty * item.qty * part.costAvg
+                        });
+                    });
+                }
+            });
+            return items;
+        }
+        
+        function getTotals() {
+            const flatBom = generateFlatBom();
+            return {
+                lineItems: flatBom.length,
+                totalQty: flatBom.reduce((sum, i) => sum + i.extendedQty, 0),
+                totalCost: flatBom.reduce((sum, i) => sum + i.lineCost, 0)
+            };
+        }
+        
+        // =====================================================================
+        // Assembly Management
+        // =====================================================================
+        function addToAssembly(item, type) {
+            const existing = assembly.find(a => 
+                type === 'part' ? a.partNum === item.Part_Number : a.name === item.name
+            );
+            
+            if (existing) {
+                existing.qty += 1;
+            } else {
+                if (type === 'part') {
+                    assembly.push({
+                        type: 'PART',
+                        partNum: item.Part_Number,
+                        description: item.Description,
+                        costAvg: Number(item.Cost_Avg) || 0,
+                        qty: 1
+                    });
+                } else {
+                    assembly.push({
+                        type: 'SUB-ASSY',
+                        name: item.name,
+                        module: item.module,
+                        costAvg: item.totalCostAvg,
+                        parts: item.parts,
+                        qty: 1
+                    });
+                }
+            }
+            updateAllViews();
+        }
+        
+        function updateQty(index, qty) {
+            assembly[index].qty = Math.max(1, parseInt(qty) || 1);
+            updateAllViews();
+        }
+        
+        function removeFromAssembly(index) {
+            assembly.splice(index, 1);
+            updateAllViews();
+        }
+        
+        // =====================================================================
+        // Export to Excel
+        // =====================================================================
+        function exportExcel() {
+            const flatBom = generateFlatBom();
+            const wb = XLSX.utils.book_new();
+            
+            const flatData = flatBom.map(item => ({
+                'Part Number': item.partNum,
+                'Description': item.description,
+                'Source Type': item.sourceType,
+                'Source Name': item.sourceName,
+                'Qty in Source': item.qtyInSource,
+                'Source Qty': item.sourceQty,
+                'Extended Qty': item.extendedQty,
+                'Unit Cost': item.costAvg,
+                'Line Cost': item.lineCost
+            }));
+            
+            const ws = XLSX.utils.json_to_sheet(flatData);
+            XLSX.utils.book_append_sheet(wb, ws, 'Flat_BOM');
+            
+            const assyData = assembly.map(item => ({
+                'Type': item.type,
+                'Part#/Name': item.type === 'PART' ? item.partNum : item.name,
+                'Description': item.description || item.module || '',
+                'Qty': item.qty,
+                'Unit Cost': item.costAvg,
+                'Line Cost': item.qty * item.costAvg
+            }));
+            
+            const ws2 = XLSX.utils.json_to_sheet(assyData);
+            XLSX.utils.book_append_sheet(wb, ws2, 'Assembly_Config');
+            
+            XLSX.writeFile(wb, 'CRISIS_FlatBOM_Export.xlsx');
+        }
+        
+        // =====================================================================
+        // View Updates
+        // =====================================================================
+        function updateAllViews() {
+            const totals = getTotals();
+            const flatBom = generateFlatBom();
+            const subAssyCount = Object.keys(appData.subAssemblies).length;
+            
+            // Update nav badges
+            document.getElementById('partsCount').textContent = appData.masterParts.length;
+            document.getElementById('subassyCount').textContent = subAssyCount;
+            document.getElementById('flatbomCount').textContent = flatBom.length;
+            
+            // Update dashboard stats
+            document.getElementById('statParts').textContent = appData.masterParts.length;
+            document.getElementById('statSubassy').textContent = subAssyCount;
+            document.getElementById('statAssembly').textContent = assembly.length;
+            document.getElementById('statFlatbom').textContent = flatBom.length;
+            document.getElementById('statQty').textContent = totals.totalQty;
+            document.getElementById('statCost').textContent = formatCurrency(totals.totalCost);
+            
+            // Update parts view
+            updatePartsTable();
+            document.getElementById('partsSubtitle').textContent = `${appData.masterParts.length} parts in database`;
+            
+            // Update type filters
+            updateTypeFilters();
+            
+            // Update subassemblies view
+            updateSubassyTable();
+            document.getElementById('subassySubtitle').textContent = `${subAssyCount} assemblies available`;
+            
+            // Update builder view
+            updateAvailableItems();
+            updateAssemblyItems();
+            document.getElementById('assemblyCount').textContent = `${assembly.length} items`;
+            document.getElementById('totalItems').textContent = assembly.length;
+            document.getElementById('totalParts').textContent = flatBom.length;
+            document.getElementById('totalQty').textContent = totals.totalQty;
+            document.getElementById('totalCost').textContent = formatCurrency(totals.totalCost);
+            
+            // Update flat BOM view
+            updateFlatBomTable();
+            document.getElementById('flatbomSubtitle').textContent = `${flatBom.length} line items · Total: ${formatCurrency(totals.totalCost)}`;
+            
+            // Update export buttons
+            const canExport = flatBom.length > 0;
+            document.getElementById('exportBtn').disabled = !canExport;
+            document.getElementById('exportBtn2').disabled = !canExport;
+        }
+        
+        function updateTypeFilters() {
+            const types = [...new Set(appData.masterParts.map(p => p.Part_Type).filter(Boolean))];
+            const container = document.getElementById('typeFilters');
+            
+            let html = `<button class="filter-pill ${typeFilter === 'all' ? 'active' : ''}" data-type="all">All</button>`;
+            types.forEach(t => {
+                html += `<button class="filter-pill ${typeFilter === t ? 'active' : ''}" data-type="${escapeHtml(t)}">${escapeHtml(t)}</button>`;
+            });
+            container.innerHTML = html;
+            
+            container.querySelectorAll('.filter-pill').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    typeFilter = btn.dataset.type;
+                    updateAllViews();
+                });
+            });
+        }
+        
+        function updatePartsTable() {
+            const filtered = appData.masterParts.filter(p => {
+                const matchesSearch = !searchTerm || 
+                    (p.Part_Number && p.Part_Number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                    (p.Description && p.Description.toLowerCase().includes(searchTerm.toLowerCase()));
+                const matchesType = typeFilter === 'all' || p.Part_Type === typeFilter;
+                return matchesSearch && matchesType;
+            }).slice(0, 100);
+            
+            const tbody = document.getElementById('partsTableBody');
+            tbody.innerHTML = filtered.map((p, idx) => `
+                <tr>
+                    <td class="mono">${escapeHtml(p.Part_Number)}</td>
+                    <td>${escapeHtml(p.Description) || '-'}</td>
+                    <td><span class="tag tag-part">${escapeHtml(p.Part_Type)}</span></td>
+                    <td>${escapeHtml(p.Region)}</td>
+                    <td class="mono">${formatCurrency(p.Cost_Avg)}</td>
+                    <td><button class="btn" onclick="addPartByIndex(${idx})">+ Add</button></td>
+                </tr>
+            `).join('');
+            
+            // Store filtered for click handler
+            window._filteredParts = filtered;
+        }
+        
+        window.addPartByIndex = function(idx) {
+            addToAssembly(window._filteredParts[idx], 'part');
+        };
+        
+        function updateSubassyTable() {
+            const items = Object.values(appData.subAssemblies);
+            const tbody = document.getElementById('subassyTableBody');
+            
+            tbody.innerHTML = items.map((sa, idx) => `
+                <tr>
+                    <td><span class="tag tag-subassy">SA</span> ${escapeHtml(sa.name)}</td>
+                    <td>${escapeHtml(sa.module)}</td>
+                    <td class="mono">${sa.parts.length}</td>
+                    <td class="mono">${formatCurrency(sa.totalCostAvg)}</td>
+                    <td><button class="btn" onclick="addSubassyByIndex(${idx})">+ Add</button></td>
+                </tr>
+            `).join('');
+            
+            window._subAssyList = items;
+        }
+        
+        window.addSubassyByIndex = function(idx) {
+            addToAssembly(window._subAssyList[idx], 'subassy');
+        };
+        
+        function updateAvailableItems() {
+            const items = Object.values(appData.subAssemblies);
+            const container = document.getElementById('availableItems');
+            
+            container.innerHTML = items.map((sa, idx) => `
+                <div class="selectable-item" onclick="addSubassyByIndex(${idx})">
+                    <span class="tag tag-subassy">SA</span>
+                    <div class="item-info">
+                        <div class="item-name">${escapeHtml(sa.name)}</div>
+                        <div class="item-meta">${sa.parts.length} parts · ${escapeHtml(sa.module)}</div>
+                    </div>
+                    <div class="item-cost">${formatCurrency(sa.totalCostAvg)}</div>
+                </div>
+            `).join('');
+        }
+        
+        function updateAssemblyItems() {
+            const container = document.getElementById('assemblyItems');
+            
+            if (assembly.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📦</div>
+                        <div>No items added yet</div>
+                        <div style="font-size: 12px; margin-top: 4px;">Click items on the left to add</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = assembly.map((item, idx) => `
+                <div class="assembly-item">
+                    <span class="tag ${item.type === 'PART' ? 'tag-part' : 'tag-subassy'}">
+                        ${item.type === 'PART' ? 'P' : 'SA'}
+                    </span>
+                    <div class="item-info">
+                        <div class="item-name">${escapeHtml(item.type === 'PART' ? item.partNum : item.name)}</div>
+                        <div class="item-meta">${escapeHtml(item.description || item.module || '')}</div>
+                    </div>
+                    <input type="number" class="qty-input" value="${item.qty}" min="1" onchange="updateQty(${idx}, this.value)">
+                    <div class="item-cost">${formatCurrency(item.qty * item.costAvg)}</div>
+                    <button class="remove-btn" onclick="removeFromAssembly(${idx})">✕</button>
+                </div>
+            `).join('');
+        }
+        
+        function updateFlatBomTable() {
+            const flatBom = generateFlatBom();
+            const tbody = document.getElementById('flatbomTableBody');
+            
+            if (flatBom.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 48px; color: var(--text-muted);">
+                            No items in Flat BOM - add parts or sub-assemblies in the Builder
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = flatBom.map(item => `
+                <tr>
+                    <td class="mono">${escapeHtml(item.partNum)}</td>
+                    <td>${escapeHtml(item.description) || '-'}</td>
+                    <td>
+                        <span class="tag ${item.sourceType === 'DIRECT' ? 'tag-direct' : 'tag-subassy'}">${item.sourceType}</span>
+                        <span style="margin-left: 6px; font-size: 12px; color: var(--text-secondary);">${escapeHtml(item.sourceName)}</span>
+                    </td>
+                    <td class="mono">${item.qtyInSource}</td>
+                    <td class="mono">${item.sourceQty}</td>
+                    <td class="mono" style="font-weight: 600;">${item.extendedQty}</td>
+                    <td class="mono">${formatCurrency(item.costAvg)}</td>
+                    <td class="mono" style="color: var(--accent);">${formatCurrency(item.lineCost)}</td>
+                </tr>
+            `).join('');
+        }
+        
+        // =====================================================================
+        // View Navigation
+        // =====================================================================
+        function showView(viewName) {
+            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+            document.getElementById('view-' + viewName).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.querySelector(`.nav-item[data-view="${viewName}"]`).classList.add('active');
+            
+            currentView = viewName;
+        }
+        
+        // =====================================================================
+        // Event Listeners
+        // =====================================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', () => showView(item.dataset.view));
+            });
+            
+            // File input
+            document.getElementById('fileInput').addEventListener('change', (e) => {
+                if (e.target.files[0]) parseExcel(e.target.files[0]);
+            });
+            
+            // Upload zone
+            const uploadZone = document.getElementById('uploadZone');
+            uploadZone.addEventListener('click', () => document.getElementById('fileInput').click());
+            uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+            uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.classList.remove('dragover');
+                if (e.dataTransfer.files[0]) parseExcel(e.dataTransfer.files[0]);
+            });
+            
+            // Search
+            document.getElementById('partsSearch').addEventListener('input', (e) => {
+                searchTerm = e.target.value;
+                updatePartsTable();
+            });
+            
+            // Export buttons
+            document.getElementById('exportBtn').addEventListener('click', exportExcel);
+            document.getElementById('exportBtn2').addEventListener('click', exportExcel);
+            
+            // Initial render
+            updateAllViews();
+        });
+    </script>
+</body>
+</html>
