@@ -92,6 +92,10 @@ Frontend (React + TypeScript):
 
 ### PLUM Module (PLM)
 
+> See [PLUM Roadmap](features/plum/ROADMAP.md) for detailed sub-phases.
+
+**Phase 1.0 - Core Migration** (port from prototype):
+
 - [ ] Parts management (CRUD, search, filtering)
 - [ ] Part revisions and status workflow
 - [ ] Bill of Materials (BOM) tree view
@@ -102,7 +106,29 @@ Frontend (React + TypeScript):
 - [ ] Where-used analysis
 - [ ] Data import/export (JSON, Excel)
 
+**Phase 1.5 - Document Links** (after core complete):
+
+- [ ] Document link model (URL/path references)
+- [ ] Document types (Spec, Drawing, Datasheet, Certificate)
+- [ ] Link management UI
+
+**Phase 2.0 - Document Management** (future):
+
+- [ ] File upload and storage
+- [ ] Document versioning
+- [ ] In-app preview (PDF, images)
+
+**Phase 2.5 - ECO Workflow** (future):
+
+- [ ] Engineering Change Order creation
+- [ ] Approval workflow
+- [ ] Impact analysis automation
+
 ### FLAN Module (Project Management)
+
+> See [FLAN Roadmap](features/flan/ROADMAP.md) for detailed sub-phases.
+
+**Phase 1.0 - Core Migration** (port from prototype):
 
 - [ ] Projects management (CRUD, categories)
 - [ ] Phases/epics with progress tracking
@@ -113,6 +139,15 @@ Frontend (React + TypeScript):
 - [ ] Deliverables tracking
 - [ ] Time entry logging
 - [ ] Project dashboard
+- [ ] Project budgets and phase estimates
+- [ ] Notes and comments
+- [ ] Import/Export (JSON, CSV, Excel)
+
+**Phase 1.5 - Portfolio & Resources** (after core complete):
+
+- [ ] Portfolio view (cross-project dashboard)
+- [ ] Resource leveling (workload balancing)
+- [ ] Cross-project reporting
 
 ### Integration Points
 
@@ -336,3 +371,7 @@ Frontend (React + TypeScript):
 - [Roadmap Planning Interview](interviews/roadmap-planning.md) - All 7 architecture decisions
 - [Analysis Report](reports/analysis-report-existing-apps.md) - PLUM/FLAN prototype analysis
 - [Architecture Decisions](decisions.md) - Phase 1 discovery decisions
+- [PLUM Documentation](features/plum/README.md) - Full PLUM module documentation
+- [PLUM Gap Analysis](interviews/plum-documentation.md) - Prototype vs requirements analysis
+- [FLAN Documentation](features/flan/README.md) - Full FLAN module documentation
+- [FLAN Gap Analysis](interviews/flan-documentation.md) - Prototype vs requirements analysis

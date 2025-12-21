@@ -36,7 +36,7 @@ BizNiceSweets/
 ├── syerp/          # SYERP - Enterprise Resource Planning
 ├── mousse/         # MOUSSE - Manufacturing Execution System
 ├── crisp/          # CRISP - Quality Management System
-├── gelato/         # GELATO - Warehouse Management
+├── gelato/         # GELATO (General Enterprise Location & Asset Tracking Operations) - Warehouse Management
 └── docs/
     ├── features/   # Feature documentation per suite
     └── tasks/      # Development task tracking

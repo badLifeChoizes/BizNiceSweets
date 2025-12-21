@@ -186,12 +186,30 @@ Possible matches:
 - Architecture: No direct match
 
 Options:
-1. Use weak matches anyway
-2. Create new requirements for "notifications"
-3. Skip requirements (manual later)
+1. Run discovery interview (recommended)
+   → Uses /interview discovery to explore requirements
+   → See: .claude/skills/interview/SKILL.md
 
-Choice (1/2/3):
+2. Use weak matches anyway
+   → Accept partial matches as starting point
+
+3. Create new requirements for "notifications"
+   → Uses add-feature to create placeholder requirements
+
+4. Skip requirements (manual later)
+   → Task will not track requirement progress
+
+Choice (1/2/3/4):
 ```
+
+**When using discovery interview (Option 1):**
+
+The interview skill provides structured exploration:
+
+- Asks clarifying questions to understand the feature scope
+- Presents options with pros/cons for each decision
+- Captures requirements with proper IDs and rationale
+- Documents why weak matches were accepted/rejected
 
 ### Scenario D: Cross-Cutting Concern Match (e.g., Bento Grid)
 
@@ -225,18 +243,32 @@ are surfaced as a cross-cutting concern.
 This appears to be a new feature not covered by existing documentation.
 
 Options:
-1. Create new feature: docs/features/analytics.md
-   - Generates stub feature doc
-   - Creates placeholder requirements (ANALYTICS-001, etc.)
+1. Run discovery interview (recommended for new features)
+   → Uses /interview discovery to gather requirements
+   → Creates proper feature doc and requirements
+   → See: .claude/skills/interview/SKILL.md
 
-2. Map to existing feature manually
-   - Show list of all features
+2. Create new feature: docs/features/analytics.md
+   → Generates stub feature doc
+   → Creates placeholder requirements (ANALYTICS-001, etc.)
 
-3. Proceed without requirements
-   - Task will not update requirements-progress.md
+3. Map to existing feature manually
+   → Show list of all features
 
-Choice (1/2/3):
+4. Proceed without requirements
+   → Task will not update requirements-progress.md
+
+Choice (1/2/3/4):
 ```
+
+**When using discovery interview (Option 1):**
+
+For new features, the discovery interview:
+
+- Explores the problem space with targeted questions
+- Defines core vs. optional requirements
+- Assigns proper requirement IDs (PREFIX-001, etc.)
+- Creates both feature doc and task file with requirements linked
 
 ## Integration with Other Commands
 
@@ -291,3 +323,54 @@ User can always override with explicit requirements:
 ```
 
 This bypasses auto-detection entirely.
+
+## Interview Skill Integration
+
+When detection confidence is low or no match is found, the interview skill provides structured requirements discovery.
+
+### When to Invoke Interview
+
+| Confidence | Interview Option |
+|------------|------------------|
+| High | Not offered (auto-accept) |
+| Medium | Offered as alternative |
+| Low | Recommended (Option 1) |
+| None | Strongly recommended |
+
+### Interview Output Format
+
+The discovery interview produces output compatible with detect-requirements:
+
+```json
+{
+  "primary_feature": {
+    "name": "{discovered feature name}",
+    "doc": "docs/features/{feature}.md",
+    "prefix": "{PREFIX}",
+    "confidence": "high"
+  },
+  "suggested_requirements": [
+    {"id": "{PREFIX}-001", "text": "{requirement}", "priority": "Must", "source": "Decision 1"},
+    {"id": "{PREFIX}-002", "text": "{requirement}", "priority": "Should", "source": "Decision 2"}
+  ],
+  "decisions_recorded": "docs/tasks/{branch}.md#decisions"
+}
+```
+
+### Handoff to Interview
+
+When detect-requirements invokes interview:
+
+```text
+detect-requirements → Low confidence
+                   ↓
+User selects: "Run discovery interview"
+                   ↓
+/interview discovery {feature-name}
+                   ↓
+Interview gathers requirements
+                   ↓
+Output → task file + feature doc
+```
+
+See: `.claude/skills/interview/SKILL.md` for full interview documentation.

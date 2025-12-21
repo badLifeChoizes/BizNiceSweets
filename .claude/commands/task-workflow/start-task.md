@@ -174,6 +174,37 @@ Read the task file and display:
 - [ ] SESS-037: Implement CSV export
 ```
 
+### Step 6b: Offer Planning Interview (Complex Tasks)
+
+For tasks with 3+ requirements, offer a planning interview:
+
+```text
+📋 This task has {count} requirements to implement.
+
+Would you like to run a planning interview first?
+1. Yes - plan implementation approach (recommended for complex tasks)
+   → Uses /interview planning to structure the work
+   → Creates ordered checklist with architecture decisions
+   → See: .claude/skills/interview/SKILL.md
+
+2. No - start working directly
+   → Use existing checklist items
+   → Good for straightforward implementations
+
+Choice (1/2):
+```
+
+**When using planning interview (Option 1):**
+
+The interview skill will:
+
+1. Confirm scope and out-of-scope items
+2. Ask architecture/implementation questions one at a time
+3. Break down requirements into ordered checklist items
+4. Record key decisions with rationale
+
+The resulting checklist is added to the task file.
+
 ### Step 7: Preflight Check (INVARIANTS)
 
 Check if INVARIANTS documentation exists for the detected feature:

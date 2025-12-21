@@ -47,7 +47,34 @@ Choice (1/2/3):
 
 ### Step 2: Gather Requirements
 
-Interactive requirements gathering:
+Requirements can be gathered in two ways:
+
+#### Option A: Discovery Interview (Recommended)
+
+Use the interview skill for structured requirements gathering:
+
+```text
+📋 Creating requirements for: Analytics
+
+Starting discovery interview...
+See: .claude/skills/interview/SKILL.md
+
+The interview will:
+1. Ask clarifying questions one at a time
+2. Present options with pros/cons
+3. Record each requirement with rationale
+4. Assign proper requirement IDs
+```
+
+The discovery interview ensures:
+- Requirements are well-thought-out with context
+- Decisions are documented with rationale
+- Edge cases are considered
+- Priority is explicitly decided for each requirement
+
+#### Option B: Quick Entry (For Simple Features)
+
+For straightforward features, use quick entry:
 
 ```text
 📋 Creating requirements for: Analytics

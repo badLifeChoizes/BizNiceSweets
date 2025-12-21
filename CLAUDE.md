@@ -69,7 +69,7 @@ Before implementing feature code:
 
 | Branch Pattern | Feature Doc | Requirements |
 |----------------|-------------|--------------|
-| `feature-{feature}*` | [{feature}.md](docs/features/{feature}.md) | {featureID}-### to {featureID}-###  |
+| `feature-{feature}*` | [{feature}.md](docs/features/{feature}.md) | {featureRequirementID}-### to {featureRequirementID}-###  |
 
 ### Key Documentation Files
 

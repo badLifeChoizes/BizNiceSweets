@@ -69,18 +69,33 @@ Select primary feature: (1/2/both)
 ⚠️ No clear feature match for: feature-analytics
 
 Options:
-1. Create new feature documentation
+1. Run discovery interview (recommended for new features)
+   → Uses /interview discovery to gather requirements
+   → Creates feature doc with proper requirements
+   → See: .claude/skills/interview/SKILL.md
+
+2. Create new feature documentation
    → Creates docs/features/analytics.md stub
    → Generates placeholder requirements (ANALYTICS-001, etc.)
 
-2. Select from existing features manually
+3. Select from existing features manually
    → Shows feature list
 
-3. Proceed without requirements
+4. Proceed without requirements
    → Task will not track requirement progress
 
-Choice (1/2/3):
+Choice (1/2/3/4):
 ```
+
+**When using discovery interview (Option 1):**
+
+The interview skill will:
+1. Ask clarifying questions one at a time
+2. Capture requirements with proper IDs
+3. Record decisions with rationale
+4. Create the feature doc and task file together
+
+This is recommended for new features where scope is unclear.
 
 ### 3. Create Branch
 

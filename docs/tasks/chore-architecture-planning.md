@@ -19,8 +19,8 @@ Based on the analysis report, interview the user to fully understand the systems
 
 | Suite | Status | Priority |
 |-------|--------|----------|
-| PLUM (PLM) | Active - needs docs | High |
-| FLAN (PRJ-MGMT) | Active - needs docs | High |
+| PLUM (PLM) | **Documented** | High |
+| FLAN (PRJ-MGMT) | **Documented** | High |
 | SYERP (ERP) | Planned | High (receives features from FLAN) |
 | CRUMB (CRM) | Planned | Medium |
 | MOUSSE (MES) | Planned (receives features from PLUM) | Medium |
@@ -45,12 +45,22 @@ Based on the analysis report, interview the user to fully understand the systems
 **Completed:** See [docs/ROADMAP.md](../ROADMAP.md) and [docs/interviews/roadmap-planning.md](../interviews/roadmap-planning.md) for all 7 new architecture decisions.
 
 ### Phase 3: Suite Documentation (Active)
-- [ ] PLUM: Create `docs/features/plum/README.md` (from template)
-- [ ] PLUM: Create `docs/features/plum/architecture.md`
-- [ ] PLUM: Create `docs/features/plum/dependencies.md`
-- [ ] PLUM: Create `docs/features/plum/INVARIANTS.md`
-- [ ] PLUM: Create `docs/features/plum/usage.md`
-- [ ] FLAN: Create complete documentation set
+- [x] PLUM: Create `docs/features/plum/README.md` (from template)
+- [x] PLUM: Create `docs/features/plum/architecture.md`
+- [x] PLUM: Create `docs/features/plum/dependencies.md`
+- [x] PLUM: Create `docs/features/plum/INVARIANTS.md`
+- [x] PLUM: Create `docs/features/plum/usage.md`
+- [x] PLUM: Create `docs/features/plum/ROADMAP.md`
+- [x] FLAN: Create `docs/features/flan/README.md`
+- [x] FLAN: Create `docs/features/flan/architecture.md`
+- [x] FLAN: Create `docs/features/flan/dependencies.md`
+- [x] FLAN: Create `docs/features/flan/INVARIANTS.md`
+- [x] FLAN: Create `docs/features/flan/usage.md`
+- [x] FLAN: Create `docs/features/flan/ROADMAP.md`
+
+**PLUM Completed:** See [docs/features/plum/README.md](../features/plum/README.md) and [docs/interviews/plum-documentation.md](../interviews/plum-documentation.md) for gap analysis.
+
+**FLAN Completed:** See [docs/features/flan/README.md](../features/flan/README.md) and [docs/interviews/flan-documentation.md](../interviews/flan-documentation.md) for gap analysis.
 
 ### Phase 4: Suite Documentation (Planned)
 - [ ] SYERP: Create complete documentation set
