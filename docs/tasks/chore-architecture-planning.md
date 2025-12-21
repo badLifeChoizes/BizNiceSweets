@@ -38,9 +38,11 @@ Based on the analysis report, interview the user to fully understand the systems
 **Completed:** See [docs/decisions.md](../decisions.md) for all 5 architecture decisions.
 
 ### Phase 2: Master Roadmap
-- [ ] Create `docs/ROADMAP.md` with suite development order
-- [ ] Define integration milestones
-- [ ] Document shared infrastructure requirements
+- [x] Create `docs/ROADMAP.md` with suite development order
+- [x] Define integration milestones
+- [x] Document shared infrastructure requirements
+
+**Completed:** See [docs/ROADMAP.md](../ROADMAP.md) and [docs/interviews/roadmap-planning.md](../interviews/roadmap-planning.md) for all 7 new architecture decisions.
 
 ### Phase 3: Suite Documentation (Active)
 - [ ] PLUM: Create `docs/features/plum/README.md` (from template)
