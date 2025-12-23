@@ -27970,10 +27970,10 @@ function showUploadDocTemplateModal(preselectedType = null) {
    id="docTemplateDropZone">
   <div style="font-size:32px;margin-bottom:8px">[Upload]</div>
   <div style="color:var(--text-muted)">Click to select or drag and drop</div>
-  <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Excel files only (.xlsx, .xls)</div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Excel files only (.xlsx, .xls, .xlsm)</div>
   <div id="docTemplateFileName" style="margin-top:12px;color:var(--success);font-weight:600;display:none"></div>
   </div>
-  <input type="file" id="docTemplateFile" accept=".xlsx,.xls" style="display:none" onchange="handleDocTemplateFileSelect(this)">
+  <input type="file" id="docTemplateFile" accept=".xlsx,.xls,.xlsm" style="display:none" onchange="handleDocTemplateFileSelect(this)">
  </div>
  <div style="background:var(--bg-tertiary);border-radius:8px;padding:12px;font-size:12px;color:var(--text-muted)">
   <strong>[Tip]</strong> In your template, use placeholders like <code>{{ecoNumber}}</code> or <code>{{partName}}</code>
@@ -28022,8 +28022,8 @@ function handleDocTemplateFileSelect(input) {
  const fileNameDisplay = document.getElementById('docTemplateFileName');
  const uploadBtn = document.getElementById('uploadDocTemplateBtn');
 
- if (!file.name.match(/\.xlsx?$/i)) {
- showToast('Please select an Excel file (.xlsx or .xls)', 'error');
+ if (!file.name.match(/\.xlsx?m?$/i)) {
+ showToast('Please select an Excel file (.xlsx, .xls, or .xlsm)', 'error');
  return;
  }
 
