@@ -635,6 +635,7 @@
  display: none;
  }
  .dropdown.open .dropdown-menu { display: block; }
+.dropdown-menu.show { display: block; }
  .dropdown-item {
  display: block;
  width: 100%;
@@ -17612,7 +17613,8 @@ const ImportExport = {
  },
 
  // Export BOM using a document template
- exportBomToTemplate(productId) {
+ // If templateId is provided, export directly; otherwise show template picker
+ exportBomToTemplate(productId, templateId = null) {
  const product = Parts.getById(productId);
  if (!product) return;
 
@@ -17646,7 +17648,12 @@ const ImportExport = {
  category: item.category || ''
  }));
 
+ // If template ID provided, export directly
+ if (templateId) {
+ DocumentTemplates.exportWithTemplate(templateId, documentData);
+ } else {
  showExportWithTemplateModal('BOM', documentData);
+ }
  },
 
  // Download a blank parts import template
@@ -19004,7 +19011,7 @@ function renderDashboard() {
  ` : '';
  }).join('')}
  ${(product.bom || []).length > 10 ? `<div style="color:var(--text-muted);font-size:11px">...and ${product.bom.length - 10} more</div>` : ''}
- </div></div></div><div style="margin-top:16px;display:flex;gap:8px"><button class="btn" onclick="showModal('bomEditor', '${product.id}')">Edit BOM</button><button class="btn" onclick="showView('bom')"> View Tree</button><button class="btn" onclick="showView('flatbom')">Flat BOM</button><button class="btn" onclick="ImportExport.exportProductBom('${product.id}')"> Export</button></div></div></div>
+ </div></div></div><div style="margin-top:16px;display:flex;gap:8px"><button class="btn" onclick="showModal('bomEditor', '${product.id}')">Edit BOM</button><button class="btn" onclick="showView('bom')"> View Tree</button><button class="btn" onclick="showView('flatbom')">Flat BOM</button><button class="btn" onclick="showBomExportModal('${product.id}')">Export</button></div></div></div>
  `;
  }
  }
@@ -19511,7 +19518,7 @@ function toggleHeaderExportMenu() {
     bomSection.innerHTML = `
      <div class="dropdown-divider"></div>
      <div class="dropdown-section-title">BOM Export</div>
-     <button class="dropdown-item" onclick="ImportExport.exportProductBom('${partId}');closeHeaderMenus()">
+     <button class="dropdown-item" onclick="showBomExportModal('${partId}');closeHeaderMenus()">
       <span class="dropdown-icon">[BOM]</span> Export BOM: ${Utils.escapeHtml(part.partNumber)}
      </button>
     `;
@@ -24416,7 +24423,7 @@ function showModal(type, data = null) {
  <div style="margin-top:12px;font-size:12px;color:var(--text-muted)">
  [i] <strong>Ref Designators</strong> identify where each part goes (e.g., R1,R2 for resistors). <strong>Notes</strong> let you add comments per BOM line. <strong>Effectivity</strong> dates track when changes take effect.
  </div>
- </div><div class="modal-footer"><button class="btn" onclick="closeModal()">Done</button></div></div></div>
+ </div><div class="modal-footer"><button class="btn" onclick="closeModal();setTimeout(()=>showBomExportModal('${part.id}'),100)">Export</button><div style="flex:1"></div><button class="btn" onclick="closeModal()">Done</button></div></div></div>
  `;
  }
  
@@ -27124,18 +27131,7 @@ function renderReportsView() {
  <td>${bomCount}</td>
  <td class="mono">${Utils.formatCurrency(cost)}</td>
  <td class="nowrap">
- <div class="dropdown" style="display:inline-block">
- <button class="btn btn-sm dropdown-toggle" onclick="this.parentElement.classList.toggle('open')">Export</button>
- <div class="dropdown-menu">
- <button class="dropdown-item" onclick="PDFReport.generateBomReport('${p.id}')">[Print] Print-Ready PDF</button>
- <button class="dropdown-item" onclick="MultiLevelBomExport.exportIndentedBom('${p.id}', 'xlsx')">[XLS] Multi-Level Excel</button>
- <button class="dropdown-item" onclick="MultiLevelBomExport.exportIndentedBom('${p.id}', 'csv')">[CSV] Multi-Level CSV</button>
- <button class="dropdown-item" onclick="MultiLevelBomExport.exportIndentedBom('${p.id}', 'html')">[HTML] Printable HTML</button>
- <button class="dropdown-item" onclick="ExportManager.exportBomAsCsv('${p.id}')">[CSV] Flat BOM CSV</button>
- <button class="dropdown-item" onclick="ImportExport.exportProductBom('${p.id}')">[XLS] Simple Excel</button>
- <button class="dropdown-item" onclick="ImportExport.exportBomToTemplate('${p.id}')">[F] Export to Template</button>
- </div>
- </div>
+ <button class="btn btn-sm" onclick="showBomExportModal('${p.id}')">Export</button>
  </td>
  </tr>
  `;
@@ -27168,7 +27164,7 @@ function renderReportsView() {
  <td><span class="tag tag-type">${p.type}</span></td>
  <td>${p.bom?.length || 0}</td>
  <td>
- <button class="btn btn-sm" onclick="MultiLevelBomExport.exportIndentedBom('${p.id}', 'xlsx')">Export</button>
+ <button class="btn btn-sm" onclick="showBomExportModal('${p.id}')">Export</button>
  </td>
  </tr>
  `).join('')}
@@ -27785,7 +27781,25 @@ const DocumentTemplates = {
    if (matches) {
    for (const match of matches) {
     const fieldName = match.replace(/\{\{|\}\}/g, '');
-    if (documentData[fieldName] !== undefined) {
+
+    // Handle indexed item placeholders like {{item1_PN}} -> bomItems[0].partNumber
+    const itemMatch = fieldName.match(/^item(\d+)_(\w+)$/);
+    if (itemMatch && documentData.bomItems) {
+    const idx = parseInt(itemMatch[1]) - 1; // item1 = index 0
+    const prop = itemMatch[2];
+    // Map placeholder suffix to bomItems property
+    const propMap = {
+     'PN': 'partNumber', 'Name': 'partName', 'Qty': 'quantity',
+     'UOM': 'unit', 'Cost': 'cost', 'ExtCost': 'totalCost',
+     'Cat': 'category', 'Notes': 'notes'
+    };
+    const bomProp = propMap[prop] || prop.toLowerCase();
+    if (documentData.bomItems[idx] && documentData.bomItems[idx][bomProp] !== undefined) {
+     value = value.replace(match, String(documentData.bomItems[idx][bomProp]));
+    } else {
+     value = value.replace(match, ''); // Clear placeholder if no data
+    }
+    } else if (documentData[fieldName] !== undefined) {
     value = value.replace(match, String(documentData[fieldName]));
     }
    }
@@ -28324,6 +28338,86 @@ function executeExportWithTemplate(templateId) {
  closeModal();
  DocumentTemplates.exportWithTemplate(templateId, documentData);
  delete window._pendingExportData;
+}
+
+// =============================================================================
+// UNIFIED BOM EXPORT MODAL
+// =============================================================================
+function showBomExportModal(partId) {
+ const part = DB.parts.find(p => p.id === partId);
+ if (!part) {
+ showToast('Part not found', 'error');
+ return;
+ }
+
+ const bomTemplates = DocumentTemplates.getByType('BOM');
+ const hasTemplates = bomTemplates.length > 0;
+
+ const html = `
+ <div class="modal-backdrop" onclick="closeModal(event)">
+ <div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
+ <div class="modal-header">
+ <h2 class="modal-title">[Export] Export BOM</h2>
+ <button class="modal-close" onclick="closeModal()">&times;</button>
+ </div>
+ <div class="modal-body">
+ <div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;margin-bottom:20px">
+  <div style="font-weight:600">${Utils.escapeHtml(part.partNumber)}</div>
+  <div style="font-size:13px;color:var(--text-muted)">${Utils.escapeHtml(part.name)}</div>
+  <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${(part.bom || []).length} direct items</div>
+ </div>
+
+ <div style="font-weight:600;margin-bottom:12px;color:var(--text-secondary);font-size:12px;text-transform:uppercase">Standard Formats</div>
+ <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+  <button class="btn" style="justify-content:flex-start;text-align:left" onclick="closeModal();ImportExport.exportProductBom('${partId}')">
+  <span style="width:60px;color:var(--text-muted)">[XLS]</span> Simple Excel BOM
+  </button>
+  <button class="btn" style="justify-content:flex-start;text-align:left" onclick="closeModal();MultiLevelBomExport.exportIndentedBom('${partId}', 'xlsx')">
+  <span style="width:60px;color:var(--text-muted)">[XLS]</span> Multi-Level Excel (Indented)
+  </button>
+  <button class="btn" style="justify-content:flex-start;text-align:left" onclick="closeModal();ExportManager.exportBomAsCsv('${partId}')">
+  <span style="width:60px;color:var(--text-muted)">[CSV]</span> Flat BOM CSV
+  </button>
+  <button class="btn" style="justify-content:flex-start;text-align:left" onclick="closeModal();MultiLevelBomExport.exportIndentedBom('${partId}', 'csv')">
+  <span style="width:60px;color:var(--text-muted)">[CSV]</span> Multi-Level CSV
+  </button>
+  <button class="btn" style="justify-content:flex-start;text-align:left" onclick="closeModal();MultiLevelBomExport.exportIndentedBom('${partId}', 'html')">
+  <span style="width:60px;color:var(--text-muted)">[HTML]</span> Printable HTML
+  </button>
+  <button class="btn" style="justify-content:flex-start;text-align:left" onclick="closeModal();PDFReport.generateBomReport('${partId}')">
+  <span style="width:60px;color:var(--text-muted)">[PDF]</span> Print-Ready PDF Report
+  </button>
+ </div>
+
+ ${hasTemplates ? `
+ <div style="font-weight:600;margin-bottom:12px;color:var(--text-secondary);font-size:12px;text-transform:uppercase">Your Templates</div>
+ <div style="display:flex;flex-direction:column;gap:8px">
+  ${bomTemplates.map(tpl => `
+  <button class="btn" style="justify-content:flex-start;text-align:left;border-color:var(--accent)" onclick="closeModal();ImportExport.exportBomToTemplate('${partId}', '${tpl.id}')">
+   <span style="width:60px;color:var(--accent)">[F]</span>
+   <span>${Utils.escapeHtml(tpl.name)}</span>
+   <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${Utils.escapeHtml(tpl.fileName)}</span>
+  </button>
+  `).join('')}
+ </div>
+ ` : `
+ <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
+  <div style="color:var(--text-muted);font-size:13px;margin-bottom:12px">
+  Want to export to your facility's custom BOM form?
+  </div>
+  <button class="btn btn-sm" onclick="closeModal();showView('doctemplates')">
+  [+] Upload BOM Template
+  </button>
+ </div>
+ `}
+ </div>
+ <div class="modal-footer">
+ <button class="btn" onclick="closeModal()">Cancel</button>
+ </div>
+ </div>
+ </div>
+ `;
+ document.getElementById('modalContainer').innerHTML = html;
 }
 
 // =============================================================================

@@ -28,11 +28,14 @@ Add document template upload and export functionality to PLM v56. Users can uplo
 - [x] Add "Export to Template" option when exporting BOM
 - [x] Template selector modal showing available templates for doc type
 - [x] Merge document data into template fields (both {{placeholders}} and cell mappings)
+- [x] Create unified export modal (`showBomExportModal`) accessible from all export points
+- [x] Add Export button to BOM Editor modal
+- [x] Add indexed item placeholder support ({{item1_PN}}, {{item2_Name}}, etc.)
 
 ### Testing & Polish
 - [x] Update version references to v56
-- [ ] Test template upload for each type
-- [ ] Test export with template selection
+- [x] Test template upload for each type
+- [x] Test export with template selection
 - [x] Verify data persists in localStorage
 
 ## Document Types
