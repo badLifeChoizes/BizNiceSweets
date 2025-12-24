@@ -2576,6 +2576,7 @@ function quickExportJson() {
  packages: DB.packages || [],
  vendors: DB.vendors || [],
  ecos: DB.ecos || [],
+ documentTemplates: DB.documentTemplates || [],
  idCounter: idCounter,
  
  // Metadata
@@ -2659,6 +2660,7 @@ function quickImportJson(file) {
  DB.packages = data.packages || [];
  DB.vendors = data.vendors || [];
  DB.ecos = data.ecos || [];
+ DB.documentTemplates = data.documentTemplates || [];
  idCounter = data.idCounter || 1;
  
  // Update version control state
@@ -8067,6 +8069,8 @@ const DatabaseManager = {
  rfqs: DB.rfqs || [],
  vendorPerformance: DB.vendorPerformance || [],
  exchangeRates: DB.exchangeRates || {},
+ // Document Templates
+ documentTemplates: DB.documentTemplates || [],
  idCounter: idCounter,
  checkedOutBy: DB.checkedOutBy,
  checkedOutAt: DB.checkedOutAt,
@@ -8107,6 +8111,8 @@ const DatabaseManager = {
  DB.rfqs = parsed.rfqs || [];
  DB.vendorPerformance = parsed.vendorPerformance || [];
  DB.exchangeRates = parsed.exchangeRates || {USD:1,EUR:0.92,GBP:0.79,JPY:149.5,CNY:7.24,KRW:1320,TWD:31.5,MXN:17.15,CAD:1.36,INR:83.12};
+ // Document Templates
+ DB.documentTemplates = parsed.documentTemplates || [];
  DB.version = parsed.version || 1;
  DB.checkedOutBy = parsed.checkedOutBy || null;
  DB.checkedOutAt = parsed.checkedOutAt || null;
