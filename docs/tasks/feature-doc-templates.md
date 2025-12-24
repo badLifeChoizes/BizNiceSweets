@@ -33,7 +33,7 @@ Add document template upload and export functionality to PLM v56. Users can uplo
 - [x] Update version references to v56
 - [ ] Test template upload for each type
 - [ ] Test export with template selection
-- [ ] Verify data persists in localStorage
+- [x] Verify data persists in localStorage
 
 ## Document Types
 | Type | Description |

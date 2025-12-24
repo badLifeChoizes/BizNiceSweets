@@ -2561,7 +2561,7 @@ function promptForUsername() {
 function quickExportJson() {
  const username = promptForUsername();
  const currentDbName = DatabaseManager.getCurrentDbName();
- 
+
  const data = {
  // Version control
  version: (DB.version || 0) + 1,
