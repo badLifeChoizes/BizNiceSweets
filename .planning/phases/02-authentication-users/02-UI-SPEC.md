@@ -5,6 +5,7 @@ status: draft
 shadcn_initialized: true
 preset: "style: default, baseColor: slate, cssVariables: true"
 created: 2026-06-23
+revised: 2026-06-23
 ---
 
 # Phase 2 — UI Design Contract
@@ -70,16 +71,16 @@ Four type sizes already established by `Landing.tsx`. This phase uses the same f
 
 | Role | Size | Tailwind | Weight | Tailwind | Line Height | Usage |
 |------|------|----------|--------|----------|-------------|-------|
-| Body | 16px | `text-base` | 400 (regular) | `font-normal` | 1.5 | Form labels, table cell text, paragraph copy |
-| Label | 14px | `text-sm` | 500 (medium) | `font-medium` | 1.4 | Field labels above inputs, status badges, table column headers |
+| Body | 16px | `text-base` | 400 (regular) | `font-normal` | 1.5 | Form labels, table cell text, paragraph copy, muted descriptions |
+| Label | 14px | `text-sm` | 400 (regular) | `font-normal` | 1.4 | Field labels above inputs, status badges, table column headers |
 | Heading | 20px | `text-xl` | 600 (semibold) | `font-semibold` | 1.2 | Page headings (`h1` on Login, `h2` on User Management) |
-| Display | 36px | `text-4xl` | 700 (bold) | `font-bold` | 1.1 | App name on Login page only (matches Landing `h1`) |
+| Display | 36px | `text-4xl` | 600 (semibold) | `font-semibold` | 1.1 | App name on Login page only (matches Landing `h1`) |
 
-**Weights used: 2** — regular (400) for body/muted text, semibold (600) for headings and labels. `font-bold` (700) reserved only for the Login display line.
+**Weights used: 2** — regular (400) for body text and labels, semibold (600) for headings and the login display line. No font-medium (500) or font-bold (700) in this phase.
 
-**Mono exception:** Error messages from API (`error.message`) render in `font-mono text-xs` — matches Landing pattern for API error text.
+**Mono exception:** Error messages from API (`error.message`) render in `font-mono text-sm` — 14px, matching the Label size already in the type scale. The monospace face provides visual distinction from surrounding body text without introducing a fifth font size. The scale remains exactly 4 sizes: 14, 16, 20, 36px.
 
-**Source:** `frontend/src/routes/Landing.tsx` codebase patterns (text-4xl font-bold, text-lg, text-sm font-semibold, text-xs); standard shadcn type scale.
+**Source:** `frontend/src/routes/Landing.tsx` codebase patterns (text-4xl font-bold, text-lg, text-sm font-semibold); standard shadcn type scale. Note: Landing uses `font-bold` for the display heading; this phase standardizes to `font-semibold` to stay within the 2-weight budget — executor should apply `font-semibold` to the Login display heading.
 
 ---
 
@@ -138,11 +139,11 @@ No third-party registry blocks declared. Registry safety gate: not applicable.
 **Layout:** Centered card on full-height background. Max width 400px. Vertically centered.
 
 ```
-[ BizNiceSweets ]           ← Display (text-4xl font-bold)
+[ BizNiceSweets ]           ← Display (text-4xl font-semibold)
 [ Modular business suite ]  ← Body muted (text-base text-muted-foreground)
 
 [ Card ]
-  Email                     ← Label (text-sm font-medium)
+  Email                     ← Label (text-sm font-normal)
   [ ________________________ ]  ← Input
   Password                  ← Label
   [ ________________________ ]  ← Input (type="password")
@@ -175,9 +176,12 @@ Not a visible screen. Renders between route load and auth resolution.
 
 **Layout:** Full-width content area. Page heading row + toolbar row + table. No sidebar (Phase 3 adds navigation shell).
 
+**Primary visual anchor:** The accent-colored "Create User" button (`Button variant="default"`) in the top-right of the toolbar row is the focal point of this screen. It is the only element using the accent color and should draw the eye immediately upon arrival.
+
 ```
 Users                                     ← Heading (text-xl font-semibold)
 Manage who can access this installation.  ← Body muted
+                                          (text-base font-normal text-muted-foreground)
 
 [ Search users... ]  [ Create User ]      ← Input + Button (toolbar row)
 
@@ -191,16 +195,24 @@ Manage who can access this installation.  ← Body muted
 
 **Table columns:** Full Name | Email | Role(s) | Status | Actions (overflow menu)
 
-**Actions overflow menu (lucide `MoreHorizontal`):**
+**Actions overflow menu trigger:**
+- Icon: lucide `MoreHorizontal`
+- `aria-label="User actions for {full_name}"` — required for screen reader context (e.g. `aria-label="User actions for Jane Doe"`)
+- Minimum touch target: 44px height via `h-11`
+
+**Actions overflow menu items:**
 - "Edit" → opens Edit User Sheet
-- "Deactivate" → opens Deactivate confirmation Dialog (destructive)
+- "Deactivate User" → opens Deactivate confirmation Dialog (destructive)
 - "Activate" (shown only when user is inactive) → direct action, no confirmation
 
 **Create / Edit User Sheet:**
 - Slide-in from right (`Sheet` component, side="right")
 - Fields: Full Name, Email, Password (create only — edit uses admin-reset), Role (Select dropdown)
-- Footer: Cancel | Save Changes (accent button)
-- Password field on Create: show/hide toggle (lucide `Eye`/`EyeOff` icon button, sm touch target 32px — acceptable for non-primary action)
+- Footer: Discard Changes | Save Changes (accent button)
+- Password field on Create: show/hide toggle (lucide `Eye`/`EyeOff` icon button)
+  - `aria-label="Show password"` when password is hidden
+  - `aria-label="Hide password"` when password is visible
+  - Touch target: 32px — acceptable for non-primary action
 
 **Table empty state:** Shown when no users match the search filter (or on fresh install before seed runs — seed creates admin automatically, so fresh-install empty state is unlikely but must exist).
 
@@ -226,18 +238,23 @@ Manage who can access this installation.  ← Body muted
 | Empty state body | "No users match your search. Clear the filter or create a new user." |
 | Edit sheet title | "Edit User" |
 | Create sheet title | "Create User" |
+| Sheet dismiss CTA | "Discard Changes" |
 | Save CTA | "Save Changes" |
-| Deactivate action label | "Deactivate" |
-| Activate action label | "Activate" |
+| Deactivate action label (overflow menu) | "Deactivate User" |
+| Activate action label (overflow menu) | "Activate" |
 | Deactivate confirmation heading | "Deactivate user?" |
 | Deactivate confirmation body | "This will immediately end all active sessions for {full_name}. They will not be able to log in until reactivated." |
-| Deactivate confirmation CTA | "Deactivate" (Button variant="destructive") |
-| Deactivate cancel | "Cancel" |
+| Deactivate confirmation CTA | "Deactivate User" (Button variant="destructive") |
+| Deactivate confirmation dismiss | "Keep User Active" |
 | Protected route loading | (no text — spinner only) |
 | Inactive user badge | "Inactive" |
 | Active user badge | "Active" |
 
-**Destructive action pattern:** Dialog with two-button footer (Cancel / Deactivate). No inline `confirm()`. The deactivate button uses shadcn `Button variant="destructive"`. No "type the name to confirm" friction — this is an admin internal tool, not a user self-serve danger zone.
+**Destructive action pattern:** Dialog with two-button footer ("Keep User Active" / "Deactivate User"). No inline `confirm()`. The deactivate button uses shadcn `Button variant="destructive"`. No "type the name to confirm" friction — this is an admin internal tool, not a user self-serve danger zone.
+
+**CTA label rules applied:**
+- All CTA labels use verb + noun pattern ("Create User", "Save Changes", "Deactivate User", "Discard Changes").
+- Generic "Cancel" is not used anywhere as a CTA label. Dismissal labels name what dismissing preserves ("Keep User Active", "Discard Changes").
 
 **Source:** CONTEXT.md D-01, D-04, D-05, D-13; CORE-04/CORE-05 requirements; standard shadcn admin patterns.
 
@@ -248,11 +265,12 @@ Manage who can access this installation.  ← Body muted
 | Interaction | Behavior |
 |-------------|----------|
 | Login form submit | `Enter` key in either field submits. Button click submits. Disable button during in-flight request. |
-| Password field visibility toggle | Toggle button adjacent to input (lucide Eye/EyeOff). Toggles `type="password"` ↔ `type="text"`. |
+| Password field visibility toggle | Toggle button adjacent to input (lucide Eye/EyeOff). Toggles `type="password"` ↔ `type="text"`. aria-label updates to match current state ("Show password" / "Hide password"). |
 | User table search | Client-side filter on name+email as user types (debounce 300ms). No server round-trip for search. |
 | Create User sheet open | Sheet slides in from right. Focus moves to first input (Full Name). |
 | Save Changes | Calls API, shows loading state on button, closes sheet on success, invalidates TanStack Query `['users']` cache. |
-| Deactivate confirmation | Dialog opens. Focus traps inside. ESC or Cancel closes without action. Deactivate button calls API, closes dialog on success. |
+| Discard Changes | Closes sheet without calling API. No confirmation needed — no destructive consequence. |
+| Deactivate confirmation | Dialog opens. Focus traps inside. ESC or "Keep User Active" closes without action. "Deactivate User" button calls API, closes dialog on success. |
 | Session expiry (mid-session) | Silent refresh interceptor fires on 401. If refresh fails, redirect to `/login` with no user-visible error (they see the login page). |
 | Role assignment | Single-select `Select` dropdown (Phase 2 seed has two roles: admin + user). Multiple role assignment deferred until role management UI is built. |
 
@@ -265,6 +283,8 @@ Manage who can access this installation.  ← Body muted
 - Dialog has `aria-labelledby` pointing to heading, focus trapped inside.
 - Sheet has `aria-labelledby` pointing to Sheet title.
 - Destructive button has `aria-label="Deactivate {full_name}"` for screen reader context.
+- Actions overflow menu trigger has `aria-label="User actions for {full_name}"` — row-scoped label prevents ambiguous "open menu" announcements when multiple rows are present.
+- Password visibility toggle has `aria-label="Show password"` (when hidden) / `aria-label="Hide password"` (when visible) — updates dynamically as state changes.
 - Minimum touch target 44px for all primary actions (login button full-width, table action triggers).
 - Color is never the only differentiator — Active/Inactive states use both badge color AND text label.
 
