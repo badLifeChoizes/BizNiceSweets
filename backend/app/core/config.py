@@ -30,6 +30,22 @@ class Settings(BaseSettings):
     # Set to True in the dev compose overlay to enable uvicorn --reload (D-11)
     uvicorn_reload: bool = False
 
+    # JWT signing key — required (no default); supply BNS_JWT_SECRET in env
+    # Typed as SecretStr to prevent repr/log disclosure (T-02-01 mitigation).
+    jwt_secret: SecretStr
+
+    # Token TTLs (D-04: two-token model)
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+
+    # First-admin bootstrap (D-02); BNS_ADMIN_PASSWORD is required (no default).
+    bns_admin_email: str = "admin@example.com"
+    bns_admin_password: SecretStr
+
+    # Feature flags
+    signup_enabled: bool = False  # D-01: no open public signup by default
+    debug: bool = False  # True in dev compose overlay; gates cookie Secure flag
+
     @property
     def database_url(self) -> str:
         """Async URL (asyncpg) for the SQLAlchemy async engine."""
