@@ -22,7 +22,11 @@ WORKDIR /frontend
 
 # Copy manifests first for layer caching
 COPY frontend/package*.json ./
-RUN npm ci --omit=dev
+# Install ALL deps (incl. devDependencies) — the build tools (tsc, vite,
+# @vitejs/plugin-react, @tailwindcss/vite) live in devDependencies and are
+# required to compile the SPA. These never reach the final image: only the
+# built dist/ is copied into the runtime stage, this builder stage is discarded.
+RUN npm ci
 
 # Copy source and build
 COPY frontend/ ./
