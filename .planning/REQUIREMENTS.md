@@ -81,13 +81,36 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (to be filled by roadmapper) | — | Pending |
+| CORE-01 | Phase 1 | Pending |
+| CORE-09 | Phase 1 | Pending |
+| CORE-02 | Phase 2 | Pending |
+| CORE-03 | Phase 2 | Pending |
+| CORE-04 | Phase 2 | Pending |
+| CORE-05 | Phase 2 | Pending |
+| CORE-06 | Phase 3 | Pending |
+| CORE-07 | Phase 3 | Pending |
+| CORE-08 | Phase 3 | Pending |
+| SYERP-01 | Phase 4 | Pending |
+| SYERP-02 | Phase 4 | Pending |
+| SYERP-03 | Phase 4 | Pending |
+| SYERP-04 | Phase 4 | Pending |
+| SYERP-05 | Phase 4 | Pending |
+| PLUM-01 | Phase 5 | Pending |
+| PLUM-02 | Phase 5 | Pending |
+| PLUM-03 | Phase 5 | Pending |
+| PLUM-04 | Phase 6 | Pending |
+| PLUM-05 | Phase 6 | Pending |
+| PLUM-06 | Phase 6 | Pending |
+| PLUM-07 | Phase 6 | Pending |
+| PLUM-08 | Phase 6 | Pending |
+| PLUM-09 | Phase 6 | Pending |
+| PLUM-10 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 24 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 24 ⚠️
+- Mapped to phases: 24
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-22*
-*Last updated: 2026-06-22 after initial definition*
+*Last updated: 2026-06-22 after roadmap creation*
