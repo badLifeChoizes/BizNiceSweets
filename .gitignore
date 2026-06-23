@@ -1,8 +1,22 @@
+# Environment / secrets — NEVER commit .env (only .env.example is tracked)
+.env
+
 # Frontend build artifacts and dependencies
 node_modules/
 dist/
 frontend/node_modules/
 frontend/dist/
+
+# Python cache / bytecode
+backend/__pycache__/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python virtual environments
+.venv/
+venv/
 
 # Archives and backups
 *.zip

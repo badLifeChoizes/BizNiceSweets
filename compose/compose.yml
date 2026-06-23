@@ -1,0 +1,132 @@
+# compose/compose.yml — Production compose file
+#
+# Usage:
+#   cp ../.env.example ../.env  # then set POSTGRES_PASSWORD
+#   podman-compose -f compose/compose.yml up -d
+#
+# Module profiles (D-04):
+#   SYERP + db + api are always-on (no `profiles:` key — Pitfall 4, D-06).
+#   Optional modules are activated with --profile <name>:
+#     --profile plum    → adds PLUM module services (when they exist)
+#     --profile flan    → adds FLAN module services (when they exist)
+#     --profile mousse  → adds MOUSSE module services (when they exist)
+#     --profile crumb   → adds CRUMB module services (when they exist)
+#     --profile gelato  → adds GELATO module services (when they exist)
+#     --profile crisp   → adds CRISP module services (when they exist)
+#     --profile full    → activates all optional modules
+#
+# Security (T-01-10, T-01-12):
+#   - POSTGRES_PASSWORD comes from ../.env (env_file); never baked into image
+#   - db service has NO ports: mapping — Postgres is NOT exposed to the host;
+#     reachable only on the internal compose network
+#
+# Pinned base images (T-01-13):
+#   postgres:17-alpine, python:3.13-slim, node:22-slim
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # db — PostgreSQL 17 (always-on; SYERP hub requires it)
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-biznice}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No ports: mapping — DB is NOT published to the host (T-01-12)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-biznice}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # api — BizNiceSweets backend (FastAPI + uvicorn)
+  # Serves: /api/v1/*, /health/*, /docs, and the built SPA at /
+  # Entrypoint: wait-for-db → alembic upgrade head → uvicorn (D-09)
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    env_file: ../.env
+    environment:
+      POSTGRES_HOST: db
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Optional module services (Phase 4+)
+  # Each module gets its own profile so operators can run a subset.
+  # Profile stubs below are placeholders — containers will be defined as
+  # modules are implemented in Phases 4–6.
+  #
+  # SYERP is bundled into the api service (always-on, D-06) — no stub needed.
+  #
+  # Uncomment and fill in the service definition when the module container is ready.
+  # ---------------------------------------------------------------------------
+
+  # plum-worker:
+  #   profiles: [plum, full]
+  #   image: biznicesweets/plum:latest
+  #   env_file: ../.env
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+
+  # flan-worker:
+  #   profiles: [flan, full]
+  #   image: biznicesweets/flan:latest
+  #   env_file: ../.env
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+
+  # mousse-worker:
+  #   profiles: [mousse, full]
+  #   image: biznicesweets/mousse:latest
+  #   env_file: ../.env
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+
+  # crumb-worker:
+  #   profiles: [crumb, full]
+  #   image: biznicesweets/crumb:latest
+  #   env_file: ../.env
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+
+  # gelato-worker:
+  #   profiles: [gelato, full]
+  #   image: biznicesweets/gelato:latest
+  #   env_file: ../.env
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+
+  # crisp-worker:
+  #   profiles: [crisp, full]
+  #   image: biznicesweets/crisp:latest
+  #   env_file: ../.env
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+
+# ---------------------------------------------------------------------------
+# Named volumes
+# ---------------------------------------------------------------------------
+volumes:
+  pgdata:
+    # Postgres data persists across container restarts and upgrades.
+    # To reset all data: podman-compose down -v

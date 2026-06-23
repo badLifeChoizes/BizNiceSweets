@@ -1,0 +1,53 @@
+# compose/compose.dev.yml — Development overlay
+#
+# Use with the production compose to get hot-reload and HMR (D-11):
+#   podman-compose -f compose/compose.yml -f compose/compose.dev.yml up
+#
+# What this overlay adds:
+#   - api: source volume mount + uvicorn --reload + watchfiles polling
+#   - frontend: Vite dev server on :5173 with HMR + polling (Windows-safe)
+#
+# Windows 10 file-watching (Pitfall 3 in RESEARCH.md):
+#   Windows filesystem events do not propagate through WSL2/Podman machine to
+#   inotify inside the container.  Force polling with:
+#     WATCHFILES_FORCE_POLLING=true  — for uvicorn/watchfiles
+#     VITE_USE_POLLING=true          — for Vite HMR (server.watch.usePolling)
+#
+# :z suffix on volume mounts — SELinux relabeling for rootless Podman.
+# Safe to use on non-SELinux hosts; ignored when not applicable.
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # api — dev override: mount source, enable uvicorn --reload
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      # Skip the frontend-builder stage in dev (we run Vite separately below)
+      target: runtime
+    volumes:
+      - ../backend:/app:z
+    command: ["/entrypoint.sh"]
+    environment:
+      UVICORN_RELOAD: "true"
+      WATCHFILES_FORCE_POLLING: "true"
+
+  # ---------------------------------------------------------------------------
+  # frontend — Vite dev server with HMR
+  # Serves on :5173; proxies /api/* to the api service on :8000
+  # ---------------------------------------------------------------------------
+  frontend:
+    image: node:22-slim
+    working_dir: /frontend
+    volumes:
+      - ../frontend:/frontend:z
+    ports:
+      - "5173:5173"
+    # npm install inside the container to ensure packages match the container OS
+    command: sh -c "npm install && npm run dev -- --host"
+    environment:
+      # Polling: required on Windows 10 where WSL2 inotify does not fire (Pitfall 3)
+      VITE_USE_POLLING: "true"
+      # API base used by the Vite proxy target (vite.config.ts reads this for
+      # the proxy rule: /api → http://api:8000)
+      VITE_API_BASE_URL: "http://localhost:8000"
