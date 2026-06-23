@@ -30,7 +30,11 @@
   2. The FastAPI backend serves a health-check endpoint and auto-generated OpenAPI docs at `/docs`
   3. Alembic migrations run cleanly against a fresh PostgreSQL instance, producing the initial schema
   4. A fresh deploy reaches a known, repeatable state from a single compose command
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 01-01-PLAN.md — Backend core skeleton (config, DB, DeclarativeBase, module registry, SYERP hub stub, single Alembic history, health endpoints, pytest Wave 0 harness)
+- [ ] 01-02-PLAN.md — Frontend Vite + React + TS SPA skeleton (Tailwind v4, shadcn, React Router, TanStack Query, landing/health page)
+- [ ] 01-03-PLAN.md — Containerization + Podman Compose orchestration (multi-stage Dockerfile, auto-migrate entrypoint, SPA static serving, module profiles, dev overlay, .env)
 
 ### Phase 2: Authentication & Users
 **Goal**: Users can securely access the suite and admins can manage who has access to what
@@ -103,7 +107,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Project Scaffolding & Deployment | 0/0 | Not started | - |
+| 1. Project Scaffolding & Deployment | 0/3 | Planned | - |
 | 2. Authentication & Users | 0/0 | Not started | - |
 | 3. App Shell & Settings | 0/0 | Not started | - |
 | 4. SYERP Core Hub | 0/0 | Not started | - |
