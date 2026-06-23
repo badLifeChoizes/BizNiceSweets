@@ -34,7 +34,7 @@
 Plans:
 - [x] 01-01-PLAN.md — Backend core skeleton (config, DB, DeclarativeBase, module registry, SYERP hub stub, single Alembic history, health endpoints, pytest Wave 0 harness)
 - [x] 01-02-PLAN.md — Frontend Vite + React + TS SPA skeleton (Tailwind v4, shadcn, React Router, TanStack Query, landing/health page)
-- [ ] 01-03-PLAN.md — Containerization + Podman Compose orchestration (multi-stage Dockerfile, auto-migrate entrypoint, SPA static serving, module profiles, dev overlay, .env)
+- [x] 01-03-PLAN.md — Containerization + Podman Compose orchestration (multi-stage Dockerfile, auto-migrate entrypoint, SPA static serving, module profiles, dev overlay, .env)
 
 ### Phase 2: Authentication & Users
 **Goal**: Users can securely access the suite and admins can manage who has access to what
