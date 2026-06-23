@@ -53,7 +53,12 @@ services:
   api:
     build:
       context: ..
-      dockerfile: backend/Dockerfile
+      # Build file lives at the repo (context) root as a Containerfile. This is
+      # Podman's native name and, critically, is auto-discovered by podman even
+      # when podman-compose drops the -f flag on Windows (a podman-compose 1.6.0
+      # bug: it misreads the absolute "E:\..." context as a git URL). docker
+      # compose honors this key directly.
+      dockerfile: Containerfile
     env_file: ../.env
     environment:
       POSTGRES_HOST: db

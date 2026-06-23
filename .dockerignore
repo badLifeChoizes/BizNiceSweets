@@ -1,0 +1,47 @@
+# .dockerignore — build context is the repo root (compose build context: ..)
+# Keeps the image lean and prevents secrets/large prototype data from entering
+# the build context. NOTE: a .dockerignore only applies at the CONTEXT ROOT,
+# which is why this lives at the repo root rather than under backend/.
+
+# Version control / planning / tooling
+.git/
+.gitignore
+.planning/
+.claude/
+.vscode/
+steps.txt
+
+# Secrets must never be baked into the image (T-01-10).
+# Operator supplies .env at runtime via compose env_file. .env.example does not
+# match this pattern (it ends in .example) so the template stays available.
+.env
+*.env
+
+# Single-file HTML prototype suites — not part of the container image
+plum/
+flan/
+
+# Docs are not needed inside the runtime image
+docs/
+
+# Node
+**/node_modules/
+frontend/dist/
+
+# Python cache / compiled bytecode / virtualenvs
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+**/.venv/
+**/venv/
+.pytest_cache/
+.ruff_cache/
+
+# Backend tests are not needed in the runtime image
+backend/tests/
+
+# Editor / OS artifacts
+*.log
+.DS_Store
+Thumbs.db

@@ -1,4 +1,4 @@
-# backend/Dockerfile
+# Containerfile (repo root) — Podman's native build-file name.
 # Multi-stage build: frontend SPA build → Python runtime serving API + static assets.
 #
 # Security hardening (T-01-10, T-01-11, T-01-13):
@@ -11,7 +11,7 @@
 # Compose usage:
 #   build:
 #     context: ..
-#     dockerfile: backend/Dockerfile
+#     dockerfile: Containerfile
 
 # ---------------------------------------------------------------------------
 # Stage 1: Build the React/TypeScript SPA
