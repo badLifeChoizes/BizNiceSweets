@@ -1,3 +1,16 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: Not started
+last_updated: "2026-06-23T17:23:45.949Z"
+progress:
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+---
+
 # STATE — BizNiceSweets Milestone 1
 
 **Last updated:** 2026-06-22
@@ -22,6 +35,7 @@
 **Status:** Not started
 
 **Progress:**
+
 ```
 Phase 1 [ ] Phase 2 [ ] Phase 3 [ ] Phase 4 [ ] Phase 5 [ ] Phase 6 [ ]
 [                                                                        ]
@@ -86,6 +100,7 @@ None at roadmap stage.
 **To resume:** Read `.planning/ROADMAP.md` for phase structure. Run `/gsd-plan-phase 1` to begin planning Phase 1.
 
 **Files on disk:**
+
 - `.planning/PROJECT.md` — project vision and constraints
 - `.planning/REQUIREMENTS.md` — 24 v1 requirements with traceability
 - `.planning/ROADMAP.md` — 6-phase milestone roadmap
