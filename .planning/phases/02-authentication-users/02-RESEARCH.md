@@ -878,21 +878,21 @@ app.add_middleware(
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `require_permission` check the DB on every call, or embed permissions in the JWT?**
    - What we know: Embedding permissions in the JWT makes the access token self-contained (no DB hit per request) but means permission changes don't take effect until token expiry.
    - What's unclear: Whether a 15-minute lag on permission changes is acceptable for Phase 2.
-   - Recommendation: For Phase 2, embed permissions in the JWT payload (`perms: ["syerp:read", "users:manage"]`). The 15-minute window is acceptable; access tokens are short-lived. This avoids a DB read on every API call. The `get_current_user` dependency still queries DB for `is_active` check only.
+   - RESOLVED: For Phase 2, embed permissions in the JWT payload (`perms: ["syerp:read", "users:manage"]`). The 15-minute window is acceptable; access tokens are short-lived. This avoids a DB read on every API call. The `get_current_user` dependency still queries DB for `is_active` check only.
 
 2. **User↔Role: one role per user (FK) or many-to-many (M2M)?**
    - What we know: CORE-05 says "assign roles" — implying plural. Phase 3 module enable/disable will consume role-based gating.
    - What's unclear: Whether any Phase 2 use case actually requires multiple roles per user simultaneously.
-   - Recommendation: Use many-to-many (schema shown in Pattern 1). The `user_roles` association table has zero cost vs. a FK column, and avoids a migration later.
+   - RESOLVED: Use many-to-many (schema shown in Pattern 1). The `user_roles` association table has zero cost vs. a FK column, and avoids a migration later.
 
 3. **Should audit_log be a PostgreSQL trigger or application-layer write?**
    - What we know: Application-layer write is simpler to implement and visible in code review. DB triggers are harder to test.
-   - Recommendation: Application-layer writes in the auth service. The `AuditLog` model is provided above; write to it explicitly in service functions.
+   - RESOLVED: Application-layer writes in the auth service. The `AuditLog` model is provided above; write to it explicitly in service functions.
 
 ---
 
