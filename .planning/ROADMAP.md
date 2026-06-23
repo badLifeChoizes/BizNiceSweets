@@ -32,8 +32,8 @@
   4. A fresh deploy reaches a known, repeatable state from a single compose command
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Backend core skeleton (config, DB, DeclarativeBase, module registry, SYERP hub stub, single Alembic history, health endpoints, pytest Wave 0 harness)
-- [ ] 01-02-PLAN.md — Frontend Vite + React + TS SPA skeleton (Tailwind v4, shadcn, React Router, TanStack Query, landing/health page)
+- [x] 01-01-PLAN.md — Backend core skeleton (config, DB, DeclarativeBase, module registry, SYERP hub stub, single Alembic history, health endpoints, pytest Wave 0 harness)
+- [x] 01-02-PLAN.md — Frontend Vite + React + TS SPA skeleton (Tailwind v4, shadcn, React Router, TanStack Query, landing/health page)
 - [ ] 01-03-PLAN.md — Containerization + Podman Compose orchestration (multi-stage Dockerfile, auto-migrate entrypoint, SPA static serving, module profiles, dev overlay, .env)
 
 ### Phase 2: Authentication & Users
