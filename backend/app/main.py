@@ -10,6 +10,7 @@ SPA static-file serving (D-08) is intentionally NOT mounted here.
 It will be added in Plan 03 (container + compose wiring), mounted LAST
 so it does not swallow /api/* routes. See Pattern 4 in RESEARCH.md.
 """
+import importlib
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -25,7 +26,7 @@ from app.core.registry import mount_all
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     yield
     # Shutdown
@@ -43,8 +44,11 @@ app = FastAPI(
 # Health endpoints (unauthenticated; always mounted)
 app.include_router(health_router)
 
-# Module registration: import causes syerp/__init__.py to call register()
-import app.modules.syerp  # noqa: E402, F401
+# Module registration: importlib.import_module triggers syerp/__init__.py
+# which calls registry.register(). Using importlib avoids shadowing the `app`
+# variable (FastAPI instance) with the `app` package name that a bare
+# `import app.modules.syerp` statement would cause.
+importlib.import_module("app.modules.syerp")
 
 # Wire all registered module routers under /api/v1
 mount_all(app)
