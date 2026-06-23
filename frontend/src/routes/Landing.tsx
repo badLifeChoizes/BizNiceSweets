@@ -17,12 +17,12 @@ async function fetchHealth(path: string): Promise<HealthResponse> {
 export function Landing() {
   const liveness = useQuery<HealthResponse, Error>({
     queryKey: ['health', 'live'],
-    queryFn: () => fetchHealth('/api/health/live'),
+    queryFn: () => fetchHealth('/health/live'),
   })
 
   const readiness = useQuery<HealthResponse, Error>({
     queryKey: ['health', 'ready'],
-    queryFn: () => fetchHealth('/api/health/ready'),
+    queryFn: () => fetchHealth('/health/ready'),
   })
 
   return (

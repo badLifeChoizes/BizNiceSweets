@@ -17,7 +17,12 @@ export default defineConfig({
       usePolling: !!process.env.VITE_USE_POLLING,
     },
     proxy: {
+      // Business APIs live under /api/v1/* on the backend
       '/api': 'http://api:8000',
+      // Health probes are served at the root (/health/*), not under /api.
+      // Forward them too so the dev server (5173) reaches the backend instead
+      // of returning index.html via the SPA fallback.
+      '/health': 'http://api:8000',
     },
   },
 })
