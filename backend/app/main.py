@@ -5,19 +5,42 @@ Startup sequence (D-09):
   1. Container entrypoint waits for Postgres, runs alembic upgrade head.
   2. uvicorn starts this module — lifespan runs (no migration work here).
   3. Health router is mounted, SYERP self-registers, mount_all wires routers.
+  4. SPAStaticFiles is mounted LAST at "/" so it never swallows /api/* routes.
 
-SPA static-file serving (D-08) is intentionally NOT mounted here.
-It will be added in Plan 03 (container + compose wiring), mounted LAST
-so it does not swallow /api/* routes. See Pattern 4 in RESEARCH.md.
+SPA static-file serving (D-08): SPAStaticFiles subclass catches 404s from
+StaticFiles and returns index.html, letting React Router handle client routes.
+See Pattern 4 in RESEARCH.md.
 """
 import importlib
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.health import router as health_router
+from app.core.config import settings
 from app.core.registry import mount_all
+
+
+# --- SPA static-file fallback (D-08) ----------------------------------------
+# Subclass catches 404 from StaticFiles and serves index.html so React Router
+# can handle client-side routes.  Mounted LAST — after all /api and health
+# routes — so it never intercepts API traffic.
+
+class SPAStaticFiles(StaticFiles):
+    """StaticFiles subclass with SPA fallback: 404 → index.html."""
+
+    async def get_response(self, path: str, scope):  # type: ignore[override]
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as ex:
+            if ex.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
+
 
 # --- Lifespan ----------------------------------------------------------------
 # Migrations have already been applied by entrypoint.sh before uvicorn starts.
@@ -54,11 +77,15 @@ importlib.import_module("app.modules.syerp")
 mount_all(app)
 
 # ---------------------------------------------------------------------------
-# SPA MOUNT PLACEHOLDER (Plan 03)
+# SPA mount (D-08) — MUST be last: mounted after all API and health routes
+# so the catch-all does not swallow /api/* traffic.  Guarded by directory
+# existence so the app still starts cleanly outside the production container
+# (e.g. native dev run without a pre-built frontend/dist).
 # ---------------------------------------------------------------------------
-# from app.core.config import settings
-# from app.main_spa import SPAStaticFiles
-# import os
-# if os.path.isdir(settings.static_dir):
-#     app.mount("/", SPAStaticFiles(directory=settings.static_dir, html=True), name="spa")
-# ---------------------------------------------------------------------------
+_static_dir = settings.static_dir
+if os.path.isdir(_static_dir):
+    app.mount(
+        "/",
+        SPAStaticFiles(directory=_static_dir, html=True),
+        name="spa",
+    )
