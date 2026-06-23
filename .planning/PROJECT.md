@@ -18,6 +18,8 @@ A small manufacturer can run their real product lifecycle — design → project
 
 - ✓ PLUM domain logic proven in prototype (parts, BOMs, where-used, cost roll-up, ECO, compliance) — `plum/app/plm_v54.html`
 - ✓ FLAN domain logic proven in prototype (projects, phases, tasks, timeline, budgets) — `flan/app/prj-mgmt-v24.html`
+- ✓ Target-stack scaffolding live (FastAPI + SQLAlchemy + React 19/TS + Tailwind v4) with SYERP always-on hub stub — Validated in Phase 1 (CORE-01)
+- ✓ Self-hostable single-command deploy: `podman-compose up` → Postgres + auto-migrating API serving the built SPA, operator-verified on Windows/Podman — Validated in Phase 1 (CORE-01, CORE-09)
 
 ### Active
 
@@ -25,12 +27,12 @@ A small manufacturer can run their real product lifecycle — design → project
 
 **Milestone 1 — Foundation + PLUM**
 
-- [ ] Project scaffolding on the target stack (FastAPI + React/TypeScript)
-- [ ] Database schema and migrations (SQLAlchemy 2.0 + Alembic)
+- [x] Project scaffolding on the target stack (FastAPI + React/TypeScript) — Phase 1
+- [x] Database migrations wired (SQLAlchemy 2.0 + Alembic single history, auto-migrate on startup) — Phase 1
 - [ ] Authentication (OAuth2 / JWT), user and role management
 - [ ] Settings/configuration system + module enable/disable
 - [ ] SYERP core: Vendors CRUD, Customers CRUD, basic general-ledger structure
-- [ ] Podman Compose deployment + basic UI shell with navigation
+- [x] Podman Compose deployment (per-module profiles, dev overlay) — Phase 1; basic UI shell with navigation still pending (Phase 3)
 - [ ] PLUM port: parts management (CRUD, search, filter), part revisions & status workflow
 - [ ] PLUM port: BOM tree view + flat view with quantity roll-up, where-used analysis
 - [ ] PLUM port: part-to-vendor linking (FK → SYERP.vendors), pricing & cost roll-up, margin analysis
@@ -95,4 +97,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-22 after initialization*
+*Last updated: 2026-06-23 after Phase 1 (Project Scaffolding & Deployment) completion*
