@@ -303,3 +303,147 @@ async def rotate_refresh_token(
     await db.commit()
 
     return new_raw, user
+
+
+# ---------------------------------------------------------------------------
+# Audit log
+# ---------------------------------------------------------------------------
+
+
+async def write_audit(
+    db: AsyncSession,
+    actor_id: str | None,
+    action: str,
+    target_type: str | None = None,
+    target_id: str | None = None,
+    detail: str | None = None,
+) -> None:
+    """
+    Write an append-only audit log row.
+
+    actor_id: None for system actions (seed, failed login where user was not resolved);
+              str user_id for authenticated admin actions and successful logins.
+    action: dot-namespaced string e.g. 'user.created', 'auth.login_success'.
+    target_type / target_id: the affected entity (e.g. 'user' / user.id).
+
+    Implements D-14: minimal auth/identity audit trail.  No update/delete
+    endpoint on AuditLog — records are append-only (T-02-16 repudiation mitigation).
+    """
+    from app.modules.auth.models import AuditLog
+
+    row = AuditLog(
+        actor_id=actor_id,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        detail=detail,
+    )
+    db.add(row)
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Admin user CRUD helpers
+# ---------------------------------------------------------------------------
+
+
+async def list_users(db: AsyncSession) -> list["User"]:
+    """Return all User rows (admin-gated by the router)."""
+    from app.modules.auth.models import User
+
+    result = await db.execute(select(User))
+    return list(result.scalars().all())
+
+
+async def create_user(
+    db: AsyncSession,
+    email: str,
+    password: str,
+    full_name: str | None = None,
+    role_name: str | None = None,
+) -> "User":
+    """
+    Create a new user account.
+
+    Hashes the password, optionally attaches a role by name, inserts the user,
+    and returns the persisted User instance (roles selectin-loaded).
+
+    The admin token that triggered this call is recorded in the audit log by
+    the calling router handler.
+    """
+    from app.modules.auth.models import Role, User
+
+    hashed = hash_password(password)
+    user = User(email=email, hashed_password=hashed, full_name=full_name, is_active=True)
+    db.add(user)
+    await db.flush()  # assign id before attaching roles
+
+    if role_name:
+        result = await db.execute(select(Role).where(Role.name == role_name))
+        role = result.scalars().first()
+        if role:
+            user.roles.append(role)
+    # If no role_name supplied, user has no roles (admin can assign later)
+
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def update_user(
+    db: AsyncSession,
+    user_id: str,
+    full_name: str | None = None,
+    is_active: bool | None = None,
+    role_name: str | None = None,
+) -> "User":
+    """
+    Patch a user record.  All fields are optional (PATCH semantics).
+
+    If is_active is set to False, the user's RefreshToken rows are deleted
+    to immediately end all active sessions (D-05, T-02-15).
+    If role_name is provided, the user's roles list is replaced with the
+    single named role.
+
+    Returns the updated User instance.  Raises 404 if user not found.
+    """
+    from app.modules.auth.models import RefreshToken, Role, User
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {user_id} not found",
+        )
+
+    if full_name is not None:
+        user.full_name = full_name
+
+    if is_active is not None:
+        user.is_active = is_active
+        if not is_active:
+            # D-05: deactivation revokes all live refresh tokens immediately
+            rt_result = await db.execute(
+                select(RefreshToken).where(
+                    RefreshToken.user_id == user_id,
+                    RefreshToken.revoked.is_(False),
+                )
+            )
+            for rt in rt_result.scalars().all():
+                rt.revoked = True
+
+    if role_name is not None:
+        role_result = await db.execute(select(Role).where(Role.name == role_name))
+        role = role_result.scalars().first()
+        if role is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Role '{role_name}' not found",
+            )
+        # Replace the user's entire role list with this single role (PATCH semantics)
+        user.roles = [role]
+
+    await db.commit()
+    await db.refresh(user)
+    return user

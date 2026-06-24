@@ -95,11 +95,22 @@ async def test_admin_list_users(
 
 async def test_non_admin_list_users_forbidden(
     client: httpx.AsyncClient,
+    skip_if_no_db: None,
 ) -> None:
-    """Non-admin token gets 403 on GET /auth/users."""
+    """
+    Non-admin token gets 403 on GET /auth/users.
+
+    Requires DB: uses a real user's id so get_current_user can validate them,
+    but mints a token without users:manage so require_permission returns 403.
+    """
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
     from app.modules.auth.service import create_access_token
 
-    user_token = create_access_token(subject="regular-user-id", permissions=["syerp:read"])
+    admin_token = await admin_login_token(client)
+    user = await create_regular_user(
+        client, admin_token, "listforbidden@test.local", "pass123"
+    )
+    user_token = create_access_token(subject=user["id"], permissions=["syerp:read"])
 
     response = await client.get(
         "/api/v1/auth/users",

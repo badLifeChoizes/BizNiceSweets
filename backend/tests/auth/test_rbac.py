@@ -93,11 +93,36 @@ async def test_gated_endpoint_allows_admin_token(
 
 async def test_gated_endpoint_denies_token_without_permission(
     client: httpx.AsyncClient,
+    skip_if_no_db: None,
 ) -> None:
-    """Token with syerp:read (no users:manage) is denied on GET /auth/users → 403."""
-    from app.modules.auth.service import create_access_token
+    """
+    Token with syerp:read (no users:manage) is denied on GET /auth/users → 403.
 
-    token = create_access_token(subject="regular-user-id", permissions=["syerp:read"])
+    Requires DB: get_current_user looks up the user by id to validate is_active.
+    Uses the seeded admin user id via login, then tests with a reduced-permission token.
+    """
+    from tests.auth.conftest_helpers import admin_login_token
+    from app.modules.auth.service import create_access_token
+    from app.core.db import AsyncSessionLocal
+    from app.modules.auth.models import User
+    from sqlalchemy import select
+
+    # Get the real admin user's id from DB so the token resolves
+    async with AsyncSessionLocal() as session:
+        from app.core.config import settings
+        result = await session.execute(
+            select(User).where(User.email == settings.bns_admin_email)
+        )
+        admin = result.scalars().first()
+
+    # Mint a token for the real admin user but strip the admin permission
+    # so require_permission("users:manage") denies them
+    if admin is None:
+        import pytest
+        pytest.skip("Admin user not seeded in DB")
+
+    # Create a user without users:manage for this test
+    token = create_access_token(subject=str(admin.id), permissions=["syerp:read"])
     response = await client.get(
         "/api/v1/auth/users",
         headers={"Authorization": f"Bearer {token}"},
@@ -107,11 +132,30 @@ async def test_gated_endpoint_denies_token_without_permission(
 
 async def test_gated_endpoint_denies_empty_permissions(
     client: httpx.AsyncClient,
+    skip_if_no_db: None,
 ) -> None:
-    """Token with empty permissions is denied on GET /auth/users → 403."""
-    from app.modules.auth.service import create_access_token
+    """
+    Token with empty permissions is denied on GET /auth/users → 403.
 
-    token = create_access_token(subject="no-perms-user", permissions=[])
+    Requires DB: get_current_user validates the user exists in DB.
+    """
+    from app.modules.auth.service import create_access_token
+    from app.core.db import AsyncSessionLocal
+    from app.modules.auth.models import User
+    from sqlalchemy import select
+
+    async with AsyncSessionLocal() as session:
+        from app.core.config import settings
+        result = await session.execute(
+            select(User).where(User.email == settings.bns_admin_email)
+        )
+        admin = result.scalars().first()
+
+    if admin is None:
+        import pytest
+        pytest.skip("Admin user not seeded in DB")
+
+    token = create_access_token(subject=str(admin.id), permissions=[])
     response = await client.get(
         "/api/v1/auth/users",
         headers={"Authorization": f"Bearer {token}"},
@@ -121,31 +165,51 @@ async def test_gated_endpoint_denies_empty_permissions(
 
 # ---------------------------------------------------------------------------
 # Integration tests — RBAC probe endpoint (syerp:read gate)
+# Requires DB: get_current_user validates the user exists and is_active in DB.
 # ---------------------------------------------------------------------------
 
 
 async def test_rbac_probe_allows_syerp_read(
     client: httpx.AsyncClient,
+    skip_if_no_db: None,
 ) -> None:
-    """GET /auth/_rbac_probe with syerp:read permission returns 200."""
-    from app.modules.auth.service import create_access_token
+    """
+    GET /auth/_rbac_probe with syerp:read permission returns 200.
 
-    token = create_access_token(subject="u1", permissions=["syerp:read"])
+    Uses the seeded admin user (who has wildcard '*' which satisfies any perm check).
+    """
+    from tests.auth.conftest_helpers import admin_login_token
+
+    token = await admin_login_token(client)
     response = await client.get(
         "/api/v1/auth/_rbac_probe",
         headers={"Authorization": f"Bearer {token}"},
     )
-    # The probe endpoint is gated by syerp:read; user has it → 200
     assert response.status_code == 200
 
 
 async def test_rbac_probe_denies_without_syerp_read(
     client: httpx.AsyncClient,
+    skip_if_no_db: None,
 ) -> None:
-    """GET /auth/_rbac_probe without syerp:read permission returns 403."""
-    from app.modules.auth.service import create_access_token
+    """
+    GET /auth/_rbac_probe with only plum:read (no syerp:read) returns 403.
 
-    token = create_access_token(subject="u2", permissions=["plum:read"])
+    Creates a non-admin user with no syerp:read and uses their token.
+    """
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
+    from app.modules.auth.service import create_access_token
+    from app.core.db import AsyncSessionLocal
+    from app.modules.auth.models import User
+    from sqlalchemy import select
+
+    admin_token = await admin_login_token(client)
+    # Create a regular user (no roles assigned by default → no permissions)
+    user = await create_regular_user(
+        client, admin_token, "rbacprobe@test.local", "pass123"
+    )
+    # Mint a token with only plum:read for this real user_id so DB lookup succeeds
+    token = create_access_token(subject=user["id"], permissions=["plum:read"])
     response = await client.get(
         "/api/v1/auth/_rbac_probe",
         headers={"Authorization": f"Bearer {token}"},
@@ -155,11 +219,17 @@ async def test_rbac_probe_denies_without_syerp_read(
 
 async def test_rbac_probe_denies_no_permissions(
     client: httpx.AsyncClient,
+    skip_if_no_db: None,
 ) -> None:
     """GET /auth/_rbac_probe with no permissions returns 403."""
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
     from app.modules.auth.service import create_access_token
 
-    token = create_access_token(subject="u3", permissions=[])
+    admin_token = await admin_login_token(client)
+    user = await create_regular_user(
+        client, admin_token, "rbacnoperms@test.local", "pass123"
+    )
+    token = create_access_token(subject=user["id"], permissions=[])
     response = await client.get(
         "/api/v1/auth/_rbac_probe",
         headers={"Authorization": f"Bearer {token}"},
@@ -169,12 +239,13 @@ async def test_rbac_probe_denies_no_permissions(
 
 async def test_rbac_probe_allows_admin_wildcard(
     client: httpx.AsyncClient,
+    skip_if_no_db: None,
 ) -> None:
-    """GET /auth/_rbac_probe with '*' wildcard (admin) returns 200."""
-    from app.modules.auth.service import create_access_token
+    """GET /auth/_rbac_probe with admin token (wildcard) returns 200."""
+    from tests.auth.conftest_helpers import admin_login_token
 
-    # Admin token embeds wildcard '*' via collect_permissions
-    token = create_access_token(subject="admin-id", permissions=["*", "users:manage"])
+    # Admin login returns a token with '*' wildcard via collect_permissions
+    token = await admin_login_token(client)
     response = await client.get(
         "/api/v1/auth/_rbac_probe",
         headers={"Authorization": f"Bearer {token}"},
