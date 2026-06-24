@@ -18,17 +18,16 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def run_seeds(db: "AsyncSession") -> None:  # noqa: ARG001
+async def run_seeds(db: "AsyncSession") -> None:
     """
     Populate the database with initial seed data.
 
-    Phase 1: intentionally empty — seed hook only, no data inserted.
+    Called from the FastAPI lifespan startup hook in app.main.  All seed
+    functions must be idempotent (safe to run on every podman-compose up).
 
-    Phase 2 extension point:
-        from app.modules.auth.seed import seed_admin_user
-        await seed_admin_user(db)
+    Phase 2: seeds the first admin user, the admin/user roles, and the
+    initial permission set.
     """
-    # -----------------------------------------------------------------------
-    # Phase 2+: add seed calls here
-    # -----------------------------------------------------------------------
-    pass
+    from app.modules.auth.seed import seed_admin_user
+
+    await seed_admin_user(db)
