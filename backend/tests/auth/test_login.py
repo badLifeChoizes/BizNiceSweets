@@ -1,19 +1,18 @@
 """
-Login endpoint tests — Wave 0 stub (plan 02-01).
+Login endpoint tests — plan 02-02.
 
-Behaviors tested in plan 02-02 when POST /auth/login is implemented:
-  CORE-02: Valid credentials → 200 + access_token + refresh cookie set
-  CORE-02: Wrong password → 401
-  CORE-02: Unknown email → 401 (constant-time; no user-enumeration timing leak)
+Behaviors tested (CORE-02):
+  - Valid credentials → 200 + access_token + refresh cookie set (httpOnly)
+  - Wrong password → 401
+  - Unknown email → 401 (constant-time; no user-enumeration timing leak)
 
-These tests are intentionally xfail because the /auth/login endpoint does not
-exist until plan 02-02.  They will be promoted to full tests in that plan.
+Tests require a live database (skip_if_no_db).  The admin user is seeded by
+conftest via BNS_ADMIN_EMAIL / BNS_ADMIN_PASSWORD env vars.
 """
 import pytest
 import httpx
 
 
-@pytest.mark.xfail(reason="POST /auth/login implemented in plan 02-02", strict=False)
 async def test_login_success(client: httpx.AsyncClient, skip_if_no_db: None) -> None:
     """Valid credentials return 200 with access_token and set refresh cookie."""
     response = await client.post(
@@ -27,7 +26,6 @@ async def test_login_success(client: httpx.AsyncClient, skip_if_no_db: None) -> 
     assert "refresh_token" in response.cookies
 
 
-@pytest.mark.xfail(reason="POST /auth/login implemented in plan 02-02", strict=False)
 async def test_login_bad_password(client: httpx.AsyncClient, skip_if_no_db: None) -> None:
     """Wrong password returns 401."""
     response = await client.post(
@@ -37,7 +35,6 @@ async def test_login_bad_password(client: httpx.AsyncClient, skip_if_no_db: None
     assert response.status_code == 401
 
 
-@pytest.mark.xfail(reason="POST /auth/login implemented in plan 02-02", strict=False)
 async def test_login_unknown_email(client: httpx.AsyncClient, skip_if_no_db: None) -> None:
     """Unknown email returns 401 (no user enumeration)."""
     response = await client.post(

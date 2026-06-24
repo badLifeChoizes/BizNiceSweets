@@ -1,17 +1,16 @@
 """
-Refresh-token rotation and reuse-detection tests — Wave 0 stub (plan 02-01).
+Refresh-token rotation and reuse-detection tests — plan 02-02.
 
-Behaviors tested in plan 02-02:
-  CORE-03 / D-07: Using a refresh token issues a new one and revokes the prior
-  CORE-03 / D-07: Replaying the old (now-revoked) token revokes the whole family → 401
+Behaviors tested (CORE-03 / D-07):
+  - Using a refresh token issues a new one and revokes the prior
+  - Replaying the old (now-revoked) token revokes the whole family → 401
 
-These tests are intentionally xfail until plan 02-02 implements rotation.
+Tests require a live database (skip_if_no_db).
 """
 import pytest
 import httpx
 
 
-@pytest.mark.xfail(reason="Refresh-token rotation implemented in plan 02-02", strict=False)
 async def test_refresh_rotation_invalidates_old_token(
     client: httpx.AsyncClient,
     skip_if_no_db: None,
@@ -37,7 +36,6 @@ async def test_refresh_rotation_invalidates_old_token(
     assert r2.status_code == 401
 
 
-@pytest.mark.xfail(reason="Family revocation implemented in plan 02-02", strict=False)
 async def test_reuse_detection_revokes_chain(
     client: httpx.AsyncClient,
     skip_if_no_db: None,
