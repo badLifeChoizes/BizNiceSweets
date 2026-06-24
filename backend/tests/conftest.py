@@ -22,6 +22,12 @@ import os
 # a real database.
 # ---------------------------------------------------------------------------
 os.environ.setdefault("POSTGRES_PASSWORD", "testpassword")
+# Auth fields (supply before app.main imports config.py via Settings())
+# jwt_secret → pydantic-settings env var JWT_SECRET
+# bns_admin_password → pydantic-settings env var BNS_ADMIN_PASSWORD
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-at-least-32-chars-long")
+os.environ.setdefault("BNS_ADMIN_EMAIL", "admin@test.local")
+os.environ.setdefault("BNS_ADMIN_PASSWORD", "testadminpass")
 
 import pytest
 import httpx
