@@ -49,7 +49,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Auth foundation: deps, config, SQLAlchemy models, service helpers, Alembic migration, Wave 0 test harness
 - [x] 02-02-PLAN.md — Login/refresh/logout/me endpoints, two-token flow with rotation + reuse detection, get_current_user/require_permission dependencies
-- [ ] 02-03-PLAN.md — First-admin seed, admin user CRUD + deactivation + role assignment (admin-gated), RBAC enforcement, audit log
+- [x] 02-03-PLAN.md — First-admin seed, admin user CRUD + deactivation + role assignment (admin-gated), RBAC enforcement, audit log
 - [ ] 02-04-PLAN.md — Frontend: axios silent-refresh client, ProtectedRoute, Login page, admin User Management UI (+ human verify checkpoint)
 **UI hint**: yes
 
@@ -113,7 +113,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Scaffolding & Deployment | 0/3 | Planned | - |
-| 2. Authentication & Users | 2/4 | In Progress|  |
+| 2. Authentication & Users | 3/4 | In Progress|  |
 | 3. App Shell & Settings | 0/0 | Not started | - |
 | 4. SYERP Core Hub | 0/0 | Not started | - |
 | 5. PLUM Parts & Revisions | 0/0 | Not started | - |

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-06-24T00:29:00.081Z"
+last_updated: "2026-06-24T00:55:19.431Z"
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
-  percent: 71
+  completed_plans: 6
+  percent: 86
 ---
 
 # STATE — BizNiceSweets Milestone 1
@@ -25,22 +25,22 @@ progress:
 
 **Milestone goal:** Can deploy it, log in, manage vendors/customers, and design parts with multi-level BOMs and cost roll-up.
 
-**Current focus:** Phase 02 — authentication-users (Plan 2 of 4)
+**Current focus:** Phase 02 — authentication-users (Plan 4 of 4)
 
 ---
 
 ## Current Position
 
 Phase: 02 (authentication-users) — EXECUTING
-Plan: 3 of 4
-**Active plan:** 02-02 (login/refresh endpoints)
+Plan: 4 of 4
+**Active plan:** 02-04 (frontend auth UI)
 **Status:** Ready to execute
 
 **Progress:**
 
-[███████░░░] 71%
+[█████████░] 86%
 
-**Last session:** 2026-06-24T00:28:59.824Z
+**Last session:** 2026-06-24T00:55:19.362Z
 
 ---
 
@@ -62,8 +62,10 @@ Plan: 3 of 4
 - Phases planned: 6
 - Requirements covered: 24/24
 - Plans created: 7
-- Plans completed: 4
+- Plans completed: 6
 - Phase 02 Plan 01: 3 tasks, 19 files, 704s
+- Phase 02 Plan 02: 2 tasks, 9 files, 900s
+- Phase 02 Plan 03: 2 tasks, 9 files, 1440s
 
 ---
 
@@ -80,6 +82,9 @@ Plan: 3 of 4
 - **Auth library:** PyJWT 2.13.0 + pwdlib[argon2] 0.3.0 (not python-jose — 4 CVEs; not passlib — abandoned)
 - **JWT env var:** jwt_secret field reads JWT_SECRET (pydantic-settings field→env convention; no BNS_ prefix unlike bns_admin_password)
 - **RBAC schema:** User↔Role↔Permission M2M with module:action codes; lazy=selectin on collection relationships for async SQLAlchemy safety
+- **Seed pattern:** select-before-insert for idempotent upsert of permissions and roles (not ON CONFLICT — SQLAlchemy ORM upsert semantics vary by dialect)
+- **Login audit:** auth.login_success (actor_id=user.id) and auth.login_failed (actor_id=None) written unconditionally on every login attempt (D-14 mandatory events)
+- **RBAC probe:** /auth/_rbac_probe diagnostic endpoint (syerp:read gate) added for CORE-05 testing without Phase 4 SYERP routes
 
 ### Deferred (v2)
 
