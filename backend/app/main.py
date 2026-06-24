@@ -22,6 +22,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.health import router as health_router
 from app.core.config import settings
+from app.core.db import AsyncSessionLocal
 from app.core.registry import mount_all
 
 
@@ -50,7 +51,11 @@ class SPAStaticFiles(StaticFiles):
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
-    # Startup
+    # Startup — run seed data (idempotent; no-op if already seeded)
+    from app.core.seed import run_seeds
+
+    async with AsyncSessionLocal() as db:
+        await run_seeds(db)
     yield
     # Shutdown
 
@@ -67,11 +72,12 @@ app = FastAPI(
 # Health endpoints (unauthenticated; always mounted)
 app.include_router(health_router)
 
-# Module registration: importlib.import_module triggers syerp/__init__.py
+# Module registration: importlib.import_module triggers <module>/__init__.py
 # which calls registry.register(). Using importlib avoids shadowing the `app`
 # variable (FastAPI instance) with the `app` package name that a bare
-# `import app.modules.syerp` statement would cause.
+# `import app.modules.*` statement would cause.
 importlib.import_module("app.modules.syerp")
+importlib.import_module("app.modules.auth")
 
 # Wire all registered module routers under /api/v1
 mount_all(app)
