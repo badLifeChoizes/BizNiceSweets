@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # Set to True in the dev compose overlay to enable uvicorn --reload (D-11)
     uvicorn_reload: bool = False
 
-    # JWT signing key — required (no default); supply BNS_JWT_SECRET in env
+    # JWT signing key — required (no default); supply JWT_SECRET in env
     # Typed as SecretStr to prevent repr/log disclosure (T-02-01 mitigation).
     jwt_secret: SecretStr
 

@@ -47,7 +47,7 @@ Plans:
   4. Admin can assign roles to users, and a user with an incorrect role is denied access to gated resources
 **Plans**: 4 plans
 Plans:
-- [ ] 02-01-PLAN.md — Auth foundation: deps, config, SQLAlchemy models, service helpers, Alembic migration, Wave 0 test harness
+- [x] 02-01-PLAN.md — Auth foundation: deps, config, SQLAlchemy models, service helpers, Alembic migration, Wave 0 test harness
 - [ ] 02-02-PLAN.md — Login/refresh/logout/me endpoints, two-token flow with rotation + reuse detection, get_current_user/require_permission dependencies
 - [ ] 02-03-PLAN.md — First-admin seed, admin user CRUD + deactivation + role assignment (admin-gated), RBAC enforcement, audit log
 - [ ] 02-04-PLAN.md — Frontend: axios silent-refresh client, ProtectedRoute, Login page, admin User Management UI (+ human verify checkpoint)
@@ -113,7 +113,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Scaffolding & Deployment | 0/3 | Planned | - |
-| 2. Authentication & Users | 0/4 | Planned | - |
+| 2. Authentication & Users | 1/4 | In Progress|  |
 | 3. App Shell & Settings | 0/0 | Not started | - |
 | 4. SYERP Core Hub | 0/0 | Not started | - |
 | 5. PLUM Parts & Revisions | 0/0 | Not started | - |

@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-06-23T23:52:15.404Z"
+last_updated: "2026-06-24T00:11:16.365Z"
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 7
-  completed_plans: 3
-  percent: 43
+  completed_plans: 4
+  percent: 57
 ---
 
 # STATE — BizNiceSweets Milestone 1
 
-**Last updated:** 2026-06-22
+**Last updated:** 2026-06-23
 **Milestone:** 1 — Foundation + PLUM
 
 ---
@@ -25,25 +25,22 @@ progress:
 
 **Milestone goal:** Can deploy it, log in, manage vendors/customers, and design parts with multi-level BOMs and cost roll-up.
 
-**Current focus:** Phase 01 — project-scaffolding-deployment
+**Current focus:** Phase 02 — authentication-users (Plan 2 of 4)
 
 ---
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
-**Active phase:** None (planning complete, implementation not started)
-**Active plan:** None
-**Status:** Ready to execute
+Phase: 02 (authentication-users) — EXECUTING
+Plan: 2 of 4
+**Active plan:** 02-02 (login/refresh endpoints)
+**Status:** Plan 02-01 complete — executing Phase 02
 
 **Progress:**
 
-```
-Phase 1 [ ] Phase 2 [ ] Phase 3 [ ] Phase 4 [ ] Phase 5 [ ] Phase 6 [ ]
-[                                                                        ]
-0%                                                                    100%
-```
+[██████░░░░] 57% (4/7 plans complete)
+
+**Last session:** 2026-06-23 — Completed 02-01-PLAN.md (auth foundation)
 
 ---
 
@@ -51,8 +48,8 @@ Phase 1 [ ] Phase 2 [ ] Phase 3 [ ] Phase 4 [ ] Phase 5 [ ] Phase 6 [ ]
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 1 | Project Scaffolding & Deployment | CORE-01, CORE-09 | Not started |
-| 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Not started |
+| 1 | Project Scaffolding & Deployment | CORE-01, CORE-09 | Complete |
+| 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Executing (1/4 plans done) |
 | 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Not started |
 | 4 | SYERP Core Hub | SYERP-01..05 | Not started |
 | 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Not started |
@@ -64,8 +61,9 @@ Phase 1 [ ] Phase 2 [ ] Phase 3 [ ] Phase 4 [ ] Phase 5 [ ] Phase 6 [ ]
 
 - Phases planned: 6
 - Requirements covered: 24/24
-- Plans created: 0
-- Plans completed: 0
+- Plans created: 7
+- Plans completed: 4
+- Phase 02 Plan 01: 3 tasks, 19 files, 704s
 
 ---
 
@@ -79,6 +77,9 @@ Phase 1 [ ] Phase 2 [ ] Phase 3 [ ] Phase 4 [ ] Phase 5 [ ] Phase 6 [ ]
 - **Structure chosen:** Horizontal layers with dependency-first ordering
 - **Source reference:** PLUM HTML prototype (`plum/app/plm_v54.html`) is functional reference for domain logic — not code to reuse
 - **PLUM-07 constraint:** Part-to-vendor links require SYERP vendors table to exist (FK); Phase 4 must precede Phase 6
+- **Auth library:** PyJWT 2.13.0 + pwdlib[argon2] 0.3.0 (not python-jose — 4 CVEs; not passlib — abandoned)
+- **JWT env var:** jwt_secret field reads JWT_SECRET (pydantic-settings field→env convention; no BNS_ prefix unlike bns_admin_password)
+- **RBAC schema:** User↔Role↔Permission M2M with module:action codes; lazy=selectin on collection relationships for async SQLAlchemy safety
 
 ### Deferred (v2)
 

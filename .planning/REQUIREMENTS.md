@@ -10,10 +10,10 @@ Milestone 1 scope: a thin foundation (auth, DB, deploy, module shell) + the SYER
 ### Foundation (Core)
 
 - [ ] **CORE-01**: User can run the suite as a containerized deployment via Podman Compose (`podman-compose up`)
-- [ ] **CORE-02**: User can create an account and log in via OAuth2/JWT authentication
-- [ ] **CORE-03**: User session persists securely across requests (token issuance + refresh)
-- [ ] **CORE-04**: Admin can create, edit, and deactivate user accounts
-- [ ] **CORE-05**: Admin can assign roles to users, and roles gate access to modules and actions
+- [x] **CORE-02**: User can create an account and log in via OAuth2/JWT authentication
+- [x] **CORE-03**: User session persists securely across requests (token issuance + refresh)
+- [x] **CORE-04**: Admin can create, edit, and deactivate user accounts
+- [x] **CORE-05**: Admin can assign roles to users, and roles gate access to modules and actions
 - [ ] **CORE-06**: Admin can configure system settings (company info, defaults)
 - [ ] **CORE-07**: Admin can enable or disable individual modules
 - [ ] **CORE-08**: User sees a navigation shell listing enabled modules and can switch between them
@@ -83,10 +83,10 @@ Which phases cover which requirements. Populated during roadmap creation.
 |-------------|-------|--------|
 | CORE-01 | Phase 1 | Pending |
 | CORE-09 | Phase 1 | Pending |
-| CORE-02 | Phase 2 | Pending |
-| CORE-03 | Phase 2 | Pending |
-| CORE-04 | Phase 2 | Pending |
-| CORE-05 | Phase 2 | Pending |
+| CORE-02 | Phase 2 | Complete |
+| CORE-03 | Phase 2 | Complete |
+| CORE-04 | Phase 2 | Complete |
+| CORE-05 | Phase 2 | Complete |
 | CORE-06 | Phase 3 | Pending |
 | CORE-07 | Phase 3 | Pending |
 | CORE-08 | Phase 3 | Pending |
