@@ -97,13 +97,13 @@ async def seed_admin_user(db: "AsyncSession") -> None:
     # Admin role gets ALL permissions (wildcard — wildcard logic in service
     # is triggered by role.name == "admin"; we still assign all codes
     # so that the permission list on the admin role is complete and auditable).
-    admin_existing_codes = {p.code for p in admin_role.permissions}
+    admin_existing_codes = {p.code for p in await admin_role.awaitable_attrs.permissions}
     for code, perm in permission_map.items():
         if code not in admin_existing_codes:
             admin_role.permissions.append(perm)
 
     # User role gets the four business permissions only (NOT users:manage)
-    user_existing_codes = {p.code for p in user_role.permissions}
+    user_existing_codes = {p.code for p in await user_role.awaitable_attrs.permissions}
     for code in _USER_ROLE_PERMS:
         if code not in user_existing_codes:
             user_role.permissions.append(permission_map[code])
