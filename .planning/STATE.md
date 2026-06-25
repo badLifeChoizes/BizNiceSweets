@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-06-24T00:55:19.431Z"
+status: verifying
+last_updated: "2026-06-25T18:58:38.378Z"
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
-  percent: 86
+  completed_plans: 7
+  percent: 100
 ---
 
 # STATE — BizNiceSweets Milestone 1
 
-**Last updated:** 2026-06-23
+**Last updated:** 2026-06-25
 **Milestone:** 1 — Foundation + PLUM
 
 ---
@@ -25,20 +25,20 @@ progress:
 
 **Milestone goal:** Can deploy it, log in, manage vendors/customers, and design parts with multi-level BOMs and cost roll-up.
 
-**Current focus:** Phase 02 — authentication-users (Plan 4 of 4)
+**Current focus:** Phase 02 — authentication-users COMPLETE (4/4 plans) — ready for verification
 
 ---
 
 ## Current Position
 
-Phase: 02 (authentication-users) — EXECUTING
-Plan: 4 of 4
-**Active plan:** 02-04 (frontend auth UI)
-**Status:** Ready to execute
+Phase: 02 (authentication-users) — COMPLETE
+Plan: 4 of 4 (all complete)
+**Last plan:** 02-04 (frontend auth UI) — human-verify checkpoint passed
+**Status:** Phase complete — ready for verification
 
 **Progress:**
 
-[█████████░] 86%
+[██████████] 100%
 
 **Last session:** 2026-06-24T00:55:19.362Z
 
@@ -49,7 +49,7 @@ Plan: 4 of 4
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
 | 1 | Project Scaffolding & Deployment | CORE-01, CORE-09 | Complete |
-| 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Executing (1/4 plans done) |
+| 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Complete (4/4 plans) — ready for verification |
 | 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Not started |
 | 4 | SYERP Core Hub | SYERP-01..05 | Not started |
 | 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Not started |
@@ -62,10 +62,11 @@ Plan: 4 of 4
 - Phases planned: 6
 - Requirements covered: 24/24
 - Plans created: 7
-- Plans completed: 6
+- Plans completed: 7
 - Phase 02 Plan 01: 3 tasks, 19 files, 704s
 - Phase 02 Plan 02: 2 tasks, 9 files, 900s
 - Phase 02 Plan 03: 2 tasks, 9 files, 1440s
+- Phase 02 Plan 04: 3 tasks, 14 files, ~4500s (frontend auth UI; human-verify passed)
 
 ---
 
@@ -85,6 +86,11 @@ Plan: 4 of 4
 - **Seed pattern:** select-before-insert for idempotent upsert of permissions and roles (not ON CONFLICT — SQLAlchemy ORM upsert semantics vary by dialect)
 - **Login audit:** auth.login_success (actor_id=user.id) and auth.login_failed (actor_id=None) written unconditionally on every login attempt (D-14 mandatory events)
 - **RBAC probe:** /auth/_rbac_probe diagnostic endpoint (syerp:read gate) added for CORE-05 testing without Phase 4 SYERP routes
+- **Frontend token storage:** access token held only in a module-level JS variable (`src/auth/token.ts`) — never localStorage/sessionStorage (D-06, T-02-18)
+- **Silent refresh:** axios single-flight 401 interceptor (`isRefreshing` flag + `failedQueue`) serializes concurrent refreshes to avoid rotation self-logout (Pitfall 4, T-02-21); `withCredentials` sends the httpOnly refresh cookie
+- **Auth UI:** ProtectedRoute layout guard (isLoading→spinner / no-user→Navigate /login / Outlet) + `useAuth` TanStack Query `/auth/me` hook; UI gating is convenience only — backend 403 is the real authz boundary (T-02-20)
+- **Dev cookie:** `DEBUG=true` in `.env` disables the cookie `Secure` flag so the refresh cookie persists over `http://localhost`; prod container bakes the SPA into the image
+- **Phase-2 deploy fixes (cross-plan):** added `email-validator` + documented auth env vars (`2ae8ebd`, 02-01); fixed admin-seed `MissingGreenlet` via `AsyncAttrs`/`awaitable_attrs` (`272db33`, 02-03)
 
 ### Deferred (v2)
 
@@ -102,11 +108,16 @@ None.
 
 None at roadmap stage.
 
+### Deferred Follow-ups (from Phase 02, do not block phase)
+
+- No in-app navigation shell / logout control linking Landing <-> /admin/users — deferred to Phase 3 (App Shell, CORE-06..08).
+- Admin-seed/startup path has no DB-backed regression test (seed tests skip without a live DB) — the `MissingGreenlet` slipped past unit tests; recommend a seed integration test during gap-closure.
+
 ---
 
 ## Session Continuity
 
-**To resume:** Read `.planning/ROADMAP.md` for phase structure. Run `/gsd-plan-phase 1` to begin planning Phase 1.
+**To resume:** Phase 02 is complete and ready for verification. Run `/gsd-verify-work` for Phase 02, then `/gsd-transition` to Phase 03 (App Shell & Settings).
 
 **Files on disk:**
 

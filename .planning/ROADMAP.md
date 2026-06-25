@@ -50,7 +50,7 @@ Plans:
 - [x] 02-01-PLAN.md — Auth foundation: deps, config, SQLAlchemy models, service helpers, Alembic migration, Wave 0 test harness
 - [x] 02-02-PLAN.md — Login/refresh/logout/me endpoints, two-token flow with rotation + reuse detection, get_current_user/require_permission dependencies
 - [x] 02-03-PLAN.md — First-admin seed, admin user CRUD + deactivation + role assignment (admin-gated), RBAC enforcement, audit log
-- [ ] 02-04-PLAN.md — Frontend: axios silent-refresh client, ProtectedRoute, Login page, admin User Management UI (+ human verify checkpoint)
+- [x] 02-04-PLAN.md — Frontend: axios silent-refresh client, ProtectedRoute, Login page, admin User Management UI (+ human verify checkpoint)
 **UI hint**: yes
 
 ### Phase 3: App Shell & Settings
