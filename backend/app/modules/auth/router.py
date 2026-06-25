@@ -357,5 +357,11 @@ async def rbac_probe(
     No SYERP module exists yet (Phase 4) — this provides a real gated endpoint
     for RBAC testing without depending on Phase 4 routes.  Marked clearly as a
     diagnostic probe; may be removed once SYERP endpoints exist.
+
+    Production guard (CR-02): this diagnostic route is only reachable when
+    settings.debug is true (dev/test). In production it returns 404 so it is
+    not part of the live attack surface.
     """
+    if not settings.debug:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return {"probe": "ok", "permission": "syerp:read"}

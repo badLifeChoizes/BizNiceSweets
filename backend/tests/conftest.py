@@ -28,6 +28,9 @@ os.environ.setdefault("POSTGRES_PASSWORD", "testpassword")
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-at-least-32-chars-long")
 os.environ.setdefault("BNS_ADMIN_EMAIL", "admin@test.local")
 os.environ.setdefault("BNS_ADMIN_PASSWORD", "testadminpass")
+# DEBUG=true so the dev/test-only /_rbac_probe route is reachable in tests
+# (it 404s in production when debug is false — CR-02 guard).
+os.environ.setdefault("DEBUG", "true")
 
 import pytest
 import httpx
