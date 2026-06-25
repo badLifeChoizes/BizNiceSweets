@@ -102,14 +102,14 @@ interface CreatePayload {
   email: string
   full_name: string
   password: string
-  role_name: string
+  role: string
 }
 
 interface UpdatePayload {
   user_id: string
   full_name?: string
   is_active?: boolean
-  role_name?: string
+  role?: string
 }
 
 function createUser(payload: CreatePayload): Promise<User> {
@@ -239,13 +239,13 @@ export function Users() {
         email: formEmail,
         full_name: formFullName,
         password: formPassword,
-        role_name: formRole,
+        role: formRole,
       })
     } else if (sheet.user) {
       updateMutation.mutate({
         user_id: sheet.user.id,
         full_name: formFullName,
-        role_name: formRole,
+        role: formRole,
       })
     }
   }

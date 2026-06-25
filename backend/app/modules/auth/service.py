@@ -382,7 +382,10 @@ async def create_user(
         result = await db.execute(select(Role).where(Role.name == role_name))
         role = result.scalars().first()
         if role:
-            user.roles.append(role)
+            # user was just created+flushed (not loaded via SELECT), so its roles
+            # collection is unloaded — append would emit a lazy load outside the
+            # async greenlet (MissingGreenlet). Load it inside the greenlet first.
+            (await user.awaitable_attrs.roles).append(role)
     # If no role_name supplied, user has no roles (admin can assign later)
 
     await db.commit()
