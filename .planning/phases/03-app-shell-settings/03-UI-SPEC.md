@@ -1,10 +1,11 @@
 ---
 phase: 3
 slug: app-shell-settings
-status: draft
+status: approved
 shadcn_initialized: true
 preset: default/slate/css-variables
 created: 2026-06-26
+reviewed_at: 2026-06-26
 ---
 
 # Phase 3 — UI Design Contract
