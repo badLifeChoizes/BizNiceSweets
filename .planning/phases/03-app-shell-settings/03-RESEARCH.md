@@ -82,7 +82,7 @@ The TanStack Query cache is configured globally with `staleTime: 30_000` and `re
 | Admin gating (settings, toggle) | API/Backend | Browser/Client | Backend `require_permission` is the real gate; UI gating is UX convenience only |
 | Company name in header | Browser/Client | API/Backend | Client reads settings query; API provides value from DB |
 | Module always-on enforcement | API/Backend | — | Reject disable of always-on at the endpoint level; DB carries the flag |
-| Seed modules from code registry | API/Backend | — | lifespan startup in `core/seed.py` reads `registry._registry` |
+| Seed modules from static catalog | API/Backend | — | lifespan startup in `core/seed.py` seeds from a static 7-suite module catalog, NOT `registry._registry` (the registry only holds modules under the active Compose profile) |
 
 ---
 
