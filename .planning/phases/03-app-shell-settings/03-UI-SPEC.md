@@ -73,23 +73,27 @@ Exceptions:
 
 Source: shadcn/ui Tailwind defaults, slate base, system font stack.
 
+Exactly 2 font weights are used across the entire phase: **400 (normal)** and **600 (semibold)**.
+
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
 | Body | 14px (text-sm) | 400 (normal) | 1.5 |
-| Label | 14px (text-sm) | 500 (medium) | 1.4 |
+| Label | 14px (text-sm) | 600 (semibold) | 1.4 |
 | Heading | 20px (text-xl) | 600 (semibold) | 1.2 |
 | Display | 28px (text-3xl) | 600 (semibold) | 1.2 |
 
 ### Typography application rules
 
-- **Sidebar nav item text:** 14px / weight 500 / line-height 1.4 (Label role)
+- **Sidebar nav item text:** 14px / weight 600 / line-height 1.4 (Label role)
 - **Topbar company name:** 14px / weight 600 — treated as a compact heading, not a display
 - **Settings page heading (e.g. "System Settings"):** 20px / weight 600 (Heading role)
-- **Settings section subheadings (e.g. "Company Identity", "Locale Defaults"):** 14px / weight 600 (Label role, uppercase not required)
+- **Settings section subheadings (e.g. "Company Identity", "Locale Defaults"):** 14px / weight 600 (Label role)
 - **Form input values and helper text:** 14px / weight 400 (Body role)
 - **Admin page titles (/settings/modules):** 20px / weight 600 (Heading role)
 - **Empty state message:** 14px / weight 400 (Body role)
 - **Tooltip text (always-on explanation):** 12px / weight 400 — shadcn Tooltip default
+
+> Implementation note: use only Tailwind `font-normal` (400) and `font-semibold` (600). Do NOT introduce `font-medium` (500) anywhere in this phase.
 
 ---
 
@@ -149,6 +153,17 @@ Dark mode CSS variables are defined in index.css (`.dark` class). This phase doe
 - Main content: `flex-1 overflow-y-auto p-4` (16px padding)
 - Full shell container: `flex h-screen bg-background overflow-hidden`
 
+### Accessibility: icon-only interactive controls
+
+All icon-only controls must carry an accessible label (no visible text fallback):
+
+| Control | Element | Accessible label |
+|---------|---------|------------------|
+| Mobile sidebar trigger (hamburger) | Sheet trigger button (md:hidden) | `aria-label="Open navigation"` |
+| User/admin menu trigger | DropdownMenu trigger (avatar/user icon) | `aria-label="Open user menu"` |
+
+Decorative lucide icons inside labeled controls (e.g. icon beside a text nav label) should carry `aria-hidden="true"`. Icon-only controls must never rely on the icon alone for their accessible name.
+
 ### Sidebar nav item states (NavLink)
 
 | State | Class |
@@ -157,11 +172,11 @@ Dark mode CSS variables are defined in index.css (`.dark` class). This phase doe
 | Active (current route) | `bg-accent text-accent-foreground` |
 | Disabled (no modules) | renders empty state in content area, not greyed nav items |
 
-Nav item layout: `flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors`
+Nav item layout: `flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-colors`
 
 ### User/Admin dropdown (D-03)
 
-DropdownMenu in topbar, right side. Items:
+DropdownMenu in topbar, right side. Trigger carries `aria-label="Open user menu"`. Items:
 - User name + email (non-interactive, separator below)
 - "Settings" — links to /settings (admin-only, hidden for non-admin)
 - "Modules" — links to /settings/modules (admin-only, hidden for non-admin)
@@ -174,7 +189,7 @@ Trigger: User avatar initials (2-char) or user icon from lucide-react.
 ### Module enable/disable table (/settings/modules)
 
 shadcn Table with columns:
-- Module name (`display_name`) — Body 14px weight 500
+- Module name (`display_name`) — Body 14px weight 600 in the cell label
 - Status badge — Badge component: "Always On" (secondary variant) or "Enabled"/"Disabled" text
 - Enable toggle — Switch component (disabled + tooltip for always_on=true modules)
 
