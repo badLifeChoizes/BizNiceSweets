@@ -20,6 +20,7 @@ export interface AuthUser {
   full_name: string | null
   is_active: boolean
   roles: Array<{ name: string }>
+  permissions: string[] // flat permission codes e.g. ["syerp:read", "plum:write"] (D-04)
 }
 
 export function useAuth(): { user: AuthUser | null; isLoading: boolean } {

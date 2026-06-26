@@ -1,11 +1,14 @@
 import { Routes, Route } from 'react-router-dom'
-import { Landing } from '@/routes/Landing'
 import { Login } from '@/routes/Login'
-import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { AppShell } from '@/components/AppShell'
 
-// Admin routes (lazy-loaded to keep initial bundle small)
-// Users.tsx is in src/routes/admin/Users.tsx
+// Admin routes
 import { Users } from '@/routes/admin/Users'
+import { Settings } from '@/routes/admin/Settings'
+import { Modules } from '@/routes/admin/Modules'
+
+// Home landing (neutral post-login screen — D-06)
+import { Home } from '@/routes/Home'
 
 export function App() {
   return (
@@ -13,9 +16,11 @@ export function App() {
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
 
-      {/* Protected routes — wrapped in ProtectedRoute layout */}
-      <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<Landing />} />
+      {/* Protected routes — wrapped in AppShell layout (merges auth guard + chrome) */}
+      <Route element={<AppShell />}>
+        <Route path="/" element={<Home />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/settings/modules" element={<Modules />} />
         <Route path="/admin/users" element={<Users />} />
       </Route>
     </Routes>
