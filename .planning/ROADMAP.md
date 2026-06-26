@@ -65,7 +65,7 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 03-01-PLAN.md — Backend data layer: modules + settings ORM models, idempotent seeds, Alembic 0003, settings:manage permission, Wave 0 core test scaffold
-- [ ] 03-02-PLAN.md — Backend API: modules router (toggle + always-on guard) + settings router, main.py mount, /auth/me permissions extension; greens the core tests
+- [x] 03-02-PLAN.md — Backend API: modules router (toggle + always-on guard) + settings router, main.py mount, /auth/me permissions extension; greens the core tests
 - [ ] 03-03-PLAN.md — Frontend AppShell (sidebar/topbar/mobile drawer), permission-filtered nav, Home, System Settings + Modules admin screens, Switch install (+ human-verify checkpoint)
 **UI hint**: yes
 
@@ -118,7 +118,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Project Scaffolding & Deployment | 0/3 | Planned | - |
 | 2. Authentication & Users | 3/4 | In Progress|  |
-| 3. App Shell & Settings | 1/3 | In Progress|  |
+| 3. App Shell & Settings | 2/3 | In Progress|  |
 | 4. SYERP Core Hub | 0/0 | Not started | - |
 | 5. PLUM Parts & Revisions | 0/0 | Not started | - |
 | 6. PLUM BOM, Costing & Integration | 0/0 | Not started | - |

@@ -16,7 +16,7 @@ Milestone 1 scope: a thin foundation (auth, DB, deploy, module shell) + the SYER
 - [x] **CORE-05**: Admin can assign roles to users, and roles gate access to modules and actions
 - [x] **CORE-06**: Admin can configure system settings (company info, defaults)
 - [x] **CORE-07**: Admin can enable or disable individual modules
-- [ ] **CORE-08**: User sees a navigation shell listing enabled modules and can switch between them
+- [x] **CORE-08**: User sees a navigation shell listing enabled modules and can switch between them
 - [ ] **CORE-09**: Database schema is managed via versioned migrations (Alembic) that apply cleanly on a fresh deploy
 
 ### SYERP Core (Hub)
@@ -89,7 +89,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CORE-05 | Phase 2 | Complete |
 | CORE-06 | Phase 3 | Complete |
 | CORE-07 | Phase 3 | Complete |
-| CORE-08 | Phase 3 | Pending |
+| CORE-08 | Phase 3 | Complete |
 | SYERP-01 | Phase 4 | Pending |
 | SYERP-02 | Phase 4 | Pending |
 | SYERP-03 | Phase 4 | Pending |
