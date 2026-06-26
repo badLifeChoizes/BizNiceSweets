@@ -35,6 +35,7 @@ _PERMISSIONS: list[tuple[str, str]] = [
     ("syerp:write", "Write access to SYERP"),
     ("plum:read", "Read access to PLUM (Product Lifecycle Management)"),
     ("plum:write", "Write access to PLUM"),
+    ("settings:manage", "Configure system settings and enable/disable modules"),
 ]
 
 # Permissions granted to the standard 'user' role (all EXCEPT users:manage)

@@ -26,8 +26,17 @@ async def run_seeds(db: "AsyncSession") -> None:
     functions must be idempotent (safe to run on every podman-compose up).
 
     Phase 2: seeds the first admin user, the admin/user roles, and the
-    initial permission set.
+    initial permission set (including settings:manage for Phase 3).
+    Phase 3: seeds the modules table (7 suites, SYERP always_on=True)
+    and the default settings (company identity + locale defaults).
+
+    Order matters: admin/permissions must exist before modules and settings
+    seeds run (settings:manage is granted to admin role in seed_admin_user).
     """
     from app.modules.auth.seed import seed_admin_user
+    from app.core.modules_seed import seed_modules_table
+    from app.core.settings_seed import seed_default_settings
 
     await seed_admin_user(db)
+    await seed_modules_table(db)
+    await seed_default_settings(db)
