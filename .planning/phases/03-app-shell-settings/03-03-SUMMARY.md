@@ -182,6 +182,25 @@ None - no external service configuration required.
 - **Deployment note:** rebuild `frontend/dist` (and the container image) before the production `:8000` serving reflects the Phase-3 UI — the current production bundle predates this phase.
 - Phase 03 is complete (all 3 plans). Ready for `/gsd-verify-work` then transition to Phase 04 (SYERP Core Hub).
 
+## Self-Check: PASSED
+
+Files exist:
+- frontend/src/components/ui/switch.tsx: FOUND
+- frontend/src/hooks/useModules.ts: FOUND
+- frontend/src/hooks/useSettings.ts: FOUND
+- frontend/src/components/AppShell.tsx: FOUND
+- frontend/src/components/Sidebar.tsx: FOUND
+- frontend/src/components/Topbar.tsx: FOUND
+- frontend/src/components/MobileSidebar.tsx: FOUND
+- frontend/src/routes/Home.tsx: FOUND
+- frontend/src/routes/admin/Settings.tsx: FOUND
+- frontend/src/routes/admin/Modules.tsx: FOUND
+
+Commits exist:
+- c9e63ff: feat(03-03): Switch primitive, data hooks, AuthUser permissions, App.tsx routing
+- d8b2efb: feat(03-03): AppShell, Sidebar, Topbar, MobileSidebar chrome
+- b767be4: feat(03-03): Home, Settings form, and Modules toggle screens
+
 ---
 *Phase: 03-app-shell-settings*
 *Completed: 2026-06-26*
