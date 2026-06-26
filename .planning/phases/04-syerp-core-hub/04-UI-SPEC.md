@@ -1,10 +1,11 @@
 ---
 phase: 4
 slug: syerp-core-hub
-status: draft
+status: approved
 shadcn_initialized: true
 preset: "style=default baseColor=slate cssVariables=true"
 created: 2026-06-26
+reviewed_at: 2026-06-26
 ---
 
 # Phase 4 — UI Design Contract: SYERP Core Hub
