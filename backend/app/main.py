@@ -83,6 +83,19 @@ importlib.import_module("app.modules.auth")
 mount_all(app)
 
 # ---------------------------------------------------------------------------
+# Core platform routers (modules + settings) — mounted directly under /api/v1.
+# These are cross-cutting platform concerns, NOT module packages, so they are
+# not registered via the module registry. Mounted AFTER mount_all() (which
+# handles module routers) and BEFORE the SPA catch-all (below) so /api/*
+# traffic is never swallowed by the static file handler.
+# ---------------------------------------------------------------------------
+from app.core.modules_router import router as modules_router  # noqa: E402
+from app.core.settings_router import router as settings_router  # noqa: E402
+
+app.include_router(modules_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
+
+# ---------------------------------------------------------------------------
 # SPA mount (D-08) — MUST be last: mounted after all API and health routes
 # so the catch-all does not swallow /api/* traffic.  Guarded by directory
 # existence so the app still starts cleanly outside the production container
