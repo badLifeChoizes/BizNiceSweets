@@ -17,6 +17,10 @@ from app.modules.syerp import models as syerp_models  # noqa: F401
 # Phase 2: Auth module — users, roles, permissions, refresh_tokens, audit_log
 from app.modules.auth import models as auth_models  # noqa: F401
 
+# Phase 3: Core platform — modules table (CORE-07) + settings table (CORE-06)
+from app.core.modules_model import Module  # noqa: F401
+from app.core.settings_model import Setting  # noqa: F401
+
 # -------------------------------------------------------------------------
 # Phase 4+: add module model imports here as each suite lands
 # -------------------------------------------------------------------------
