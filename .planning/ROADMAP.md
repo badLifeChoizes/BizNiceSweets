@@ -66,7 +66,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — Backend data layer: modules + settings ORM models, idempotent seeds, Alembic 0003, settings:manage permission, Wave 0 core test scaffold
 - [x] 03-02-PLAN.md — Backend API: modules router (toggle + always-on guard) + settings router, main.py mount, /auth/me permissions extension; greens the core tests
-- [ ] 03-03-PLAN.md — Frontend AppShell (sidebar/topbar/mobile drawer), permission-filtered nav, Home, System Settings + Modules admin screens, Switch install (+ human-verify checkpoint)
+- [x] 03-03-PLAN.md — Frontend AppShell (sidebar/topbar/mobile drawer), permission-filtered nav, Home, System Settings + Modules admin screens, Switch install (+ human-verify checkpoint)
 **UI hint**: yes
 
 ### Phase 4: SYERP Core Hub

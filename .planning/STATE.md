@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-06-26T20:28:10.758Z"
+status: verifying
+last_updated: "2026-06-26T21:52:14.197Z"
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 9
-  percent: 90
+  completed_plans: 10
+  percent: 100
 ---
 
 # STATE — BizNiceSweets Milestone 1
@@ -31,14 +31,14 @@ progress:
 
 ## Current Position
 
-Phase: 03 (app-shell-settings) — EXECUTING
-Plan: 3 of 3
-**Last plan:** 02-04 (frontend auth UI) — human-verify checkpoint passed
-**Status:** Ready to execute
+Phase: 03 (app-shell-settings) — COMPLETE (3/3 plans)
+Plan: 3 of 3 — done
+**Last plan:** 03-03 (app shell, settings, modules UI) — human-verify checkpoint approved
+**Status:** Phase complete — ready for verification
 
 **Progress:**
 
-[█████████░] 90%
+[██████████] 100%
 
 **Last session:** 2026-06-26T20:28:10.736Z
 
@@ -50,7 +50,7 @@ Plan: 3 of 3
 |-------|------|--------------|--------|
 | 1 | Project Scaffolding & Deployment | CORE-01, CORE-09 | Complete |
 | 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Complete (4/4 plans) — ready for verification |
-| 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Not started |
+| 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Complete (3/3 plans) — ready for verification |
 | 4 | SYERP Core Hub | SYERP-01..05 | Not started |
 | 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Not started |
 | 6 | PLUM BOM, Costing & Integration | PLUM-04..10 | Not started |
@@ -61,12 +61,15 @@ Plan: 3 of 3
 
 - Phases planned: 6
 - Requirements covered: 24/24
-- Plans created: 7
-- Plans completed: 7
+- Plans created: 10
+- Plans completed: 10
 - Phase 02 Plan 01: 3 tasks, 19 files, 704s
 - Phase 02 Plan 02: 2 tasks, 9 files, 900s
 - Phase 02 Plan 03: 2 tasks, 9 files, 1440s
 - Phase 02 Plan 04: 3 tasks, 14 files, ~4500s (frontend auth UI; human-verify passed)
+- Phase 03 Plan 01: 3 tasks, 12 files, 282s (backend data layer: modules + settings tables)
+- Phase 03 Plan 02: 2 tasks, 9 files, 420s (modules + settings API routers, /me permissions)
+- Phase 03 Plan 03: 4 tasks, 14 files, ~30min (app shell, settings, modules UI; human-verify approved)
 
 ---
 
@@ -91,6 +94,9 @@ Plan: 3 of 3
 - **Auth UI:** ProtectedRoute layout guard (isLoading→spinner / no-user→Navigate /login / Outlet) + `useAuth` TanStack Query `/auth/me` hook; UI gating is convenience only — backend 403 is the real authz boundary (T-02-20)
 - **Dev cookie:** `DEBUG=true` in `.env` disables the cookie `Secure` flag so the refresh cookie persists over `http://localhost`; prod container bakes the SPA into the image
 - **Phase-2 deploy fixes (cross-plan):** added `email-validator` + documented auth env vars (`2ae8ebd`, 02-01); fixed admin-seed `MissingGreenlet` via `AsyncAttrs`/`awaitable_attrs` (`272db33`, 02-03)
+- **App shell (Phase 3):** `AppShell` layout route merges the auth guard (replaces ProtectedRoute; no nested layout routes — Pitfall 3). Client-side nav = enabled modules ∩ `user.permissions`, admin role is wildcard (D-04). `useModules` overrides global staleTime/refetchOnWindowFocus for toggle propagation; toggle mutation invalidates the exact `['core','modules']` key the sidebar reads (D-09). Company name renders for all authenticated users (settings GET is any-auth, not admin)
+- **Toast infra (Phase 3):** added `sonner` as the project's first toast library (no toast infra existed) — Settings save + Module toggle feedback
+- **Dist staleness (Phase 3):** production `frontend/dist` predates Phase 3 (built in Phase 1); Phase-3 UI verified via Vite dev overlay (:5173). A `frontend/dist` + image rebuild is needed before production `:8000` serving reflects the new shell
 
 ### Deferred (v2)
 
@@ -110,14 +116,14 @@ None at roadmap stage.
 
 ### Deferred Follow-ups (from Phase 02, do not block phase)
 
-- No in-app navigation shell / logout control linking Landing <-> /admin/users — deferred to Phase 3 (App Shell, CORE-06..08).
+- ~~No in-app navigation shell / logout control linking Landing <-> /admin/users — deferred to Phase 3 (App Shell, CORE-06..08).~~ **CLOSED in Phase 3 (03-03):** AppShell sidebar+topbar chrome with a working Log out control in the user menu.
 - Admin-seed/startup path has no DB-backed regression test (seed tests skip without a live DB) — the `MissingGreenlet` slipped past unit tests; recommend a seed integration test during gap-closure.
 
 ---
 
 ## Session Continuity
 
-**To resume:** Phase 02 is complete and ready for verification. Run `/gsd-verify-work` for Phase 02, then `/gsd-transition` to Phase 03 (App Shell & Settings).
+**To resume:** Phase 03 is complete (all 3 plans, human-verify approved). Run `/gsd-verify-work` for Phase 03, then `/gsd-transition` to Phase 04 (SYERP Core Hub). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3 UI.
 
 **Files on disk:**
 
