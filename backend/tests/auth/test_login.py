@@ -80,6 +80,46 @@ async def test_login_success_writes_audit_log(
     assert row.actor_id is not None, "actor_id must be set (user's id) on successful login"
 
 
+async def test_me_includes_permissions(
+    client: httpx.AsyncClient,
+    skip_if_no_db: None,
+) -> None:
+    """
+    GET /api/v1/auth/me returns a body that includes a `permissions` list (CORE-08).
+
+    The flat permissions list feeds the frontend nav filter (D-04): the sidebar
+    shows a module only if enabled AND user.permissions includes the module's
+    required permission code.
+
+    For the admin user, permissions includes "*" (wildcard) plus all explicit codes.
+    """
+    # Log in as admin
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "admin@test.local", "password": "testadminpass"},
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+
+    # Call /me and assert permissions is present and is a list
+    me_resp = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert me_resp.status_code == 200, f"GET /me failed: {me_resp.text}"
+    body = me_resp.json()
+    assert "permissions" in body, (
+        f"Expected 'permissions' key in /me response body. Keys present: {list(body.keys())}"
+    )
+    assert isinstance(body["permissions"], list), (
+        f"Expected permissions to be a list, got {type(body['permissions'])}"
+    )
+    # Admin should have at least the wildcard marker
+    assert "*" in body["permissions"] or len(body["permissions"]) > 0, (
+        "Admin user should have at least one permission in the list"
+    )
+
+
 async def test_login_failure_writes_audit_log(
     client: httpx.AsyncClient,
     skip_if_no_db: None,

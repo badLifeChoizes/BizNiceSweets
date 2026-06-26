@@ -125,15 +125,31 @@ async def test_toggle_requires_admin(
     client: httpx.AsyncClient,
     seeded_core_db,
 ) -> None:
-    """Non-admin token with syerp:read (no settings:manage) gets 403 on
-    PATCH /api/v1/core/modules/plum (D-12 admin-only toggle)."""
-    from app.modules.auth.service import create_access_token
+    """Non-admin user (no settings:manage) gets 403 on
+    PATCH /api/v1/core/modules/plum (D-12 admin-only toggle).
 
-    # Mint a token with only syerp:read — lacks settings:manage
-    user_token = create_access_token(
-        subject="non-admin-user-id",
-        permissions=["syerp:read"],
+    A real DB-backed user is created via admin token so get_current_user resolves
+    the user correctly. The user role has no settings:manage permission, so
+    require_permission("settings:manage") raises 403, not 401.
+    """
+    from tests.auth.conftest_helpers import create_regular_user
+
+    # Get admin token first, then create a non-admin user in the DB
+    admin_token = await admin_login_token(client)
+    user_data = await create_regular_user(
+        client,
+        admin_token,
+        email="nonadmin_toggle_test@example.com",
+        password="testpass123",
     )
+
+    # Log in as the non-admin user to get a real token (so get_current_user resolves them)
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "nonadmin_toggle_test@example.com", "password": "testpass123"},
+    )
+    assert login_resp.status_code == 200, f"Non-admin login failed: {login_resp.text}"
+    user_token = login_resp.json()["access_token"]
 
     response = await client.patch(
         "/api/v1/core/modules/plum",

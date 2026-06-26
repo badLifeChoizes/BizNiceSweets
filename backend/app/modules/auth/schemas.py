@@ -53,6 +53,10 @@ class UserRead(BaseModel):
     full_name: Optional[str] = None
     is_active: bool
     roles: List[RoleRead] = []
+    # Flat permission-code list for frontend nav filtering (D-04, CORE-08).
+    # Populated by collect_permissions(user) in the /me endpoint.
+    # Admin users include "*" (wildcard) plus all explicit codes.
+    permissions: List[str] = []
 
     model_config = {"from_attributes": True}
 

@@ -233,8 +233,25 @@ async def logout(
 
 @router.get("/me", response_model=UserRead)
 async def me(current_user=Depends(get_current_user)) -> UserRead:
-    """Return the authenticated user's profile and roles."""
-    return current_user
+    """Return the authenticated user's profile, roles, and flat permissions list.
+
+    The `permissions` field is populated via collect_permissions(current_user) —
+    the same function used when minting the JWT access token. Admin users receive
+    ["*", ...all_explicit_codes]; standard users receive their explicit codes.
+    This flat list feeds the frontend nav permission filter (D-04, CORE-08):
+    the sidebar shows a module only if it is enabled AND user.permissions includes
+    the module's required permission code (or user has admin role).
+    """
+    return UserRead.model_validate(
+        {
+            "id": current_user.id,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "is_active": current_user.is_active,
+            "roles": current_user.roles,
+            "permissions": collect_permissions(current_user),
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
