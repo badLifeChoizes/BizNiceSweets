@@ -916,22 +916,19 @@ function useVisibleModules(): ModuleRecord[] {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `GET /api/v1/core/modules` require authentication, or be public?**
    - What we know: The nav is only shown to authenticated users; unauthenticated visitors only see `/login`.
-   - What's unclear: Whether the list of module names is considered sensitive.
-   - Recommendation: Require auth (use `get_current_user` dependency). The modules list is not public information. This also means unauthenticated requests to the shell API fail cleanly with 401.
+   - RESOLVED: `GET /api/v1/core/modules` is gated by `Depends(get_current_user)` (any authenticated user, not admin-only). The modules list is not public — unauthenticated requests get 401. Implemented in 03-02 Task 1.
 
 2. **Should `GET /api/v1/core/settings` be auth-required (any user) or admin-only?**
-   - What we know: The shell header needs `company.name` which must be readable by all users (D-02).
-   - What's unclear: Whether all settings fields or only specific keys should be readable by all users.
-   - Recommendation: Two options: (a) allow `GET /core/settings` for any authenticated user (simpler, but exposes all setting keys/values including locale defaults that are non-sensitive); (b) add a `GET /core/settings/public` endpoint returning only company-identity fields for the shell header. Option (a) is simpler and the settings in v1 are all non-sensitive — recommended.
+   - What we know: The shell header needs `company.name` which must be readable by all users (D-02/D-05).
+   - RESOLVED: `GET /api/v1/core/settings` is gated by `Depends(get_current_user)` — readable by ANY authenticated user (option a). v1 settings are non-sensitive identity/locale defaults, and the shell header must render the company name for every authenticated user (admin and non-admin alike). The settings **write** path (`PATCH /api/v1/core/settings/{key}`) stays admin-only via `Depends(require_permission("settings:manage"))` — D-12's admin-only constraint applies to mutation, not read. No separate `/settings/public` endpoint is added. Implemented in 03-02 Task 1.
 
 3. **How does the `modules` table handle modules not yet in `registry._registry`?**
    - What we know: The static seed list includes all 7 suites; only SYERP+auth are imported in main.py today.
-   - What's unclear: Whether the Modules admin UI should show PLUM/FLAN/etc. before Phase 5/6 ships them.
-   - Recommendation: Seed all 7 rows but mark non-shipped modules `enabled=false` by default; the admin UI can display them as "not yet available" (or just show the enabled toggle greyed out). This gives the admin visibility without breaking anything.
+   - RESOLVED: Seed all 7 module rows. Shipped suites are seeded `enabled=true`; not-yet-shipped suites are seeded `enabled=false`. This gives the admin visibility of the full module catalog without breaking anything before Phase 5/6 ships them. Implemented in 03-01 seed.
 
 ---
 
@@ -958,11 +955,11 @@ All required dependencies are already installed in the repo. No new backend pack
 | Property | Value |
 |----------|-------|
 | Backend framework | pytest + httpx ASGITransport (pytest-asyncio auto mode) [VERIFIED: pyproject.toml, conftest.py] |
-| Frontend framework | Vitest + Testing Library + jsdom [VERIFIED: package.json] |
+| Frontend framework | TypeScript `tsc --noEmit` only — no Vitest suite this phase; CORE-08 frontend behaviors are e2e/manual, covered by `tsc --noEmit` + the 03-03 T4 human-verify checkpoint (see 03-VALIDATION.md) |
 | Backend config file | `backend/pyproject.toml` `[tool.pytest.ini_options]` |
-| Frontend config file | Vite config (vitest co-located) |
+| Frontend config file | `frontend/tsconfig.json` (no vitest config this phase) |
 | Backend quick run | `cd backend && pytest tests/ -x -q` |
-| Frontend quick run | `cd frontend && npm test` |
+| Frontend quick run | `cd frontend && npx tsc --noEmit` |
 | Backend full suite | `cd backend && pytest tests/ -v` |
 
 ### Phase Requirements → Test Map
@@ -973,7 +970,7 @@ All required dependencies are already installed in the repo. No new backend pack
 | CORE-07 | PATCH /core/modules/syerp {enabled:false} returns 422 (always-on guard) | integration | `pytest tests/core/test_modules.py::test_cannot_disable_always_on -x` | Wave 0 |
 | CORE-07 | PATCH /core/modules/plum {enabled:false} returns 200, module now disabled | integration | `pytest tests/core/test_modules.py::test_toggle_module -x` | Wave 0 |
 | CORE-07 | Non-admin PATCH /core/modules returns 403 | integration | `pytest tests/core/test_modules.py::test_toggle_requires_admin -x` | Wave 0 |
-| CORE-06 | GET /core/settings returns settings list (admin) | integration | `pytest tests/core/test_settings.py -x` | Wave 0 |
+| CORE-06 | GET /core/settings returns settings list (any authenticated user) | integration | `pytest tests/core/test_settings.py -x` | Wave 0 |
 | CORE-06 | PATCH /core/settings/company.name updates value | integration | `pytest tests/core/test_settings.py::test_update_setting -x` | Wave 0 |
 | CORE-06 | Seed populates default settings including company.name | integration | `pytest tests/core/test_settings.py::test_seed_defaults -x` | Wave 0 |
 | CORE-08 | /auth/me response includes `permissions` list | integration | `pytest tests/auth/test_login.py::test_me_includes_permissions -x` | Wave 0 |
@@ -991,7 +988,6 @@ All required dependencies are already installed in the repo. No new backend pack
 - [ ] `backend/tests/core/test_modules.py` — covers CORE-07 (list, toggle, always-on guard, 403)
 - [ ] `backend/tests/core/test_settings.py` — covers CORE-06 (list, update, seed defaults)
 - [ ] `backend/tests/core/conftest.py` — seeded DB fixture for modules + settings rows
-- [ ] Frontend test: `frontend/src/components/AppShell.test.tsx` — render with mock user, verify nav items shown/hidden
 
 ---
 

@@ -62,7 +62,11 @@ Plans:
   2. Admin can update system settings (company name, defaults) and changes persist across sessions
   3. Admin can toggle a module off, and its nav entry disappears for all users immediately
   4. Admin can re-enable a module and it reappears in the navigation shell
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 03-01-PLAN.md — Backend data layer: modules + settings ORM models, idempotent seeds, Alembic 0003, settings:manage permission, Wave 0 core test scaffold
+- [ ] 03-02-PLAN.md — Backend API: modules router (toggle + always-on guard) + settings router, main.py mount, /auth/me permissions extension; greens the core tests
+- [ ] 03-03-PLAN.md — Frontend AppShell (sidebar/topbar/mobile drawer), permission-filtered nav, Home, System Settings + Modules admin screens, Switch install (+ human-verify checkpoint)
 **UI hint**: yes
 
 ### Phase 4: SYERP Core Hub
@@ -114,7 +118,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Project Scaffolding & Deployment | 0/3 | Planned | - |
 | 2. Authentication & Users | 3/4 | In Progress|  |
-| 3. App Shell & Settings | 0/0 | Not started | - |
+| 3. App Shell & Settings | 0/3 | Planned | - |
 | 4. SYERP Core Hub | 0/0 | Not started | - |
 | 5. PLUM Parts & Revisions | 0/0 | Not started | - |
 | 6. PLUM BOM, Costing & Integration | 0/0 | Not started | - |
