@@ -78,13 +78,39 @@ async def generate_partner_code(db: AsyncSession) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _build_partner_kwargs(code: str, data: "PartnerCreate") -> dict:
+    """Build the Partner constructor kwargs from a PartnerCreate schema."""
+    return {
+        "code": code,
+        "name": data.name,
+        "is_vendor": data.is_vendor,
+        "is_customer": data.is_customer,
+        "addr_line1": data.addr_line1,
+        "addr_line2": data.addr_line2,
+        "addr_city": data.addr_city,
+        "addr_state": data.addr_state,
+        "addr_postal": data.addr_postal,
+        "addr_country": data.addr_country,
+        "contact_name": data.contact_name,
+        "contact_email": data.contact_email,
+        "contact_phone": data.contact_phone,
+        "payment_terms": data.payment_terms,
+        "tax_id": data.tax_id,
+        "currency": data.currency,
+        "country_of_origin": data.country_of_origin,
+        "notes": data.notes,
+    }
+
+
 async def create_partner(db: AsyncSession, data: "PartnerCreate") -> "Partner":
     """
     Insert a new partner row.
 
     If data.code is not supplied, auto-generates one via generate_partner_code.
-    On a unique-constraint IntegrityError (code collision race), rolls back and
-    retries once with a freshly generated code (RESEARCH.md Pattern 3).
+    On a unique-constraint IntegrityError:
+      - If the caller explicitly supplied a code → 409 Conflict (duplicate code).
+      - If the code was auto-generated (race condition) → retry ONCE with a fresh
+        code (RESEARCH.md Pattern 3).
 
     Returns the refreshed Partner ORM instance.
     """
@@ -92,59 +118,27 @@ async def create_partner(db: AsyncSession, data: "PartnerCreate") -> "Partner":
 
     from app.modules.syerp.models import Partner
 
+    user_supplied_code = bool(data.code)
     code = data.code or await generate_partner_code(db)
 
-    partner = Partner(
-        code=code,
-        name=data.name,
-        is_vendor=data.is_vendor,
-        is_customer=data.is_customer,
-        # Address
-        addr_line1=data.addr_line1,
-        addr_line2=data.addr_line2,
-        addr_city=data.addr_city,
-        addr_state=data.addr_state,
-        addr_postal=data.addr_postal,
-        addr_country=data.addr_country,
-        # Contact
-        contact_name=data.contact_name,
-        contact_email=data.contact_email,
-        contact_phone=data.contact_phone,
-        # Commerce
-        payment_terms=data.payment_terms,
-        tax_id=data.tax_id,
-        currency=data.currency,
-        country_of_origin=data.country_of_origin,
-        notes=data.notes,
-    )
+    partner = Partner(**_build_partner_kwargs(code, data))
     db.add(partner)
 
     try:
         await db.flush()
     except sqlalchemy.exc.IntegrityError:
-        # Code collision — rollback this transaction savepoint and retry once
         await db.rollback()
+
+        if user_supplied_code:
+            # Caller provided an explicit code that already exists → 409 Conflict
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Partner code '{code}' already exists.",
+            )
+
+        # Auto-generated code collision — retry once with a fresh code
         code = await generate_partner_code(db)
-        partner = Partner(
-            code=code,
-            name=data.name,
-            is_vendor=data.is_vendor,
-            is_customer=data.is_customer,
-            addr_line1=data.addr_line1,
-            addr_line2=data.addr_line2,
-            addr_city=data.addr_city,
-            addr_state=data.addr_state,
-            addr_postal=data.addr_postal,
-            addr_country=data.addr_country,
-            contact_name=data.contact_name,
-            contact_email=data.contact_email,
-            contact_phone=data.contact_phone,
-            payment_terms=data.payment_terms,
-            tax_id=data.tax_id,
-            currency=data.currency,
-            country_of_origin=data.country_of_origin,
-            notes=data.notes,
-        )
+        partner = Partner(**_build_partner_kwargs(code, data))
         db.add(partner)
         await db.flush()
 

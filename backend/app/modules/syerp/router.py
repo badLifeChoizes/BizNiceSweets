@@ -1,15 +1,172 @@
 """
 SYERP API router.
 
-Phase 1: Empty router stub. Phase 4 will add /api/v1/syerp/vendors,
-/api/v1/syerp/customers, and GL endpoints.
+Phase 4: Partner CRUD + GL accounts browse endpoints.
+
+Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
+  GET    /syerp/partners               — list/search partners (syerp:read)
+  POST   /syerp/partners               — create partner (syerp:write)
+  GET    /syerp/partners/{partner_id}  — get partner (syerp:read)
+  PATCH  /syerp/partners/{partner_id}  — update/archive partner (syerp:write)
+  GET    /syerp/gl/accounts            — list GL accounts (syerp:read)
+
+mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
+Full paths are therefore /api/v1/syerp/partners, /api/v1/syerp/gl/accounts, etc.
+
+Permission gating (D-09):
+  - All write (POST, PATCH) endpoints require syerp:write.
+  - All read (GET) endpoints require syerp:read.
+  - Unauthenticated requests return 401; wrong permission returns 403.
+  - Admin role is wildcard (handled inside require_permission).
+
+Audit logging (D-10, T-04-08):
+  - partner.created: on POST /partners success.
+  - partner.updated: on PATCH when active does not change to False.
+  - partner.archived: on PATCH when patch sets active=False.
+
+Archive strategy (RESEARCH.md Pattern 4):
+  Archive flows through PATCH with {active: false}. The router compares
+  the current active state before applying the update to select the correct
+  audit action string.
 """
-from fastapi import APIRouter
+from __future__ import annotations
 
-router = APIRouter()
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# Phase 4+ routes go here, e.g.:
-#
-# @router.get("/syerp/vendors")
-# async def list_vendors(db: AsyncSession = Depends(get_db)):
-#     ...
+from app.core.db import get_db
+from app.modules.auth.dependencies import require_permission
+from app.modules.auth.service import write_audit
+from app.modules.syerp.schemas import GLAccountRead, PartnerCreate, PartnerRead, PartnerUpdate
+from app.modules.syerp.service import (
+    archive_partner,
+    create_partner,
+    get_partner,
+    list_gl_accounts,
+    list_partners,
+    update_partner,
+)
+
+router = APIRouter(prefix="/syerp", tags=["syerp"])
+
+
+# ---------------------------------------------------------------------------
+# Partners
+# ---------------------------------------------------------------------------
+
+
+@router.get("/partners", response_model=list[PartnerRead])
+async def list_partners_endpoint(
+    role: str | None = None,
+    q: str | None = None,
+    include_archived: bool = False,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[PartnerRead]:
+    """
+    List / search partners.
+
+    Query params:
+      role: "vendor" | "customer" — filter by role flag.
+      q: substring search across name, code, contact_name (server-side, parameterized).
+      include_archived: when true, includes active=False partners (default false).
+
+    Requires syerp:read permission.
+    """
+    partners = await list_partners(db, role=role, q=q, include_archived=include_archived)
+    return partners
+
+
+@router.post("/partners", response_model=PartnerRead, status_code=status.HTTP_201_CREATED)
+async def create_partner_endpoint(
+    data: PartnerCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PartnerRead:
+    """
+    Create a new partner.
+
+    Auto-generates a unique P-#### code if not supplied in the payload.
+    Requires syerp:write permission. Writes a partner.created audit log row.
+    """
+    partner = await create_partner(db, data)
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="partner.created",
+        target_type="partner",
+        target_id=str(partner.id),
+        detail=f"Partner created: {partner.name}",
+    )
+    return partner
+
+
+@router.get("/partners/{partner_id}", response_model=PartnerRead)
+async def get_partner_endpoint(
+    partner_id: str,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> PartnerRead:
+    """
+    Get a single partner by id.
+
+    Requires syerp:read permission. Returns 404 if partner does not exist.
+    """
+    return await get_partner(db, partner_id)
+
+
+@router.patch("/partners/{partner_id}", response_model=PartnerRead)
+async def update_partner_endpoint(
+    partner_id: str,
+    data: PartnerUpdate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PartnerRead:
+    """
+    Partially update a partner (PATCH semantics).
+
+    Sending {active: false} archives the partner (D-05 soft-delete).
+    Requires syerp:write permission. Writes audit log with correct action:
+      - "partner.archived" when active transitions True → False
+      - "partner.updated" for all other mutations
+
+    Returns 404 if partner does not exist.
+    """
+    # Read current state before mutation to detect archive transition
+    existing = await get_partner(db, partner_id)
+    was_active = existing.active
+
+    partner = await update_partner(db, partner_id, data)
+
+    # Select audit action based on active state transition
+    is_archiving = data.active is False and was_active is True
+    audit_action = "partner.archived" if is_archiving else "partner.updated"
+
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action=audit_action,
+        target_type="partner",
+        target_id=str(partner.id),
+        detail=f"Partner {audit_action.split('.')[1]}: {partner.name}",
+    )
+    return partner
+
+
+# ---------------------------------------------------------------------------
+# GL Accounts (read-only, D-11)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/gl/accounts", response_model=list[GLAccountRead])
+async def list_gl_accounts_endpoint(
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[GLAccountRead]:
+    """
+    Return all GL accounts ordered by code.
+
+    Read-only in Phase 4 (D-11 scope guard). Seeded at startup.
+    Requires syerp:read permission. Unauthenticated → 401. Wrong perm → 403.
+    """
+    return await list_gl_accounts(db)
