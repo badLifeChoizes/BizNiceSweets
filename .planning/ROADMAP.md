@@ -84,7 +84,7 @@ Plans:
 - [x] 04-01-PLAN.md — Backend foundation: Partner + GLAccount models, Alembic 0004, idempotent CoA seed, Wave 0 test scaffold
 - [x] 04-02-PLAN.md — Backend API: partner CRUD/search/archive + audit + code-gen, GL browse endpoint, RBAC gating; greens backend tests
 - [x] 04-03-PLAN.md — Frontend Vendor + Customer screens, shared PartnerSheet + ArchiveDialog, Wave 0 frontend tests
-- [ ] 04-04-PLAN.md — Frontend Chart-of-Accounts screen, App.tsx route wiring, human-verify checkpoint
+- [x] 04-04-PLAN.md — Frontend Chart-of-Accounts screen, App.tsx route wiring, human-verify checkpoint
 **UI hint**: yes
 
 ### Phase 5: PLUM Parts & Revisions

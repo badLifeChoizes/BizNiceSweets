@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-06-27T18:01:00Z"
+status: verifying
+last_updated: "2026-06-27T21:41:45.486Z"
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 14
-  completed_plans: 13
-  percent: 93
+  completed_plans: 14
+  percent: 100
 ---
 
 # STATE — BizNiceSweets Milestone 1
@@ -31,16 +31,16 @@ progress:
 
 ## Current Position
 
-Phase: 04 (syerp-core-hub) — EXECUTING
+Phase: 04 (syerp-core-hub) — COMPLETE
 Plan: 4 of 4
-**Last plan:** 04-03 (SYERP Partner UI: Vendors, Customers, PartnerSheet, Wave 0 tests green)
-**Status:** Executing Plan 4
+**Last plan:** 04-04 (GLAccounts read-only CoA screen + SYERP route wiring; human-verify approved after UAT)
+**Status:** Phase complete — ready for verification
 
 **Progress:**
 
-[█████████░] 93%
+[██████████] 100%
 
-**Last session:** 2026-06-27T18:01:00Z
+**Last session:** 2026-06-27T21:41:45.445Z
 
 ---
 
@@ -51,7 +51,7 @@ Plan: 4 of 4
 | 1 | Project Scaffolding & Deployment | CORE-01, CORE-09 | Complete |
 | 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Complete (4/4 plans) — ready for verification |
 | 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Complete (3/3 plans) — ready for verification |
-| 4 | SYERP Core Hub | SYERP-01..05 | In Progress (3/4 plans complete) |
+| 4 | SYERP Core Hub | SYERP-01..05 | Complete (4/4 plans) — human-verify approved |
 | 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Not started |
 | 6 | PLUM BOM, Costing & Integration | PLUM-04..10 | Not started |
 
@@ -73,6 +73,7 @@ Plan: 4 of 4
 - Phase 04 Plan 01: 3 tasks, 7 files, ~25min (SYERP data foundation: models, migration 0004, CoA seed, Wave 0 tests)
 - Phase 04 Plan 02: 3 tasks, 3 files, ~25min (SYERP Partner API: schemas, service, router; Wave 0 tests green)
 - Phase 04 Plan 03: 2 tasks, 6 files, ~5min (SYERP Partner UI: Vendors, Customers, PartnerSheet, PartnerArchiveDialog; Wave 0 tests green)
+- Phase 04 Plan 04: 2 tasks (1 auto + human-verify), 7 files, ~20min (GLAccounts read-only CoA screen + SYERP route wiring; human-verify approved after UAT; 4 UAT follow-up fixes: Tailwind v4 tokens, country validation/error toast, catch-all route, SYERP sub-nav tab strip)
 
 ---
 
@@ -106,6 +107,11 @@ Plan: 4 of 4
 - **SYERP partner code uniqueness (Phase 4, 04-02):** User-supplied duplicate code returns 409 Conflict; auto-generated code collision retries once with fresh code (distinguishes user intent from race condition)
 - **PartnerRead type location (Phase 4, 04-03):** PartnerRead TypeScript interface exported from PartnerSheet.tsx — consumed by Vendors, Customers, and PartnerArchiveDialog to keep a single source of truth without a separate types file
 - **Partner currency default (Phase 4, 04-03):** formCurrency initializes to 'USD' in React state; corrects to settings default_currency on first TanStack Query cache hit — avoids uncontrolled Select issues while supporting the settings-driven default
+- **SYERP nav landing (Phase 4, 04-04):** sidebar renders one NavLink per module at `/${mod.key}`, so SYERP lands on `/syerp`; App.tsx adds a `Navigate replace` redirect `/syerp → /syerp/vendors` so the entry resolves to a real screen while keeping the sidebar convention generic
+- **GLAccounts read-only CoA (Phase 4, 04-04):** groups the flat `GET /gl/accounts` list by `account_type` into 5 fixed-order Cards; round-hundred codes (`/0+$/`) render bold/no-indent as top-level, all others `pl-6` — no recursive tree component for the shallow seeded CoA (D-11 read-only: no toolbar/mutations/accent)
+- **Tailwind v4 token registration (Phase 4, 04-04 UAT, `41d2fb7`):** shadcn color tokens must be registered via `@theme inline` in `src/index.css`, otherwise Tailwind v4 does not emit `bg-background`/`bg-card`/etc. utilities and Sheet/Dialog/form panels render transparent app-wide
+- **Partner country validation UX (Phase 4, 04-04 UAT, `a3f50da`):** `addr_country`/`country_of_origin` constrained to ISO 2-letter (maxLength + uppercase + helper text) and the API's real validation detail surfaced in the toast (was an opaque "Failed to save")
+- **Catch-all + SYERP sub-nav (Phase 4, 04-04 UAT, `2e78af8`/`d88d55e`):** App.tsx catch-all redirects unknown paths to Home (no blank screen); a `SyerpNav.tsx` tab strip (Vendors | Customers | Chart of Accounts) was added to all three SYERP screens since the sidebar only exposes the module root
 
 ### Deferred (v2)
 
@@ -132,7 +138,7 @@ None at roadmap stage.
 
 ## Session Continuity
 
-**To resume:** Phase 04 Plan 03 complete (SYERP Partner UI: Vendors, Customers, PartnerSheet, PartnerArchiveDialog, Wave 0 tests green). Continue with Plan 04 (routing + nav wiring — add Vendors/Customers/GL routes to AppShell sidebar). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3/4 UI.
+**To resume:** Phase 04 COMPLETE (4/4 plans) — human-verify approved after UAT (Vendor/Customer CRUD + search + archive/restore, dual-role partner in both lists, read-only Chart of Accounts, role guard). SYERP Core Hub is live and routed. Next: begin Phase 05 (PLUM Parts & Revisions). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3/4 UI.
 
 **Files on disk:**
 
