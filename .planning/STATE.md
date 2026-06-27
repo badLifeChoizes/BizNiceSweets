@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-06-27T17:27:40.070Z"
+last_updated: "2026-06-27T17:39:40.268Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 14
-  completed_plans: 10
-  percent: 71
+  completed_plans: 11
+  percent: 79
 ---
 
 # STATE — BizNiceSweets Milestone 1
@@ -25,22 +25,22 @@ progress:
 
 **Milestone goal:** Can deploy it, log in, manage vendors/customers, and design parts with multi-level BOMs and cost roll-up.
 
-**Current focus:** Phase 03 — app-shell-settings
+**Current focus:** Phase 04 — syerp-core-hub
 
 ---
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
-**Last plan:** 03-03 (app shell, settings, modules UI) — human-verify checkpoint approved
-**Status:** Ready to execute
+Phase: 04 (syerp-core-hub) — EXECUTING
+Plan: 2 of 4
+**Last plan:** 04-01 (SYERP data foundation: models, migration, CoA seed, Wave 0 tests)
+**Status:** Executing Plan 2
 
 **Progress:**
 
-[██████████] 100%
+[████████░░] 79%
 
-**Last session:** 2026-06-26T23:14:42.575Z
+**Last session:** 2026-06-27T17:39:40.248Z
 
 ---
 
@@ -51,7 +51,7 @@ Plan: Not started
 | 1 | Project Scaffolding & Deployment | CORE-01, CORE-09 | Complete |
 | 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Complete (4/4 plans) — ready for verification |
 | 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Complete (3/3 plans) — ready for verification |
-| 4 | SYERP Core Hub | SYERP-01..05 | Not started |
+| 4 | SYERP Core Hub | SYERP-01..05 | In Progress (1/4 plans complete) |
 | 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Not started |
 | 6 | PLUM BOM, Costing & Integration | PLUM-04..10 | Not started |
 
@@ -70,6 +70,7 @@ Plan: Not started
 - Phase 03 Plan 01: 3 tasks, 12 files, 282s (backend data layer: modules + settings tables)
 - Phase 03 Plan 02: 2 tasks, 9 files, 420s (modules + settings API routers, /me permissions)
 - Phase 03 Plan 03: 4 tasks, 14 files, ~30min (app shell, settings, modules UI; human-verify approved)
+- Phase 04 Plan 01: 3 tasks, 7 files, ~25min (SYERP data foundation: models, migration 0004, CoA seed, Wave 0 tests)
 
 ---
 
@@ -97,6 +98,8 @@ Plan: Not started
 - **App shell (Phase 3):** `AppShell` layout route merges the auth guard (replaces ProtectedRoute; no nested layout routes — Pitfall 3). Client-side nav = enabled modules ∩ `user.permissions`, admin role is wildcard (D-04). `useModules` overrides global staleTime/refetchOnWindowFocus for toggle propagation; toggle mutation invalidates the exact `['core','modules']` key the sidebar reads (D-09). Company name renders for all authenticated users (settings GET is any-auth, not admin)
 - **Toast infra (Phase 3):** added `sonner` as the project's first toast library (no toast infra existed) — Settings save + Module toggle feedback
 - **Dist staleness (Phase 3):** production `frontend/dist` predates Phase 3 (built in Phase 1); Phase-3 UI verified via Vite dev overlay (:5173). A `frontend/dist` + image rebuild is needed before production `:8000` serving reflects the new shell
+- **SYERP migration convention (Phase 4):** migration 0004 hand-authored (no live DB available in dev) following 0002/0003 convention; down_revision chains onto 0003
+- **SYERP CoA seed (Phase 4):** `_STANDARD_COA` uses `parent_code` string keys (not raw integer IDs); two-pass insert resolves parent codes to DB integer IDs at seed time — portable across environments
 
 ### Deferred (v2)
 
@@ -123,7 +126,7 @@ None at roadmap stage.
 
 ## Session Continuity
 
-**To resume:** Phase 03 is complete (all 3 plans, human-verify approved). Run `/gsd-verify-work` for Phase 03, then `/gsd-transition` to Phase 04 (SYERP Core Hub). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3 UI.
+**To resume:** Phase 04 Plan 01 complete (SYERP data foundation). Continue with Plan 02 (SYERP Partner API — the routes that Plan 01's Wave 0 tests will green). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3 UI.
 
 **Files on disk:**
 
