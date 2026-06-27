@@ -27,6 +27,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { apiClient } from '@/api/client'
+import { SyerpNav } from './components/SyerpNav'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,7 @@ export function GLAccounts() {
 
   return (
     <div className="p-8 space-y-6">
+      <SyerpNav />
       {/* Page heading */}
       <div className="space-y-1">
         <h1 className="text-xl font-semibold text-foreground">Chart of Accounts</h1>

@@ -52,6 +52,7 @@ import {
 import { apiClient } from '@/api/client'
 import { PartnerSheet } from './components/PartnerSheet'
 import { PartnerArchiveDialog } from './components/PartnerArchiveDialog'
+import { SyerpNav } from './components/SyerpNav'
 import type { PartnerRead } from './components/PartnerSheet'
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
@@ -158,6 +159,7 @@ export function Customers() {
   // ── Render ──
   return (
     <div className="p-8 space-y-6">
+      <SyerpNav />
       {/* Page heading */}
       <div className="space-y-1">
         <h1 className="text-xl font-semibold text-foreground">Customers</h1>
