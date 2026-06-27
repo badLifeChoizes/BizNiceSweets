@@ -28,6 +28,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -105,6 +106,29 @@ const PAYMENT_TERMS_OPTIONS = [
   { value: 'Due on Receipt', label: 'Due on Receipt' },
   { value: 'Prepaid', label: 'Prepaid' },
 ]
+
+// ─── API error helper ─────────────────────────────────────────────────────────
+// Surface the server's real reason instead of a generic "please try again".
+// FastAPI returns either a string `detail` (e.g. 409 duplicate code) or a
+// 422 validation array of { loc, msg }. Map both to a readable, actionable message.
+function getApiErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const detail = err.response?.data?.detail
+    if (typeof detail === 'string' && detail.trim()) return detail
+    if (Array.isArray(detail)) {
+      const msgs = detail
+        .map((d) => {
+          const loc = Array.isArray(d?.loc) ? d.loc[d.loc.length - 1] : undefined
+          const field = typeof loc === 'string' ? loc : undefined
+          const msg = typeof d?.msg === 'string' ? d.msg : 'invalid value'
+          return field ? `${field}: ${msg}` : msg
+        })
+        .filter(Boolean)
+      if (msgs.length) return msgs.join('; ')
+    }
+  }
+  return fallback
+}
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
@@ -249,11 +273,14 @@ export function PartnerSheet({ open, mode, partner, role, onClose }: PartnerShee
       toast(role === 'vendor' ? 'Vendor saved.' : 'Customer saved.')
       onClose()
     },
-    onError: () => {
+    onError: (err) => {
       toast.error(
-        role === 'vendor'
-          ? 'Failed to save vendor. Please try again.'
-          : 'Failed to save customer. Please try again.',
+        getApiErrorMessage(
+          err,
+          role === 'vendor'
+            ? 'Failed to save vendor. Please try again.'
+            : 'Failed to save customer. Please try again.',
+        ),
       )
     },
   })
@@ -268,11 +295,14 @@ export function PartnerSheet({ open, mode, partner, role, onClose }: PartnerShee
       toast(role === 'vendor' ? 'Vendor saved.' : 'Customer saved.')
       onClose()
     },
-    onError: () => {
+    onError: (err) => {
       toast.error(
-        role === 'vendor'
-          ? 'Failed to save vendor. Please try again.'
-          : 'Failed to save customer. Please try again.',
+        getApiErrorMessage(
+          err,
+          role === 'vendor'
+            ? 'Failed to save vendor. Please try again.'
+            : 'Failed to save customer. Please try again.',
+        ),
       )
     },
   })
@@ -424,9 +454,13 @@ export function PartnerSheet({ open, mode, partner, role, onClose }: PartnerShee
               <Input
                 id="partner-addr-country"
                 value={formAddrCountry}
-                onChange={(e) => setFormAddrCountry(e.target.value)}
+                onChange={(e) => setFormAddrCountry(e.target.value.toUpperCase().slice(0, 2))}
+                maxLength={2}
                 placeholder="US"
               />
+              <p className="text-xs text-muted-foreground">
+                2-letter country code (ISO 3166), e.g. US, GB, DE.
+              </p>
             </div>
           </div>
 
@@ -512,9 +546,13 @@ export function PartnerSheet({ open, mode, partner, role, onClose }: PartnerShee
               <Input
                 id="partner-country-of-origin"
                 value={formCountryOfOrigin}
-                onChange={(e) => setFormCountryOfOrigin(e.target.value)}
+                onChange={(e) => setFormCountryOfOrigin(e.target.value.toUpperCase().slice(0, 2))}
+                maxLength={2}
                 placeholder="US"
               />
+              <p className="text-xs text-muted-foreground">
+                2-letter country code (ISO 3166), e.g. US, GB, DE.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="partner-notes">Notes</Label>
