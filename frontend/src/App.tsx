@@ -33,6 +33,9 @@ export function App() {
         <Route path="/syerp/vendors" element={<Vendors />} />
         <Route path="/syerp/customers" element={<Customers />} />
         <Route path="/syerp/gl" element={<GLAccounts />} />
+
+        {/* Catch-all: unknown protected paths fall back to Home instead of a blank screen */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
   )
