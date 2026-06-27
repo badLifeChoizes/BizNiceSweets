@@ -13,7 +13,7 @@
 - [ ] **Phase 1: Project Scaffolding & Deployment** - Containerized repo, Postgres, Alembic migrations, Podman Compose
 - [ ] **Phase 2: Authentication & Users** - OAuth2/JWT auth, session management, user accounts, role-based access
 - [x] **Phase 3: App Shell & Settings** - Navigation shell, system settings, module enable/disable
-- [ ] **Phase 4: SYERP Core Hub** - Vendor CRUD + search, Customer CRUD + search, GL account skeleton
+- [x] **Phase 4: SYERP Core Hub** - Vendor CRUD + search, Customer CRUD + search, GL account skeleton
 - [ ] **Phase 5: PLUM Parts & Revisions** - Parts CRUD, search/filter, revision workflow and status
 - [ ] **Phase 6: PLUM BOM, Costing & Integration** - BOM tree/flat/where-used, vendor linking, cost roll-up, margin, import/export
 
@@ -124,7 +124,7 @@ Plans:
 | 1. Project Scaffolding & Deployment | 0/3 | Planned | - |
 | 2. Authentication & Users | 3/4 | In Progress|  |
 | 3. App Shell & Settings | 3/3 | Complete | 2026-06-26 |
-| 4. SYERP Core Hub | 3/4 | In Progress|  |
+| 4. SYERP Core Hub | 4/4 | Complete | 2026-06-27 |
 | 5. PLUM Parts & Revisions | 0/0 | Not started | - |
 | 6. PLUM BOM, Costing & Integration | 0/0 | Not started | - |
 
