@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Navigate, Routes, Route } from 'react-router-dom'
 import { Login } from '@/routes/Login'
 import { AppShell } from '@/components/AppShell'
 
@@ -9,6 +9,11 @@ import { Modules } from '@/routes/admin/Modules'
 
 // Home landing (neutral post-login screen — D-06)
 import { Home } from '@/routes/Home'
+
+// SYERP routes (Phase 4)
+import { Vendors } from '@/routes/syerp/Vendors'
+import { Customers } from '@/routes/syerp/Customers'
+import { GLAccounts } from '@/routes/syerp/GLAccounts'
 
 export function App() {
   return (
@@ -22,6 +27,12 @@ export function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/modules" element={<Modules />} />
         <Route path="/admin/users" element={<Users />} />
+
+        {/* SYERP module routes — Sidebar nav lands on /syerp → redirect to vendors list */}
+        <Route path="/syerp" element={<Navigate to="/syerp/vendors" replace />} />
+        <Route path="/syerp/vendors" element={<Vendors />} />
+        <Route path="/syerp/customers" element={<Customers />} />
+        <Route path="/syerp/gl" element={<GLAccounts />} />
       </Route>
     </Routes>
   )
