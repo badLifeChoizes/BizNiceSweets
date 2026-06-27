@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-06-27T17:47:04.308Z"
+last_updated: "2026-06-27T18:01:00Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 14
-  completed_plans: 12
-  percent: 86
+  completed_plans: 13
+  percent: 93
 ---
 
 # STATE — BizNiceSweets Milestone 1
 
-**Last updated:** 2026-06-25
+**Last updated:** 2026-06-27
 **Milestone:** 1 — Foundation + PLUM
 
 ---
@@ -32,15 +32,15 @@ progress:
 ## Current Position
 
 Phase: 04 (syerp-core-hub) — EXECUTING
-Plan: 3 of 4
-**Last plan:** 04-02 (SYERP Partner API: schemas, service, router, Wave 0 tests green)
-**Status:** Executing Plan 3
+Plan: 4 of 4
+**Last plan:** 04-03 (SYERP Partner UI: Vendors, Customers, PartnerSheet, Wave 0 tests green)
+**Status:** Executing Plan 4
 
 **Progress:**
 
-[█████████░] 86%
+[█████████░] 93%
 
-**Last session:** 2026-06-27T17:47:04.292Z
+**Last session:** 2026-06-27T18:01:00Z
 
 ---
 
@@ -51,7 +51,7 @@ Plan: 3 of 4
 | 1 | Project Scaffolding & Deployment | CORE-01, CORE-09 | Complete |
 | 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Complete (4/4 plans) — ready for verification |
 | 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Complete (3/3 plans) — ready for verification |
-| 4 | SYERP Core Hub | SYERP-01..05 | In Progress (2/4 plans complete) |
+| 4 | SYERP Core Hub | SYERP-01..05 | In Progress (3/4 plans complete) |
 | 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Not started |
 | 6 | PLUM BOM, Costing & Integration | PLUM-04..10 | Not started |
 
@@ -72,6 +72,7 @@ Plan: 3 of 4
 - Phase 03 Plan 03: 4 tasks, 14 files, ~30min (app shell, settings, modules UI; human-verify approved)
 - Phase 04 Plan 01: 3 tasks, 7 files, ~25min (SYERP data foundation: models, migration 0004, CoA seed, Wave 0 tests)
 - Phase 04 Plan 02: 3 tasks, 3 files, ~25min (SYERP Partner API: schemas, service, router; Wave 0 tests green)
+- Phase 04 Plan 03: 2 tasks, 6 files, ~5min (SYERP Partner UI: Vendors, Customers, PartnerSheet, PartnerArchiveDialog; Wave 0 tests green)
 
 ---
 
@@ -103,6 +104,8 @@ Plan: 3 of 4
 - **SYERP CoA seed (Phase 4):** `_STANDARD_COA` uses `parent_code` string keys (not raw integer IDs); two-pass insert resolves parent codes to DB integer IDs at seed time — portable across environments
 - **SYERP archive pattern (Phase 4, 04-02):** Archive flows through PATCH `{active: false}`; router compares pre-state active flag to emit `partner.archived` vs `partner.updated` audit action — no separate /archive endpoint
 - **SYERP partner code uniqueness (Phase 4, 04-02):** User-supplied duplicate code returns 409 Conflict; auto-generated code collision retries once with fresh code (distinguishes user intent from race condition)
+- **PartnerRead type location (Phase 4, 04-03):** PartnerRead TypeScript interface exported from PartnerSheet.tsx — consumed by Vendors, Customers, and PartnerArchiveDialog to keep a single source of truth without a separate types file
+- **Partner currency default (Phase 4, 04-03):** formCurrency initializes to 'USD' in React state; corrects to settings default_currency on first TanStack Query cache hit — avoids uncontrolled Select issues while supporting the settings-driven default
 
 ### Deferred (v2)
 
@@ -129,7 +132,7 @@ None at roadmap stage.
 
 ## Session Continuity
 
-**To resume:** Phase 04 Plan 02 complete (SYERP Partner API: schemas, service, router, Wave 0 tests green). Continue with Plan 03 (SYERP frontend: Vendors, Customers, GL Accounts pages). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3 UI.
+**To resume:** Phase 04 Plan 03 complete (SYERP Partner UI: Vendors, Customers, PartnerSheet, PartnerArchiveDialog, Wave 0 tests green). Continue with Plan 04 (routing + nav wiring — add Vendors/Customers/GL routes to AppShell sidebar). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3/4 UI.
 
 **Files on disk:**
 

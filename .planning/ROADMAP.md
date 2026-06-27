@@ -83,7 +83,7 @@ Plans:
 Plans:
 - [x] 04-01-PLAN.md — Backend foundation: Partner + GLAccount models, Alembic 0004, idempotent CoA seed, Wave 0 test scaffold
 - [x] 04-02-PLAN.md — Backend API: partner CRUD/search/archive + audit + code-gen, GL browse endpoint, RBAC gating; greens backend tests
-- [ ] 04-03-PLAN.md — Frontend Vendor + Customer screens, shared PartnerSheet + ArchiveDialog, Wave 0 frontend tests
+- [x] 04-03-PLAN.md — Frontend Vendor + Customer screens, shared PartnerSheet + ArchiveDialog, Wave 0 frontend tests
 - [ ] 04-04-PLAN.md — Frontend Chart-of-Accounts screen, App.tsx route wiring, human-verify checkpoint
 **UI hint**: yes
 
@@ -124,7 +124,7 @@ Plans:
 | 1. Project Scaffolding & Deployment | 0/3 | Planned | - |
 | 2. Authentication & Users | 3/4 | In Progress|  |
 | 3. App Shell & Settings | 3/3 | Complete | 2026-06-26 |
-| 4. SYERP Core Hub | 2/4 | In Progress|  |
+| 4. SYERP Core Hub | 3/4 | In Progress|  |
 | 5. PLUM Parts & Revisions | 0/0 | Not started | - |
 | 6. PLUM BOM, Costing & Integration | 0/0 | Not started | - |
 
