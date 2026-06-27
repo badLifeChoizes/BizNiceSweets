@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-06-27T17:39:40.268Z"
+last_updated: "2026-06-27T17:47:04.308Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 14
-  completed_plans: 11
-  percent: 79
+  completed_plans: 12
+  percent: 86
 ---
 
 # STATE — BizNiceSweets Milestone 1
@@ -32,15 +32,15 @@ progress:
 ## Current Position
 
 Phase: 04 (syerp-core-hub) — EXECUTING
-Plan: 2 of 4
-**Last plan:** 04-01 (SYERP data foundation: models, migration, CoA seed, Wave 0 tests)
-**Status:** Executing Plan 2
+Plan: 3 of 4
+**Last plan:** 04-02 (SYERP Partner API: schemas, service, router, Wave 0 tests green)
+**Status:** Executing Plan 3
 
 **Progress:**
 
-[████████░░] 79%
+[█████████░] 86%
 
-**Last session:** 2026-06-27T17:39:40.248Z
+**Last session:** 2026-06-27T17:47:04.292Z
 
 ---
 
@@ -51,7 +51,7 @@ Plan: 2 of 4
 | 1 | Project Scaffolding & Deployment | CORE-01, CORE-09 | Complete |
 | 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Complete (4/4 plans) — ready for verification |
 | 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Complete (3/3 plans) — ready for verification |
-| 4 | SYERP Core Hub | SYERP-01..05 | In Progress (1/4 plans complete) |
+| 4 | SYERP Core Hub | SYERP-01..05 | In Progress (2/4 plans complete) |
 | 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Not started |
 | 6 | PLUM BOM, Costing & Integration | PLUM-04..10 | Not started |
 
@@ -71,6 +71,7 @@ Plan: 2 of 4
 - Phase 03 Plan 02: 2 tasks, 9 files, 420s (modules + settings API routers, /me permissions)
 - Phase 03 Plan 03: 4 tasks, 14 files, ~30min (app shell, settings, modules UI; human-verify approved)
 - Phase 04 Plan 01: 3 tasks, 7 files, ~25min (SYERP data foundation: models, migration 0004, CoA seed, Wave 0 tests)
+- Phase 04 Plan 02: 3 tasks, 3 files, ~25min (SYERP Partner API: schemas, service, router; Wave 0 tests green)
 
 ---
 
@@ -100,6 +101,8 @@ Plan: 2 of 4
 - **Dist staleness (Phase 3):** production `frontend/dist` predates Phase 3 (built in Phase 1); Phase-3 UI verified via Vite dev overlay (:5173). A `frontend/dist` + image rebuild is needed before production `:8000` serving reflects the new shell
 - **SYERP migration convention (Phase 4):** migration 0004 hand-authored (no live DB available in dev) following 0002/0003 convention; down_revision chains onto 0003
 - **SYERP CoA seed (Phase 4):** `_STANDARD_COA` uses `parent_code` string keys (not raw integer IDs); two-pass insert resolves parent codes to DB integer IDs at seed time — portable across environments
+- **SYERP archive pattern (Phase 4, 04-02):** Archive flows through PATCH `{active: false}`; router compares pre-state active flag to emit `partner.archived` vs `partner.updated` audit action — no separate /archive endpoint
+- **SYERP partner code uniqueness (Phase 4, 04-02):** User-supplied duplicate code returns 409 Conflict; auto-generated code collision retries once with fresh code (distinguishes user intent from race condition)
 
 ### Deferred (v2)
 
@@ -126,7 +129,7 @@ None at roadmap stage.
 
 ## Session Continuity
 
-**To resume:** Phase 04 Plan 01 complete (SYERP data foundation). Continue with Plan 02 (SYERP Partner API — the routes that Plan 01's Wave 0 tests will green). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3 UI.
+**To resume:** Phase 04 Plan 02 complete (SYERP Partner API: schemas, service, router, Wave 0 tests green). Continue with Plan 03 (SYERP frontend: Vendors, Customers, GL Accounts pages). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3 UI.
 
 **Files on disk:**
 

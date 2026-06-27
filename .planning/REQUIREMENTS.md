@@ -22,9 +22,9 @@ Milestone 1 scope: a thin foundation (auth, DB, deploy, module shell) + the SYER
 ### SYERP Core (Hub)
 
 - [x] **SYERP-01**: User can create, view, edit, and delete vendors
-- [ ] **SYERP-02**: User can search and filter the vendor list
-- [ ] **SYERP-03**: User can create, view, edit, and delete customers
-- [ ] **SYERP-04**: User can search and filter the customer list
+- [x] **SYERP-02**: User can search and filter the vendor list
+- [x] **SYERP-03**: User can create, view, edit, and delete customers
+- [x] **SYERP-04**: User can search and filter the customer list
 - [x] **SYERP-05**: System provides a basic general-ledger account structure (chart-of-accounts skeleton)
 
 ### PLUM (PLM Port — Core)
@@ -91,9 +91,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CORE-07 | Phase 3 | Complete |
 | CORE-08 | Phase 3 | Complete |
 | SYERP-01 | Phase 4 | Complete |
-| SYERP-02 | Phase 4 | Pending |
-| SYERP-03 | Phase 4 | Pending |
-| SYERP-04 | Phase 4 | Pending |
+| SYERP-02 | Phase 4 | Complete |
+| SYERP-03 | Phase 4 | Complete |
+| SYERP-04 | Phase 4 | Complete |
 | SYERP-05 | Phase 4 | Complete |
 | PLUM-01 | Phase 5 | Pending |
 | PLUM-02 | Phase 5 | Pending |
