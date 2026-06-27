@@ -79,7 +79,12 @@ Plans:
   3. User can create, view, edit, and delete a customer record
   4. User can search and filter the customer list by name or attribute and see matching results instantly
   5. System exposes a chart-of-accounts skeleton (GL account structure) that is visible and browsable
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 04-01-PLAN.md — Backend foundation: Partner + GLAccount models, Alembic 0004, idempotent CoA seed, Wave 0 test scaffold
+- [ ] 04-02-PLAN.md — Backend API: partner CRUD/search/archive + audit + code-gen, GL browse endpoint, RBAC gating; greens backend tests
+- [ ] 04-03-PLAN.md — Frontend Vendor + Customer screens, shared PartnerSheet + ArchiveDialog, Wave 0 frontend tests
+- [ ] 04-04-PLAN.md — Frontend Chart-of-Accounts screen, App.tsx route wiring, human-verify checkpoint
 **UI hint**: yes
 
 ### Phase 5: PLUM Parts & Revisions
@@ -119,7 +124,7 @@ Plans:
 | 1. Project Scaffolding & Deployment | 0/3 | Planned | - |
 | 2. Authentication & Users | 3/4 | In Progress|  |
 | 3. App Shell & Settings | 3/3 | Complete | 2026-06-26 |
-| 4. SYERP Core Hub | 0/0 | Not started | - |
+| 4. SYERP Core Hub | 0/4 | Planned | - |
 | 5. PLUM Parts & Revisions | 0/0 | Not started | - |
 | 6. PLUM BOM, Costing & Integration | 0/0 | Not started | - |
 
