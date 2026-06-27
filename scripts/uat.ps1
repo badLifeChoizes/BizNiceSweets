@@ -74,8 +74,10 @@ $FileArgs = @()
 foreach ($f in $ComposeFiles) { $FileArgs += @('-f', $f) }
 
 function Invoke-Composer {
-  param([string[]]$Args)
-  $all = $Composer.Base + $FileArgs + $Args
+  # NOTE: do NOT name this parameter $Args — it collides with PowerShell's
+  # automatic $args variable and the bound value is silently lost.
+  param([string[]]$CmdArgs)
+  $all = $Composer.Base + $FileArgs + $CmdArgs
   Write-Host "  > $($Composer.Exe) $($all -join ' ')" -ForegroundColor DarkGray
   & $Composer.Exe @all
 }
@@ -90,8 +92,8 @@ Write-Host '===================================================' -ForegroundColo
 # --- Down mode: stop and exit ------------------------------------------------
 if ($Down) {
   Write-Host 'Stopping the stack...' -ForegroundColor Yellow
-  if ($Fresh) { Invoke-Composer -Args @('down', '-v') }
-  else        { Invoke-Composer -Args @('down') }
+  if ($Fresh) { Invoke-Composer -CmdArgs @('down', '-v') }
+  else        { Invoke-Composer -CmdArgs @('down') }
   Write-Host 'Stack stopped.' -ForegroundColor Green
   return
 }
@@ -113,7 +115,7 @@ if (-not $pwLine) {
 # --- Fresh: reset DB volume --------------------------------------------------
 if ($Fresh) {
   Write-Host 'Resetting database volume (down -v)...' -ForegroundColor Yellow
-  try { Invoke-Composer -Args @('down', '-v') } catch { Write-Warning "down -v reported: $($_.Exception.Message) (continuing)" }
+  try { Invoke-Composer -CmdArgs @('down', '-v') } catch { Write-Warning "down -v reported: $($_.Exception.Message) (continuing)" }
 }
 
 # --- URLs --------------------------------------------------------------------
@@ -127,7 +129,7 @@ Write-Host ''
 # --- Detached mode: up -d, wait for health, open browser ---------------------
 if ($Detach) {
   Write-Host 'Starting stack in background...' -ForegroundColor Yellow
-  Invoke-Composer -Args @('up', '-d', '--build')
+  Invoke-Composer -CmdArgs @('up', '-d')
 
   Write-Host 'Waiting for the API to become healthy...' -ForegroundColor Yellow
   $ready = $false
@@ -153,4 +155,4 @@ if ($Detach) {
 # --- Foreground mode (default): stream logs, Ctrl+C stops --------------------
 Write-Host 'Starting stack (foreground). Press Ctrl+C to stop.' -ForegroundColor Yellow
 Write-Host ''
-Invoke-Composer -Args @('up', '--build')
+Invoke-Composer -CmdArgs @('up')
