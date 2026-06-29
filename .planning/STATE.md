@@ -31,10 +31,10 @@ progress:
 
 ## Current Position
 
-Phase: 05 (plum-parts-revisions) — EXECUTING
-Plan: 4 of 4
-**Last plan:** 05-02 (PLUM service + router; Wave 0 tests green)
-**Status:** Phase complete — ready for verification
+Phase: 05 (plum-parts-revisions) — HUMAN-VERIFY PENDING
+Plan: 4 of 4 (all code complete)
+**Last plan:** 05-04 (PartDetail + revision dialogs + App.tsx wiring; ended at human-verify checkpoint)
+**Status:** Code complete (4/4 plans); automated gates green (build/tests/schema/regression + verifier 4/5); human-verify (05-04, 10-step UAT) PENDING — see 05-HUMAN-UAT.md. Code review left 3C/5W/3I advisory findings in 05-REVIEW.md (untriaged by user).
 
 **Progress:**
 
@@ -52,7 +52,7 @@ Plan: 4 of 4
 | 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Complete (4/4 plans) — ready for verification |
 | 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Complete (3/3 plans) — ready for verification |
 | 4 | SYERP Core Hub | SYERP-01..05 | Complete (4/4 plans) — human-verify approved |
-| 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Not started |
+| 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Code complete (4/4 plans) — human-verify pending |
 | 6 | PLUM BOM, Costing & Integration | PLUM-04..10 | Not started |
 
 ---
