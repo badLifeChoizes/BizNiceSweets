@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-06-29T02:24:18.051Z"
+last_updated: "2026-06-29T02:33:32.294Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 18
-  completed_plans: 15
+  completed_plans: 16
   percent: 67
 ---
 
@@ -32,15 +32,15 @@ progress:
 ## Current Position
 
 Phase: 05 (plum-parts-revisions) — EXECUTING
-Plan: 2 of 4
-**Last plan:** 05-01 (PLUM data layer: models, migration 0005, seed, Wave 0 tests)
-**Status:** Executing Phase 05
+Plan: 3 of 4
+**Last plan:** 05-02 (PLUM service + router; Wave 0 tests green)
+**Status:** Ready to execute
 
 **Progress:**
 
-[████████░░] 83%
+[█████████░] 89%
 
-**Last session:** 2026-06-29T02:24:11.342Z
+**Last session:** 2026-06-29T02:33:32.279Z
 
 ---
 
@@ -75,6 +75,7 @@ Plan: 2 of 4
 - Phase 04 Plan 03: 2 tasks, 6 files, ~5min (SYERP Partner UI: Vendors, Customers, PartnerSheet, PartnerArchiveDialog; Wave 0 tests green)
 - Phase 04 Plan 04: 2 tasks (1 auto + human-verify), 7 files, ~20min (GLAccounts read-only CoA screen + SYERP route wiring; human-verify approved after UAT; 4 UAT follow-up fixes: Tailwind v4 tokens, country validation/error toast, catch-all route, SYERP sub-nav tab strip)
 - Phase 05 Plan 01: 3 tasks, 11 files, ~35min (PLUM data foundation: models, migration 0005, seed, Wave 0 tests; 14 tests collected)
+- Phase 05 Plan 02: 2 tasks, 2 files, ~30min (PLUM service + router; FSM, RBAC, audit, label generation; Wave 0 tests green/skip)
 
 ---
 
@@ -116,6 +117,10 @@ Plan: 2 of 4
 - **PLUM revision_number (Phase 5, 05-01):** `revision_number INT` added to `plum_part_revision` for stable per-part ordering; latest-revision resolved via MAX query (avoids timestamp collision edge case)
 - **PLUM tag storage (Phase 5, 05-01):** Classification tags stored as join table (`plum_part_tag`) for Phase 6 extensibility — tag rename won't require data migration
 - **PLUM one-Released invariant (Phase 5, 05-01):** Partial unique index `uq_plum_part_one_released ON plum_part_revision(part_id) WHERE status='released'` enforces D-08 at DB level (belt-and-suspenders for race condition safety)
+- **PLUM service list/update dict return (Phase 5, 05-02):** list_parts and update_part return dicts (not ORM instances) because PartRead contains virtual fields (current_revision_label, current_revision_status, tags) not present as ORM columns on PlumPart — enriched post-query
+- **PLUM revision label timing (Phase 5, 05-02):** SemVer label is major-bumped at release time (inside advance_revision_status); ASME label is set at creation time and unchanged on release
+- **PLUM advance endpoint body (Phase 5, 05-02):** AdvanceStatusBody(target_status:str) defined inline in router.py — avoids a separate schema file for a single-field body
+- **PLUM audit colocation (Phase 5, 05-02):** revision FSM audit events (revision.submitted/released/rejected/obsoleted) written inside service; part-level events (part.created/updated/archived) written in router — keeps FSM logic and audit collocated
 
 ### Deferred (v2)
 
@@ -142,7 +147,7 @@ None at roadmap stage.
 
 ## Session Continuity
 
-**To resume:** Phase 05 Plan 01 COMPLETE. PLUM data layer is in place: 4 plum_ tables defined in models + migration 0005, schemas contract established, idempotent seed wired, 14-test Wave 0 scaffold collectable. Next: Plan 05-02 (PLUM service + router — greens the Wave 0 tests). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3/4 UI.
+**To resume:** Phase 05 Plan 02 COMPLETE. PLUM service + router implemented: 7 endpoints with RBAC/audit, revision FSM, supersede-on-release, ASME/SemVer label generation. Wave 0 tests (14) skip cleanly without DB (ready to run green with live DB). Next: Plan 05-03 (PLUM parts list UI). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3/4 UI.
 
 **Files on disk:**
 

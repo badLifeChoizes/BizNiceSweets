@@ -127,7 +127,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-02-PLAN.md — Backend service + router: part CRUD/search, revision FSM (Draft→In Review→Released→Obsolete) with supersede-on-release, RBAC + audit; greens backend tests
+- [x] 05-02-PLAN.md — Backend service + router: part CRUD/search, revision FSM (Draft→In Review→Released→Obsolete) with supersede-on-release, RBAC + audit; greens backend tests
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -167,7 +167,7 @@ Plans:
 | 2. Authentication & Users | 3/4 | In Progress|  |
 | 3. App Shell & Settings | 3/3 | Complete | 2026-06-26 |
 | 4. SYERP Core Hub | 4/4 | Complete | 2026-06-27 |
-| 5. PLUM Parts & Revisions | 1/4 | In Progress|  |
+| 5. PLUM Parts & Revisions | 2/4 | In Progress|  |
 | 6. PLUM BOM, Costing & Integration | 0/0 | Not started | - |
 
 ---
