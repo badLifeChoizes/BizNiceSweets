@@ -112,6 +112,10 @@ export function PartSheet({ open, mode, part, onClose }: PartSheetProps) {
   // ── Form state ──
   const [formPartNumber, setFormPartNumber] = useState('')
   const [formDescription, setFormDescription] = useState('')
+  // Current revision's description at edit-open time. Used to send `description`
+  // in the PATCH only when it actually changed — so a tags-only edit on a
+  // Released part is NOT rejected, while a real description change IS (D-07 422).
+  const [initialDescription, setInitialDescription] = useState('')
   const [formTagIds, setFormTagIds] = useState<number[]>([])
   const [formReasonForRevision, setFormReasonForRevision] = useState('')
 
@@ -126,11 +130,28 @@ export function PartSheet({ open, mode, part, onClose }: PartSheetProps) {
         .then((r) => setFormPartNumber(r.data.part_number))
         .catch(() => setFormPartNumber(''))
       setFormDescription('')
+      setInitialDescription('')
       setFormTagIds([])
       setFormReasonForRevision('')
     } else if (mode === 'edit' && part) {
       setFormPartNumber(part.part_number)
-      setFormDescription('')   // description is revision-controlled; not in PartRead list response
+      // The list PartRead omits description (it is revision-controlled). Fetch the
+      // part detail so the field shows the current revision's description instead
+      // of blanking it, and so we can detect a real change on save.
+      setFormDescription('')
+      setInitialDescription('')
+      apiClient
+        .get<{ revisions: { description: string | null }[] }>(
+          `/api/v1/plum/parts/${part.id}`,
+        )
+        .then((r) => {
+          const current = r.data.revisions?.[0]?.description ?? ''
+          setFormDescription(current)
+          setInitialDescription(current)
+        })
+        .catch(() => {
+          /* leave blank on failure; save will simply not send description */
+        })
       // Map tag names back to IDs for pre-selection
       const selectedIds = part.tags
         .map((name) => TAG_VOCABULARY.find((t) => t.name === name)?.id)
@@ -159,6 +180,7 @@ export function PartSheet({ open, mode, part, onClose }: PartSheetProps) {
   interface PartUpdatePayload {
     part_number?: string
     tag_ids?: number[]
+    description?: string
   }
 
   function buildCreatePayload(): PartCreatePayload {
@@ -171,10 +193,18 @@ export function PartSheet({ open, mode, part, onClose }: PartSheetProps) {
   }
 
   function buildUpdatePayload(): PartUpdatePayload {
-    return {
+    const payload: PartUpdatePayload = {
       part_number: formPartNumber || undefined,
       tag_ids: formTagIds,
     }
+    // Only send description when it actually changed. This is what enforces the
+    // D-07 guardrail in the UI: changing a Released revision's description sends
+    // the field and the server returns 422 (surfaced via onError toast), while a
+    // tags/part-number-only edit omits it and is allowed.
+    if (formDescription !== initialDescription) {
+      payload.description = formDescription
+    }
+    return payload
   }
 
   // ── Mutations ──
