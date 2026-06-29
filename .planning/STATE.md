@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-last_updated: "2026-06-29T02:47:58.840Z"
+status: ready_to_plan
+last_updated: 2026-06-29T23:47:59.646Z
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 18
   completed_plans: 18
   percent: 83
+stopped_at: Phase 05 complete (4/4) — ready to discuss Phase 6
 ---
 
 # STATE — BizNiceSweets Milestone 1
@@ -25,16 +26,16 @@ progress:
 
 **Milestone goal:** Can deploy it, log in, manage vendors/customers, and design parts with multi-level BOMs and cost roll-up.
 
-**Current focus:** Phase 05 — plum-parts-revisions
+**Current focus:** Phase 6 — plum bom, costing & integration
 
 ---
 
 ## Current Position
 
-Phase: 05 (plum-parts-revisions) — HUMAN-VERIFY PENDING
-Plan: 4 of 4 (all code complete)
+Phase: 6
+Plan: Not started
 **Last plan:** 05-04 (PartDetail + revision dialogs + App.tsx wiring; ended at human-verify checkpoint)
-**Status:** Code complete (4/4 plans); automated gates green (build/tests/schema/regression + verifier 4/5); human-verify (05-04, 10-step UAT) PENDING — see 05-HUMAN-UAT.md. Code review left 3C/5W/3I advisory findings in 05-REVIEW.md (untriaged by user).
+**Status:** Ready to plan
 
 **Progress:**
 
@@ -52,7 +53,7 @@ Plan: 4 of 4 (all code complete)
 | 2 | Authentication & Users | CORE-02, CORE-03, CORE-04, CORE-05 | Complete (4/4 plans) — ready for verification |
 | 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Complete (3/3 plans) — ready for verification |
 | 4 | SYERP Core Hub | SYERP-01..05 | Complete (4/4 plans) — human-verify approved |
-| 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Code complete (4/4 plans) — human-verify pending |
+| 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Complete (4/4 plans) — human-verify 10/10 passed |
 | 6 | PLUM BOM, Costing & Integration | PLUM-04..10 | Not started |
 
 ---

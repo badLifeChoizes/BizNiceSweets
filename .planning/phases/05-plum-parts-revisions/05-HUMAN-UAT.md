@@ -1,5 +1,5 @@
 ---
-status: partial
+status: passed
 phase: 05-plum-parts-revisions
 source: [05-VERIFICATION.md, 05-04-PLAN.md]
 started: "2026-06-29"
@@ -8,73 +8,71 @@ updated: "2026-06-29"
 
 # Phase 05 — Human Verification (PLUM Parts & Revisions)
 
-All automated gates passed (build green, backend 31 pass / 77 skip, frontend 16 pass, schema-drift clean, regression clean, goal verifier 4/5 code-verified). The remaining gate is the manual lifecycle walkthrough from the 05-04 human-verify checkpoint.
+All automated gates passed and the 10-step manual lifecycle walkthrough was completed in a live stack (Podman: db + api + Vite on :5174) signed in as admin. **All 10 steps PASS.**
 
-**How to run:** live Postgres required (the revision lifecycle needs a real DB). Prod `:8000` serves a stale `dist`, so use the Vite dev server (`:5173`) + backend. Sign in as admin.
-
-## Current Test
-
-[awaiting human testing]
+Two integration/UI bugs were found and fixed during verification (gap closure):
+- `fix(05) 37aeba1` — PLUM module never imported in main.py, so every /api/v1/plum/* route 404'd. Caught at runtime (unit tests never boot the full app).
+- `fix(05) 2a75450` — Edit sheet blanked description and never sent it, so editing a Released part silently succeeded instead of returning the D-07 422 (step 10). Now loads the current description and sends it only when changed.
+- `fix(05) f5cd61b` — pre-existing ProtectedRoute test-mock type error blocking the production build.
 
 ## Tests
 
 ### 1. PLUM nav landing
-expected: Opening PLUM from the sidebar lands on `/plum/parts` (the Parts list).
-result: [pending]
+expected: Opening PLUM from the sidebar lands on /plum/parts.
+result: pass
 
 ### 2. Create part
-expected: Create Part → Part Number auto-prefilled and editable; add description + optional tags; save → part appears in the list with current revision "A" (ASME) or "0.1.0" (SemVer) and status Draft.
-result: [pending]
+expected: Auto-prefilled editable Part Number; saved part appears with current revision A/0.1.0, status Draft.
+result: pass
 
 ### 3. Search and filter
-expected: Search box filters by part number/description after ~300ms; Status select filters by current-revision status; "Show archived" toggle works.
-result: [pending]
+expected: Debounced search; status filter; show-archived toggle.
+result: pass
 
 ### 4. Navigate to detail
-expected: Clicking a part row navigates to `/plum/parts/{id}` showing the header card and a revision timeline with one Draft revision.
-result: [pending]
+expected: Row click → /plum/parts/{id} with header card + revision timeline.
+result: pass
 
 ### 5. Advance Draft → In Review → Released
-expected: Submit for Review (Draft→In Review), then Release → confirmation dialog appears; after confirming, the revision shows Released.
-result: [pending]
+expected: Submit for Review then Release (confirm dialog) → Released.
+result: pass
 
 ### 6. Create new revision (copy-forward)
-expected: New Revision → pick source, enter reason, create → a new Draft revision appears at the top of the timeline copying prior attributes.
-result: [pending]
+expected: New Draft revision at top copying prior attributes.
+result: pass
 
 ### 7. Supersede-on-release
-expected: Advance the new revision to Released → the previously released revision becomes Obsolete; exactly one revision shows Released.
-result: [pending]
+expected: Releasing the new revision obsoletes the prior released one; exactly one Released.
+result: pass
 
 ### 8. Revision history visibility
-expected: Timeline shows all revisions newest-first with correct status badges and snapshot attributes.
-result: [pending]
+expected: Timeline newest-first with correct status badges.
+result: pass
 
 ### 9. Archive / restore
-expected: Archive a part from row actions → toggle Show archived → it reappears → Restore works.
-result: [pending]
+expected: Archive → show archived → restore.
+result: pass
 
 ### 10. Released immutability (server-enforced)
-expected: Attempting to edit a Released revision's attributes returns 422 with an error toast (immutability enforced backend-side).
-result: [pending]
+expected: Editing a Released revision's description returns 422 + error toast.
+result: pass (after fix 2a75450)
 
 ## Summary
 
 total: 10
-passed: 0
+passed: 10
 issues: 0
-pending: 10
+pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-(none yet — pending human testing)
+None blocking. Closed during verification (see fixes above).
 
-## Notes — open code-review items (advisory, see 05-REVIEW.md)
+## Outstanding advisory review items (non-blocking — see 05-REVIEW.md)
 
-These do not block UAT but are worth keeping in view while testing:
-- **CR-02 (verify against D-07 spec):** In Review revisions may be editable via PATCH; spec check was deferred. Watch test step 5/10 behavior.
-- **CR-03:** Parts list "Description" column always shows "—" (list response omits description). Search-by-description still works; the value just isn't shown in the column.
-- **CR-01:** `released → obsolete` reachable directly — likely intended (part discontinuation), flagged for a domain call.
-- **WR-01:** First-ever release shows a "Prior revision obsoleted" toast even when there was no prior released revision.
+Tracked for triage; did not block UAT or phase success criteria:
+- **CR-02:** In Review revisions are editable via PATCH (confirmed via API). Bug only if D-07 mandates In Review = locked; needs a domain decision.
+- **CR-03 (list column):** The Parts-list Description column still shows "—" (the list API omits description). The edit-form side was fixed in 2a75450; the list column itself was not.
+- **CR-01 / WR-01..WR-05:** see 05-REVIEW.md.

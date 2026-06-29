@@ -1,9 +1,11 @@
 ---
 phase: 05-plum-parts-revisions
 verified: 2026-06-29T16:30:00Z
-status: human_needed
-score: 4/5
+human_verified: 2026-06-29
+status: passed
+score: 5/5
 overrides_applied: 0
+human_uat: 05-HUMAN-UAT.md (10/10 passed; gap fixes 37aeba1, 2a75450, f5cd61b)
 human_verification:
   - test: "Full end-to-end PLUM part + revision lifecycle walkthrough (10 steps)"
     expected: >

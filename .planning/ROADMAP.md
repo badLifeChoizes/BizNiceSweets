@@ -14,7 +14,7 @@
 - [ ] **Phase 2: Authentication & Users** - OAuth2/JWT auth, session management, user accounts, role-based access
 - [x] **Phase 3: App Shell & Settings** - Navigation shell, system settings, module enable/disable
 - [x] **Phase 4: SYERP Core Hub** - Vendor CRUD + search, Customer CRUD + search, GL account skeleton
-- [ ] **Phase 5: PLUM Parts & Revisions** - Parts CRUD, search/filter, revision workflow and status (code complete 4/4 plans; automated gates green; human-verify pending — see 05-HUMAN-UAT.md)
+- [x] **Phase 5: PLUM Parts & Revisions** - Parts CRUD, search/filter, revision workflow and status (completed 2026-06-29; human-verify 10/10 passed)
 - [ ] **Phase 6: PLUM BOM, Costing & Integration** - BOM tree/flat/where-used, vendor linking, cost roll-up, margin, import/export
 
 ---
@@ -167,7 +167,7 @@ Plans:
 | 2. Authentication & Users | 3/4 | In Progress|  |
 | 3. App Shell & Settings | 3/3 | Complete | 2026-06-26 |
 | 4. SYERP Core Hub | 4/4 | Complete | 2026-06-27 |
-| 5. PLUM Parts & Revisions | 4/4 | Human-verify pending | - |
+| 5. PLUM Parts & Revisions | 4/4 | Complete | 2026-06-29 |
 | 6. PLUM BOM, Costing & Integration | 0/0 | Not started | - |
 
 ---
