@@ -97,7 +97,12 @@ Plans:
   3. User can search and filter the parts list by part number, description, or status and see filtered results
   4. User can create a new revision on a part and advance it through the status workflow (e.g., Draft → Released → Obsolete)
   5. Revision history is visible on the part detail page showing all prior revisions and their statuses
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 05-01-PLAN.md — Backend data foundation: PlumPart/PlumPartRevision/tag tables, schemas, idempotent seed, Alembic 0005 + partial unique index, Wave 0 test scaffold
+- [ ] 05-02-PLAN.md — Backend service + router: part CRUD/search, revision FSM (Draft→In Review→Released→Obsolete) with supersede-on-release, RBAC + audit; greens backend tests
+- [ ] 05-03-PLAN.md — Frontend Parts list + PartSheet + ArchivePartDialog + PlumNav + Wave 0 smoke test
+- [ ] 05-04-PLAN.md — Frontend Part Detail + revision timeline + New Revision/Advance Status dialogs + App.tsx wiring + human-verify checkpoint
 **UI hint**: yes
 
 ### Phase 6: PLUM BOM, Costing & Integration
@@ -125,7 +130,7 @@ Plans:
 | 2. Authentication & Users | 3/4 | In Progress|  |
 | 3. App Shell & Settings | 3/3 | Complete | 2026-06-26 |
 | 4. SYERP Core Hub | 4/4 | Complete | 2026-06-27 |
-| 5. PLUM Parts & Revisions | 0/0 | Not started | - |
+| 5. PLUM Parts & Revisions | 0/4 | Planned | - |
 | 6. PLUM BOM, Costing & Integration | 0/0 | Not started | - |
 
 ---
