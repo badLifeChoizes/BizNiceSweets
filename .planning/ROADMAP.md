@@ -123,7 +123,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Backend data foundation: PlumPart/PlumPartRevision/tag tables, schemas, idempotent seed, Alembic 0005 + partial unique index, Wave 0 test scaffold
+- [x] 05-01-PLAN.md — Backend data foundation: PlumPart/PlumPartRevision/tag tables, schemas, idempotent seed, Alembic 0005 + partial unique index, Wave 0 test scaffold
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -167,7 +167,7 @@ Plans:
 | 2. Authentication & Users | 3/4 | In Progress|  |
 | 3. App Shell & Settings | 3/3 | Complete | 2026-06-26 |
 | 4. SYERP Core Hub | 4/4 | Complete | 2026-06-27 |
-| 5. PLUM Parts & Revisions | 0/4 | Planned | - |
+| 5. PLUM Parts & Revisions | 1/4 | In Progress|  |
 | 6. PLUM BOM, Costing & Integration | 0/0 | Not started | - |
 
 ---

@@ -29,9 +29,9 @@ Milestone 1 scope: a thin foundation (auth, DB, deploy, module shell) + the SYER
 
 ### PLUM (PLM Port — Core)
 
-- [ ] **PLUM-01**: User can create, view, edit, and delete parts
-- [ ] **PLUM-02**: User can search and filter parts
-- [ ] **PLUM-03**: User can create part revisions and advance a part through its status workflow
+- [x] **PLUM-01**: User can create, view, edit, and delete parts
+- [x] **PLUM-02**: User can search and filter parts
+- [x] **PLUM-03**: User can create part revisions and advance a part through its status workflow
 - [ ] **PLUM-04**: User can build a multi-level BOM and view it as an expandable tree
 - [ ] **PLUM-05**: User can view a flat BOM with quantity roll-up across levels
 - [ ] **PLUM-06**: User can run where-used analysis to see which assemblies consume a part
@@ -95,9 +95,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 | SYERP-03 | Phase 4 | Complete |
 | SYERP-04 | Phase 4 | Complete |
 | SYERP-05 | Phase 4 | Complete |
-| PLUM-01 | Phase 5 | Pending |
-| PLUM-02 | Phase 5 | Pending |
-| PLUM-03 | Phase 5 | Pending |
+| PLUM-01 | Phase 5 | Complete |
+| PLUM-02 | Phase 5 | Complete |
+| PLUM-03 | Phase 5 | Complete |
 | PLUM-04 | Phase 6 | Pending |
 | PLUM-05 | Phase 6 | Pending |
 | PLUM-06 | Phase 6 | Pending |
