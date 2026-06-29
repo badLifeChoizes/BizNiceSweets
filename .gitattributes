@@ -1,0 +1,4 @@
+# Normalize line endings: detect text vs binary automatically,
+# force LF in the working tree and repository for all text files.
+# Prevents CRLF churn when the repo is checked out across OSes.
+* text=auto eol=lf
