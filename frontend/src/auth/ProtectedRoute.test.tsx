@@ -54,6 +54,7 @@ describe('ProtectedRoute', () => {
         full_name: 'Admin User',
         is_active: true,
         roles: [{ name: 'admin' }],
+        permissions: [],
       },
       isLoading: false,
     })
