@@ -24,7 +24,7 @@ from app.core.settings_model import Setting  # noqa: F401
 # -------------------------------------------------------------------------
 # Phase 4+: add module model imports here as each suite lands
 # -------------------------------------------------------------------------
-# from app.modules.plum import models as plum_models    # noqa: F401
+from app.modules.plum import models as plum_models  # noqa: F401
 # from app.modules.flan import models as flan_models    # noqa: F401
 # from app.modules.mousse import models as mousse_models  # noqa: F401
 # from app.modules.crumb import models as crumb_models  # noqa: F401
