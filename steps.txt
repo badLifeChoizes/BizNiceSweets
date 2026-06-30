@@ -1,0 +1,65 @@
+How to verify 01-03 — single-command deploy smoke test
+Step 1 — Create your .env (one time)
+The compose file reads env_file: ../.env, so .env must live at the repo root.
+
+
+copy .env.example .env
+Then open .env and change the password line to a real value:
+
+
+POSTGRES_PASSWORD=changeme_in_production   ←  set this to something strong
+(Everything else — POSTGRES_HOST=db, POSTGRES_DB=biznice, POSTGRES_USER=app — can stay as-is.)
+
+Step 2 — Make sure you have a compose tool
+Podman itself is installed, but podman-compose is a separate Python wrapper:
+
+
+pip install podman-compose==1.6.0
+podman-compose --version
+(Fallback: if you'd rather use Docker's compose engine against Podman, docker compose -f compose/compose.yml up -d works too — same file.)
+
+Step 3 — Bring the stack up (the actual CORE-01 test)
+
+podman-compose -f compose/compose.yml up -d
+This builds the multi-stage image (Node builds the SPA → Python runtime), starts Postgres, waits for its healthcheck, then the api container's entrypoint runs alembic upgrade head and launches uvicorn. First run takes a few minutes (image build); allow ~15–30s after that for healthchecks.
+
+Watch it settle:
+
+
+podman-compose -f compose/compose.yml ps        # both db and api should be "Up"/healthy
+podman-compose -f compose/compose.yml logs api   # should show: "PostgreSQL is ready" → "Migrations complete" → "Starting API server"
+Step 4 — Hit the endpoints (all should be HTTP 200)
+Use curl.exe (built into Windows 10) or just paste the URLs in a browser:
+
+
+curl.exe -f http://localhost:8000/health/live     # → {"status":"ok"}
+curl.exe -f http://localhost:8000/health/ready    # → 200 with "db":"connected"   ← proves auto-migrate + DB (CORE-09)
+curl.exe -f http://localhost:8000/docs            # → 200, Swagger/OpenAPI page
+Step 5 — Confirm the SPA is served by the backend (D-08)
+Open in a browser:
+
+
+http://localhost:8000/
+You should see the React landing page, and it should display the backend health it fetched (the same app from 01-02, now served by the api container, not Vite).
+
+Step 6 — Repeatability (success criterion 4)
+Tear down including the volume, then bring it back — it must reach the same healthy state with no manual step:
+
+
+podman-compose -f compose/compose.yml down -v
+podman-compose -f compose/compose.yml up -d
+Re-run the Step 4 curls — same 200s.
+
+Step 7 (optional) — Dev HMR overlay (D-11)
+
+podman-compose -f compose/compose.yml -f compose/compose.dev.yml up
+Visit http://localhost:5173, edit frontend/src/routes/Landing.tsx, and confirm it hot-reloads.
+
+What counts as pass / fail
+Pass → reply approved. Specifically: Step 4's three curls return 200 (with "db":"connected" on /health/ready), the SPA renders at :8000/, and Step 6 comes back healthy after a down -v / up.
+Fail → paste the output of podman-compose -f compose/compose.yml logs api (and logs db if relevant). I'll dispatch a continuation agent to diagnose and fix, then you re-test.
+Likely first-run snags (so you can tell a real bug from a config hiccup)
+POSTGRES_PASSWORD empty/unset → db container exits immediately. Make sure Step 1's .env is at the repo root and has the password set.
+Port 8000 already in use → up fails to bind. Stop whatever's on 8000, or report it.
+Rootless Podman + volume relabel → only relevant to the dev overlay (:z mounts); the prod file in Step 3 doesn't mount source, so it shouldn't bite here.
+I'm holding at the checkpoint until you run this and report back.
