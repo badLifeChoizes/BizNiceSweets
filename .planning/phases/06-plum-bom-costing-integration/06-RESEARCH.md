@@ -247,7 +247,7 @@ backend/app/modules/plum/
 └── seed.py            # No changes needed
 
 backend/alembic/versions/
-└── 0006_plum_bom_avl_cost.py  # Single migration: all new tables + columns
+└── 0006_plum_bom_costing.py  # Single migration: all new tables + columns
 
 backend/tests/plum/
 ├── test_bom.py              # Wave 0 stubs (BOM CRUD + cycle + tree + flat)
@@ -845,7 +845,7 @@ qty: Mapped[PyDecimal] = mapped_column(Numeric(precision=18, scale=6), nullable=
 
 ### Pitfall 7: Cross-Module FK Ordering in Migration
 
-**What goes wrong:** Migration `0006_plum_bom_avl_cost.py` adds `plum_avl_link.vendor_id → syerp_partner.id`. If the migration is accidentally placed before `0004_syerp_tables.py` in Alembic's chain, the FK constraint fails (referenced table doesn't exist yet).
+**What goes wrong:** Migration `0006_plum_bom_costing.py` adds `plum_avl_link.vendor_id → syerp_partner.id`. If the migration is accidentally placed before `0004_syerp_tables.py` in Alembic's chain, the FK constraint fails (referenced table doesn't exist yet).
 
 **How to avoid:** Set `down_revision = "0005"` in migration 0006. The chain `0005 → 0004 → ... → 0001` guarantees SYERP tables exist before PLUM AVL tables are created.
 

@@ -53,8 +53,8 @@ created: 2026-06-29
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------|-------------------|-------------|--------|
-| 06-01-01 | 01 | 1 | PLUM-04..10 | T-06-01 / T-06-02 / T-06-03 | import smoke | `cd backend && .venv/bin/python -c "from app.modules.plum.models import PlumBomItem, PlumAvlLink, PlumAvlPriceBreak, PlumPartRevision; ..."` | ✅ | ⬜ pending |
-| 06-01-02 | 01 | 1 | PLUM-04..10 | T-06-01 / T-06-02 | migration parse | `cd backend && .venv/bin/python -c "import ast; ... ast.parse(...)"` | ✅ | ⬜ pending |
+| 06-01-01 | 01 | 1 | PLUM-04..10 | T-06-01 / T-06-02 / T-06-03 | import smoke | `cd backend && .venv/bin/python -c "from app.modules.plum.models import PlumBomItem, PlumAvlLink, PlumAvlPriceBreak, PlumPartRevision; assert hasattr(PlumPartRevision,'material_cost') and hasattr(PlumPartRevision,'selected_vendor_link_id'); print('models OK')"` | ✅ | ⬜ pending |
+| 06-01-02 | 01 | 1 | PLUM-04..10 | T-06-01 / T-06-02 | migration parse | `cd backend && .venv/bin/python -c "import ast; src=open('alembic/versions/0006_plum_bom_costing.py').read(); ast.parse(src); assert 'down_revision' in src and '\"0005\"' in src and 'plum_bom_item' in src and 'plum_avl_link' in src and 'plum_avl_price_break' in src and 'SET NULL' in src and 'CASCADE' in src; print('migration OK')"` | ✅ | ⬜ pending |
 | 06-01-03 | 01 | 1 | PLUM-04..10 | T-06-SC | unit (collect-only) | `cd backend && .venv/bin/pytest tests/plum/test_bom.py tests/plum/test_avl.py tests/plum/test_costing.py tests/plum/test_import_export.py --collect-only -q` | ❌ W0 | ⬜ pending |
 | 06-02-01 | 02 | 2 | PLUM-04, PLUM-05, PLUM-06 | T-06-05 / T-06-06 | integration | `cd backend && .venv/bin/pytest tests/plum/test_bom.py -q` | ❌ W0 | ⬜ pending |
 | 06-02-02 | 02 | 2 | PLUM-07, PLUM-08, PLUM-09 | T-06-07 / T-06-09 / T-06-10 | integration + unit | `cd backend && .venv/bin/pytest tests/plum/test_avl.py tests/plum/test_costing.py -q` | ❌ W0 | ⬜ pending |
