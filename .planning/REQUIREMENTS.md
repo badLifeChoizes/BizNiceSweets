@@ -53,6 +53,9 @@ Acknowledged, deferred to later milestones. Tracked but not in this roadmap.
 - **PLUM-11**: Document links (URL/path references, document types)
 - **PLUM-12**: Document management (file upload, versioning, in-app preview)
 - **PLUM-13**: ECO workflow (creation, approval, impact analysis)
+- **PLUM-14**: Labor costing — flat labor cost on assemblies plus full hours × rate × notes machinery, rolled up the BOM tree (prototype `laborCost`/`laborHours`/`laborRate`/`laborNotes`). *Promoted from Phase-6 D-06 deferral, per the user's explicit condition that the richer cost features be tracked as future requirements rather than dropped.*
+- **PLUM-15**: Dev-estimate cost ranges — low / high / average cost with a costed-date for early-design estimating before a released cost exists (prototype `costLow`/`costHigh`/`costAvg`/`costedDate`). *Promoted from Phase-6 D-06 deferral.*
+- **PLUM-16**: Distributor discount / multi-tier pricing (prototype `distributorDiscount`) and a dedicated margin-analysis report screen (versus the inline-on-detail margin shipped in v1, Phase-6 D-09). *Promoted from Phase-6 D-06 deferral.*
 
 ### Later Suites
 
@@ -74,6 +77,8 @@ Explicitly excluded from Milestone 1.
 | Offline capability / sync | Standing constraint but a cross-module Phase 4 concern |
 | Cloud/hosted SaaS offering | Product is self-hosted by design |
 | Real-time multi-user collaboration | Auth + shared DB only for now |
+| Revision→revision BOM lines (freeze exact child rev per line) | Phase-6 D-01 considered, not adopted in v1; revisit if true as-built traceability is needed |
+| Multi-currency + FX conversion | Phase-6 D-10 — its own future project |
 
 ## Traceability
 
@@ -113,4 +118,4 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 ---
 *Requirements defined: 2026-06-22*
-*Last updated: 2026-06-22 after roadmap creation*
+*Last updated: 2026-06-30 — promoted Phase-6 D-06 deferrals (labor, dev-range, distributor discount) to PLUM-14..16 in v2*
