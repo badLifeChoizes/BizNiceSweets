@@ -139,7 +139,7 @@ attaches to a part **revision**, and a **Released** revision is immutable.
   over partial/skip-invalid import.)
 
 ### Claude's Discretion (delegated to planner/researcher)
-- **D-19:** Exact RBAC split — export likely `plum:read`, import `plum:write`;
+- **D-19:** [informational] Exact RBAC split — export likely `plum:read`, import `plum:write`;
   audit events for import/export (e.g. `plum.imported`, `plum.exported`) using
   the existing `write_audit` helper.
 - Exact table/column design: `PlumBomItem` (parent_revision_id, child_part_id,
