@@ -29,7 +29,7 @@
 - D-11: Full AVL link shape: FK to `syerp_partner` + vendor's part number + `preferred` flag + optional notes + quantity price-break table (rows of qty_threshold / unit_cost / lead_days).
 - D-12: Vendor-driven costing is in v1. A part designates a selected vendor + selected price-break row; that row's unit cost feeds D-07 step 1.
 - D-13: `preferred` (sourcing designation, multiple allowed) ≠ `selected-for-costing` (single driver, one per revision).
-- D-14: AVL list + price-breaks are part-level/live. The selected-vendor+break choice is revision-controlled. On Release, the resolved effective cost is snapshotted as a frozen `as_released_cost` column on the revision. UI must surface both frozen and live recomputed cost.
+- D-14: AVL list + price-breaks are part-level/live. The selected-vendor+break choice is revision-controlled. On Release, the resolved effective cost is snapshotted as a frozen `released_cost_snapshot` column on the revision. UI must surface both frozen and live recomputed cost.
 
 **Import / Export**
 - D-15: Server-side FastAPI endpoints. Export streams a file; import accepts upload, validates, writes in a transaction.
@@ -64,7 +64,7 @@
 | PLUM-05 | User can view a flat BOM with quantity roll-up across levels | `generateFlatBom` recursion pattern (§Prototype Insights), server-side flat-BOM endpoint returning rolled quantities |
 | PLUM-06 | User can run where-used analysis to see which assemblies consume a part | Reverse-BOM recursive CTE (§Architecture Patterns Pattern 3) |
 | PLUM-07 | User can link a part to one or more vendors (FK to SYERP vendors / AVL) | `PlumAvlLink` + `PlumAvlPriceBreak` model (§Standard Stack), cross-module FK pattern |
-| PLUM-08 | User can set part pricing/cost and see cost roll-up across a BOM | D-07 effective-cost chain (§Architecture Patterns Pattern 4), `material_cost` + `as_released_cost` columns on `PlumPartRevision` |
+| PLUM-08 | User can set part pricing/cost and see cost roll-up across a BOM | D-07 effective-cost chain (§Architecture Patterns Pattern 4), `material_cost` + `released_cost_snapshot` columns on `PlumPartRevision` |
 | PLUM-09 | User can view margin analysis for a product | D-09: sale_price column on `PlumPartRevision`, margin computed in service layer |
 | PLUM-10 | User can import and export PLUM data as JSON and Excel | openpyxl 3.1.5 (§Standard Stack), D-16 JSON lossless / Excel multi-sheet, D-18 preview-then-commit (§Architecture Patterns Pattern 5) |
 </phase_requirements>
@@ -205,7 +205,7 @@ Browser (React)
     └── Import / Export page (ImportExport.tsx)
             │  GET  /api/v1/plum/export/json       → StreamingResponse (application/json)
             │  GET  /api/v1/plum/export/excel      → StreamingResponse (application/vnd.openxmlformats...)
-            │  POST /api/v1/plum/import/validate   → UploadFile → preview JSON
+            │  POST /api/v1/plum/import/preview   → UploadFile → preview JSON
             │  POST /api/v1/plum/import/commit     → preview token / confirm → atomic upsert
             
 FastAPI (plum router)
@@ -213,7 +213,7 @@ FastAPI (plum router)
     ├── BOM service: tree query (recursive CTE), flat-BOM query, cycle check
     ├── AVL service: link CRUD, price-break CRUD, vendor search delegation
     ├── Cost service: effective-cost chain (D-07), roll-up, margin
-    ├── Release hook: snapshot as_released_cost on advance_revision_status (D-14)
+    ├── Release hook: snapshot released_cost_snapshot on advance_revision_status (D-14)
     └── Import/export service: openpyxl read/write, JSON serialize/deserialize,
                                upsert logic, preview generation
             │
@@ -221,13 +221,13 @@ PostgreSQL
     ├── plum_bom_item          (parent_revision_id → plum_part_revision.id,
     │                           child_part_id → plum_part.id, qty NUMERIC, ref_des)
     ├── plum_avl_link          (part_id → plum_part.id,
-    │                           partner_id → syerp_partner.id [CROSS-MODULE FK],
+    │                           vendor_id → syerp_partner.id [CROSS-MODULE FK],
     │                           vendor_part_number, preferred, notes)
     ├── plum_avl_price_break   (avl_link_id → plum_avl_link.id,
     │                           qty_threshold INT, unit_cost NUMERIC, lead_days INT)
     └── plum_part_revision     (+ material_cost NUMERIC, sale_price NUMERIC,
-                                  as_released_cost NUMERIC,
-                                  selected_avl_link_id → plum_avl_link.id,
+                                  released_cost_snapshot NUMERIC,
+                                  selected_vendor_link_id → plum_avl_link.id,
                                   selected_price_break_index INT)
 ```
 
@@ -317,7 +317,7 @@ class PlumAvlLink(Base):
         String(36), ForeignKey("plum_part.id"), nullable=False, index=True
     )
     # Cross-module FK (first in the system — validates SYERP-as-hub)
-    partner_id: Mapped[str] = mapped_column(
+    vendor_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("syerp_partner.id"), nullable=False
     )
     vendor_part_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -352,13 +352,13 @@ class PlumAvlPriceBreak(Base):
 ALTER TABLE plum_part_revision
     ADD COLUMN material_cost NUMERIC(18,6) NULL,          -- D-06: manual material cost
     ADD COLUMN sale_price NUMERIC(18,6) NULL,             -- D-09: optional sale price
-    ADD COLUMN as_released_cost NUMERIC(18,6) NULL,       -- D-14: frozen cost snapshot on Release
-    ADD COLUMN selected_avl_link_id VARCHAR(36) NULL      -- D-12/D-14: FK to PlumAvlLink
+    ADD COLUMN released_cost_snapshot NUMERIC(18,6) NULL,       -- D-14: frozen cost snapshot on Release
+    ADD COLUMN selected_vendor_link_id VARCHAR(36) NULL      -- D-12/D-14: FK to PlumAvlLink
                 REFERENCES plum_avl_link(id),
     ADD COLUMN selected_price_break_index INTEGER NULL;   -- D-12/D-14: index into price-break array
 ```
 
-**Why `selected_avl_link_id` + index (not a FK to the price-break row):** The price-break table rows may be reordered or re-created; storing the FK to the price-break row (not the link) risks the selected row being deleted. Storing the AVL link FK + an index into the sorted price-breaks matches the prototype's `selectedVendorCostIndex` pattern, is simpler, and is recoverable. The price-break sort order must be stable (sorted by `qty_threshold` ascending, enforced on save).
+**Why `selected_vendor_link_id` + index (not a FK to the price-break row):** The price-break table rows may be reordered or re-created; storing the FK to the price-break row (not the link) risks the selected row being deleted. Storing the AVL link FK + an index into the sorted price-breaks matches the prototype's `selectedVendorCostIndex` pattern, is simpler, and is recoverable. The price-break sort order must be stable (sorted by `qty_threshold` ascending, enforced on save).
 
 ### Pattern 4: Recursive BOM Traversal (PostgreSQL CTE)
 
@@ -528,7 +528,7 @@ async def get_effective_cost(
         "vendor price", "manual", "roll-up", "uncosted"
     
     Priority:
-      1. Selected vendor + price-break unit_cost (if selected_avl_link_id set)
+      1. Selected vendor + price-break unit_cost (if selected_vendor_link_id set)
       2. Manual material_cost (if set on revision)
       3. BOM roll-up of children (if has BOM children, passed as bom_roll_up arg)
       4. None / "uncosted"
@@ -536,10 +536,10 @@ async def get_effective_cost(
     from app.modules.plum.models import PlumAvlLink, PlumAvlPriceBreak
 
     # Step 1: Selected vendor price-break
-    if revision.selected_avl_link_id and revision.selected_price_break_index is not None:
+    if revision.selected_vendor_link_id and revision.selected_price_break_index is not None:
         pb_result = await db.execute(
             select(PlumAvlPriceBreak)
-            .where(PlumAvlPriceBreak.avl_link_id == revision.selected_avl_link_id)
+            .where(PlumAvlPriceBreak.avl_link_id == revision.selected_vendor_link_id)
             .order_by(PlumAvlPriceBreak.qty_threshold)
         )
         price_breaks = list(pb_result.scalars().all())
@@ -561,7 +561,7 @@ async def get_effective_cost(
 
 ### Pattern 8: As-Released Cost Snapshot (D-14)
 
-Hook into the existing `advance_revision_status` function in `service.py`. When `target_status == "released"`, after setting `released_at`, compute and write `as_released_cost`:
+Hook into the existing `advance_revision_status` function in `service.py`. When `target_status == "released"`, after setting `released_at`, compute and write `released_cost_snapshot`:
 
 ```python
 # Source: 06-CONTEXT.md D-14, backend/app/modules/plum/service.py advance_revision_status
@@ -573,7 +573,7 @@ if target_status == "released":
     # D-14: Snapshot the as-released cost
     roll_up = await compute_bom_rollup(db, part_id, revision.id)
     effective_cost, _ = await get_effective_cost(db, revision, roll_up)
-    revision.as_released_cost = effective_cost
+    revision.released_cost_snapshot = effective_cost
     revision.released_at = datetime.now(timezone.utc)
 ```
 
@@ -687,9 +687,9 @@ async def export_excel(db: AsyncSession) -> StreamingResponse:
 
 **Import preview-then-commit pattern (D-18):**
 ```python
-# Two endpoints: POST /import/validate and POST /import/commit
+# Two endpoints: POST /import/preview and POST /import/commit
 
-@router.post("/import/validate")
+@router.post("/import/preview")
 async def validate_import(
     file: UploadFile,
     current_user=Depends(require_permission("plum:write")),
@@ -739,9 +739,9 @@ async def commit_import(
 - **Float for monetary values:** Always use `NUMERIC` in PostgreSQL and `Decimal` in Python for cost/price/qty fields. IEEE 754 float rounding is inappropriate for financial data. The prototype used JavaScript `Number` (float); the re-platform must use `NUMERIC`. [VERIFIED: established PostgreSQL best practice]
 - **ORM relationships on PLUM/SYERP models:** The project-wide decision (documented in `syerp/models.py` lines 99–102 and `plum/models.py` lines 105–108) forbids ORM relationships due to `MissingGreenlet` in async context. Use explicit `select()` queries throughout. [VERIFIED: project codebase]
 - **Hard-deleting BOM items on import:** D-17 explicitly forbids hard-deletes during import. Use upsert only. Rows absent from the file are left in place.
-- **Writing `as_released_cost` anywhere other than the release FSM path:** The snapshot must only be written once, at the moment of release, inside `advance_revision_status`. Writing it at any other time breaks D-14's immutability guarantee.
+- **Writing `released_cost_snapshot` anywhere other than the release FSM path:** The snapshot must only be written once, at the moment of release, inside `advance_revision_status`. Writing it at any other time breaks D-14's immutability guarantee.
 - **Cycle detection only at the UI layer:** The cycle check (D-05) must be enforced in the service layer (before the DB write), not just as frontend validation. The prototype did it in JS only; the re-platform must do it server-side.
-- **Storing cost as a JSON blob:** All cost fields (material_cost, sale_price, as_released_cost) must be individual typed columns, not packed into a JSON field. This allows proper `NUMERIC` typing, indexing, and migration evolution.
+- **Storing cost as a JSON blob:** All cost fields (material_cost, sale_price, released_cost_snapshot) must be individual typed columns, not packed into a JSON field. This allows proper `NUMERIC` typing, indexing, and migration evolution.
 
 ---
 
@@ -814,7 +814,7 @@ Then flat BOM = GROUP BY child_part_id, SUM(cumulative_qty).
 
 **Why it happens:** The index is a position-based reference into a sorted list that can change.
 
-**How to avoid:** Always sort price-breaks by `qty_threshold` ascending before saving, and enforce this sort order consistently. When a price-break row is deleted and the selected index becomes out-of-bounds, clear the selection (`selected_avl_link_id = NULL`, `selected_price_break_index = NULL`) and surface a warning to the user. On the UI side, show "No longer valid" if the index is stale.
+**How to avoid:** Always sort price-breaks by `qty_threshold` ascending before saving, and enforce this sort order consistently. When a price-break row is deleted and the selected index becomes out-of-bounds, clear the selection (`selected_vendor_link_id = NULL`, `selected_price_break_index = NULL`) and surface a warning to the user. On the UI side, show "No longer valid" if the index is stale.
 
 **Alternative:** Use a FK to the price-break row (`selected_price_break_id`) instead of an index. This is more robust but was not chosen in the decisions (D-12/D-14 reference "index" from the prototype). The planner should decide based on D-14's stability requirements.
 
@@ -845,7 +845,7 @@ qty: Mapped[PyDecimal] = mapped_column(Numeric(precision=18, scale=6), nullable=
 
 ### Pitfall 7: Cross-Module FK Ordering in Migration
 
-**What goes wrong:** Migration `0006_plum_bom_avl_cost.py` adds `plum_avl_link.partner_id → syerp_partner.id`. If the migration is accidentally placed before `0004_syerp_tables.py` in Alembic's chain, the FK constraint fails (referenced table doesn't exist yet).
+**What goes wrong:** Migration `0006_plum_bom_avl_cost.py` adds `plum_avl_link.vendor_id → syerp_partner.id`. If the migration is accidentally placed before `0004_syerp_tables.py` in Alembic's chain, the FK constraint fails (referenced table doesn't exist yet).
 
 **How to avoid:** Set `down_revision = "0005"` in migration 0006. The chain `0005 → 0004 → ... → 0001` guarantees SYERP tables exist before PLUM AVL tables are created.
 
@@ -1024,9 +1024,9 @@ These findings from the v54 prototype are domain logic worth carrying forward. T
 
 ### AVL Vendor Shape (`partVendors` array, ~line 3418)
 The prototype stores per-part: `{vendorId, vendorPartNumber, isPreferred, costs[], notes}` where `costs[]` = `[{minQty, unitCost, leadTimeDays, effectiveDate}]`. The re-platform maps this to:
-- `PlumAvlLink`: `part_id`, `partner_id`, `vendor_part_number`, `preferred`, `notes`
+- `PlumAvlLink`: `part_id`, `vendor_id`, `vendor_part_number`, `preferred`, `notes`
 - `PlumAvlPriceBreak`: `avl_link_id`, `qty_threshold` (= `minQty`), `unit_cost`, `lead_days`
-- `selectedVendorId` + `selectedVendorCostIndex` → `selected_avl_link_id` + `selected_price_break_index` on `PlumPartRevision`
+- `selectedVendorId` + `selectedVendorCostIndex` → `selected_vendor_link_id` + `selected_price_break_index` on `PlumPartRevision`
 
 ### Effective-Cost Chain (`getEffectiveCost`, ~line 3669)
 The prototype priority: (1) selected vendor `costs[selectedVendorCostIndex].unitCost`, (2) released `part.cost`, (3) `part.costAvg`. The re-platform D-07 chain maps: (1) selected vendor price-break, (2) manual `material_cost`, (3) BOM roll-up. Note: the prototype did not have a BOM-roll-up fallback as step 3 — D-07 adds this as a new capability.
@@ -1058,27 +1058,27 @@ The prototype uses SheetJS (client-side CDN library). The re-platform replaces e
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`selected_price_break_index` vs. `selected_price_break_id` (FK)**
    - What we know: the prototype stores an index (`selectedVendorCostIndex`); D-12/D-14 reference this pattern.
    - What's unclear: an FK to the price-break row would be more robust but the CONTEXT.md uses "index" terminology.
-   - Recommendation: The planner should use a FK (`selected_price_break_id → plum_avl_price_break.id`) for robustness. If a price-break row is deleted, set `selected_price_break_id = NULL` (cascading or explicit) and surface a warning. This is strictly safer than an index and still matches the D-12/D-14 intent.
+   - **RESOLVED:** Use the integer index `selected_price_break_index` (bounds-checked on read, fall through when out of range — Pitfall 7). This matches the prototype and CONTEXT.md/D-12/D-14 terminology. The plans (06-01 model column, 06-02 compute_effective_cost) implement the index, not an FK.
 
 2. **BOM copy-forward scope**
    - What we know: D-01 says "A new revision copies the prior BOM forward to edit."
-   - What's unclear: Does copy-forward include the `selected_avl_link_id` and `selected_price_break_index` (or `_id`) columns on the new revision? Logically yes (the cost selection should carry forward), but this needs a deliberate decision.
-   - Recommendation: Copy all cost-related columns forward (material_cost, sale_price, selected_avl_link_id, selected_price_break_index). `as_released_cost` must NOT be copied (it is only set on release). The planner should make this explicit in the copy-forward task.
+   - What's unclear: Does copy-forward include the `selected_vendor_link_id` and `selected_price_break_index` columns on the new revision? Logically yes (the cost selection should carry forward), but this needs a deliberate decision.
+   - **RESOLVED:** copy-forward copies BOM lines plus `material_cost`, `sale_price`, `selected_vendor_link_id`, and `selected_price_break_index` (with a defensive null-out of `selected_vendor_link_id` if the referenced AVL link no longer exists). `released_cost_snapshot` is NOT copied — it is set only on release. Implemented in 06-02 Task 1 create_revision copy-forward.
 
 3. **System currency source**
    - What we know: D-10 says "one organization currency"; Phase-3 seeds `locale.currency = "USD"` in the settings table.
    - What's unclear: CONTEXT.md says "a Phase-3 system setting, default e.g. USD" — confirming this is the `locale.currency` setting already seeded.
-   - Recommendation: Read `locale.currency` from the `Setting` table (same pattern as `_get_revision_scheme` in `service.py`). No new setting needed.
+   - **RESOLVED:** system currency = the `locale.currency` Setting (read via `_get_system_currency`, default "USD"), mirroring `_get_revision_scheme`. No new setting. Implemented in 06-02 Task 2.
 
 4. **Import commit: re-upload vs. server-side session**
    - What we know: D-18 requires preview → user confirms → commit. The simplest pattern is re-upload the file for commit.
    - What's unclear: Is the UX acceptable to require the client to hold the file in state and re-upload it?
-   - Recommendation: Re-upload is acceptable for v1. The frontend `ImportExport.tsx` holds the file in React state between steps 1 and 2 (the file input ref is not cleared until after commit). Implement this as the default; add server-side session (store validated payload in DB or cache) in v2 if file size becomes a concern.
+   - **RESOLVED:** stateless re-upload on commit — the client re-sends the same file to `POST /plum/import/commit`, which re-parses and re-validates before the transactional upsert. No server-side preview session. Implemented in 06-03 Tasks 2-3.
 
 ---
 
@@ -1123,26 +1123,30 @@ Frontend:
 
 ### Phase Requirements → Test Map
 
+Canonical test names — these MUST match Plan 06-01 Task 3 stubs, Plan 06-02/06-03 verify commands, and 06-VALIDATION.md exactly.
+
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
-| PLUM-04 | POST BOM line → 201; tree returned with correct depth | integration (DB required) | `pytest tests/plum/test_bom.py::test_add_bom_line -x` | ❌ Wave 0 |
-| PLUM-04 | Cycle detection → 422 on add that would create cycle | integration (DB required) | `pytest tests/plum/test_bom.py::test_cycle_detection -x` | ❌ Wave 0 |
-| PLUM-04 | BOM tree endpoint returns correct depth/qty for 3-level BOM | integration (DB required) | `pytest tests/plum/test_bom.py::test_bom_tree_depth -x` | ❌ Wave 0 |
-| PLUM-05 | Flat BOM roll-up: part used in 2 sub-assemblies shows correct total qty | integration (DB required) | `pytest tests/plum/test_bom.py::test_flat_bom_rollup -x` | ❌ Wave 0 |
-| PLUM-06 | Where-used returns direct parents | integration (DB required) | `pytest tests/plum/test_bom.py::test_where_used_direct -x` | ❌ Wave 0 |
-| PLUM-06 | Where-used returns indirect (grandparent) assemblies | integration (DB required) | `pytest tests/plum/test_bom.py::test_where_used_indirect -x` | ❌ Wave 0 |
+| PLUM-04 | POST BOM line on a Draft revision → 201; line returned | integration (DB required) | `pytest tests/plum/test_bom.py::test_add_bom_line -x` | ❌ Wave 0 |
+| PLUM-04 | BOM edit on a Released revision → 422 (immutable) | integration (DB required) | `pytest tests/plum/test_bom.py::test_bom_line_released_immutable -x` | ❌ Wave 0 |
+| PLUM-04 | Cycle detection → 422 on add that would create a cycle | integration (DB required) | `pytest tests/plum/test_bom.py::test_bom_cycle_detection -x` | ❌ Wave 0 |
+| PLUM-05 | Flat BOM roll-up: a part used in 2 sub-assemblies shows ONE row with summed total qty | integration (DB required) | `pytest tests/plum/test_bom.py::test_flat_bom_shared_part -x` | ❌ Wave 0 |
+| PLUM-06 | Where-used returns direct AND indirect (grandparent) assemblies | integration (DB required) | `pytest tests/plum/test_bom.py::test_where_used_indirect -x` | ❌ Wave 0 |
 | PLUM-07 | POST AVL link with price-breaks → 201; link + breaks persisted | integration (DB required) | `pytest tests/plum/test_avl.py::test_add_avl_link -x` | ❌ Wave 0 |
-| PLUM-07 | AVL link rejects archived/non-vendor partner | integration (DB required) | `pytest tests/plum/test_avl.py::test_avl_vendor_validation -x` | ❌ Wave 0 |
-| PLUM-08 | Effective cost = vendor price when selected (D-07 step 1) | unit (no DB) | `pytest tests/plum/test_costing.py::test_effective_cost_vendor -x` | ❌ Wave 0 |
-| PLUM-08 | Effective cost = manual cost when no vendor selected (D-07 step 2) | unit (no DB) | `pytest tests/plum/test_costing.py::test_effective_cost_manual -x` | ❌ Wave 0 |
-| PLUM-08 | Roll-up: parent cost = sum(child effective cost × qty) | integration (DB required) | `pytest tests/plum/test_costing.py::test_cost_rollup -x` | ❌ Wave 0 |
-| PLUM-08 | as_released_cost snapshotted on revision release | integration (DB required) | `pytest tests/plum/test_costing.py::test_as_released_snapshot -x` | ❌ Wave 0 |
-| PLUM-09 | Margin = sale_price − effective_cost; margin_pct computed correctly | unit (no DB) | `pytest tests/plum/test_costing.py::test_margin_calculation -x` | ❌ Wave 0 |
-| PLUM-10 | JSON export → re-import restores same part + revision + BOM + AVL dataset | integration (DB required) | `pytest tests/plum/test_import_export.py::test_json_roundtrip -x` | ❌ Wave 0 |
-| PLUM-10 | Excel export → re-import updates existing parts + inserts new ones (upsert, no deletes) | integration (DB required) | `pytest tests/plum/test_import_export.py::test_excel_roundtrip -x` | ❌ Wave 0 |
-| PLUM-10 | Import with invalid vendor reference → preview shows error, commit blocked | integration (DB required) | `pytest tests/plum/test_import_export.py::test_import_invalid_vendor -x` | ❌ Wave 0 |
-| PLUM-10 | Import file > 10 MB → 413 | unit (no DB) | `pytest tests/plum/test_import_export.py::test_import_size_limit -x` | ❌ Wave 0 |
-| PLUM-04 (frontend) | BomTree renders expand/collapse; flat mode shows rolled qty | unit (React) | `npx vitest run src/routes/plum/components/BomTree.test.tsx` | ❌ Wave 0 |
+| PLUM-07 | AVL link rejects a non-vendor / unknown partner → 422 | integration (DB required) | `pytest tests/plum/test_avl.py::test_avl_link_non_vendor -x` | ❌ Wave 0 |
+| PLUM-08 | Effective cost = selected vendor price-break (D-07 step 1) | unit (no DB) | `pytest tests/plum/test_costing.py::test_effective_cost_vendor -x` | ❌ Wave 0 |
+| PLUM-08 | Effective cost = manual material cost when no vendor selected (D-07 step 2) | unit (no DB) | `pytest tests/plum/test_costing.py::test_effective_cost_manual -x` | ❌ Wave 0 |
+| PLUM-08 | Effective cost = BOM roll-up Σ(child effective × qty) when no vendor/manual (D-07 step 3) | integration (DB required) | `pytest tests/plum/test_costing.py::test_effective_cost_rollup -x` | ❌ Wave 0 |
+| PLUM-08 | released_cost_snapshot frozen on revision release (D-14) | integration (DB required) | `pytest tests/plum/test_costing.py::test_release_snapshots_cost -x` | ❌ Wave 0 |
+| PLUM-09 | Margin = sale_price − effective_cost; margin_pct computed | unit (no DB) | `pytest tests/plum/test_costing.py::test_margin_computation -x` | ❌ Wave 0 |
+| PLUM-10 | Lossless JSON export includes parts + revisions + BOM + AVL + price breaks | integration (DB required) | `pytest tests/plum/test_import_export.py::test_export_json -x` | ❌ Wave 0 |
+| PLUM-10 | Excel export workbook has exactly the Parts/BOMs/AVL sheets | integration (DB required) | `pytest tests/plum/test_import_export.py::test_export_excel_sheets -x` | ❌ Wave 0 |
+| PLUM-10 | Import preview on a clean file → new/updated counts, 0 errors, no writes | integration (DB required) | `pytest tests/plum/test_import_export.py::test_import_preview_valid -x` | ❌ Wave 0 |
+| PLUM-10 | Import preview flags AVL rows referencing an unknown SYERP vendor | integration (DB required) | `pytest tests/plum/test_import_export.py::test_import_preview_unknown_vendor -x` | ❌ Wave 0 |
+| PLUM-10 | Import commit upserts and NEVER hard-deletes rows absent from the file (D-17) | integration (DB required) | `pytest tests/plum/test_import_export.py::test_import_commit_no_delete -x` | ❌ Wave 0 |
+| PLUM-04 (frontend) | BomTree renders expand/collapse; flat mode shows rolled qty | unit (React) | `npm test -- --run src/routes/plum/components/BomTree.test.tsx` | ❌ Wave 0 |
+
+> Note: the 10 MB upload guard (T-06-11) is enforced at the router layer and verified by the Plan 06-03 Task 3 grep gate on the size check; it is exercised through the import endpoints rather than a standalone backend unit test.
 
 ### Sampling Rate
 - **Per task commit:** `cd backend && pytest tests/plum/ -x -q`
