@@ -59,6 +59,10 @@ Phase-6 additions:
   at this depth. Beyond 5 levels tested behavior is undefined (deferred).
 - Price-break table rows: `h-10` (40px) — slightly tighter than the 48px parts
   table default because the editor is always inside a card, not a full-page table.
+  Added to exceptions list: not on the 8-point scale (40px falls between 32px and
+  48px) but justified by the dense-editor context where the standard 48px row
+  height would make the price-break sub-table visually oversized relative to the
+  containing vendor card.
 
 ---
 
@@ -95,7 +99,7 @@ from Phase 5.
 | Destructive | `--destructive` | #ef4444 | "Remove BOM line" action, "Remove vendor link" action — dropdown items and confirmation dialogs only |
 
 Accent (`bg-primary` / `text-primary-foreground`) is reserved for:
-1. "Add Part" / "Save" primary CTA buttons in the BOM line editor sheet.
+1. "Add Part" / "Save Costs" primary CTA buttons in the BOM line editor sheet and cost form.
 2. "Add Vendor" primary CTA button in the AVL editor.
 3. "Link Vendor" and "Select for Costing" call-to-action buttons in the AVL panel.
 4. "Import" final commit button in the import flow.
@@ -171,6 +175,12 @@ Each section uses a consistent card header pattern:
 The section order is fixed. All four cards render for every part (including
 purchased parts with no BOM children). If a section has no data it shows its
 own empty state within the card.
+
+**Focal point — PartDetail extended page:** The BOM Tree card is the primary
+visual anchor of the extended PartDetail. It appears first among the four new
+sections, directly below the revision history, and hosts the primary add-child
+action ("Add Part") visible on load for Draft revisions. All other new sections
+(AVL, Cost & Margin, Where-Used) are subordinate to the BOM structure.
 
 ---
 
@@ -319,8 +329,8 @@ Vendor row:
 - Center: vendor's part number (`text-sm text-muted-foreground font-mono`).
 - Right: three-dot `DropdownMenu` (`h-11 w-11` ghost trigger,
   `aria-label="Actions for {vendor_name}"`):
-  - "Edit" — opens AVL link sheet
-  - "Remove" — destructive dropdown item; opens confirmation dialog
+  - "Edit Vendor Link" — opens AVL link sheet
+  - "Remove Vendor Link" — destructive dropdown item; opens confirmation dialog
 
 **Price-break sub-table (expanded state):**
 
@@ -444,7 +454,8 @@ Below the cost grid, a compact inline form (not a Sheet or Dialog):
   or BOM roll-up."
 - Sale Price: `<Input type="number" step="0.01" min="0" className="w-36 font-mono">`
   Label "Sale Price". Helper text: "Optional. Used to compute margin."
-- "Save" (`<Button variant="outline" size="sm">`) — saves both values together.
+- "Save Costs" (`<Button variant="outline" size="sm">`) — saves both Material Cost
+  and Sale Price together.
 
 The inline form is always visible on Draft revisions (not hidden behind an "Edit
 Cost" button) to reduce friction for the primary costing workflow.
@@ -541,6 +552,12 @@ A standalone page (not a Sheet or Dialog) because import has a multi-step flow
 **Page heading:**
 - `<h1 className="text-xl font-semibold text-foreground">Import / Export</h1>`
 - `<p className="text-base font-normal text-muted-foreground">Move data in and out of PLUM.</p>`
+
+**Focal point — Import / Export page:** The Import card is the primary visual
+anchor of this page. It appears below the Export card and hosts the multi-step
+flow that carries the most interaction complexity. The Export card is intentionally
+lightweight (two buttons) so the user's eye lands on Import as the primary task
+requiring guided action.
 
 ---
 
@@ -655,6 +672,7 @@ A toast notification also fires: "Import complete. {newCount} inserted, {updated
 | Primary CTA — save BOM line | "Save Line" |
 | Primary CTA — add vendor | "Add Vendor" |
 | Primary CTA — save vendor link | "Save Vendor Link" |
+| Primary CTA — save costs (Cost & Margin inline form) | "Save Costs" |
 | Primary CTA — import upload | "Upload and Preview" |
 | Primary CTA — import commit | "Confirm Import" |
 | CTA — export JSON | "Export as JSON" |
@@ -662,6 +680,9 @@ A toast notification also fires: "Import complete. {newCount} inserted, {updated
 | CTA — discard BOM line sheet | "Discard Line" |
 | CTA — discard AVL link sheet | "Discard Changes" |
 | CTA — restart import | "Import Another File" |
+| CTA — AVL vendor row edit action | "Edit Vendor Link" |
+| CTA — AVL vendor row remove action | "Remove Vendor Link" |
+| CTA — BOM row edit action | "Edit Line" |
 | Empty state — BOM (no lines) heading | "No parts added yet." |
 | Empty state — BOM (no lines) body | "Add child parts to build a bill of materials for this revision." |
 | Empty state — AVL (no vendors) heading | "No approved vendors yet." |
@@ -671,7 +692,7 @@ A toast notification also fires: "Import complete. {newCount} inserted, {updated
 | Error — BOM cycle detected | "Adding {part_number} here would create a circular BOM. Choose a different part." |
 | Error — BOM line save failure | "Failed to save BOM line. Please try again." |
 | Error — AVL save failure | "Failed to save vendor link. Please try again." |
-| Error — cost save failure | "Failed to save cost. Please try again." |
+| Error — cost save failure | "Failed to save costs. Please try again." |
 | Error — export failure | "Export failed. Check your connection and try again." |
 | Error — upload/validate failure | "Upload failed. Check your connection and try again." |
 | Error — import commit failure | "Import failed. No changes were made. Please try again." |
@@ -701,7 +722,7 @@ A toast notification also fires: "Import complete. {newCount} inserted, {updated
 | Vendor link added toast | "Vendor link added." |
 | Vendor link updated toast | "Vendor link updated." |
 | Vendor link removed toast | "Vendor link removed." |
-| Cost saved toast | "Cost saved." |
+| Cost saved toast | "Costs saved." |
 | Export started toast | "Export started — your download will begin shortly." |
 | Cost divergence notice (amber, Released) | "Current would be ${liveCost}" |
 | Where-used extensive notice | "Showing {count} assemblies. This part is used extensively across the product structure." |
@@ -713,6 +734,9 @@ consistent with Phase-5 "Keep Part" / "Archive Part" pattern.
 Sheet discard pattern: sheet footer cancel buttons name the thing being
 discarded — "Discard Line" (BomLineSheet), "Discard Changes" (AVL link sheet) —
 never a bare "Cancel".
+
+Dropdown action items use verb+noun labels — "Edit Vendor Link", "Remove Vendor
+Link", "Edit Line" — never bare single-word verbs.
 
 ---
 
