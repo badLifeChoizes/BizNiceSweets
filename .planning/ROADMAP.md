@@ -21,7 +21,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 06-02-PLAN.md — Backend service + router: BOM CRUD/tree/flat/where-used + cycle detection, AVL CRUD, effective-cost chain + margin + release snapshot, copy-forward; greens test_bom/test_avl/test_costing
+- [x] 06-02-PLAN.md — Backend service + router: BOM CRUD/tree/flat/where-used + cycle detection, AVL CRUD, effective-cost chain + margin + release snapshot, copy-forward; greens test_bom/test_avl/test_costing
 
 **Wave 3** *(blocked on Wave 2 — same service.py/router.py files)*
 
