@@ -6,8 +6,13 @@ Tables defined here (all with plum_ table-name prefix):
   plum_part               — stable part header record (D-01/D-02)
   plum_part_tag           — join table: part ↔ classification tag (D-12)
   plum_part_revision      — versioned revision snapshot (D-01/D-02/D-07)
+  plum_bom_item           — BOM directed edge: parent_revision → child_part (D-01/D-02/D-04)
+  plum_avl_link           — Approved Vendor List link: part → syerp_partner (D-11/D-13)
+  plum_avl_price_break    — Quantity price-break rows per AVL link (D-11)
 
 Phase 5: Added PLUM Parts & Revisions data layer (PLUM-01, PLUM-02, PLUM-03).
+Phase 6: Added BOM, AVL, price-break tables + cost columns on plum_part_revision
+         (PLUM-04..10, D-04/D-06/D-09/D-11/D-12/D-13/D-14).
 
 All models inherit from Base so that Base.metadata is populated when
 app.core.models (the central aggregator) is imported by Alembic's env.py.
@@ -34,7 +39,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from decimal import Decimal
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.base import Base
@@ -198,3 +205,148 @@ class PlumPartRevision(Base):
     obsoleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+    # --- Cost columns (Phase 6: D-06/D-09/D-12/D-14) — added by migration 0006 ----
+    material_cost: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=True
+    )
+    sale_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=True
+    )
+    released_cost_snapshot: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=True
+    )
+    # selected_vendor_link_id FKs plum_avl_link.id; SET NULL on delete (T-06-01)
+    # The FK constraint is added in migration 0006 Zone 3 (after plum_avl_link exists).
+    selected_vendor_link_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("plum_avl_link.id", ondelete="SET NULL"), nullable=True
+    )
+    selected_price_break_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # No ORM relationships declared on PlumPartRevision.
+    # Use explicit `select` queries in service functions.
+    # See PlumPart docstring (lines above) for MissingGreenlet pitfall details.
+
+
+# ---------------------------------------------------------------------------
+# PlumBomItem — BOM edge table (D-01/D-02/D-04)
+# ---------------------------------------------------------------------------
+
+
+class PlumBomItem(Base):
+    """
+    BOM directed edge: parent_revision → child_part.
+    D-01: revision owns the BOM. D-02: child resolves to latest Released
+    revision at view time. D-04: carries decimal qty + optional ref_des.
+    No ORM relationships (MissingGreenlet pitfall — see PlumPart docstring).
+    """
+
+    __tablename__ = "plum_bom_item"
+
+    __table_args__ = (
+        # T-06-03: prevent duplicate child under same revision at DB level
+        UniqueConstraint(
+            "parent_revision_id", "child_part_id", name="uq_plum_bom_item_parent_child"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    parent_revision_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("plum_part_revision.id"), nullable=False, index=True
+    )
+    child_part_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("plum_part.id"), nullable=False, index=True
+    )
+    qty: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
+    ref_des: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    # No ORM relationships (MissingGreenlet pitfall — see PlumPart docstring).
+
+
+# ---------------------------------------------------------------------------
+# PlumAvlLink — Approved Vendor List link (D-11/D-13) — first cross-module FK
+# ---------------------------------------------------------------------------
+
+
+class PlumAvlLink(Base):
+    """
+    Part-level (live, not revision-controlled) link to a SYERP vendor.
+    Cross-module FK: vendor_id → syerp_partner.id (validates SYERP-as-hub).
+    `preferred` = sourcing designation (multiple allowed per part).
+    `active` = soft-delete flag (mirrors PlumPart.active convention).
+    No ORM relationships (MissingGreenlet pitfall — see PlumPart docstring).
+    """
+
+    __tablename__ = "plum_avl_link"
+
+    __table_args__ = (
+        # T-06-03: prevent duplicate vendor under same part at DB level
+        UniqueConstraint("part_id", "vendor_id", name="uq_plum_avl_link_part_vendor"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    part_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("plum_part.id"), nullable=False, index=True
+    )
+    vendor_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_partner.id"), nullable=False, index=True
+    )
+    vendor_part_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    preferred: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    # No ORM relationships (MissingGreenlet pitfall — see PlumPart docstring).
+
+
+# ---------------------------------------------------------------------------
+# PlumAvlPriceBreak — quantity price-break rows per AVL link (D-11)
+# ---------------------------------------------------------------------------
+
+
+class PlumAvlPriceBreak(Base):
+    """
+    Price-break row belonging to a PlumAvlLink. Always sorted by qty_threshold
+    ascending; sort_order enforced on save to keep selected_price_break_index stable.
+    avl_link_id FK uses ondelete=CASCADE (T-06-02) — orphan rows auto-removed.
+    No ORM relationships (MissingGreenlet pitfall — see PlumPart docstring).
+    """
+
+    __tablename__ = "plum_avl_price_break"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    avl_link_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("plum_avl_link.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    qty_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
+    lead_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # No ORM relationships (MissingGreenlet pitfall — see PlumPart docstring).
