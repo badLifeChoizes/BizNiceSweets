@@ -204,8 +204,9 @@ Each BOM line row:
   effective cost (per D-07 resolution chain). If uncosted, shows "—" in
   `text-muted-foreground`.
 - Row actions (Draft revision only): `DropdownMenu` with `h-11 w-11` ghost
-  trigger: "Edit Line" (opens BomLineSheet) and "Remove" (destructive — opens
-  inline confirmation, not a full dialog).
+  trigger (`aria-label="Actions for {child_part_number}"`): "Edit Line" (opens
+  BomLineSheet) and "Remove" (destructive — opens inline confirmation, not a
+  full dialog).
 - Row actions (Released revision): none — all actions hidden, rows are read-only.
 
 Tree rows are NOT clickable for navigation — clicking a child part number opens a
@@ -257,11 +258,11 @@ No dialog. Instead, the row shows an inline "Are you sure?" confirmation in the
 Actions column:
 ```
 [Remove] → row enters confirmation state:
-  "Remove {child_part_number}? " [Yes, Remove] [Cancel]
+  "Remove {child_part_number}? " [Yes, Remove] [Keep {child_part_number}]
 ```
 Both confirmation actions are `size="sm"` buttons. "Yes, Remove" is
-`variant="destructive"`. "Cancel" is `variant="ghost"`. This avoids a dialog
-for a single-row operation.
+`variant="destructive"`. "Keep {child_part_number}" is `variant="ghost"`. This
+avoids a dialog for a single-row operation.
 
 **Empty state (no BOM lines):**
 ```
@@ -293,7 +294,7 @@ Fields:
 - Reference Designators: `<Input>` optional. Placeholder "e.g. R1, C4, U7".
   Helper text: "Optional. Comma-separated designator identifiers."
 
-Footer: "Cancel" (`variant="outline"`) + "Save Line" (`variant="default"`).
+Footer: "Discard Line" (`variant="outline"`) + "Save Line" (`variant="default"`).
 Loading state shows `<Loader2 className="animate-spin">`.
 
 ---
@@ -316,7 +317,8 @@ Vendor row:
   table; vendor name (`text-sm font-medium text-foreground`); "Preferred" badge
   (`bg-blue-50 text-blue-700 text-xs`) if `preferred = true`.
 - Center: vendor's part number (`text-sm text-muted-foreground font-mono`).
-- Right: three-dot `DropdownMenu` (h-11 w-11 ghost trigger):
+- Right: three-dot `DropdownMenu` (`h-11 w-11` ghost trigger,
+  `aria-label="Actions for {vendor_name}"`):
   - "Edit" — opens AVL link sheet
   - "Remove" — destructive dropdown item; opens confirmation dialog
 
@@ -381,7 +383,7 @@ Price-break section (within the same sheet):
   appends a new empty row.
 - Rows sorted by qty ascending; sort is enforced on save, not on input.
 
-Footer: "Cancel" (`variant="outline"`) + "Save Vendor Link" (`variant="default"`).
+Footer: "Discard Changes" (`variant="outline"`) + "Save Vendor Link" (`variant="default"`).
 
 **Remove vendor link confirmation dialog:**
 
@@ -657,7 +659,8 @@ A toast notification also fires: "Import complete. {newCount} inserted, {updated
 | Primary CTA — import commit | "Confirm Import" |
 | CTA — export JSON | "Export as JSON" |
 | CTA — export Excel | "Export as Excel" |
-| CTA — cancel any sheet/dialog | "Cancel" |
+| CTA — discard BOM line sheet | "Discard Line" |
+| CTA — discard AVL link sheet | "Discard Changes" |
 | CTA — restart import | "Import Another File" |
 | Empty state — BOM (no lines) heading | "No parts added yet." |
 | Empty state — BOM (no lines) body | "Add child parts to build a bill of materials for this revision." |
@@ -673,7 +676,7 @@ A toast notification also fires: "Import complete. {newCount} inserted, {updated
 | Error — upload/validate failure | "Upload failed. Check your connection and try again." |
 | Error — import commit failure | "Import failed. No changes were made. Please try again." |
 | Error — import row error (in table) | "{human description of the validation problem, e.g. 'BOM parent revision not found'}" |
-| Remove BOM line inline confirm | "Remove {child_part_number}?" [Yes, Remove] [Cancel] |
+| Remove BOM line inline confirm | "Remove {child_part_number}?" [Yes, Remove] [Keep {child_part_number}] |
 | Remove vendor link dialog title | "Remove vendor link?" |
 | Remove vendor link dialog body | "This will remove {vendor_name} from the approved vendor list for this part. Existing revision cost data is not affected." |
 | Remove vendor link cancel | "Keep Link" |
@@ -706,6 +709,10 @@ A toast notification also fires: "Import complete. {newCount} inserted, {updated
 Destructive confirmation pattern: every destructive action uses "Keep {noun}"
 as the safe-exit CTA and "{Verb} {noun}" as the destructive confirm CTA —
 consistent with Phase-5 "Keep Part" / "Archive Part" pattern.
+
+Sheet discard pattern: sheet footer cancel buttons name the thing being
+discarded — "Discard Line" (BomLineSheet), "Discard Changes" (AVL link sheet) —
+never a bare "Cancel".
 
 ---
 
@@ -770,17 +777,20 @@ All Phase-5 contracts carry forward. Phase-6 additions:
    `aria-label="Selected for costing"` on its container.
 4. "Preferred" badge: supplemented by `title="Preferred vendor"` attribute.
 5. "Unreleased" badge: supplemented by `title="No Released revision — using latest Draft"`.
-6. Import file input: visually hidden but accessible — `<input type="file" className="sr-only">` 
+6. Import file input: visually hidden but accessible — `<input type="file" className="sr-only">`
    with associated `<label>` containing the drop-zone content.
 7. Import error table: `<Table aria-label="Import validation errors">`.
 8. Price-break rows: each `<Input>` within the price-break editor has `aria-label`
    including its row index (e.g. `aria-label="Quantity threshold, row 1"`).
 9. Inline BOM remove confirmation: the "Yes, Remove" button has
-   `aria-label="Confirm remove {child_part_number} from BOM"`.
+   `aria-label="Confirm remove {child_part_number} from BOM"`. The "Keep
+   {child_part_number}" button has `aria-label="Keep {child_part_number} in BOM"`.
 10. Flat BOM table: `<Table aria-label="Flat bill of materials">`.
 11. Where-used list: `<ul aria-label="Where used">`.
 12. Color is never used alone — all semantic indicators (amber unreleased, blue
     preferred, green selected) always include a text label or `aria-label`.
+13. BOM line row actions three-dot trigger: `aria-label="Actions for {child_part_number}"`.
+14. AVL vendor row actions three-dot trigger: `aria-label="Actions for {vendor_name}"`.
 
 ---
 
