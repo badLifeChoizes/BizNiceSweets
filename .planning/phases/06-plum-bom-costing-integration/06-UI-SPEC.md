@@ -1,10 +1,11 @@
 ---
 phase: 6
 slug: plum-bom-costing-integration
-status: draft
+status: approved
 shadcn_initialized: true
 preset: slate / default / cssVariables / lucide
 created: 2026-06-29
+reviewed_at: 2026-06-29
 ---
 
 # Phase 6 — UI Design Contract
