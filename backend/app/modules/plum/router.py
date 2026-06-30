@@ -2,33 +2,51 @@
 PLUM API router.
 
 Phase 5: Part CRUD + revision FSM endpoints.
+Phase 6: BOM/AVL/cost/where-used endpoints.
 
 Endpoints (all prefixed with /api/v1/plum by registry.py mount_all):
-  GET    /plum/parts                              — list/search parts (plum:read)
-  GET    /plum/parts/next-number                  — next auto-generated part number (plum:read)
-  POST   /plum/parts                              — create part + first Draft revision (plum:write)
-  GET    /plum/parts/{part_id}                    — get part + revision history (plum:read)
-  PATCH  /plum/parts/{part_id}                    — update/archive part (plum:write)
-  POST   /plum/parts/{part_id}/revisions          — create new revision (plum:write)
+  GET    /plum/parts                                      — list/search parts (plum:read)
+  GET    /plum/parts/next-number                          — next auto-generated part number (plum:read)
+  POST   /plum/parts                                      — create part + first Draft revision (plum:write)
+  GET    /plum/parts/{part_id}                            — get part + revision history (plum:read)
+  PATCH  /plum/parts/{part_id}                            — update/archive part (plum:write)
+  POST   /plum/parts/{part_id}/revisions                  — create new revision (plum:write)
   POST   /plum/parts/{part_id}/revisions/{rev_id}/advance — advance revision status (plum:write)
+
+  Phase 6 — BOM (PLUM-04/05/06):
+  GET    /plum/parts/{part_id}/bom                        — BOM tree (plum:read)
+  GET    /plum/parts/{part_id}/bom/flat                   — flat BOM with rolled-up qty (plum:read)
+  GET    /plum/parts/{part_id}/where-used                 — reverse traversal (plum:read)
+  POST   /plum/parts/{part_id}/bom                        — add BOM line to Draft revision (plum:write)
+  PATCH  /plum/parts/{part_id}/bom/{line_id}              — update BOM line (plum:write)
+  DELETE /plum/parts/{part_id}/bom/{line_id}              — remove BOM line (plum:write)
+
+  Phase 6 — AVL (PLUM-07):
+  GET    /plum/parts/{part_id}/avl                        — list AVL links (plum:read)
+  POST   /plum/parts/{part_id}/avl                        — link part to vendor (plum:write)
+  PATCH  /plum/parts/{part_id}/avl/{link_id}              — update AVL link (plum:write)
+  DELETE /plum/parts/{part_id}/avl/{link_id}              — soft-delete AVL link (plum:write)
+  POST   /plum/parts/{part_id}/avl/{link_id}/price-breaks — add price break (plum:write)
+
+  Phase 6 — Costing (PLUM-08/09):
+  GET    /plum/parts/{part_id}/revisions/{rev_id}/cost    — effective cost read (plum:read)
+  PATCH  /plum/parts/{part_id}/revisions/{rev_id}/cost    — update cost fields on Draft (plum:write)
 
 mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
 Full paths are therefore /api/v1/plum/parts, etc.
 
 Permission gating (D-10):
-  - All write (POST, PATCH) endpoints require plum:write.
+  - All write (POST, PATCH, DELETE) endpoints require plum:write.
   - All read (GET) endpoints require plum:read.
   - Unauthenticated requests return 401; wrong permission returns 403.
 
-Audit logging (D-10, T-05-09):
-  - part.created: on POST /parts success.
-  - part.updated: on PATCH when active does not change to False.
-  - part.archived: on PATCH when patch sets active=False.
-  - revision.created: on POST /parts/{id}/revisions success.
-  - revision.submitted: on advance to in_review (written inside service).
-  - revision.released: on advance to released (written inside service).
-  - revision.rejected: on advance back to draft (written inside service).
-  - revision.obsoleted: on supersede of prior released (written inside service).
+Audit logging:
+  Phase 5 audit (part.created / part.updated / part.archived / revision.created /
+    revision.submitted / revision.released / revision.rejected / revision.obsoleted).
+  Phase 6 audit is written inside the service functions to keep the transaction
+    atomic — the router only passes actor_id=str(current_user.id).
+  Phase 6 actions: bom.line_added / bom.line_updated / bom.line_removed /
+    avl.link_added / avl.link_updated / avl.link_removed / part.cost_updated.
 
 Archive strategy:
   Archive flows through PATCH with {active: false}. The router compares the
@@ -37,28 +55,59 @@ Archive strategy:
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.modules.auth.dependencies import require_permission
 from app.modules.auth.service import write_audit
 from app.modules.plum.schemas import (
+    AvlLinkCreate,
+    AvlLinkRead,
+    AvlLinkUpdate,
+    BomItemCreate,
+    BomItemRead,
+    BomItemUpdate,
+    BomTreeNode,
+    CostRead,
+    CostUpdate,
+    FlatBomRow,
     PartCreate,
     PartDetailRead,
     PartRead,
     PartUpdate,
+    PriceBreakCreate,
+    PriceBreakRead,
     RevisionCreate,
     RevisionRead,
+    WhereUsedRow,
 )
 from app.modules.plum.service import (
+    add_avl_link,
+    add_bom_line,
+    add_price_break,
     advance_revision_status,
     create_part,
     create_revision,
     generate_part_number,
+    get_cost_read,
     get_part,
     get_part_with_revisions,
+    get_revision,
+    get_where_used,
+    list_avl_links,
     list_parts,
+    load_bom_tree,
+    load_flat_bom,
+    remove_avl_link,
+    remove_bom_line,
+    update_avl_link,
+    update_bom_line,
+    update_cost,
     update_part,
 )
 
@@ -270,18 +319,23 @@ async def create_revision_endpoint(
 # ---------------------------------------------------------------------------
 
 
-class AdvanceStatusPayload(dict):
-    """Runtime body type for advance-status endpoint. Defined inline to avoid
-    a separate schema file for a single-field body."""
-
-
-from pydantic import BaseModel
-
-
 class AdvanceStatusBody(BaseModel):
     """Request body for POST /parts/{part_id}/revisions/{rev_id}/advance."""
 
     target_status: str
+
+
+class BomAddBody(BomItemCreate):
+    """
+    Request body for POST /parts/{part_id}/bom.
+
+    Extends BomItemCreate with an optional `revision_id` field. When
+    revision_id is omitted the endpoint auto-resolves to the part's latest
+    revision (by revision_number). Tests that assert 422 on Released revisions
+    rely on this auto-resolution path.
+    """
+
+    revision_id: Optional[str] = None
 
 
 @router.post(
@@ -313,11 +367,470 @@ async def advance_revision_status_endpoint(
 
     Requires plum:write permission. Returns 404 if part or revision not found.
     """
+    # Handle "latest" as a sentinel to resolve the most recent revision by
+    # revision_number. Tests use /revisions/latest/advance for brevity.
+    resolved_rev_id = rev_id
+    if rev_id == "latest":
+        from app.modules.plum.models import PlumPartRevision
+
+        result = await db.execute(
+            select(PlumPartRevision.id).where(
+                PlumPartRevision.part_id == part_id
+            ).order_by(PlumPartRevision.revision_number.desc()).limit(1)
+        )
+        row = result.first()
+        if row is None:
+            from fastapi import HTTPException as _HTTPException
+            raise _HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No revisions found for part {part_id}",
+            )
+        resolved_rev_id = row[0]
+
     revision = await advance_revision_status(
         db,
         part_id=part_id,
-        revision_id=rev_id,
+        revision_id=resolved_rev_id,
         target_status=body.target_status,
         actor_id=str(current_user.id),
     )
     return revision  # type: ignore[return-value]
+
+
+# ===========================================================================
+# Phase 6: BOM endpoints (PLUM-04/05/06)
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# GET /parts/{part_id}/bom — BOM tree
+# ---------------------------------------------------------------------------
+
+
+@router.get("/parts/{part_id}/bom", response_model=list[BomTreeNode])
+async def get_bom_tree_endpoint(
+    part_id: str,
+    rev_id: Optional[str] = Query(None, description="Revision ID; defaults to latest"),
+    current_user=Depends(require_permission("plum:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[BomTreeNode]:
+    """
+    Return the BOM as a nested tree (PLUM-04/D-02/D-03).
+
+    Children resolve to their latest Released revision (D-02), falling back
+    to the latest Draft with is_unreleased=True (D-03).
+    Requires plum:read permission.
+    """
+    if rev_id is None:
+        from app.modules.plum.models import PlumPartRevision
+
+        result = await db.execute(
+            select(PlumPartRevision.id).where(
+                PlumPartRevision.part_id == part_id
+            ).order_by(PlumPartRevision.revision_number.desc()).limit(1)
+        )
+        row = result.first()
+        if row is None:
+            from fastapi import HTTPException as _HTTPException
+            raise _HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No revisions found for part {part_id}",
+            )
+        rev_id = row[0]
+
+    tree = await load_bom_tree(db, part_id, rev_id)
+    return tree  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# GET /parts/{part_id}/bom/flat — flat BOM with rolled-up quantities
+# ---------------------------------------------------------------------------
+
+
+@router.get("/parts/{part_id}/bom/flat", response_model=list[FlatBomRow])
+async def get_flat_bom_endpoint(
+    part_id: str,
+    rev_id: Optional[str] = Query(None, description="Revision ID; defaults to latest"),
+    current_user=Depends(require_permission("plum:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[FlatBomRow]:
+    """
+    Return the flat BOM with total quantities rolled up across all paths
+    (PLUM-05/D-04). Shared sub-assemblies appear once with summed total_qty.
+    Requires plum:read permission.
+    """
+    if rev_id is None:
+        from app.modules.plum.models import PlumPartRevision
+
+        result = await db.execute(
+            select(PlumPartRevision.id).where(
+                PlumPartRevision.part_id == part_id
+            ).order_by(PlumPartRevision.revision_number.desc()).limit(1)
+        )
+        row = result.first()
+        if row is None:
+            from fastapi import HTTPException as _HTTPException
+            raise _HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No revisions found for part {part_id}",
+            )
+        rev_id = row[0]
+
+    flat = await load_flat_bom(db, part_id, rev_id)
+    return flat  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# GET /parts/{part_id}/where-used — reverse traversal
+# ---------------------------------------------------------------------------
+
+
+@router.get("/parts/{part_id}/where-used", response_model=list[WhereUsedRow])
+async def get_where_used_endpoint(
+    part_id: str,
+    current_user=Depends(require_permission("plum:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[WhereUsedRow]:
+    """
+    Return all parent assemblies that reference this part, direct or indirect
+    (PLUM-06). Indirect ancestors have indirect=True.
+    Requires plum:read permission.
+    """
+    rows = await get_where_used(db, part_id)
+    return rows  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# POST /parts/{part_id}/bom — add BOM line (Draft-only, 201)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/parts/{part_id}/bom",
+    response_model=BomItemRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_bom_line_endpoint(
+    part_id: str,
+    data: BomAddBody,
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> BomItemRead:
+    """
+    Add a child part to a Draft revision's BOM (PLUM-04/D-01/D-05).
+
+    `revision_id` in the body selects the target revision; if omitted the
+    latest revision (by revision_number) is used. Returns 422 if the revision
+    is not in Draft status (T-06-05) or if adding the child would create a
+    cycle (T-06-06). Writes bom.line_added audit event.
+    Requires plum:write permission.
+    """
+    # Resolve revision_id: use body value or auto-resolve to latest
+    resolved_rev_id = data.revision_id
+    if resolved_rev_id is None:
+        from app.modules.plum.models import PlumPartRevision
+
+        result = await db.execute(
+            select(PlumPartRevision.id).where(
+                PlumPartRevision.part_id == part_id
+            ).order_by(PlumPartRevision.revision_number.desc()).limit(1)
+        )
+        row = result.first()
+        if row is None:
+            from fastapi import HTTPException as _HTTPException
+            raise _HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No revisions found for part {part_id}",
+            )
+        resolved_rev_id = row[0]
+
+    # Build the BomItemCreate (without revision_id) for the service call
+    item_data = BomItemCreate(
+        child_part_id=data.child_part_id,
+        qty=data.qty,
+        ref_des=data.ref_des,
+        sort_order=data.sort_order,
+    )
+
+    bom_item = await add_bom_line(
+        db,
+        part_id=part_id,
+        data=item_data,
+        revision_id=resolved_rev_id,
+        actor_id=str(current_user.id),
+    )
+    return bom_item  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# PATCH /parts/{part_id}/bom/{line_id} — update BOM line
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/parts/{part_id}/bom/{line_id}", response_model=BomItemRead)
+async def update_bom_line_endpoint(
+    part_id: str,
+    line_id: str,
+    data: BomItemUpdate,
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> BomItemRead:
+    """
+    Update qty/ref_des/sort_order of a BOM line (PLUM-04/D-01).
+
+    Returns 422 if the revision is not in Draft status (T-06-05).
+    Requires plum:write permission. Writes bom.line_updated audit event.
+    """
+    bom_item = await update_bom_line(
+        db,
+        part_id=part_id,
+        line_id=line_id,
+        data=data,
+        actor_id=str(current_user.id),
+    )
+    return bom_item  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# DELETE /parts/{part_id}/bom/{line_id} — remove BOM line
+# ---------------------------------------------------------------------------
+
+
+@router.delete(
+    "/parts/{part_id}/bom/{line_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_bom_line_endpoint(
+    part_id: str,
+    line_id: str,
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """
+    Remove a BOM line from a Draft revision (PLUM-04/D-01).
+
+    Returns 422 if the revision is not in Draft status (T-06-05).
+    Requires plum:write permission. Writes bom.line_removed audit event.
+    """
+    await remove_bom_line(
+        db,
+        part_id=part_id,
+        line_id=line_id,
+        actor_id=str(current_user.id),
+    )
+
+
+# ===========================================================================
+# Phase 6: AVL endpoints (PLUM-07)
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# GET /parts/{part_id}/avl — list AVL links
+# ---------------------------------------------------------------------------
+
+
+@router.get("/parts/{part_id}/avl", response_model=list[AvlLinkRead])
+async def list_avl_links_endpoint(
+    part_id: str,
+    current_user=Depends(require_permission("plum:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[AvlLinkRead]:
+    """
+    List all AVL links for a part, including embedded price breaks (PLUM-07/D-11).
+
+    Includes active=False links (archived vendors still surface, Pitfall 4).
+    Requires plum:read permission.
+    """
+    links = await list_avl_links(db, part_id)
+    return links  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# POST /parts/{part_id}/avl — add AVL link (201)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/parts/{part_id}/avl",
+    response_model=AvlLinkRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_avl_link_endpoint(
+    part_id: str,
+    data: AvlLinkCreate,
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> AvlLinkRead:
+    """
+    Link a part to a SYERP vendor in the Approved Vendor List (PLUM-07/D-13).
+
+    Validates that the vendor exists with is_vendor=True (T-06-07). Returns 422
+    if the vendor is not found or is not a vendor.
+    Requires plum:write permission. Writes avl.link_added audit event.
+    """
+    link = await add_avl_link(
+        db,
+        part_id=part_id,
+        data=data,
+        actor_id=str(current_user.id),
+    )
+    return link  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# PATCH /parts/{part_id}/avl/{link_id} — update AVL link
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/parts/{part_id}/avl/{link_id}", response_model=AvlLinkRead)
+async def update_avl_link_endpoint(
+    part_id: str,
+    link_id: str,
+    data: AvlLinkUpdate,
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> AvlLinkRead:
+    """
+    Update metadata on an AVL link (PLUM-07/D-11).
+
+    vendor_id and price_breaks are immutable via this endpoint.
+    Requires plum:write permission. Writes avl.link_updated audit event.
+    """
+    link = await update_avl_link(
+        db,
+        part_id=part_id,
+        link_id=link_id,
+        data=data,
+        actor_id=str(current_user.id),
+    )
+    return link  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# DELETE /parts/{part_id}/avl/{link_id} — soft-delete AVL link
+# ---------------------------------------------------------------------------
+
+
+@router.delete(
+    "/parts/{part_id}/avl/{link_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_avl_link_endpoint(
+    part_id: str,
+    link_id: str,
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """
+    Soft-delete an AVL link by setting active=False (PLUM-07/D-11).
+
+    Requires plum:write permission. Writes avl.link_removed audit event.
+    """
+    await remove_avl_link(
+        db,
+        part_id=part_id,
+        link_id=link_id,
+        actor_id=str(current_user.id),
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /parts/{part_id}/avl/{link_id}/price-breaks — add price break (201)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/parts/{part_id}/avl/{link_id}/price-breaks",
+    response_model=PriceBreakRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_price_break_endpoint(
+    part_id: str,
+    link_id: str,
+    data: PriceBreakCreate,
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PriceBreakRead:
+    """
+    Add a price break to an AVL link (PLUM-07/D-11).
+
+    Price breaks are returned sorted by qty_threshold ascending.
+    Requires plum:write permission. Writes avl.price_break_added audit event.
+    """
+    pb = await add_price_break(
+        db,
+        part_id=part_id,
+        link_id=link_id,
+        data=data,
+        actor_id=str(current_user.id),
+    )
+    return pb  # type: ignore[return-value]
+
+
+# ===========================================================================
+# Phase 6: Costing endpoints (PLUM-08/09)
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# GET /parts/{part_id}/revisions/{rev_id}/cost — effective cost read
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/parts/{part_id}/revisions/{rev_id}/cost",
+    response_model=CostRead,
+)
+async def get_cost_endpoint(
+    part_id: str,
+    rev_id: str,
+    current_user=Depends(require_permission("plum:read")),
+    db: AsyncSession = Depends(get_db),
+) -> CostRead:
+    """
+    Return the full cost summary for a revision (PLUM-08/09/D-07).
+
+    Computes effective_cost via the D-07 chain (vendor price → manual →
+    roll-up → uncosted), live bom_rollup_cost, margin, and margin_pct.
+    Released revisions also expose released_cost_snapshot (D-14).
+    Requires plum:read permission.
+    """
+    cost = await get_cost_read(db, part_id, rev_id)
+    return cost  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# PATCH /parts/{part_id}/revisions/{rev_id}/cost — update cost fields on Draft
+# ---------------------------------------------------------------------------
+
+
+@router.patch(
+    "/parts/{part_id}/revisions/{rev_id}/cost",
+    response_model=CostRead,
+)
+async def update_cost_endpoint(
+    part_id: str,
+    rev_id: str,
+    data: CostUpdate,
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> CostRead:
+    """
+    Update cost fields on a Draft revision (PLUM-08/D-06/D-07).
+
+    Accepted fields: material_cost, sale_price, selected_vendor_link_id,
+    selected_price_break_index. Returns 422 if revision is not Draft.
+    Requires plum:write permission. Writes part.cost_updated audit event.
+    Returns the updated CostRead after applying changes.
+    """
+    await update_cost(
+        db,
+        part_id=part_id,
+        revision_id=rev_id,
+        data=data,
+        actor_id=str(current_user.id),
+    )
+    # Return the updated cost read for the caller
+    cost = await get_cost_read(db, part_id, rev_id)
+    return cost  # type: ignore[return-value]
