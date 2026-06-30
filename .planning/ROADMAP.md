@@ -17,7 +17,7 @@
 Plans:
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — Backend data foundation: PlumBomItem/PlumAvlLink/PlumAvlPriceBreak models + 5 revision cost columns, migration 0006, openpyxl dep, Wave 0 backend test stubs (PLUM-04..10)
+- [x] 06-01-PLAN.md — Backend data foundation: PlumBomItem/PlumAvlLink/PlumAvlPriceBreak models + 5 revision cost columns, migration 0006, openpyxl dep, Wave 0 backend test stubs (PLUM-04..10)
 
 **Wave 2** *(blocked on Wave 1)*
 
