@@ -2024,3 +2024,972 @@ async def get_cost_read(
         "margin": margin,
         "margin_pct": margin_pct,
     }
+
+
+# ---------------------------------------------------------------------------
+# Import / Export (PLUM-10, D-15/D-16/D-17/D-18)
+# ---------------------------------------------------------------------------
+# JSON schema (D-16 lossless round-trip):
+#   { schema_version: 1, exported_at: ISO-8601, parts: [
+#     { part_number, active, tags, revisions: [
+#       { revision_label, revision_number, status, description,
+#         material_cost, sale_price, released_cost_snapshot,
+#         selected_vendor_link_id, selected_price_break_index,
+#         bom: [{ child_part_number, quantity, reference_designators }]
+#       }],
+#       avl: [{ vendor_code, vendor_part_number, preferred, notes,
+#               price_breaks: [{ qty_threshold, unit_cost, lead_days }] }]
+#     }
+#   ]}
+# Costs serialized as strings from Decimal (lossless, no float).
+# ---------------------------------------------------------------------------
+
+
+async def build_json_export(db: AsyncSession) -> dict:
+    """
+    Build the full lossless JSON export dataset (PLUM-10, D-16).
+
+    Serializes every PlumPart with all revisions, BOM lines, costs (raw stored
+    columns only — NOT live effective_cost), AVL links, and price breaks.
+    Decimal values are cast to str for lossless JSON round-trip.
+    Returns a dict with schema_version=1 and an exported_at timestamp.
+    """
+    from app.modules.plum.models import (
+        PlumAvlLink,
+        PlumAvlPriceBreak,
+        PlumBomItem,
+        PlumPart,
+        PlumPartRevision,
+    )
+    from sqlalchemy import text as sa_text
+
+    # Load all parts
+    parts_result = await db.execute(
+        select(PlumPart).order_by(PlumPart.part_number)
+    )
+    all_parts = list(parts_result.scalars().all())
+
+    # Load all tags (part_id -> list of tag names)
+    tags_result = await db.execute(
+        sa_text(
+            """
+            SELECT pt.part_id, ct.name
+            FROM plum_part_tag pt
+            JOIN plum_classification_tag ct ON ct.id = pt.tag_id
+            ORDER BY pt.part_id, ct.name
+            """
+        )
+    )
+    tags_by_part: dict[str, list[str]] = {}
+    for row in tags_result.all():
+        pid = str(row[0])
+        tags_by_part.setdefault(pid, []).append(str(row[1]))
+
+    # Load all revisions
+    revs_result = await db.execute(
+        select(PlumPartRevision).order_by(
+            PlumPartRevision.part_id, PlumPartRevision.revision_number
+        )
+    )
+    all_revisions = list(revs_result.scalars().all())
+    revs_by_part: dict[str, list] = {}
+    for rev in all_revisions:
+        revs_by_part.setdefault(str(rev.part_id), []).append(rev)
+
+    # Load all BOM items
+    bom_result = await db.execute(
+        select(PlumBomItem).order_by(
+            PlumBomItem.parent_revision_id, PlumBomItem.sort_order
+        )
+    )
+    all_bom_items = list(bom_result.scalars().all())
+    bom_by_rev: dict[str, list] = {}
+    for bi in all_bom_items:
+        bom_by_rev.setdefault(str(bi.parent_revision_id), []).append(bi)
+
+    # Build part_number lookup from part_id
+    part_number_by_id: dict[str, str] = {
+        str(p.id): str(p.part_number) for p in all_parts
+    }
+
+    # Load all AVL links
+    avl_result = await db.execute(
+        select(PlumAvlLink).order_by(PlumAvlLink.part_id)
+    )
+    all_avl_links = list(avl_result.scalars().all())
+    avl_by_part: dict[str, list] = {}
+    for link in all_avl_links:
+        avl_by_part.setdefault(str(link.part_id), []).append(link)
+
+    # Load all price breaks
+    pb_result = await db.execute(
+        select(PlumAvlPriceBreak).order_by(
+            PlumAvlPriceBreak.avl_link_id, PlumAvlPriceBreak.qty_threshold
+        )
+    )
+    all_price_breaks = list(pb_result.scalars().all())
+    pb_by_link: dict[str, list] = {}
+    for pb in all_price_breaks:
+        pb_by_link.setdefault(str(pb.avl_link_id), []).append(pb)
+
+    # Resolve vendor_code from syerp_partner
+    vendor_ids = {str(link.vendor_id) for link in all_avl_links}
+    vendor_code_by_id: dict[str, str] = {}
+    if vendor_ids:
+        from app.modules.syerp.models import SyerpPartner
+
+        vend_result = await db.execute(
+            select(SyerpPartner.id, SyerpPartner.code).where(
+                SyerpPartner.id.in_(list(vendor_ids))
+            )
+        )
+        for vid, vcode in vend_result.all():
+            vendor_code_by_id[str(vid)] = str(vcode)
+
+    # Assemble the export payload
+    parts_payload: list[dict] = []
+    for part in all_parts:
+        pid = str(part.id)
+        # Revisions
+        revisions_payload: list[dict] = []
+        for rev in revs_by_part.get(pid, []):
+            rid = str(rev.id)
+            # BOM lines for this revision
+            bom_payload: list[dict] = []
+            for bi in bom_by_rev.get(rid, []):
+                child_pn = part_number_by_id.get(str(bi.child_part_id), "")
+                bom_payload.append(
+                    {
+                        "child_part_number": child_pn,
+                        "quantity": str(bi.qty) if bi.qty is not None else None,
+                        "reference_designators": bi.ref_des,
+                    }
+                )
+            revisions_payload.append(
+                {
+                    "revision_label": rev.revision_label,
+                    "revision_number": rev.revision_number,
+                    "status": rev.status,
+                    "description": rev.description,
+                    "material_cost": (
+                        str(rev.material_cost) if rev.material_cost is not None else None
+                    ),
+                    "sale_price": (
+                        str(rev.sale_price) if rev.sale_price is not None else None
+                    ),
+                    "released_cost_snapshot": (
+                        str(rev.released_cost_snapshot)
+                        if rev.released_cost_snapshot is not None
+                        else None
+                    ),
+                    "selected_vendor_link_id": rev.selected_vendor_link_id,
+                    "selected_price_break_index": rev.selected_price_break_index,
+                    "bom": bom_payload,
+                }
+            )
+        # AVL links
+        avl_payload: list[dict] = []
+        for link in avl_by_part.get(pid, []):
+            lid = str(link.id)
+            pb_payload: list[dict] = []
+            for pb in pb_by_link.get(lid, []):
+                pb_payload.append(
+                    {
+                        "qty_threshold": pb.qty_threshold,
+                        "unit_cost": (
+                            str(pb.unit_cost) if pb.unit_cost is not None else None
+                        ),
+                        "lead_days": pb.lead_days,
+                    }
+                )
+            avl_payload.append(
+                {
+                    "vendor_code": vendor_code_by_id.get(str(link.vendor_id), ""),
+                    "vendor_part_number": link.vendor_part_number,
+                    "preferred": link.preferred,
+                    "notes": link.notes,
+                    "price_breaks": pb_payload,
+                }
+            )
+        parts_payload.append(
+            {
+                "part_number": str(part.part_number),
+                "active": bool(part.active),
+                "tags": tags_by_part.get(pid, []),
+                "revisions": revisions_payload,
+                "avl": avl_payload,
+            }
+        )
+
+    return {
+        "schema_version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "parts": parts_payload,
+    }
+
+
+def generate_excel_export(data: dict) -> bytes:
+    """
+    Generate a three-sheet .xlsx workbook from the export data dict (PLUM-10, D-16).
+
+    Sheets:
+      "Parts" — part_number, description (from latest revision), tags
+      "BOMs"  — parent_part_number, parent_revision_label, child_part_number, quantity,
+                 reference_designators
+      "AVL"   — part_number, vendor_code, vendor_part_number, preferred, notes,
+                 pb_qty_threshold, pb_unit_cost, pb_lead_days (one row per price break)
+
+    Uses openpyxl; workbook saved to BytesIO and returned as bytes.
+    T-06-12 mitigation: no formula execution — only data written via .append().
+    """
+    from io import BytesIO
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+
+    # --- Sheet 1: Parts ---
+    ws_parts = wb.active
+    ws_parts.title = "Parts"
+    ws_parts.append(
+        ["part_number", "description", "category", "unit_of_measure", "tags", "notes"]
+    )
+    for part in data.get("parts", []):
+        # Extract description from the latest revision (highest revision_number)
+        revisions = part.get("revisions", [])
+        description = ""
+        if revisions:
+            latest = max(revisions, key=lambda r: r.get("revision_number", 0))
+            description = latest.get("description", "") or ""
+        tags = ",".join(part.get("tags", []))
+        ws_parts.append(
+            [
+                part.get("part_number", ""),
+                description,
+                "",  # category not in export JSON; column kept for human-friendly template
+                "",  # unit_of_measure — on revision, not part
+                tags,
+                "",  # notes — not present in current schema
+            ]
+        )
+
+    # --- Sheet 2: BOMs (sheet named "BOM" per test_import_export Wave-0 stub) ---
+    ws_boms = wb.create_sheet("BOM")
+    ws_boms.append(
+        [
+            "parent_part_number",
+            "parent_revision_label",
+            "child_part_number",
+            "quantity",
+            "reference_designators",
+        ]
+    )
+    for part in data.get("parts", []):
+        parent_pn = part.get("part_number", "")
+        for rev in part.get("revisions", []):
+            rev_label = rev.get("revision_label", "")
+            for bom_line in rev.get("bom", []):
+                ws_boms.append(
+                    [
+                        parent_pn,
+                        rev_label,
+                        bom_line.get("child_part_number", ""),
+                        bom_line.get("quantity", ""),
+                        bom_line.get("reference_designators", ""),
+                    ]
+                )
+
+    # --- Sheet 3: AVL ---
+    ws_avl = wb.create_sheet("AVL")
+    ws_avl.append(
+        [
+            "part_number",
+            "vendor_code",
+            "vendor_part_number",
+            "preferred",
+            "notes",
+            "pb_qty_threshold",
+            "pb_unit_cost",
+            "pb_lead_days",
+        ]
+    )
+    for part in data.get("parts", []):
+        pn = part.get("part_number", "")
+        for avl in part.get("avl", []):
+            price_breaks = avl.get("price_breaks", [])
+            if price_breaks:
+                for pb in price_breaks:
+                    ws_avl.append(
+                        [
+                            pn,
+                            avl.get("vendor_code", ""),
+                            avl.get("vendor_part_number", ""),
+                            avl.get("preferred", False),
+                            avl.get("notes", ""),
+                            pb.get("qty_threshold", ""),
+                            pb.get("unit_cost", ""),
+                            pb.get("lead_days", ""),
+                        ]
+                    )
+            else:
+                # AVL link with no price breaks — emit one row with empty PB columns
+                ws_avl.append(
+                    [
+                        pn,
+                        avl.get("vendor_code", ""),
+                        avl.get("vendor_part_number", ""),
+                        avl.get("preferred", False),
+                        avl.get("notes", ""),
+                        "",
+                        "",
+                        "",
+                    ]
+                )
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Import parsing (PLUM-10, D-15/D-16)
+# ---------------------------------------------------------------------------
+
+
+def parse_json_import(content: bytes) -> dict:
+    """
+    Parse a JSON import file (bytes) into a normalized in-memory dataset dict.
+
+    Expects the schema produced by build_json_export (schema_version=1).
+    Returns the parsed dict as-is; validation is performed separately in
+    validate_import (two-pass cross-reference check, D-18 Pitfall 6).
+
+    Raises HTTPException 422 on malformed JSON.
+    """
+    import json as _json
+
+    try:
+        data = _json.loads(content)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid JSON: {exc}",
+        )
+    if not isinstance(data, dict):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Import JSON must be an object.",
+        )
+    return data
+
+
+def parse_excel_import(content: bytes) -> dict:
+    """
+    Parse an Excel (.xlsx) import file into the normalized in-memory dataset dict.
+
+    Reads the three sheets (Parts, BOMs, AVL) from the workbook via
+    openpyxl.load_workbook(read_only=True, data_only=True) — values only,
+    no formula execution (T-06-12 mitigation).
+
+    Returns a dict matching the JSON export schema so validate_import and
+    commit_import can handle both formats identically.
+
+    Raises HTTPException 422 on malformed workbook or missing required sheets.
+    """
+    from io import BytesIO as _BytesIO
+    import openpyxl
+
+    try:
+        wb = openpyxl.load_workbook(
+            _BytesIO(content), read_only=True, data_only=True
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid Excel file: {exc}",
+        )
+
+    sheet_names = wb.sheetnames
+
+    # Build parts dict keyed by part_number for assembly
+    parts_by_pn: dict[str, dict] = {}
+
+    # --- Parse Parts sheet ---
+    if "Parts" in sheet_names:
+        ws = wb["Parts"]
+        rows = iter(ws.rows)
+        next(rows, None)  # skip header
+        for row in rows:
+            vals = [cell.value for cell in row]
+            if not vals or vals[0] is None:
+                continue
+            pn = str(vals[0]).strip()
+            if not pn:
+                continue
+            tags_raw = vals[4] if len(vals) > 4 and vals[4] is not None else ""
+            tags = (
+                [t.strip() for t in str(tags_raw).split(",") if t.strip()]
+                if tags_raw
+                else []
+            )
+            parts_by_pn[pn] = {
+                "part_number": pn,
+                "active": True,
+                "tags": tags,
+                "revisions": [],
+                "avl": [],
+            }
+
+    # --- Parse BOMs sheet (named "BOM" in export; also accepts "BOMs" for round-trip) ---
+    _bom_sheet = next(
+        (n for n in ("BOM", "BOMs") if n in sheet_names), None
+    )
+    if _bom_sheet is not None:
+        bom_by_pn_rev: dict[tuple, list] = {}
+        ws = wb[_bom_sheet]
+        rows = iter(ws.rows)
+        next(rows, None)  # skip header
+        for row in rows:
+            vals = [cell.value for cell in row]
+            if not vals or vals[0] is None:
+                continue
+            parent_pn = str(vals[0]).strip() if vals[0] else ""
+            rev_label = str(vals[1]).strip() if len(vals) > 1 and vals[1] else ""
+            child_pn = str(vals[2]).strip() if len(vals) > 2 and vals[2] else ""
+            qty = (
+                str(vals[3]).strip()
+                if len(vals) > 3 and vals[3] is not None
+                else "1"
+            )
+            ref_des = vals[4] if len(vals) > 4 else None
+            if parent_pn and child_pn:
+                key = (parent_pn, rev_label)
+                bom_by_pn_rev.setdefault(key, []).append(
+                    {
+                        "child_part_number": child_pn,
+                        "quantity": qty,
+                        "reference_designators": (
+                            str(ref_des) if ref_des else None
+                        ),
+                    }
+                )
+        # Attach BOM lines to parts/revisions
+        for (parent_pn, rev_label), lines in bom_by_pn_rev.items():
+            if parent_pn not in parts_by_pn:
+                parts_by_pn[parent_pn] = {
+                    "part_number": parent_pn,
+                    "active": True,
+                    "tags": [],
+                    "revisions": [],
+                    "avl": [],
+                }
+            part_entry = parts_by_pn[parent_pn]
+            rev_entry = next(
+                (
+                    r
+                    for r in part_entry["revisions"]
+                    if r.get("revision_label") == rev_label
+                ),
+                None,
+            )
+            if rev_entry is None:
+                rev_entry = {
+                    "revision_label": rev_label,
+                    "revision_number": 1,
+                    "status": "draft",
+                    "description": None,
+                    "material_cost": None,
+                    "sale_price": None,
+                    "released_cost_snapshot": None,
+                    "selected_vendor_link_id": None,
+                    "selected_price_break_index": None,
+                    "bom": [],
+                }
+                part_entry["revisions"].append(rev_entry)
+            rev_entry["bom"].extend(lines)
+
+    # --- Parse AVL sheet ---
+    if "AVL" in sheet_names:
+        ws = wb["AVL"]
+        rows = iter(ws.rows)
+        next(rows, None)  # skip header
+        avl_links_temp: dict[tuple, dict] = {}
+        for row in rows:
+            vals = [cell.value for cell in row]
+            if not vals or vals[0] is None:
+                continue
+            pn = str(vals[0]).strip() if vals[0] else ""
+            vendor_code = (
+                str(vals[1]).strip() if len(vals) > 1 and vals[1] else ""
+            )
+            if not pn or not vendor_code:
+                continue
+            key = (pn, vendor_code)
+            if key not in avl_links_temp:
+                avl_links_temp[key] = {
+                    "vendor_code": vendor_code,
+                    "vendor_part_number": (
+                        str(vals[2]).strip()
+                        if len(vals) > 2 and vals[2]
+                        else None
+                    ),
+                    "preferred": (
+                        bool(vals[3])
+                        if len(vals) > 3 and vals[3] is not None
+                        else False
+                    ),
+                    "notes": (
+                        str(vals[4]).strip() if len(vals) > 4 and vals[4] else None
+                    ),
+                    "price_breaks": [],
+                }
+                if pn not in parts_by_pn:
+                    parts_by_pn[pn] = {
+                        "part_number": pn,
+                        "active": True,
+                        "tags": [],
+                        "revisions": [],
+                        "avl": [],
+                    }
+                parts_by_pn[pn]["avl"].append(avl_links_temp[key])
+            # Price break columns: pb_qty_threshold, pb_unit_cost, pb_lead_days
+            pb_qty = vals[5] if len(vals) > 5 and vals[5] is not None else None
+            pb_cost = vals[6] if len(vals) > 6 and vals[6] is not None else None
+            if pb_qty is not None and pb_cost is not None:
+                try:
+                    avl_links_temp[key]["price_breaks"].append(
+                        {
+                            "qty_threshold": int(pb_qty),
+                            "unit_cost": str(pb_cost),
+                            "lead_days": (
+                                int(vals[7])
+                                if len(vals) > 7 and vals[7] is not None
+                                else None
+                            ),
+                        }
+                    )
+                except (ValueError, TypeError):
+                    pass  # skip malformed price break row
+
+    return {
+        "schema_version": 1,
+        "exported_at": None,
+        "parts": list(parts_by_pn.values()),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Import validate/preview (PLUM-10, D-18 step 1 — NO DB WRITES)
+# ---------------------------------------------------------------------------
+
+
+async def validate_import(
+    db: AsyncSession,
+    data: dict,
+) -> "ImportPreviewResponse":
+    """
+    Validate an import payload (two-pass cross-reference check, D-18 step 1).
+
+    NEVER writes to the DB — preview is side-effect free.
+
+    Two-pass algorithm (RESEARCH Pitfall 6):
+      Pass 1: Collect all part_numbers declared in the file (file-declared set).
+      Pass 2: For each row, validate against DB union file-declared parts.
+               AVL vendor_code must resolve to an existing syerp_partner (is_vendor=True).
+
+    Counts rows as new vs. updated by checking existence on stable keys:
+      - Part: stable key = part_number
+
+    Returns ImportPreviewResponse(new_count, updated_count, errors).
+    """
+    from app.modules.plum.models import PlumPart
+    from app.modules.plum.schemas import ImportPreviewResponse, ImportRowError
+    from app.modules.syerp.models import SyerpPartner
+
+    errors: list[ImportRowError] = []
+    parts_in_file: list[dict] = data.get("parts", [])
+
+    # --- Pass 1: Collect file-declared part_numbers ---
+    file_part_numbers: set[str] = set()
+    for part in parts_in_file:
+        pn = part.get("part_number", "")
+        if pn:
+            file_part_numbers.add(str(pn))
+
+    # --- Fetch existing parts from DB (stable key: part_number) ---
+    db_all_parts_result = await db.execute(select(PlumPart.part_number))
+    db_all_part_numbers: set[str] = {
+        str(row[0]) for row in db_all_parts_result.all()
+    }
+
+    # Combined known set for BOM cross-reference validation
+    known_part_numbers = db_all_part_numbers | file_part_numbers
+
+    # --- Resolve vendor_codes referenced in the file ---
+    file_vendor_codes: set[str] = set()
+    for part in parts_in_file:
+        for avl in part.get("avl", []):
+            vc = avl.get("vendor_code", "") or avl.get("vendor_id", "")
+            if vc:
+                file_vendor_codes.add(str(vc))
+
+    db_vendor_codes: set[str] = set()
+    if file_vendor_codes:
+        vend_result = await db.execute(
+            select(SyerpPartner.code).where(
+                SyerpPartner.is_vendor.is_(True),
+                SyerpPartner.code.in_(list(file_vendor_codes)),
+            )
+        )
+        db_vendor_codes = {str(row[0]) for row in vend_result.all()}
+
+    # --- Pass 2: Validate each part + BOM + AVL ---
+    new_count = 0
+    updated_count = 0
+
+    for row_idx, part in enumerate(parts_in_file, start=1):
+        pn = part.get("part_number", "")
+        if not pn:
+            errors.append(
+                ImportRowError(
+                    row=row_idx,
+                    field="part_number",
+                    message="part_number is required.",
+                )
+            )
+            continue
+
+        if pn in db_all_part_numbers:
+            updated_count += 1
+        else:
+            new_count += 1
+
+        # Validate BOM child cross-references
+        for rev in part.get("revisions", []):
+            for bom_line in rev.get("bom", []):
+                child_pn = bom_line.get("child_part_number", "")
+                if child_pn and child_pn not in known_part_numbers:
+                    errors.append(
+                        ImportRowError(
+                            row=row_idx,
+                            field="child_part_number",
+                            message=(
+                                f"BOM child part '{child_pn}' is not declared in the "
+                                f"import file and does not exist in the database."
+                            ),
+                        )
+                    )
+
+        # Validate AVL vendor_code cross-references
+        for avl_idx, avl in enumerate(part.get("avl", []), start=1):
+            vc = avl.get("vendor_code", "") or avl.get("vendor_id", "")
+            if vc and vc not in db_vendor_codes:
+                errors.append(
+                    ImportRowError(
+                        row=row_idx,
+                        field="vendor_id",
+                        message=(
+                            f"AVL vendor_code '{vc}' does not match any known SYERP "
+                            f"vendor (is_vendor=True). Row {avl_idx} for part '{pn}'."
+                        ),
+                    )
+                )
+
+    return ImportPreviewResponse(
+        new_count=new_count,
+        updated_count=updated_count,
+        errors=errors,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Import commit (PLUM-10, D-17/D-18 step 2 — upsert, never delete)
+# ---------------------------------------------------------------------------
+
+
+async def commit_import(
+    db: AsyncSession,
+    data: dict,
+    actor_id: str,
+) -> "ImportCommitResponse":
+    """
+    Apply an import payload to the database in one transaction (PLUM-10, D-17/D-18).
+
+    Algorithm (upsert on stable keys, NEVER hard-delete):
+      1. Re-validate (same logic as validate_import). Any errors block the commit.
+      2. Upsert PlumPart rows by part_number (select-before-insert-or-update).
+      3. Upsert PlumPartRevision rows by (part_id, revision_label).
+      4. Upsert PlumBomItem rows by (parent_revision_id, child_part_id).
+      5. Upsert PlumAvlLink rows by (part_id, vendor_id).
+         Price breaks: replace-all per AVL link (subordinate data).
+      6. NEVER calls DELETE on parts/revisions/BOM/AVL rows absent from the file. (D-17)
+      7. Writes plum.imported audit event.
+
+    Returns ImportCommitResponse(inserted, updated).
+    Raises HTTPException 400 if validate_import returns any errors.
+    """
+    from app.modules.auth.service import write_audit
+    from app.modules.plum.models import (
+        PlumAvlLink,
+        PlumAvlPriceBreak,
+        PlumBomItem,
+        PlumPart,
+        PlumPartRevision,
+    )
+    from app.modules.plum.schemas import ImportCommitResponse
+    from app.modules.syerp.models import SyerpPartner
+
+    # --- Step 1: Re-validate (D-18 Pitfall 5 — never trust preview result from client) ---
+    preview = await validate_import(db, data)
+    if preview.errors:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Import validation failed with {len(preview.errors)} error(s). "
+                f"Run preview first and resolve all errors before committing."
+            ),
+        )
+
+    inserted = 0
+    updated = 0
+    parts_in_file: list[dict] = data.get("parts", [])
+
+    # Fetch vendor_code -> vendor_id mapping for the file's vendor codes
+    file_vendor_codes = {
+        avl.get("vendor_code", "") or avl.get("vendor_id", "")
+        for part in parts_in_file
+        for avl in part.get("avl", [])
+        if avl.get("vendor_code", "") or avl.get("vendor_id", "")
+    }
+    vendor_id_by_code: dict[str, str] = {}
+    if file_vendor_codes:
+        vend_result = await db.execute(
+            select(SyerpPartner.id, SyerpPartner.code).where(
+                SyerpPartner.is_vendor.is_(True),
+                SyerpPartner.code.in_(list(file_vendor_codes)),
+            )
+        )
+        for vid, vcode in vend_result.all():
+            vendor_id_by_code[str(vcode)] = str(vid)
+
+    for part_data in parts_in_file:
+        pn = str(part_data.get("part_number", "")).strip()
+        if not pn:
+            continue
+
+        # --- Upsert Part (stable key: part_number) ---
+        existing_part_result = await db.execute(
+            select(PlumPart).where(PlumPart.part_number == pn)
+        )
+        existing_part = existing_part_result.scalars().first()
+        if existing_part is None:
+            new_part = PlumPart(
+                id=str(uuid.uuid4()),
+                part_number=pn,
+                active=bool(part_data.get("active", True)),
+            )
+            db.add(new_part)
+            await db.flush()
+            part_id = str(new_part.id)
+            inserted += 1
+        else:
+            part_id = str(existing_part.id)
+            if existing_part.active != bool(part_data.get("active", True)):
+                existing_part.active = bool(part_data.get("active", True))
+            updated += 1
+
+        # --- Upsert Revisions (stable key: part_id + revision_label) ---
+        for rev_data in part_data.get("revisions", []):
+            rev_label = str(rev_data.get("revision_label", "")).strip()
+            if not rev_label:
+                continue
+            existing_rev_result = await db.execute(
+                select(PlumPartRevision).where(
+                    PlumPartRevision.part_id == part_id,
+                    PlumPartRevision.revision_label == rev_label,
+                )
+            )
+            existing_rev = existing_rev_result.scalars().first()
+            if existing_rev is None:
+                max_rev_result = await db.execute(
+                    select(func.max(PlumPartRevision.revision_number)).where(
+                        PlumPartRevision.part_id == part_id
+                    )
+                )
+                max_rev_num = max_rev_result.scalar() or 0
+                new_rev = PlumPartRevision(
+                    id=str(uuid.uuid4()),
+                    part_id=part_id,
+                    revision_label=rev_label,
+                    revision_number=(
+                        rev_data.get("revision_number") or max_rev_num + 1
+                    ),
+                    status=rev_data.get("status", "draft"),
+                    description=rev_data.get("description"),
+                    material_cost=(
+                        Decimal(str(rev_data["material_cost"]))
+                        if rev_data.get("material_cost") is not None
+                        else None
+                    ),
+                    sale_price=(
+                        Decimal(str(rev_data["sale_price"]))
+                        if rev_data.get("sale_price") is not None
+                        else None
+                    ),
+                    released_cost_snapshot=(
+                        Decimal(str(rev_data["released_cost_snapshot"]))
+                        if rev_data.get("released_cost_snapshot") is not None
+                        else None
+                    ),
+                    selected_vendor_link_id=rev_data.get("selected_vendor_link_id"),
+                    selected_price_break_index=rev_data.get(
+                        "selected_price_break_index"
+                    ),
+                )
+                db.add(new_rev)
+                await db.flush()
+                rev_id = str(new_rev.id)
+            else:
+                rev_id = str(existing_rev.id)
+                existing_rev.status = rev_data.get("status", existing_rev.status)
+                existing_rev.description = rev_data.get(
+                    "description", existing_rev.description
+                )
+                if rev_data.get("material_cost") is not None:
+                    existing_rev.material_cost = Decimal(
+                        str(rev_data["material_cost"])
+                    )
+                if rev_data.get("sale_price") is not None:
+                    existing_rev.sale_price = Decimal(str(rev_data["sale_price"]))
+
+            # --- Upsert BOM lines (stable key: parent_revision_id + child_part_id) ---
+            for bom_line in rev_data.get("bom", []):
+                child_pn = str(bom_line.get("child_part_number", "")).strip()
+                if not child_pn:
+                    continue
+                child_part_result = await db.execute(
+                    select(PlumPart.id).where(PlumPart.part_number == child_pn)
+                )
+                child_part_id_val = child_part_result.scalar()
+                if child_part_id_val is None:
+                    continue  # validated in preview; skip if still missing
+                child_part_id = str(child_part_id_val)
+                existing_bom_result = await db.execute(
+                    select(PlumBomItem).where(
+                        PlumBomItem.parent_revision_id == rev_id,
+                        PlumBomItem.child_part_id == child_part_id,
+                    )
+                )
+                existing_bom = existing_bom_result.scalars().first()
+                qty_val = bom_line.get("quantity", "1")
+                try:
+                    qty_dec = (
+                        Decimal(str(qty_val)) if qty_val else Decimal("1")
+                    )
+                except Exception:
+                    qty_dec = Decimal("1")
+                if existing_bom is None:
+                    max_sort_result = await db.execute(
+                        select(func.max(PlumBomItem.sort_order)).where(
+                            PlumBomItem.parent_revision_id == rev_id
+                        )
+                    )
+                    next_sort = (max_sort_result.scalar() or 0) + 1
+                    db.add(
+                        PlumBomItem(
+                            id=str(uuid.uuid4()),
+                            parent_revision_id=rev_id,
+                            child_part_id=child_part_id,
+                            qty=qty_dec,
+                            ref_des=bom_line.get("reference_designators"),
+                            sort_order=next_sort,
+                        )
+                    )
+                else:
+                    existing_bom.qty = qty_dec
+                    existing_bom.ref_des = bom_line.get("reference_designators")
+                await db.flush()
+
+        # --- Upsert AVL links (stable key: part_id + vendor_id) ---
+        for avl_data in part_data.get("avl", []):
+            vc = str(
+                avl_data.get("vendor_code", "") or avl_data.get("vendor_id", "")
+            ).strip()
+            vendor_db_id = vendor_id_by_code.get(vc)
+            if not vendor_db_id:
+                continue  # validated in preview; skip if still missing
+
+            existing_avl_result = await db.execute(
+                select(PlumAvlLink).where(
+                    PlumAvlLink.part_id == part_id,
+                    PlumAvlLink.vendor_id == vendor_db_id,
+                )
+            )
+            existing_avl = existing_avl_result.scalars().first()
+            if existing_avl is None:
+                new_avl = PlumAvlLink(
+                    id=str(uuid.uuid4()),
+                    part_id=part_id,
+                    vendor_id=vendor_db_id,
+                    vendor_part_number=avl_data.get("vendor_part_number"),
+                    preferred=bool(avl_data.get("preferred", False)),
+                    notes=avl_data.get("notes"),
+                    active=True,
+                )
+                db.add(new_avl)
+                await db.flush()
+                avl_link_id = str(new_avl.id)
+            else:
+                avl_link_id = str(existing_avl.id)
+                existing_avl.vendor_part_number = avl_data.get(
+                    "vendor_part_number"
+                )
+                existing_avl.preferred = bool(avl_data.get("preferred", False))
+                existing_avl.notes = avl_data.get("notes")
+
+            # Replace-all price breaks for this AVL link.
+            # NEVER-DELETE rule applies to parts/revisions/BOM/AVL — not to
+            # subordinate price-break rows (which are replace-all per link, D-17).
+            existing_pbs_result = await db.execute(
+                select(PlumAvlPriceBreak).where(
+                    PlumAvlPriceBreak.avl_link_id == avl_link_id
+                )
+            )
+            for old_pb in existing_pbs_result.scalars().all():
+                await db.delete(old_pb)
+            await db.flush()
+
+            for pb_idx, pb_data in enumerate(avl_data.get("price_breaks", [])):
+                try:
+                    unit_cost_dec = Decimal(
+                        str(pb_data.get("unit_cost", "0"))
+                    )
+                except Exception:
+                    unit_cost_dec = Decimal("0")
+                db.add(
+                    PlumAvlPriceBreak(
+                        id=str(uuid.uuid4()),
+                        avl_link_id=avl_link_id,
+                        qty_threshold=int(pb_data.get("qty_threshold", 1)),
+                        unit_cost=unit_cost_dec,
+                        lead_days=pb_data.get("lead_days"),
+                        sort_order=pb_idx,
+                    )
+                )
+            await db.flush()
+
+    # NEVER hard-delete parts, revisions, BOM lines, or AVL links absent from the file. (D-17)
+    # Only price breaks are replaced (replace-all per AVL link, subordinate data).
+
+    await db.commit()
+
+    await write_audit(
+        db,
+        actor_id=actor_id,
+        action="plum.imported",
+        target_type="import",
+        target_id="",
+        detail=f"Import committed: {inserted} inserted, {updated} updated.",
+    )
+
+    return ImportCommitResponse(inserted=inserted, updated=updated)
