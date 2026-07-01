@@ -25,11 +25,11 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 — same service.py/router.py files)*
 
-- [ ] 06-03-PLAN.md — Backend import/export: lossless JSON + multi-sheet Excel export, two-step preview/commit upsert import (never-delete, 10MB guard, cross-ref validation); greens test_import_export
+- [x] 06-03-PLAN.md — Backend import/export: lossless JSON + multi-sheet Excel export, two-step preview/commit upsert import (never-delete, 10MB guard, cross-ref validation); greens test_import_export
 
 **Wave 4** *(blocked on Wave 2)*
 
-- [ ] 06-04-PLAN.md — Frontend components: Tooltip install, BomTree (tree + flat) + smoke test, BomLineSheet (part search + cycle error), PriceBreakEditor, AvlLinkSheet (vendor search)
+- [x] 06-04-PLAN.md — Frontend components: Tooltip install, BomTree (tree + flat) + smoke test, BomLineSheet (part search + cycle error), PriceBreakEditor, AvlLinkSheet (vendor search)
 
 **Wave 5** *(blocked on Waves 3 + 4)*
 
