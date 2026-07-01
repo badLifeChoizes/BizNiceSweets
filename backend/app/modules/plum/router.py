@@ -55,9 +55,11 @@ Archive strategy:
 """
 from __future__ import annotations
 
+import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,6 +78,8 @@ from app.modules.plum.schemas import (
     CostRead,
     CostUpdate,
     FlatBomRow,
+    ImportCommitResponse,
+    ImportPreviewResponse,
     PartCreate,
     PartDetailRead,
     PartRead,
@@ -91,8 +95,11 @@ from app.modules.plum.service import (
     add_bom_line,
     add_price_break,
     advance_revision_status,
+    build_json_export,
+    commit_import,
     create_part,
     create_revision,
+    generate_excel_export,
     generate_part_number,
     get_cost_read,
     get_part,
@@ -103,12 +110,15 @@ from app.modules.plum.service import (
     list_parts,
     load_bom_tree,
     load_flat_bom,
+    parse_excel_import,
+    parse_json_import,
     remove_avl_link,
     remove_bom_line,
     update_avl_link,
     update_bom_line,
     update_cost,
     update_part,
+    validate_import,
 )
 
 router = APIRouter(prefix="/plum", tags=["plum"])
@@ -834,3 +844,219 @@ async def update_cost_endpoint(
     # Return the updated cost read for the caller
     cost = await get_cost_read(db, part_id, rev_id)
     return cost  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# GET /export/json — lossless JSON export (PLUM-10, D-16/D-19)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/export/json")
+async def export_json_endpoint(
+    current_user=Depends(require_permission("plum:read")),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """
+    Export the full PLUM dataset as a lossless JSON file (PLUM-10, D-16).
+
+    Returns a StreamingResponse with Content-Disposition attachment so the
+    browser triggers a file download. The JSON schema is fully round-trip
+    compatible with POST /import/commit.
+
+    Requires plum:read permission (D-19).
+    Writes audit event plum.exported (D-19).
+    """
+    data = await build_json_export(db)
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="plum.exported",
+        target_type="export",
+        target_id="",
+        detail="json",
+    )
+    json_bytes = json.dumps(data, default=str).encode("utf-8")
+
+    from io import BytesIO
+
+    return StreamingResponse(
+        BytesIO(json_bytes),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": "attachment; filename=plum-export.json"
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /export/excel — Excel export (PLUM-10, D-16/D-19)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/export/excel")
+async def export_excel_endpoint(
+    current_user=Depends(require_permission("plum:read")),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """
+    Export the PLUM dataset as a three-sheet Excel (.xlsx) workbook (PLUM-10, D-16).
+
+    Sheets: Parts, BOM, AVL. Human-friendly format for review and bulk-editing.
+    The Excel file can be re-imported via POST /import/preview + /import/commit.
+
+    Requires plum:read permission (D-19).
+    Writes audit event plum.exported (D-19).
+    """
+    data = await build_json_export(db)
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="plum.exported",
+        target_type="export",
+        target_id="",
+        detail="excel",
+    )
+    xlsx_bytes = generate_excel_export(data)
+
+    from io import BytesIO
+
+    return StreamingResponse(
+        BytesIO(xlsx_bytes),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": "attachment; filename=plum-export.xlsx"
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /import/preview — import preview / dry-run (PLUM-10, D-18 step 1)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/import/preview", response_model=ImportPreviewResponse)
+async def import_preview_endpoint(
+    file: UploadFile = File(...),
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> ImportPreviewResponse:
+    """
+    Preview an import file without writing to the DB (PLUM-10, D-18 step 1).
+
+    Accepts .json or .xlsx upload. Validates cross-references, counts new vs.
+    updated rows, and returns any row-level errors. No data is written.
+
+    Upload guard: rejects files > 10 MB (T-06-11, 413).
+    Format dispatch: .json → parse_json_import; .xlsx → parse_excel_import.
+    Unsupported extensions → 422.
+
+    Requires plum:write permission (D-19).
+    """
+    content = await file.read()
+
+    # T-06-11: 10 MB upload guard
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File exceeds 10 MB limit.",
+        )
+
+    filename = file.filename or ""
+    if filename.endswith(".json"):
+        data = parse_json_import(content)
+    elif filename.endswith(".xlsx"):
+        data = parse_excel_import(content)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported file type. Use .json or .xlsx",
+        )
+
+    return await validate_import(db, data)
+
+
+# ---------------------------------------------------------------------------
+# POST /import/validate — alias for /import/preview (test stub uses /validate)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/import/validate", response_model=ImportPreviewResponse)
+async def import_validate_endpoint(
+    file: UploadFile = File(...),
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> ImportPreviewResponse:
+    """
+    Alias for POST /import/preview (Wave-0 test stubs reference /import/validate).
+
+    Identical behavior to /import/preview — see that endpoint for full docs.
+    Requires plum:write permission (D-19).
+    """
+    content = await file.read()
+
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File exceeds 10 MB limit.",
+        )
+
+    filename = file.filename or ""
+    if filename.endswith(".json"):
+        data = parse_json_import(content)
+    elif filename.endswith(".xlsx"):
+        data = parse_excel_import(content)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported file type. Use .json or .xlsx",
+        )
+
+    return await validate_import(db, data)
+
+
+# ---------------------------------------------------------------------------
+# POST /import/commit — transactional upsert commit (PLUM-10, D-17/D-18 step 2)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/import/commit", response_model=ImportCommitResponse)
+async def import_commit_endpoint(
+    file: UploadFile = File(...),
+    current_user=Depends(require_permission("plum:write")),
+    db: AsyncSession = Depends(get_db),
+) -> ImportCommitResponse:
+    """
+    Commit an import file to the database (PLUM-10, D-17/D-18 step 2).
+
+    Re-parses and re-validates the uploaded file (stateless, D-18 Open Question 2
+    resolution: client re-sends the same file). Blocks on any validation errors
+    (D-18: any unresolved error blocks commit). Applies upsert in one transaction
+    (never hard-deletes parts/revisions/BOM/AVL absent from the file — D-17).
+
+    Upload guard: rejects files > 10 MB (T-06-11, 413).
+    Writes audit event plum.imported (D-19, written inside commit_import).
+
+    Requires plum:write permission (D-19).
+    """
+    content = await file.read()
+
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File exceeds 10 MB limit.",
+        )
+
+    filename = file.filename or ""
+    if filename.endswith(".json"):
+        data = parse_json_import(content)
+    elif filename.endswith(".xlsx"):
+        data = parse_excel_import(content)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported file type. Use .json or .xlsx",
+        )
+
+    return await commit_import(db, data, actor_id=str(current_user.id))
