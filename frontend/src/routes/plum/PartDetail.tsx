@@ -1,5 +1,6 @@
 /**
- * PartDetail — Part detail page showing header card, advance-status strip, and revision timeline.
+ * PartDetail — Part detail page showing header card, advance-status strip, revision timeline,
+ * and four Phase-6 section cards (BOM, AVL, Cost & Margin, Where-Used).
  *
  * Route: /plum/parts/:id
  *
@@ -15,32 +16,75 @@
  *     - In Review → "Release" (opens AdvanceStatusDialog) + "Reject to Draft" (target: draft)
  *   - Revision History: <ol aria-label="Revision history"> listing revisions newest-first
  *     Each <li> shows label, status badge, date, snapshot attributes, reason, and diff from prior
+ *   - Bill of Materials card (Phase 6 — PLUM-04/05)
+ *   - Approved Vendor List card (Phase 6 — PLUM-07)
+ *   - Cost & Margin card (Phase 6 — PLUM-08/09)
+ *   - Where Used card (Phase 6 — PLUM-06)
  *
  * Data: useQuery key ['plum','parts',partId] → GET /api/v1/plum/parts/{partId}
  * Mutations: POST /api/v1/plum/parts/{partId}/revisions/{revId}/advance → invalidate same key
  *
  * Threat mitigation T-05-12: No dangerouslySetInnerHTML — all user content via JSX interpolation
  * Threat mitigation T-05-14: Release flows through AdvanceStatusDialog confirmation
+ * Threat mitigation T-06-21: Client hides BOM/cost edits on Released; backend enforces
  */
 
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Loader2 } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  Loader2,
+  CheckCircle,
+  Circle,
+} from 'lucide-react'
+import { MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
   CardHeader,
 } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { apiClient } from '@/api/client'
 import { PartSheet } from './components/PartSheet'
 import { NewRevisionDialog } from './components/NewRevisionDialog'
 import { AdvanceStatusDialog } from './components/AdvanceStatusDialog'
+import { BomTree } from './components/BomTree'
+import { BomLineSheet } from './components/BomLineSheet'
+import { AvlLinkSheet } from './components/AvlLinkSheet'
+import type { BomTreeNode } from './components/BomTree'
+import type { AvlLinkRead } from './components/AvlLinkSheet'
 import type { RevisionRead } from './components/NewRevisionDialog'
 import type { PartRead } from './components/PartSheet'
+import type { SettingRecord } from '@/hooks/useSettings'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +96,38 @@ interface PartDetailRead {
   created_at: string
   updated_at: string
   revisions: RevisionRead[]
+}
+
+interface PriceBreakRead {
+  id: string
+  avl_link_id: string
+  qty_threshold: number
+  unit_cost: number | string
+  lead_days?: number | null
+  sort_order: number
+}
+
+interface WhereUsedEntry {
+  parent_part_id: string
+  parent_part_number: string
+  parent_revision_label?: string | null
+  parent_revision_status?: string | null
+  relationship?: string | null
+  via_part_number?: string | null
+  depth?: number
+}
+
+interface CostRead {
+  material_cost?: number | string | null
+  sale_price?: number | string | null
+  bom_rollup_cost?: number | string | null
+  effective_cost?: number | string | null
+  effective_cost_source?: string | null
+  margin?: number | string | null
+  margin_pct?: number | string | null
+  released_cost_snapshot?: number | string | null
+  selected_vendor_link_id?: string | null
+  selected_price_break_index?: number | null
 }
 
 // ─── Status badge color map ───────────────────────────────────────────────────
@@ -132,6 +208,15 @@ function getDiffFromPrior(current: RevisionRead, prior: RevisionRead): string[] 
     .map(({ label }) => label)
 }
 
+// ─── Helper: format cost values ───────────────────────────────────────────────
+
+function formatCostValue(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '—'
+  const num = typeof value === 'string' ? parseFloat(value) : value
+  if (isNaN(num)) return '—'
+  return num.toFixed(2)
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function PartDetail() {
@@ -144,12 +229,95 @@ export function PartDetail() {
   const [newRevDialogOpen, setNewRevDialogOpen] = useState(false)
   const [releaseDialogOpen, setReleaseDialogOpen] = useState(false)
 
+  // ── BOM state ──
+  const [bomLineSheetOpen, setBomLineSheetOpen] = useState(false)
+  const [bomLineSheetMode, setBomLineSheetMode] = useState<'create' | 'edit'>('create')
+  const [editingBomLine, setEditingBomLine] = useState<BomTreeNode | null>(null)
+  const [removingBomLine, setRemovingBomLine] = useState<BomTreeNode | null>(null)
+
+  // ── AVL state ──
+  const [avlSheetOpen, setAvlSheetOpen] = useState(false)
+  const [avlSheetMode, setAvlSheetMode] = useState<'create' | 'edit'>('create')
+  const [editingAvlLink, setEditingAvlLink] = useState<AvlLinkRead | null>(null)
+  const [removingAvlLinkId, setRemovingAvlLinkId] = useState<string | null>(null)
+  const [removingAvlLinkName, setRemovingAvlLinkName] = useState<string>('')
+  const [expandedAvlIds, setExpandedAvlIds] = useState<Set<string>>(new Set())
+
+  // ── Cost & Margin state ──
+  const [costMaterialInput, setCostMaterialInput] = useState('')
+  const [costSalePriceInput, setCostSalePriceInput] = useState('')
+
   // ── Data ──
   const { data: part, isLoading, isError } = useQuery<PartDetailRead, Error>({
     queryKey: ['plum', 'parts', partId],
     queryFn: () =>
       apiClient.get<PartDetailRead>(`/api/v1/plum/parts/${partId}`).then((r) => r.data),
     enabled: !!partId,
+  })
+
+  // ── Settings (currency) ──
+  const { data: settings = [] } = useQuery<SettingRecord[], Error>({
+    queryKey: ['core', 'settings'],
+    queryFn: () =>
+      apiClient.get<SettingRecord[]>('/api/v1/core/settings').then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  function getSystemCurrency(): string {
+    const rec = settings.find((s) => s.key === 'locale.currency')
+    return rec?.value ?? 'USD'
+  }
+
+  // ── Computed values ──
+  const revisions = part?.revisions ?? []
+  // Revisions from the API are newest-first (revision_number DESC)
+  const currentRevision = getCurrentRevision(revisions)
+  const isDraft = currentRevision?.status === 'draft'
+  const isReleased = currentRevision?.status === 'released'
+  const priorReleasedRevision = revisions.find((r) => r.status === 'released' && r.id !== currentRevision?.id)
+
+  // Build a PartRead-compatible object to pass to PartSheet edit mode
+  const partReadForSheet: PartRead | null = part
+    ? {
+        id: part.id,
+        part_number: part.part_number,
+        active: part.active,
+        tags: part.tags,
+        current_revision_label: currentRevision?.revision_label ?? null,
+        current_revision_status: currentRevision?.status ?? null,
+        created_at: part.created_at,
+        updated_at: part.updated_at,
+      }
+    : null
+
+  // ── AVL query (part-level) ──
+  const { data: avlLinks = [] } = useQuery<AvlLinkRead[], Error>({
+    queryKey: ['plum', 'parts', partId, 'avl'],
+    queryFn: () =>
+      apiClient
+        .get<AvlLinkRead[]>(`/api/v1/plum/parts/${partId}/avl`)
+        .then((r) => r.data),
+    enabled: !!partId,
+  })
+
+  // ── Where-used query ──
+  const { data: whereUsed = [] } = useQuery<WhereUsedEntry[], Error>({
+    queryKey: ['plum', 'parts', partId, 'where-used'],
+    queryFn: () =>
+      apiClient
+        .get<WhereUsedEntry[]>(`/api/v1/plum/parts/${partId}/where-used`)
+        .then((r) => r.data),
+    enabled: !!partId,
+  })
+
+  // ── Cost query (current revision) ──
+  const { data: costData } = useQuery<CostRead, Error>({
+    queryKey: ['plum', 'parts', partId, 'cost', currentRevision?.id],
+    queryFn: () =>
+      apiClient
+        .get<CostRead>(`/api/v1/plum/parts/${partId}/revisions/${currentRevision!.id}/cost`)
+        .then((r) => r.data),
+    enabled: !!partId && !!currentRevision?.id,
   })
 
   // ── Advance mutation (Draft → In Review, In Review → Draft) ──
@@ -174,25 +342,135 @@ export function PartDetail() {
     },
   })
 
-  // ── Computed values ──
-  const revisions = part?.revisions ?? []
-  // Revisions from the API are newest-first (revision_number DESC)
-  const currentRevision = getCurrentRevision(revisions)
-  const priorReleasedRevision = revisions.find((r) => r.status === 'released' && r.id !== currentRevision?.id)
+  // ── Save cost mutation ──
+  const saveCostMutation = useMutation<CostRead, Error, { materialCost?: number | null; salePrice?: number | null }>({
+    mutationFn: ({ materialCost, salePrice }) =>
+      apiClient
+        .patch<CostRead>(
+          `/api/v1/plum/parts/${partId}/revisions/${currentRevision!.id}/cost`,
+          {
+            material_cost: materialCost,
+            sale_price: salePrice,
+          },
+        )
+        .then((r) => r.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['plum', 'parts', partId, 'cost', currentRevision?.id] })
+      toast('Costs saved.')
+    },
+    onError: () => {
+      toast.error('Failed to save costs. Please try again.')
+    },
+  })
 
-  // Build a PartRead-compatible object to pass to PartSheet edit mode
-  const partReadForSheet: PartRead | null = part
-    ? {
-        id: part.id,
-        part_number: part.part_number,
-        active: part.active,
-        tags: part.tags,
-        current_revision_label: currentRevision?.revision_label ?? null,
-        current_revision_status: currentRevision?.status ?? null,
-        created_at: part.created_at,
-        updated_at: part.updated_at,
+  // ── BOM remove mutation ──
+  const removeBomLineMutation = useMutation<void, Error, string>({
+    mutationFn: (lineId: string) =>
+      apiClient
+        .delete(`/api/v1/plum/parts/${partId}/bom/${lineId}`)
+        .then(() => undefined),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['plum', 'parts', partId] })
+      setRemovingBomLine(null)
+      toast('BOM line removed.')
+    },
+    onError: () => {
+      toast.error('Failed to remove BOM line. Please try again.')
+    },
+  })
+
+  // ── AVL remove mutation ──
+  const removeAvlLinkMutation = useMutation<void, Error, string>({
+    mutationFn: (linkId: string) =>
+      apiClient
+        .delete(`/api/v1/plum/parts/${partId}/avl/${linkId}`)
+        .then(() => undefined),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['plum', 'parts', partId, 'avl'] })
+      setRemovingAvlLinkId(null)
+      setRemovingAvlLinkName('')
+      toast('Vendor link removed.')
+    },
+    onError: () => {
+      toast.error('Failed to remove vendor link. Please try again.')
+    },
+  })
+
+  // ── AVL select-for-costing mutation ──
+  const selectForCostingMutation = useMutation<
+    CostRead,
+    Error,
+    { vendorLinkId: string; priceBreakIndex: number }
+  >({
+    mutationFn: ({ vendorLinkId, priceBreakIndex }) =>
+      apiClient
+        .patch<CostRead>(
+          `/api/v1/plum/parts/${partId}/revisions/${currentRevision!.id}/cost`,
+          {
+            selected_vendor_link_id: vendorLinkId,
+            selected_price_break_index: priceBreakIndex,
+          },
+        )
+        .then((r) => r.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['plum', 'parts', partId, 'cost', currentRevision?.id] })
+      toast('Costs saved.')
+    },
+    onError: () => {
+      toast.error('Failed to save costs. Please try again.')
+    },
+  })
+
+  // ── Handlers ──
+
+  function handleBomEdit(line: BomTreeNode) {
+    setEditingBomLine(line)
+    setBomLineSheetMode('edit')
+    setBomLineSheetOpen(true)
+  }
+
+  function handleBomRemove(line: BomTreeNode) {
+    setRemovingBomLine(line)
+  }
+
+  function handleBomLineSheetClose() {
+    setBomLineSheetOpen(false)
+    setEditingBomLine(null)
+  }
+
+  function handleAvlEdit(link: AvlLinkRead) {
+    setEditingAvlLink(link)
+    setAvlSheetMode('edit')
+    setAvlSheetOpen(true)
+  }
+
+  function handleAvlRemove(link: AvlLinkRead) {
+    setRemovingAvlLinkId(link.id)
+    setRemovingAvlLinkName(link.vendor_name ?? link.vendor_id)
+  }
+
+  function handleAvlSheetClose() {
+    setAvlSheetOpen(false)
+    setEditingAvlLink(null)
+  }
+
+  function toggleAvlExpand(linkId: string) {
+    setExpandedAvlIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(linkId)) {
+        next.delete(linkId)
+      } else {
+        next.add(linkId)
       }
-    : null
+      return next
+    })
+  }
+
+  function handleSaveCosts() {
+    const materialCost = costMaterialInput !== '' ? parseFloat(costMaterialInput) : null
+    const salePrice = costSalePriceInput !== '' ? parseFloat(costSalePriceInput) : null
+    saveCostMutation.mutate({ materialCost, salePrice })
+  }
 
   // ── Render: loading ──
   if (isLoading) {
@@ -213,6 +491,36 @@ export function PartDetail() {
       </div>
     )
   }
+
+  const currency = getSystemCurrency()
+
+  // ── Computed cost display values ──
+  const effectiveCost = costData?.effective_cost
+  const effectiveCostSource = costData?.effective_cost_source
+  const materialCostDisplay = formatCostValue(costData?.material_cost)
+  const bomRollupDisplay = formatCostValue(costData?.bom_rollup_cost)
+  const effectiveCostDisplay = formatCostValue(effectiveCost)
+  const salePriceDisplay = formatCostValue(costData?.sale_price)
+  const marginDisplay = formatCostValue(costData?.margin)
+  const marginPctDisplay = formatCostValue(costData?.margin_pct)
+  const frozenCostDisplay = formatCostValue(costData?.released_cost_snapshot)
+
+  const marginNum = costData?.margin !== null && costData?.margin !== undefined
+    ? (typeof costData.margin === 'string' ? parseFloat(costData.margin) : costData.margin)
+    : null
+  const isNegativeMargin = marginNum !== null && !isNaN(marginNum) && marginNum < 0
+
+  const hasSalePrice = costData?.sale_price !== null && costData?.sale_price !== undefined && costData.sale_price !== ''
+  const hasEffectiveCost = effectiveCost !== null && effectiveCost !== undefined && effectiveCost !== ''
+
+  // Sort where-used: direct first, then indirect
+  const sortedWhereUsed = [...whereUsed].sort((a, b) => {
+    const aIsDirect = !a.via_part_number
+    const bIsDirect = !b.via_part_number
+    if (aIsDirect && !bIsDirect) return -1
+    if (!aIsDirect && bIsDirect) return 1
+    return (a.parent_part_number ?? '').localeCompare(b.parent_part_number ?? '')
+  })
 
   // ── Render: main ──
   return (
@@ -473,6 +781,507 @@ export function PartDetail() {
         )}
       </div>
 
+      {/* ── Section 1: Bill of Materials ──────────────────────────────────────── */}
+      {currentRevision && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">Bill of Materials</h2>
+              {isDraft && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingBomLine(null)
+                    setBomLineSheetMode('create')
+                    setBomLineSheetOpen(true)
+                  }}
+                >
+                  Add Part
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <BomTree
+              partId={partId}
+              revisionId={currentRevision.id}
+              isDraft={isDraft}
+              onEdit={isDraft ? handleBomEdit : undefined}
+              onRemove={isDraft ? handleBomRemove : undefined}
+            />
+
+            {/* Inline BOM remove confirmation (Draft only) */}
+            {removingBomLine && (
+              <div className="mt-3 flex items-center gap-3 rounded-md border border-border p-3 text-sm">
+                <span className="text-foreground">
+                  Remove {removingBomLine.child_part_number}?
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  aria-label={`Confirm remove ${removingBomLine.child_part_number} from BOM`}
+                  disabled={removeBomLineMutation.isPending}
+                  onClick={() => removeBomLineMutation.mutate(removingBomLine.bom_item_id)}
+                >
+                  {removeBomLineMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    'Yes, Remove'
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Keep ${removingBomLine.child_part_number} in BOM`}
+                  disabled={removeBomLineMutation.isPending}
+                  onClick={() => setRemovingBomLine(null)}
+                >
+                  Keep {removingBomLine.child_part_number}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Section 2: Approved Vendor List ───────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-foreground">Approved Vendor List</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setEditingAvlLink(null)
+                setAvlSheetMode('create')
+                setAvlSheetOpen(true)
+              }}
+            >
+              Add Vendor
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {avlLinks.length === 0 ? (
+            <>
+              <p className="text-sm text-muted-foreground text-center py-6">
+                No approved vendors yet.
+              </p>
+              <p className="text-xs text-muted-foreground text-center">
+                Link a vendor to track sourcing options and vendor-driven pricing.
+              </p>
+            </>
+          ) : (
+            <div className="space-y-2">
+              {avlLinks.map((link) => {
+                const isExpanded = expandedAvlIds.has(link.id)
+                const priceBreaks = (link.price_breaks ?? [])
+                  .slice()
+                  .sort((a, b) => a.sort_order - b.sort_order)
+
+                return (
+                  <div key={link.id} className="rounded-md border border-border">
+                    {/* Vendor row */}
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground flex-none"
+                        onClick={() => toggleAvlExpand(link.id)}
+                        aria-label={isExpanded ? 'Collapse price breaks' : 'Expand price breaks'}
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
+                      <span className="text-sm font-medium text-foreground">
+                        {link.vendor_name ?? link.vendor_id}
+                      </span>
+                      {link.preferred && (
+                        <span
+                          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700"
+                          title="Preferred vendor"
+                        >
+                          Preferred
+                        </span>
+                      )}
+                      {link.vendor_part_number && (
+                        <span className="text-sm text-muted-foreground font-mono ml-1">
+                          {link.vendor_part_number}
+                        </span>
+                      )}
+                      <div className="ml-auto">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-11 w-11"
+                              aria-label={`Actions for ${link.vendor_name ?? link.vendor_id}`}
+                            >
+                              <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleAvlEdit(link)}>
+                              Edit Vendor Link
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handleAvlRemove(link)}
+                            >
+                              Remove Vendor Link
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+
+                    {/* Price-break sub-table (expanded) */}
+                    {isExpanded && (
+                      <div className="border-t border-border px-3 pb-3">
+                        {priceBreaks.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2">No price breaks defined.</p>
+                        ) : (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-right">Qty Threshold</TableHead>
+                                <TableHead className="text-right">Unit Cost</TableHead>
+                                <TableHead>Lead Days</TableHead>
+                                <TableHead>Costing</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {priceBreaks.map((pb: PriceBreakRead, idx: number) => {
+                                const isSelected =
+                                  costData?.selected_vendor_link_id === link.id &&
+                                  costData?.selected_price_break_index === idx
+                                const rowBg = isSelected ? 'bg-green-50' : ''
+
+                                return (
+                                  <TableRow key={pb.id} className={rowBg}>
+                                    <TableCell className="font-mono text-sm text-right">
+                                      {pb.qty_threshold}
+                                    </TableCell>
+                                    <TableCell className="font-mono text-sm text-right">
+                                      {formatCostValue(pb.unit_cost)} {currency}
+                                    </TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">
+                                      {pb.lead_days ?? '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {isDraft ? (
+                                        <button
+                                          type="button"
+                                          aria-label={isSelected ? 'Selected for costing' : 'Select for costing'}
+                                          onClick={() =>
+                                            selectForCostingMutation.mutate({
+                                              vendorLinkId: link.id,
+                                              priceBreakIndex: idx,
+                                            })
+                                          }
+                                          className="text-muted-foreground hover:text-foreground"
+                                        >
+                                          {isSelected ? (
+                                            <CheckCircle className="h-4 w-4 text-green-600" aria-hidden="true" />
+                                          ) : (
+                                            <Circle className="h-4 w-4" aria-hidden="true" />
+                                          )}
+                                        </button>
+                                      ) : (
+                                        isSelected && (
+                                          <CheckCircle
+                                            className="h-4 w-4 text-green-600"
+                                            aria-label="Selected for costing"
+                                          />
+                                        )
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                )
+                              })}
+                            </TableBody>
+                          </Table>
+                        )}
+
+                        {/* D-14 dual-cost notice (Released) */}
+                        {isReleased && costData?.released_cost_snapshot !== null && costData?.released_cost_snapshot !== undefined && (
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            Released at:{' '}
+                            <span className="font-mono text-foreground">{frozenCostDisplay} {currency}</span>
+                            {effectiveCostDisplay !== frozenCostDisplay && effectiveCostDisplay !== '—' && (
+                              <span className="text-amber-600 ml-2">
+                                Current would be {effectiveCostDisplay} {currency}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Remove vendor link confirmation dialog */}
+      <Dialog
+        open={!!removingAvlLinkId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRemovingAvlLinkId(null)
+            setRemovingAvlLinkName('')
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove vendor link?</DialogTitle>
+            <DialogDescription>
+              This will remove {removingAvlLinkName} from the approved vendor list for this part.
+              Existing revision cost data is not affected.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRemovingAvlLinkId(null)
+                setRemovingAvlLinkName('')
+              }}
+              disabled={removeAvlLinkMutation.isPending}
+            >
+              Keep Link
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => removingAvlLinkId && removeAvlLinkMutation.mutate(removingAvlLinkId)}
+              disabled={removeAvlLinkMutation.isPending}
+            >
+              {removeAvlLinkMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Removing…
+                </>
+              ) : (
+                'Remove Link'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Section 3: Cost & Margin ───────────────────────────────────────────── */}
+      {currentRevision && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">Cost & Margin</h2>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Cost display grid */}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">
+                  Material Cost{' '}
+                  <span className="text-xs text-muted-foreground">{currency}</span>
+                </p>
+                <p className="font-mono">{materialCostDisplay}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">BOM Roll-up Cost</p>
+                <p className="font-mono">{bomRollupDisplay}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs text-muted-foreground mb-0.5">
+                  Effective Cost{' '}
+                  {effectiveCostSource && (
+                    <span className="text-xs text-muted-foreground">({effectiveCostSource})</span>
+                  )}
+                </p>
+                <p className="font-mono font-semibold">{effectiveCostDisplay}</p>
+                {/* D-14: Released frozen + live cost */}
+                {isReleased && costData?.released_cost_snapshot !== null && costData?.released_cost_snapshot !== undefined && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Released at:{' '}
+                    <span className="font-mono text-foreground">{frozenCostDisplay}</span>
+                    {effectiveCostDisplay !== frozenCostDisplay && effectiveCostDisplay !== '—' && (
+                      <span className="text-amber-600 ml-1">
+                        · Current: {effectiveCostDisplay}
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Sale Price</p>
+                <p className="font-mono">{salePriceDisplay}</p>
+              </div>
+              {hasSalePrice && hasEffectiveCost && (
+                <>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Margin</p>
+                    <p className={`font-mono ${isNegativeMargin ? 'text-destructive' : ''}`}>
+                      {marginDisplay}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Margin %</p>
+                    <p className={`font-mono ${isNegativeMargin ? 'text-destructive' : ''}`}>
+                      {marginPctDisplay !== '—' ? `${marginPctDisplay}%` : '—'}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Inline edit form (Draft only) */}
+            {isDraft && (
+              <div className="mt-6 space-y-4">
+                <div className="flex gap-4 flex-wrap">
+                  <div className="space-y-1">
+                    <Label htmlFor="cost-material">Material Cost</Label>
+                    <Input
+                      id="cost-material"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="w-36 font-mono"
+                      placeholder={materialCostDisplay !== '—' ? materialCostDisplay : '0.00'}
+                      value={costMaterialInput}
+                      onChange={(e) => setCostMaterialInput(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Optional. Leave blank to use vendor price or BOM roll-up.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="cost-sale-price">Sale Price</Label>
+                    <Input
+                      id="cost-sale-price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="w-36 font-mono"
+                      placeholder={salePriceDisplay !== '—' ? salePriceDisplay : '0.00'}
+                      value={costSalePriceInput}
+                      onChange={(e) => setCostSalePriceInput(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Optional. Used to compute margin.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveCosts}
+                  disabled={saveCostMutation.isPending}
+                >
+                  {saveCostMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      Saving…
+                    </>
+                  ) : (
+                    'Save Costs'
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* Margin summary box (when sale price and effective cost are both available) */}
+            {hasSalePrice && hasEffectiveCost && (
+              <div className="mt-3 rounded-md border border-border p-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Sale Price</span>
+                  <span className="font-mono">{salePriceDisplay}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Effective Cost</span>
+                  <span className="font-mono">{effectiveCostDisplay}</span>
+                </div>
+                <div
+                  className={`flex justify-between border-t border-border pt-2 mt-2 font-semibold ${
+                    isNegativeMargin ? 'text-destructive' : ''
+                  }`}
+                >
+                  <span>Margin</span>
+                  <span className="font-mono">
+                    {marginDisplay}
+                    {marginPctDisplay !== '—' ? ` (${marginPctDisplay}%)` : ''}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Empty state when no cost data and not in Draft edit mode */}
+            {!isDraft && !costData && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No cost data yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Section 4: Where Used ──────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-foreground">Where Used</h2>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* Extensive notice (>20 results) */}
+          {sortedWhereUsed.length > 20 && (
+            <div className="rounded-md border border-border p-3 text-xs text-muted-foreground mb-3">
+              Showing {sortedWhereUsed.length} assemblies. This part is used extensively across the product
+              structure.
+            </div>
+          )}
+
+          {sortedWhereUsed.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              This part is not used in any assembly.
+            </p>
+          ) : (
+            <ul aria-label="Where used" className="space-y-2">
+              {sortedWhereUsed.map((entry) => (
+                <li
+                  key={`${entry.parent_part_id}-${entry.parent_revision_label ?? ''}`}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <span className="font-medium text-foreground">
+                    {entry.parent_part_number}
+                  </span>
+                  {entry.parent_revision_label && (
+                    <span className="text-xs text-muted-foreground">
+                      {entry.parent_revision_label}
+                    </span>
+                  )}
+                  {entry.parent_revision_status && (
+                    <RevisionStatusBadge status={entry.parent_revision_status} />
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {entry.via_part_number
+                      ? `Indirect via ${entry.via_part_number}`
+                      : 'Direct parent'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
       {/* ── Edit Part Sheet ────────────────────────────────────────────────── */}
       <PartSheet
         open={editSheetOpen}
@@ -499,6 +1308,38 @@ export function PartDetail() {
           onClose={() => setReleaseDialogOpen(false)}
         />
       )}
+
+      {/* ── BOM Line Sheet ─────────────────────────────────────────────────── */}
+      {currentRevision && (
+        <BomLineSheet
+          open={bomLineSheetOpen}
+          mode={bomLineSheetMode}
+          partId={partId}
+          revisionId={currentRevision.id}
+          existingLine={
+            editingBomLine
+              ? {
+                  id: editingBomLine.bom_item_id,
+                  child_part_id: editingBomLine.child_part_id,
+                  child_part_number: editingBomLine.child_part_number,
+                  qty: editingBomLine.quantity,
+                  ref_des: editingBomLine.reference_designators,
+                  unit_of_measure: editingBomLine.unit_of_measure,
+                }
+              : null
+          }
+          onClose={handleBomLineSheetClose}
+        />
+      )}
+
+      {/* ── AVL Link Sheet ─────────────────────────────────────────────────── */}
+      <AvlLinkSheet
+        open={avlSheetOpen}
+        mode={avlSheetMode}
+        partId={partId}
+        existingLink={editingAvlLink}
+        onClose={handleAvlSheetClose}
+      />
     </div>
   )
 }
