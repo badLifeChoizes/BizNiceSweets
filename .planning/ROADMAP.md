@@ -36,3 +36,24 @@ Plans:
 - [ ] 06-05-PLAN.md — Frontend integration: PartDetail four cards (BOM/AVL/Cost&Margin/Where-Used), Import/Export page + 3-step flow, PlumNav tab, App route, requirements-progress update, human-verify checkpoint
 
 **UI hint**: yes
+
+### Phase 7: Close v1.0 gaps: fix PLUM/SYERP Partner import (PLUM-07/10), part-number ordering (PLUM-01), import cache invalidation; verify Phase 6
+
+**Goal:** PLUM part-to-vendor links (AVL) and JSON/Excel import-export work end-to-end without runtime errors, auto part-number generation is numerically correct past a digit-width boundary, the Parts List refreshes immediately after an import commit, and Phase 6's PLUM-04..10 flows are human-verified with traceability reconciled.
+**Requirements**: PLUM-01, PLUM-04, PLUM-05, PLUM-06, PLUM-07, PLUM-08, PLUM-09, PLUM-10 (+ CORE-01, CORE-09 traceability reconciliation)
+**Depends on:** Phase 6
+**Plans:** 4 plans
+
+Plans:
+**Wave 1** *(parallel — disjoint files)*
+
+- [ ] 07-01-PLAN.md — Backend service.py fixes: alias Partner as SyerpPartner at 4 sites (PLUM-07/10/08), numeric-safe generate_part_number (PLUM-01), + live-DB regression coverage
+- [ ] 07-02-PLAN.md — Frontend: invalidate ['plum','parts'] on import-commit success so the Parts List refreshes without manual reload (PLUM-10)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 07-03-PLAN.md — Consolidated human-verify: 7 PLUM flows (PLUM-04..10) + 4 Phase-7 regression checks; supersedes the unrun 06-05 Task 4 checkpoint
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 07-04-PLAN.md — Reconcile REQUIREMENTS.md + docs/features/requirements-progress.md against the verified outcome (PLUM-04..10, CORE-01, CORE-09)
