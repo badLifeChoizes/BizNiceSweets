@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 
 const TABS = [
   { to: '/plum/parts', label: 'Parts' },
-  // Phase 6 will add: { to: '/plum/boms', label: 'BOMs' }
+  { to: '/plum/import-export', label: 'Import / Export' },
 ]
 
 export function PlumNav() {
