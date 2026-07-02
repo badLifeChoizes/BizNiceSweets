@@ -15,9 +15,10 @@ import { Vendors } from '@/routes/syerp/Vendors'
 import { Customers } from '@/routes/syerp/Customers'
 import { GLAccounts } from '@/routes/syerp/GLAccounts'
 
-// PLUM routes (Phase 5)
+// PLUM routes (Phase 5 + 6)
 import { PartsList } from '@/routes/plum/PartsList'
 import { PartDetail } from '@/routes/plum/PartDetail'
+import { ImportExport } from '@/routes/plum/ImportExport'
 
 export function App() {
   return (
@@ -42,6 +43,7 @@ export function App() {
         <Route path="/plum" element={<Navigate to="/plum/parts" replace />} />
         <Route path="/plum/parts" element={<PartsList />} />
         <Route path="/plum/parts/:id" element={<PartDetail />} />
+        <Route path="/plum/import-export" element={<ImportExport />} />
 
         {/* Catch-all: unknown protected paths fall back to Home instead of a blank screen */}
         <Route path="*" element={<Navigate to="/" replace />} />
