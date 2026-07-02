@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
+milestone_name: "gaps: fix PLUM/SYERP Partner import"
 status: executing
-last_updated: "2026-07-01T00:00:00.000Z"
+last_updated: "2026-07-02T05:03:42.915Z"
 progress:
-  total_phases: 6
-  completed_phases: 5
-  total_plans: 23
-  completed_plans: 22
-  percent: 96
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 4
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE — BizNiceSweets Milestone 1
@@ -25,7 +25,7 @@ progress:
 
 **Milestone goal:** Can deploy it, log in, manage vendors/customers, and design parts with multi-level BOMs and cost roll-up.
 
-**Current focus:** Phase 06 — plum-bom-costing-integration (code-complete; awaiting 06-05 human-verify)
+**Current focus:** Phase 07 — close v1.0 gaps (next: /gsd:plan-phase 7); Phases 1-5 verified, Phase 6 code-complete but unverified per v1.0-MILESTONE-AUDIT.md
 
 ---
 
@@ -34,7 +34,7 @@ progress:
 Phase: 06 (plum-bom-costing-integration) — CODE-COMPLETE, PENDING HUMAN-VERIFY
 Plan: 5 of 5
 **Last plan:** 06-05 (PartDetail four cards + Import/Export page + PlumNav + App route; Tasks 1-3 committed, Task 4 human-verify checkpoint PENDING)
-**Status:** All Phase-6 code landed and committed. Final human-verify checkpoint for 06-05 not yet run. REQUIREMENTS.md traceability still marks PLUM-04..10 (and CORE-01/CORE-09) Pending — reconcile during audit/verify.
+**Status:** Ready to execute
 
 **Progress:**
 
@@ -87,6 +87,10 @@ Plan: 5 of 5
 ---
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 7 added: Close v1.0 gaps: fix PLUM/SYERP Partner import (PLUM-07/10), part-number ordering (PLUM-01), import cache invalidation; verify Phase 6 (per v1.0-MILESTONE-AUDIT.md)
 
 ### Key Decisions
 
@@ -163,6 +167,7 @@ None at roadmap stage.
 **To resume:** Phase 06 CODE-COMPLETE. All 5 plans landed and committed (last commit `a6952be`): BOM (tree/flat/where-used + cycle detection), AVL vendor links + price breaks, effective-cost chain + margin + release snapshot, JSON/Excel import-export, and the full PLUM Phase-6 frontend (PartDetail four cards, Import/Export 3-step flow, PlumNav, App route). Wave-0 backend tests skip cleanly without a DB.
 
 **Outstanding before milestone close:**
+
 1. **06-05 Task 4 human-verify checkpoint** never run — run `/gsd:verify-work` (or `/gsd:audit-milestone` first, per the chosen path).
 2. **REQUIREMENTS.md traceability lag** — PLUM-04..10 are code-complete but still `[ ]`/Pending in `.planning/REQUIREMENTS.md`; CORE-01/CORE-09 shipped in Phase 1 but also still Pending there. `docs/features/requirements-progress.md` already marks PLUM-04..10 complete — the two need reconciling.
 3. **Prod bundle staleness** — rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3/4/5/6 UI.
