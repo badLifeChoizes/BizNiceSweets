@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-06-30T15:34:18.441Z"
+last_updated: "2026-07-01T00:00:00.000Z"
 progress:
-  total_phases: 1
-  completed_phases: 0
-  total_plans: 5
-  completed_plans: 1
-  percent: 0
+  total_phases: 6
+  completed_phases: 5
+  total_plans: 23
+  completed_plans: 22
+  percent: 96
 ---
 
 # STATE — BizNiceSweets Milestone 1
 
-**Last updated:** 2026-06-28
+**Last updated:** 2026-07-01
 **Milestone:** 1 — Foundation + PLUM
 
 ---
@@ -25,22 +25,22 @@ progress:
 
 **Milestone goal:** Can deploy it, log in, manage vendors/customers, and design parts with multi-level BOMs and cost roll-up.
 
-**Current focus:** Phase 06 — plum-bom-costing-integration
+**Current focus:** Phase 06 — plum-bom-costing-integration (code-complete; awaiting 06-05 human-verify)
 
 ---
 
 ## Current Position
 
-Phase: 06 (plum-bom-costing-integration) — EXECUTING
-Plan: 1 of 5
-**Last plan:** 05-04 (PartDetail + revision dialogs + App.tsx wiring; ended at human-verify checkpoint)
-**Status:** Ready to execute
+Phase: 06 (plum-bom-costing-integration) — CODE-COMPLETE, PENDING HUMAN-VERIFY
+Plan: 5 of 5
+**Last plan:** 06-05 (PartDetail four cards + Import/Export page + PlumNav + App route; Tasks 1-3 committed, Task 4 human-verify checkpoint PENDING)
+**Status:** All Phase-6 code landed and committed. Final human-verify checkpoint for 06-05 not yet run. REQUIREMENTS.md traceability still marks PLUM-04..10 (and CORE-01/CORE-09) Pending — reconcile during audit/verify.
 
 **Progress:**
 
-[██████████] 100%
+[█████████▁] 96% (22/23 plans; 06-05 human-verify outstanding)
 
-**Last session:** 2026-06-30T02:56:06.934Z
+**Last session:** 2026-07-01T20:34:00.000Z
 
 ---
 
@@ -53,16 +53,16 @@ Plan: 1 of 5
 | 3 | App Shell & Settings | CORE-06, CORE-07, CORE-08 | Complete (3/3 plans) — ready for verification |
 | 4 | SYERP Core Hub | SYERP-01..05 | Complete (4/4 plans) — human-verify approved |
 | 5 | PLUM Parts & Revisions | PLUM-01, PLUM-02, PLUM-03 | Complete (4/4 plans) — human-verify 10/10 passed |
-| 6 | PLUM BOM, Costing & Integration | PLUM-04..10 | Not started |
+| 6 | PLUM BOM, Costing & Integration | PLUM-04..10 | Code-complete (5/5 plans landed; 06-05 Task 4 human-verify PENDING) |
 
 ---
 
 ## Performance Metrics
 
 - Phases planned: 6
-- Requirements covered: 24/24
-- Plans created: 10
-- Plans completed: 10
+- Requirements covered: 24/24 (15 checked off in REQUIREMENTS.md; PLUM-04..10 code-complete but not yet checked; CORE-01/CORE-09 shipped in Phase 1 but traceability not updated)
+- Plans created: 23
+- Plans completed: 22 (06-05 code committed, human-verify pending)
 - Phase 02 Plan 01: 3 tasks, 19 files, 704s
 - Phase 02 Plan 02: 2 tasks, 9 files, 900s
 - Phase 02 Plan 03: 2 tasks, 9 files, 1440s
@@ -76,6 +76,13 @@ Plan: 1 of 5
 - Phase 04 Plan 04: 2 tasks (1 auto + human-verify), 7 files, ~20min (GLAccounts read-only CoA screen + SYERP route wiring; human-verify approved after UAT; 4 UAT follow-up fixes: Tailwind v4 tokens, country validation/error toast, catch-all route, SYERP sub-nav tab strip)
 - Phase 05 Plan 01: 3 tasks, 11 files, ~35min (PLUM data foundation: models, migration 0005, seed, Wave 0 tests; 14 tests collected)
 - Phase 05 Plan 02: 2 tasks, 2 files, ~30min (PLUM service + router; FSM, RBAC, audit, label generation; Wave 0 tests green/skip)
+- Phase 05 Plan 03: PLUM parts list UI (Parts screen, search/filter)
+- Phase 05 Plan 04: PartDetail + revision dialogs + App.tsx wiring (human-verify 10/10 passed)
+- Phase 06 Plan 01: 8 files (models, schemas, migration 0006, openpyxl dep, 4 Wave-0 backend test stubs; BomItem/AvlLink/AvlPriceBreak tables + 5 revision cost columns; PLUM-04..10)
+- Phase 06 Plan 02: 2 files (service.py + router.py: BOM CRUD/tree/flat/where-used + BFS cycle detection, AVL CRUD, effective-cost chain + margin + release snapshot, copy-forward; greens test_bom/test_avl/test_costing)
+- Phase 06 Plan 03: 2 files (service.py + router.py: lossless JSON + 3-sheet Excel export, two-step preview/commit upsert-never-delete import with 10MB guard + cross-ref validation; greens test_import_export)
+- Phase 06 Plan 04: ~6 files (Tooltip primitive, BomTree tree/flat + smoke test, BomLineSheet part-search combobox + cycle error, PriceBreakEditor, AvlLinkSheet vendor search)
+- Phase 06 Plan 05: 6 files (PartDetail four cards BOM/AVL/Cost&Margin/Where-Used, ImportExport page + 3-step flow + smoke test, PlumNav tab, App route, requirements-progress.md; Tasks 1-3 committed — Task 4 human-verify PENDING)
 
 ---
 
@@ -121,6 +128,12 @@ Plan: 1 of 5
 - **PLUM revision label timing (Phase 5, 05-02):** SemVer label is major-bumped at release time (inside advance_revision_status); ASME label is set at creation time and unchanged on release
 - **PLUM advance endpoint body (Phase 5, 05-02):** AdvanceStatusBody(target_status:str) defined inline in router.py — avoids a separate schema file for a single-field body
 - **PLUM audit colocation (Phase 5, 05-02):** revision FSM audit events (revision.submitted/released/rejected/obsoleted) written inside service; part-level events (part.created/updated/archived) written in router — keeps FSM logic and audit collocated
+- **PLUM BOM cost types (Phase 6, 06-01):** all cost/qty fields use `Numeric(18,6)` mapped to Python `Decimal` (first Decimal use in project) — no float, to keep roll-up math exact; Excel/JSON export serializes Decimal as string
+- **PLUM cycle detection (Phase 6, 06-02):** BFS visited-set traversal runs before any BOM insert to reject cycles; recursive tree traversal uses `visited.copy()` per branch (D-02/D-03); flat BOM accumulates into a dict keyed by child_part_id
+- **PLUM effective-cost chain (Phase 6, 06-02):** D-07 resolution order = vendor price → manual cost → BOM roll-up → uncosted; D-14 cost snapshot written before the FSM status flip in advance_revision_status (frozen vs live cost both surfaced on Released revisions)
+- **PLUM import safety (Phase 6, 06-03):** two-pass validation (file-declared set ∪ DB set), upsert-never-delete commit (select-before-insert-or-update; price breaks replace-all), stateless re-parse on commit, 10MB upload guard on all import endpoints; `/import/validate` aliases `/import/preview`
+- **PLUM Excel sheet naming (Phase 6, 06-03):** export sheet is `BOM` (Wave-0 test asserts exact string); parser accepts both `BOM` and `BOMs` for round-trip tolerance
+- **PLUM Draft-only editing (Phase 6, 06-05):** BOM/AVL/cost edit controls gated on `isDraft`; Released revisions are read-only and show both frozen (snapshot) and live roll-up cost; blob-download + multipart FormData idioms for export/import UI
 
 ### Deferred (v2)
 
@@ -147,7 +160,13 @@ None at roadmap stage.
 
 ## Session Continuity
 
-**To resume:** Phase 05 Plan 02 COMPLETE. PLUM service + router implemented: 7 endpoints with RBAC/audit, revision FSM, supersede-on-release, ASME/SemVer label generation. Wave 0 tests (14) skip cleanly without DB (ready to run green with live DB). Next: Plan 05-03 (PLUM parts list UI). Note: rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3/4 UI.
+**To resume:** Phase 06 CODE-COMPLETE. All 5 plans landed and committed (last commit `a6952be`): BOM (tree/flat/where-used + cycle detection), AVL vendor links + price breaks, effective-cost chain + margin + release snapshot, JSON/Excel import-export, and the full PLUM Phase-6 frontend (PartDetail four cards, Import/Export 3-step flow, PlumNav, App route). Wave-0 backend tests skip cleanly without a DB.
+
+**Outstanding before milestone close:**
+1. **06-05 Task 4 human-verify checkpoint** never run — run `/gsd:verify-work` (or `/gsd:audit-milestone` first, per the chosen path).
+2. **REQUIREMENTS.md traceability lag** — PLUM-04..10 are code-complete but still `[ ]`/Pending in `.planning/REQUIREMENTS.md`; CORE-01/CORE-09 shipped in Phase 1 but also still Pending there. `docs/features/requirements-progress.md` already marks PLUM-04..10 complete — the two need reconciling.
+3. **Prod bundle staleness** — rebuild `frontend/dist` + container image before production `:8000` serving reflects the Phase-3/4/5/6 UI.
+4. **Milestone name** — STATE frontmatter `milestone_name` is the literal "milestone"; consider renaming (e.g. "Foundation + PLUM") before archiving.
 
 **Files on disk:**
 
