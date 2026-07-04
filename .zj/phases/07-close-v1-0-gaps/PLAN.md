@@ -1,7 +1,7 @@
 # Plan: 07 — Close v1.0 gaps
 Goal: PLUM AVL and vendor import/export work end-to-end with no runtime 500s, auto part-numbering is numerically correct, the Parts List auto-refreshes after import, and Phase 6's PLUM flows are human-verified with traceability reconciled — the last phase before v1.0 closes.
 Status: draft
-Branch: `bugfix-plum-v1-gaps` (branch off `master`; per-branch checklist at `docs/tasks/bugfix-plum-v1-gaps.md`)
+Branch: `bugfix-plum-v1-gaps` (branch off `chore-architecture-planning` per D-P7-3 — master lacks the code; per-branch checklist at `docs/tasks/bugfix-plum-v1-gaps.md`)
 
 > This plan is a clean ZJ translation of the four adopted GSD plans (`archive/planning-gsd/phases/07-close-v1-0-gaps-fix-plum-syerp-partner-import-plum-07-10-par/07-01..04-PLAN.md`) per DECISION D-ADOPT-2 — the fixes are **not** re-derived. Line numbers below were re-verified in the live code on 2026-07-04.
 
@@ -143,6 +143,9 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
   - `git diff CHANGELOG.md` is empty.
 - **Verify:** `grep -nE "PLUM-0[4-9]|PLUM-10" .zj/SRD.md` shows `implemented` for verified reqs and no stale "broken"/"pending Phase-7" wording; `git diff --quiet CHANGELOG.md && echo "changelog untouched"`.
 - **Parallel-ok:** no (depends on Task 6)
+
+## Deviations
+- **Branch base (material, owner-approved D-P7-3):** plan said branch off `master`; actually branched off `chore-architecture-planning` because master (2025-12-20) predates the re-platform and has no `backend/`/`frontend/`/`.zj/`. See DECISIONS.md D-P7-3.
 
 ## Risks
 - **Pattern-2 SQLAlchemy syntax (Assumption A1, MEDIUM):** `cast(func.substring(...), Integer)` + `.op("~")` may need a spelling tweak against Postgres 17. Early-warning: a SQL error at Task 2's verify. Mitigation: budget one repair cycle inside Task 2 — caught before merge by the live-DB test.

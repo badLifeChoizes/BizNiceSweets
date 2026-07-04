@@ -81,3 +81,14 @@ Numbering is append-only.
   right next to the work, and reduces future-agent confusion. CI (the process gap that let the
   `SyerpPartner` bug ship) was explicitly **not** folded in — it stays a p1 backlog item for
   its own phase, honoring D-ADOPT-2 (adopt Phase 7 as-is).
+
+## Phase 7 build (2026-07-04)
+
+- **D-P7-3 (owner, at build):** `bugfix-plum-v1-gaps` is branched off
+  **`chore-architecture-planning`**, not `master` as the PLAN originally stated. *Why:* `master`
+  (HEAD `f4e2bd3`, 2025-12-20) predates the entire re-platform — it contains only the legacy
+  prototypes and has **no `backend/`, `frontend/`, or `.zj/`**. All 212 commits of real work,
+  including the code Phase 7 fixes and the plan itself, live on `chore-architecture-planning`
+  (a strict superset of master). Branching off master would give an empty tree with nothing to
+  fix. Eventual integration of `chore-architecture-planning` → `master` is a separate concern
+  outside Phase 7. The plan's dedicated-branch intent is preserved; only the base changed.
