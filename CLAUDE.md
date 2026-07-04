@@ -1,4 +1,3 @@
-<!-- GSD:project-start source:PROJECT.md -->
 ## Project
 
 **BizNiceSweets**
@@ -18,9 +17,7 @@ The seven suites: **SYERP** (ERP/financials/inventory — the hub), **PLUM** (Pr
 - **Offline:** Must support offline capability (Service Worker + IndexedDB) and sync on reconnect — a later cross-module concern but a standing constraint.
 - **Licensing:** Open core — core suite open source (permissive deps only), premium add-ons possible.
 - **Compliance posture:** Medical-device origin means audit trail and traceability are first-class concerns, designed for even before CRISP ships.
-<!-- GSD:project-end -->
 
-<!-- GSD:stack-start source:codebase/STACK.md -->
 ## Technology Stack
 
 ## Languages
@@ -73,9 +70,7 @@ The seven suites: **SYERP** (ERP/financials/inventory — the hub), **PLUM** (Pr
 | MOUSSE (MES) | — | — | Planned |
 | CRISP (QMS) | — | — | Planned |
 | GELATO (WMS) | — | — | Planned |
-<!-- GSD:stack-end -->
 
-<!-- GSD:conventions-start source:CONVENTIONS.md -->
 ## Conventions
 
 ## Language & Style
@@ -125,9 +120,7 @@ The seven suites: **SYERP** (ERP/financials/inventory — the hub), **PLUM** (Pr
 - No type system.
 - No build or bundling step — code must run directly in the browser.
 - No shared/common library across suites — patterns are duplicated per suite.
-<!-- GSD:conventions-end -->
 
-<!-- GSD:architecture-start source:ARCHITECTURE.md -->
 ## Architecture
 
 ## Overview
@@ -168,9 +161,7 @@ The seven suites: **SYERP** (ERP/financials/inventory — the hub), **PLUM** (Pr
 - `docs/features/plum/architecture.md`, `docs/features/flan/architecture.md` — per-suite architecture detail
 - `docs/features/INDEX.md` — suite relationships and integration vision
 - See `.planning/codebase/STRUCTURE.md` for directory layout and `.planning/codebase/CONCERNS.md` for architectural risks
-<!-- GSD:architecture-end -->
 
-<!-- GSD:skills-start source:skills/ -->
 ## Project Skills
 
 | Skill | Description | Path |
@@ -180,25 +171,11 @@ The seven suites: **SYERP** (ERP/financials/inventory — the hub), **PLUM** (Pr
 | codebase-analyzer | Analyze any codebase to understand structure, patterns, and conventions. Uses a two-phase hybrid approach - automated static analysis followed by Claude-assisted synthesis for meaningful project context. Supports Python, JavaScript/TypeScript, Go, Rust, Java, C/C++, and C#. Use when starting work on a new project, need to understand architecture, or creating a project context skill. (project) | `.claude/skills/codebase-analyzer/SKILL.md` |
 | context-creator | Create project context skills that keep AI agents aligned with project goals and architecture. Use when (1) setting up a new project for AI assistance, (2) analyzing a codebase to understand its structure, (3) creating guardrails to prevent AI from deviating, (4) documenting project-specific patterns and constraints, or (5) improving an existing project context skill. Includes automated codebase analysis. | `.claude/skills/context-creator/SKILL.md` |
 | interview | Conduct planning, discovery, and decision-making sessions using an incremental documentation approach. Use when (1) architecture planning, (2) feature discovery and requirements gathering, (3) design decisions requiring user input, or (4) any multi-question planning process. Creates or updates documentation incrementally with one question at a time, recording decisions before proceeding. (project) | `.claude/skills/interview/SKILL.md` |
-<!-- GSD:skills-end -->
 
-<!-- GSD:workflow-start source:GSD defaults -->
-## GSD Workflow Enforcement
-
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
-
-Use these entry points:
-- `/gsd-quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd-debug` for investigation and bug fixing
-- `/gsd-execute-phase` for planned phase work
-
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
-<!-- GSD:workflow-end -->
-
-<!-- PROJECT-RULES:start (preserved from original CLAUDE.md — not GSD-managed) -->
+<!-- PROJECT-RULES:start (preserved from original CLAUDE.md) -->
 ## Project-Specific Rules
 
-These rules predate GSD and are preserved. Where they overlap, **GSD's `.planning/` workflow is authoritative for task and phase tracking** for any work planned through GSD; the older `docs/tasks/{branch}.md` checklist system below applies only to ad-hoc work done outside a GSD phase.
+These are the project's authoritative rules. Task and phase tracking uses the `docs/tasks/{branch}.md` checklist system described below; historical planning artifacts remain under `.planning/`.
 
 ### Commit Messages (MANDATORY)
 
@@ -219,14 +196,7 @@ These rules predate GSD and are preserved. Where they overlap, **GSD's `.plannin
 
 Key docs: [docs/features/INDEX.md](docs/features/INDEX.md), [GLOSSARY.md](docs/features/GLOSSARY.md), [requirements.md](docs/features/requirements.md) (221 requirements), [requirements-progress.md](docs/features/requirements-progress.md).
 
-### Legacy Task Workflow (non-GSD work only)
+### Task Workflow
 
-For ad-hoc work outside a GSD phase: keep a checklist file at `docs/tasks/{branch-name}.md`, commit after each checklist item, and archive the file to `docs/tasks/_completed/{date}-{branch-name}.md` when finished. GSD-planned work uses `.planning/` instead and does not need a `docs/tasks/` file.
+Keep a checklist file at `docs/tasks/{branch-name}.md`, commit after each checklist item, and archive the file to `docs/tasks/_completed/{date}-{branch-name}.md` when finished. Historical planning artifacts remain under `.planning/`.
 <!-- PROJECT-RULES:end -->
-
-<!-- GSD:profile-start -->
-## Developer Profile
-
-> Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
-> This section is managed by `generate-claude-profile` -- do not edit manually.
-<!-- GSD:profile-end -->
