@@ -42,56 +42,60 @@ decision log at `archive/planning-docs/`.
 
 ## Technology Stack
 
+This section describes the **live codebase** — the FastAPI backend (`backend/`) and React
+frontend (`frontend/`). `.zj/codebase/MAP.md` is the authoritative, evidence-cited source
+for the current stack, directory layout, and verified commands; consult it when in doubt.
+The vanilla-JS / CDN / localStorage details in the "Legacy prototypes" subsection apply
+**only** when reading `plum/app/` or `flan/app/`.
+
 ## Languages
-- HTML5 - Application markup for all active suites
-- CSS3 - Styling using CSS custom properties (variables), flexbox, grid; inline in HTML files
-- JavaScript (ES6+) - All application logic; inline `<script>` blocks within single-file HTML apps; no transpilation
-## Runtime
-- Browser (any modern browser supporting ES6, localStorage, SVG)
-- No server-side runtime — all execution is client-side
-- No build step; files open directly from the filesystem or a static file host
-- None — no npm, yarn, or pip
-- No lockfile
-- All third-party libraries loaded via CDN at runtime
-## Frameworks
-- None — vanilla JavaScript only; no React, Vue, Angular, or jQuery
-- Inline SVG - Custom chart rendering (pie, bar, line, progress rings) written from scratch
-- None detected — no test framework, no test files
-- None — no webpack, vite, rollup, or esbuild
-## Key Dependencies
-| Library | Version | Suite | Purpose | CDN URL |
-|---------|---------|-------|---------|---------|
-| SheetJS (xlsx) | 0.18.5 | PLUM, FLAN | Excel import/export (.xlsx, .xls, .csv) | `cdnjs.cloudflare.com` |
-| jsPDF | 2.5.1 | FLAN | PDF report generation | `cdnjs.cloudflare.com` |
-- `Plus Jakarta Sans` (weights 400/500/600/700) — FLAN display font, via Google Fonts
-- `JetBrains Mono` (weights 400/600) — FLAN monospace font, via Google Fonts
-- PLUM uses system font stack only (`-apple-system, BlinkMacSystemFont, Segoe UI, Roboto`)
-- None — no database driver, ORM, HTTP client, or auth library
+- Python 3.13 — backend application language (`backend/`)
+- TypeScript 6.0 — frontend application language (`frontend/`)
+- SQL (PostgreSQL 17 dialect) — schema managed through Alembic migrations
+- HTML/CSS — frozen legacy prototypes only (`plum/app/`, `flan/app/`)
+
+## Backend
+- **Framework:** FastAPI 0.138.0 — app factory in `backend/app/main.py`, auto OpenAPI docs, routers mounted under `/api/v1`
+- **ORM:** SQLAlchemy 2.0.51, async, over asyncpg 0.31.0
+- **Migrations:** Alembic 1.18.4 — revisions in `backend/alembic/versions/`, run at container boot
+- **Config/validation:** Pydantic + pydantic-settings 2.14.2 (secrets typed `SecretStr`)
+- **Auth:** PyJWT 2.13.0 (two-token access/refresh), pwdlib[argon2] 0.3.0 for hashing
+- **Import/export:** openpyxl 3.1.5 for Excel (.xlsx)
+- **Dev/test:** pytest 9.1.1 + pytest-asyncio 1.4.0 (asyncio auto), httpx 0.28.1, ruff 0.15.18 (line-length 100)
+
+## Frontend
+- **Framework:** React 19.2.7 (SPA) with react-router-dom 7.18.0
+- **Language/build:** TypeScript 6.0.3, Vite 8.1.0 (`tsc -b && vite build`)
+- **Styling:** Tailwind CSS 4.3.1 via `@tailwindcss/vite` (no `tailwind.config` file); shadcn/ui-style primitives (Radix + cva) generated into `src/components/ui/`
+- **Server state:** TanStack Query 5.101.1; single axios 1.18.1 client (`src/api/client.ts`) handles tokens
+- **UX:** sonner for toasts
+- **Dev/test:** Vitest 4.1.9 + Testing Library + jsdom; ESLint 10 + typescript-eslint; Prettier 3.8.4 (zero-warning policy)
+
+## Database & Deployment
+- **Database:** PostgreSQL 17 (`postgres:17-alpine`) — one shared database for all modules, never port-mapped to the host
+- **Containers:** Podman / podman-compose (Docker CLI compatible); `compose/compose.yml` (prod) + `compose/compose.dev.yml` (dev overlay: Vite HMR, `--reload`); multi-stage `Containerfile` at repo root; pinned bases `python:3.13-slim`, `node:22-slim`
+- **Boot sequence:** `backend/entrypoint.sh` waits for Postgres, runs `alembic upgrade head`, then startup seeds run idempotently; the built React app is served from `frontend/dist` by a catch-all mounted last so it never swallows `/api/*`
+
 ## Configuration
-- No environment variables — all configuration stored in `localStorage` at runtime
-- Per-suite localStorage namespaces:
-- No build config files — not applicable
-## Data Storage
-- PLUM database: `plum/data/plm_database.json`
-- FLAN sample project: `flan/data/Crisis.json`
-- FLAN project template: `flan/templates/project_template.json`
-## Platform Requirements
-- No toolchain required
-- A modern web browser (Chrome, Edge, Firefox, Safari)
-- Git for version control
-- Any static file host or local filesystem access
-- No server required
-- SharePoint is the intended team-sync medium for PLUM database files (manual export/import workflow)
+- Environment-driven (12-factor); required secrets have **no defaults** — the app refuses to start without them: `POSTGRES_PASSWORD`, `JWT_SECRET`, `BNS_ADMIN_PASSWORD` (see `.env.example`; `.env` is not git-tracked)
+- Backend config surface in `backend/app/core/config.py`; module toggles/settings via `modules_router.py` / `settings_router.py`
+
+## Legacy prototypes (frozen reference — `plum/app/`, `flan/app/` only)
+- Single-file vanilla ES6+ HTML apps, no build step, no framework, no toolchain — open directly in a modern browser
+- No npm/pip, no lockfile; third-party libs loaded via CDN at runtime: SheetJS 0.18.5 (PLUM, FLAN — Excel/CSV), jsPDF 2.5.1 (FLAN — PDF)
+- Persistence is client-side: session/UI state in `localStorage`; canonical data as manually imported/exported JSON (`plum/data/plm_database.json`, `flan/data/Crisis.json`)
+- Frozen per `.zj/DECISIONS.md` D-ADOPT-4; the platform re-hosts their features and supersedes them
+
 ## Suite Status
-| Suite | File | Version | Status |
-|-------|------|---------|--------|
-| PLUM (PLM) | `plum/app/plm_v54.html` | v54 | Active |
-| FLAN (Project Mgmt) | `flan/app/prj-mgmt-v24.html` | v24 | Active |
-| CRUMB (CRM) | — | — | Planned |
-| SYERP (ERP) | — | — | Planned |
-| MOUSSE (MES) | — | — | Planned |
-| CRISP (QMS) | — | — | Planned |
-| GELATO (WMS) | — | — | Planned |
+| Suite | Live location | Status |
+|-------|---------------|--------|
+| SYERP (ERP — hub) | `backend/app/modules/syerp/`, `frontend/src/routes/syerp/` | Building (partners + GL) |
+| PLUM (PLM) | `backend/app/modules/plum/`, `frontend/src/routes/plum/` | Building (parts, revisions, BOM, costing, AVL, import/export); legacy `plum/app/plm_v54.html` |
+| FLAN (Project Mgmt) | — (legacy `flan/app/prj-mgmt-v24.html`) | Prototype only, not yet re-platformed |
+| CRUMB (CRM) | — | Planned |
+| MOUSSE (MES) | — | Planned |
+| CRISP (QMS) | — | Planned |
+| GELATO (WMS) | — | Planned |
 
 ## Conventions
 
@@ -145,44 +149,59 @@ decision log at `archive/planning-docs/`.
 
 ## Architecture
 
-## Overview
+This section describes the **live architecture** — the FastAPI backend + React frontend
+platform. `.zj/codebase/MAP.md` holds the authoritative, evidence-cited map. The legacy
+single-file prototype architecture is captured in the final "Legacy prototypes" subsection
+and applies **only** to `plum/app/` and `flan/app/`.
+
 ## Architectural Pattern
-- All markup, styles, and logic live in a single `.html` file opened directly in the browser.
-- No framework — vanilla ES6+ JavaScript in inline `<script>` blocks.
-- State is held in module-level JavaScript objects/variables; persistence is via `localStorage` and manual JSON file import/export.
-- Each suite is an independent silo: **no code, state, or data is shared between suites** today. Cross-suite integration exists only as a documented future goal (see `docs/features/INDEX.md`).
-## Layers (within a single suite)
+- **Modular monolith over one shared PostgreSQL database, with SYERP as the hub** — installable modules integrate via foreign keys, exactly per the stated constraint and already realized in code.
+- Backend and frontend ship as one deployable unit: the FastAPI app serves its own `/api/v1` surface and also serves the built React SPA from `frontend/dist` (catch-all mounted last so it never swallows API routes).
+- Modules self-register at import time and are mounted through a central registry, so adding a suite is additive rather than invasive.
+
+## Backend structure
+- **Entry point:** `backend/app/main.py` — FastAPI app factory. Startup: entrypoint waits for Postgres and runs `alembic upgrade head`, lifespan runs idempotent seeds, modules self-register, then the SPA catch-all mounts last.
+- **Module registry:** each module package's `__init__.py` calls `registry.register(module)`; `mount_all(app)` wires every router under `/api/v1` (`backend/app/core/registry.py`). Registered today: `syerp`, `plum`, `auth`.
+- **Module layout (repeated pattern):** `backend/app/modules/<name>/{__init__,models,schemas,router,service,seed}.py`. Business logic lives in `service.py`; routers are thin.
+- **Cross-cutting platform code:** `backend/app/core/` — config (pydantic-settings, `SecretStr`), async engine/session (`db.py`), module-toggle + settings routers, seed orchestration (`seed.py`).
+- **Cross-module integration via FKs:** PLUM AVL rows reference SYERP partners — the concrete realization of "SYERP as the hub."
+- **Migrations:** Alembic revisions in `backend/alembic/versions/` are the schema source of truth; every model change adds one.
+
+## Frontend structure
+- SPA in `frontend/src/` — `main.tsx` → `App.tsx` route table; `components/AppShell.tsx` + Sidebar/Topbar shell; per-suite route folders (`routes/plum/`, `routes/syerp/`, `routes/admin/`) each with a local `components/` subfolder.
+- Server state via TanStack Query hooks (`hooks/useAuth.ts`, `useModules.ts`, `useSettings.ts`); a single axios client (`src/api/client.ts`) carries all API traffic and token handling.
+- shadcn/ui primitives in `components/ui/`; `cn()` helper in `src/lib/utils.ts`.
+
 ## Data Flow
-```
-```
-- **Mutation is global**: handlers mutate the shared state object directly, then call a broad re-render.
-- **Rendering is string-based**: views are rebuilt by assigning generated HTML strings to `innerHTML` (145 occurrences in PLUM, 117 in FLAN). There is no virtual DOM or diffing — most changes trigger a full or near-full re-render via `renderAll()`.
-- **Persistence is dual**: ephemeral session state in `localStorage`; the canonical database is an exportable/importable JSON file (`plum/data/plm_database.json`, 2.7 MB; FLAN `flan/data/Crisis.json`).
-## Key Abstractions
-| Abstraction | Form | Example |
-|-------------|------|---------|
-| Domain namespace | `const Name = { ... }` object literal | `Parts`, `ECO`, `RFQ` in PLUM |
-| Global state container | module-level `const DB = {}` | `plum/app/plm_v54.html:2279` |
-| View renderer | `function renderX() { el.innerHTML = ... }` | `renderBomView()` |
-| Orchestrator | `renderAll()` | rebuilds all views after a change |
-| Dirty tracking | `markUnsaved()` / sync-status helpers | PLUM checkout/checkin flow |
-| Import/export | SheetJS + JSON serialization | `quickExportJson()` / `quickImportJson()` |
-## Entry Points
-- **PLUM:** open `plum/app/plm_v54.html` in a browser. Initialization runs on load (reads `localStorage`, hydrates `DB`, calls `renderAll()`).
-- **FLAN:** open `flan/app/prj-mgmt-v24.html` in a browser.
-- No CLI, no server endpoint, no router — navigation is in-app view switching driven by JS state.
-## Concurrency / Collaboration Model
-- Single-user by default. PLUM implements an advisory **checkout/checkin** convention over a shared JSON file (`checkoutDatabase()` / `checkinDatabase()` / `forceCheckin()`, `plum/app/plm_v54.html:2694`+) with `checkedOutBy`/`checkedOutAt` fields in the data, intended for SharePoint-hosted team sync via manual export/import. This is cooperative, not enforced — there is no real locking or server arbitration.
+- Client calls `/api/v1/*` through the axios client → thin FastAPI router → module `service.py` (business logic) → async SQLAlchemy session → PostgreSQL. Responses are Pydantic-validated schemas; TanStack Query caches and revalidates on the client.
+
+## Auth & Collaboration Model
+- Multi-user by design: JWT two-token model (15-min access / 7-day refresh), Argon2 password hashing, a seeded first admin (`BNS_ADMIN_*` env), and RBAC enforced server-side (`backend/tests/auth/test_rbac.py`).
+- Persistence and concurrency are the database's responsibility — no file checkout/checkin dance (that was a legacy-prototype workaround).
+
 ## Architectural Constraints
-- **No server / no backend** — everything runs client-side.
-- **No build tooling** — code must be runnable as-is in a browser; no transpilation, bundling, or modules (`import`/`export` not used).
-- **localStorage size limit** (~5–10 MB/origin) bounds what can be cached locally; the 2.7 MB PLUM database approaches practical limits.
-- **Monolithic files** — all logic for a suite lives in one large HTML file, making the render path (`renderAll`) a central bottleneck.
-- **Suite isolation** — no shared module layer; common patterns are duplicated across suites rather than factored out.
+- **Permissive licensing only** — open-core suite; dependencies must stay permissively licensed.
+- **Self-hostable** — must deploy on the user's own infrastructure via Podman/podman-compose, rootless.
+- **Audit trail & traceability are first-class** (medical-device origin), designed for even before CRISP ships.
+- **Offline capability** (Service Worker + IndexedDB, sync on reconnect) is a standing cross-module constraint, not yet built.
+- **Split PLUM's service layer before it metastasizes** — `plum/service.py` is ~3,000 lines; keep new suites thin.
+
+## Entry Points
+- **Full dev stack:** `./scripts/uat.ps1` (requires `pwsh`), or `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up`.
+- **Prod stack:** `podman-compose -f compose/compose.yml up -d` (needs `.env` from `.env.example`).
+- **Backend:** `pytest` / `ruff check .` / `alembic upgrade head` from `backend/`.
+- **Frontend:** `npm run dev` / `npm run build` / `npm run lint` / `npm run test` from `frontend/`.
+
+## Legacy prototypes (frozen reference — `plum/app/`, `flan/app/` only)
+- All markup, styles, and logic live in a single `.html` file opened directly in the browser; no framework, no build step, no server.
+- State is held in module-level JS objects (`const DB = {}`, domain namespaces like `Parts`/`ECO`/`RFQ`); views rebuild via string-template `innerHTML` orchestrated by `renderAll()`.
+- Persistence is dual: session/UI state in `localStorage`; canonical data as manually imported/exported JSON (`plum/data/plm_database.json`, `flan/data/Crisis.json`). PLUM adds an advisory checkout/checkin convention for SharePoint-hosted manual sync — cooperative, not enforced.
+- Frozen per `.zj/DECISIONS.md` D-ADOPT-4; a historical deep-dive is archived at `archive/planning-gsd/codebase/ARCHITECTURE.md`.
+
 ## Related Docs
-- `docs/features/plum/architecture.md`, `docs/features/flan/architecture.md` — per-suite architecture detail
+- `.zj/codebase/MAP.md` — authoritative current map, stack, commands, hotspots, and concerns
+- `docs/features/plum/architecture.md`, `docs/features/flan/architecture.md` — per-suite (legacy) architecture detail
 - `docs/features/INDEX.md` — suite relationships and integration vision
-- See `.zj/codebase/MAP.md` for the current directory layout and concerns (legacy snapshots archived at `archive/planning-gsd/codebase/`)
 
 ## Project Skills
 
