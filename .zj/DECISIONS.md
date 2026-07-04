@@ -67,3 +67,17 @@ Numbering is append-only.
   claims PLUM-04..10 "Complete" — contradicted by the live audit (PLUM-07/10 broken at
   runtime, rest unverified). SRD statuses follow the code/audit, not the progress doc;
   reconciliation is Phase 7 scope.
+
+## Phase 7 planning (2026-07-04)
+
+- **D-P7-1 (owner):** Phase-7 human-verify runs against the **Vite dev server (http://localhost:5173)
+  only** — no `frontend/dist` / container-image rebuild task. *Why:* the served :8000 bundle
+  predates Phase 3 (stale UI), but Vite dev always reflects current source, so it verifies the
+  fixes without build work; the stale production bundle stays a separate backlog item
+  ("Rebuild frontend/dist + container image").
+- **D-P7-2 (owner):** Phase 7 stays scoped to the adopted 4 GSD plans **plus one task** to
+  correct the root `CLAUDE.md` "Technology Stack" / "Architecture" sections (they still describe
+  the frozen vanilla-JS prototypes — "No server-side runtime", "no npm"). *Why:* cheap, sits
+  right next to the work, and reduces future-agent confusion. CI (the process gap that let the
+  `SyerpPartner` bug ship) was explicitly **not** folded in — it stays a p1 backlog item for
+  its own phase, honoring D-ADOPT-2 (adopt Phase 7 as-is).
