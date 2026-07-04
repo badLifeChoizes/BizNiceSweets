@@ -27,7 +27,7 @@
  */
 
 import { useState, useRef } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Download, FileSpreadsheet, Upload, CheckCircle, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import axios from 'axios'
@@ -107,6 +107,7 @@ export function ImportExport() {
   const [previewData, setPreviewData] = useState<ImportPreviewResponse | null>(null)
   const [committedData, setCommittedData] = useState<ImportCommitResponse | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const queryClient = useQueryClient()
 
   // ── Export mutations ──
   const exportJsonMutation = useMutation<void, Error>({
@@ -176,6 +177,7 @@ export function ImportExport() {
       setCommittedData(data)
       setImportStep('committed')
       toast(`Import complete. ${data.inserted} inserted, ${data.updated} updated.`)
+      void queryClient.invalidateQueries({ queryKey: ['plum', 'parts'] })
     },
     onError: (err) => {
       toast.error(
