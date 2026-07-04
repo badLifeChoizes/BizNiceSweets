@@ -1,0 +1,69 @@
+# DECISIONS — BizNiceSweets
+Updated: 2026-07-04
+
+Recovered decisions are marked `(recovered)` with their original source (now archived).
+Numbering is append-only.
+
+## Product & Architecture
+
+- **D-1 (recovered, 2025-12-20):** Business domain = hybrid open-source business suite of 7
+  integrated suites (SYERP, PLUM, FLAN, MOUSSE, CRUMB, GELATO, CRISP), each usable standalone
+  but integrating when present. *Source: archived `docs/decisions.md` #1.*
+- **D-2 (recovered, 2025-12-20):** Manufacturing (facilities, work centers, routings) lives
+  in MOUSSE, not PLUM — PLUM is product *development*; released products hand off to MOUSSE.
+  *Source: archived `docs/decisions.md` #2.*
+- **D-3 (recovered, 2025-12-21):** Modular monolith over one shared PostgreSQL database,
+  **SYERP as hub**, modules integrate via foreign keys — simpler ops than microservices at
+  this scale. *Source: archived `docs/ROADMAP.md`; realized in `backend/app/core/registry.py`.*
+- **D-4 (recovered, 2025-12-21):** Full rewrite of all suites onto FastAPI + SQLAlchemy 2.0 +
+  PostgreSQL / React + TypeScript + Tailwind + shadcn/ui, deployed via Podman Compose.
+  Supersedes the earlier client-side DataService/localStorage plan (archived
+  `docs/decisions.md` #4) — prototypes can't scale to a shared team system.
+- **D-5 (recovered, 2025-12-21):** Self-hosted + offline-capable + open-core licensing —
+  user ownership, no SaaS lock-in, permissive deps only.
+- **D-6 (recovered, 2026-06-22):** Dependency-first phase order (Foundation → Product Dev →
+  Operations → Customer/Logistics → Quality); a value-first reorder was considered and
+  explicitly rejected. *Source: archived `.planning/PROJECT.md`.*
+- **D-7 (recovered, 2026-06-22):** Milestone 1 = thin foundation + the PLUM port together,
+  so the milestone ends with a usable tool, not just plumbing.
+
+## Technical (recovered from GSD phase work, June 2026)
+
+- **D-8 (recovered):** Auth = PyJWT 2.13 + pwdlib[argon2] — not python-jose (CVEs), not
+  passlib (abandoned). Access token lives only in a module-level JS variable
+  (`frontend/src/auth/token.ts`), never web storage; refresh via httpOnly cookie with
+  single-flight axios 401 interceptor.
+- **D-9 (recovered):** RBAC = User↔Role↔Permission M2M with `module:action` permission codes;
+  UI gating is convenience only — backend 403 is the authz boundary.
+- **D-10 (recovered):** Seeds are idempotent select-before-insert, run at startup lifespan;
+  migrations auto-apply on container boot (`backend/entrypoint.sh`).
+- **D-11 (recovered):** All PLUM cost/qty math uses `Numeric(18,6)`/Python `Decimal` — never
+  float; export serializes Decimal as string.
+- **D-12 (recovered):** One-Released-revision-per-part enforced at DB level (partial unique
+  index), not just in service code.
+- **D-13 (recovered):** Effective-cost resolution order = vendor price → manual cost → BOM
+  roll-up → uncosted; cost snapshot frozen at release time.
+- **D-14 (recovered):** Import is two-step preview/commit, upsert-never-delete, stateless
+  re-parse on commit, 10MB guard.
+- **D-15 (recovered):** Tailwind v4 requires shadcn color tokens registered via
+  `@theme inline` in `src/index.css`, or panels render transparent app-wide.
+
+## Adoption decisions (2026-07-04)
+
+- **D-ADOPT-1:** Project adopted into ZJ. `.zj/` is the sole planning source of truth; the
+  GSD system (`.planning/`) and the superseded program-planning docs (`docs/ROADMAP.md`,
+  `docs/decisions.md`) are archived under `archive/`. Requirement IDs (CORE/SYERP/PLUM/FLAN)
+  carried over verbatim into `.zj/SRD.md`.
+- **D-ADOPT-2 (owner):** Phase 7 (close v1.0 gaps) adopted **as-is** from the GSD plans —
+  same 4-plan scope; `/zj:plan 7` translates rather than re-derives.
+- **D-ADOPT-3 (owner):** Next milestone after v1.0 = **SYERP extended + MOUSSE**
+  (dependency-first confirmed), ahead of the FLAN port and PLUM advanced.
+- **D-ADOPT-4 (owner):** HTML prototypes (`plum/app/plm_v54.html`, `flan/app/prj-mgmt-v24.html`)
+  are **frozen reference only** — no further development or bug fixes; they exist as
+  domain-logic reference for porting.
+- **D-ADOPT-5 (owner):** The unfinished suite-documentation and integration-spec items from
+  `docs/tasks/chore-architecture-planning.md` are kept as backlog, not abandoned.
+- **D-ADOPT-6:** Requirement-status corrections at adoption: `docs/features/requirements-progress.md`
+  claims PLUM-04..10 "Complete" — contradicted by the live audit (PLUM-07/10 broken at
+  runtime, rest unverified). SRD statuses follow the code/audit, not the progress doc;
+  reconciliation is Phase 7 scope.

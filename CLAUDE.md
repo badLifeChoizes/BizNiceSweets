@@ -18,6 +18,28 @@ The seven suites: **SYERP** (ERP/financials/inventory — the hub), **PLUM** (Pr
 - **Licensing:** Open core — core suite open source (permissive deps only), premium add-ons possible.
 - **Compliance posture:** Medical-device origin means audit trail and traceability are first-class concerns, designed for even before CRISP ships.
 
+## ZJ Workflow (planning source of truth)
+
+This project is managed with the **ZJ workflow**. All planning, requirements, and roadmap
+authority lives in **`.zj/`** — read it before planning or implementing:
+
+- `.zj/PROJECT.md` — vision, users, constraints, current reality
+- `.zj/PRD.md` / `.zj/SRD.md` — requirements with statuses and evidence (IDs: CORE-*, SYERP-*, PLUM-*, FLAN-*, MOUSSE-*, …)
+- `.zj/ROADMAP.md` — shipped phases (with evidence) and pending phases
+- `.zj/STATE.md` — current position and the exact next command
+- `.zj/DECISIONS.md`, `.zj/BACKLOG.md`, `.zj/codebase/MAP.md`
+
+Check `/zj:status` for where things stand. Prior planning systems are **archived** (history
+only, never authoritative): GSD at `archive/planning-gsd/`, the 2025 program roadmap and
+decision log at `archive/planning-docs/`.
+
+> **⚠ Stale sections below:** the "Technology Stack", "Conventions", and "Architecture"
+> sections of this file describe the **legacy HTML prototypes only** (frozen reference —
+> see `.zj/DECISIONS.md` D-ADOPT-4). The live codebase is the FastAPI backend (`backend/`)
+> and React 19 frontend (`frontend/`) — see `.zj/codebase/MAP.md` for the accurate map,
+> stack, and verified commands. Follow the legacy conventions only when reading
+> `plum/app/` or `flan/app/`.
+
 ## Technology Stack
 
 ## Languages
@@ -102,7 +124,7 @@ The seven suites: **SYERP** (ERP/financials/inventory — the hub), **PLUM** (Pr
 - No centralized error logger; failures are surfaced inline at the call site.
 ## DOM & UI
 - Event handling is mostly **inline `onclick`/`oninput` attributes** in generated HTML strings calling global functions.
-- Heavy reliance on `innerHTML` for both reads and writes (PLUM 145, FLAN 117 occurrences) — see `.planning/codebase/CONCERNS.md` for the XSS/perf implications.
+- Heavy reliance on `innerHTML` for both reads and writes (PLUM 145, FLAN 117 occurrences) — see `archive/planning-gsd/codebase/CONCERNS.md` for the XSS/perf implications.
 - Charts are **hand-rolled inline SVG** (PLUM `Charts` object; FLAN `renderPieChart`/`renderBarChart`) rather than a charting library.
 ## Persistence Conventions
 - Session/UI state → `localStorage` under a suite-specific prefix.
@@ -160,7 +182,7 @@ The seven suites: **SYERP** (ERP/financials/inventory — the hub), **PLUM** (Pr
 ## Related Docs
 - `docs/features/plum/architecture.md`, `docs/features/flan/architecture.md` — per-suite architecture detail
 - `docs/features/INDEX.md` — suite relationships and integration vision
-- See `.planning/codebase/STRUCTURE.md` for directory layout and `.planning/codebase/CONCERNS.md` for architectural risks
+- See `.zj/codebase/MAP.md` for the current directory layout and concerns (legacy snapshots archived at `archive/planning-gsd/codebase/`)
 
 ## Project Skills
 
@@ -175,7 +197,7 @@ The seven suites: **SYERP** (ERP/financials/inventory — the hub), **PLUM** (Pr
 <!-- PROJECT-RULES:start (preserved from original CLAUDE.md) -->
 ## Project-Specific Rules
 
-These are the project's authoritative rules. Task and phase tracking uses the `docs/tasks/{branch}.md` checklist system described below; historical planning artifacts remain under `.planning/`.
+These are the project's authoritative rules. Task tracking uses the `docs/tasks/{branch}.md` checklist system described below; planning and phase tracking use the ZJ workflow in `.zj/` (prior systems archived under `archive/`).
 
 ### Commit Messages (MANDATORY)
 
@@ -194,9 +216,9 @@ These are the project's authoritative rules. Task and phase tracking uses the `d
 3. Update `docs/features/requirements-progress.md` when completing a requirement.
 4. If implementation diverges from spec, update the feature doc or flag it with the user.
 
-Key docs: [docs/features/INDEX.md](docs/features/INDEX.md), [GLOSSARY.md](docs/features/GLOSSARY.md), [requirements.md](docs/features/requirements.md) (221 requirements), [requirements-progress.md](docs/features/requirements-progress.md).
+Key docs: [.zj/SRD.md](.zj/SRD.md) (requirements with statuses and evidence), [docs/features/INDEX.md](docs/features/INDEX.md), [requirements-progress.md](docs/features/requirements-progress.md).
 
 ### Task Workflow
 
-Keep a checklist file at `docs/tasks/{branch-name}.md`, commit after each checklist item, and archive the file to `docs/tasks/_completed/{date}-{branch-name}.md` when finished. Historical planning artifacts remain under `.planning/`.
+Keep a checklist file at `docs/tasks/{branch-name}.md`, commit after each checklist item, and archive the file to `docs/tasks/_completed/{date}-{branch-name}.md` when finished. Historical planning artifacts live under `archive/` (see the ZJ Workflow section).
 <!-- PROJECT-RULES:end -->

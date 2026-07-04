@@ -75,6 +75,30 @@ Based on the analysis report, interview the user to fully understand the systems
 - [ ] Define FLAN <-> SYERP integration
 - [ ] Define shared vendor/document infrastructure
 
+
+## Last Session (2026-06-30 15:48)
+
+**Auto-checkpointed:** Commit `8ec3804`
+
+**Changes:**
+```
+?? _templates/
+?? docs/tasks/chore-suite-structure.md
+?? docs/testing-feedback/
+?? steps.txt
+```
+
+_Context compacted. Review changes and update checklist manually._
+## ZJ Adoption (2026-07-04)
+
+- [x] Project adopted into the ZJ workflow: self-contained `.zj/` authored (PROJECT, PRD,
+  SRD, ROADMAP, DECISIONS, BACKLOG, STATE, codebase/MAP); GSD system archived to
+  `archive/planning-gsd/`; superseded `docs/ROADMAP.md` + `docs/decisions.md` archived to
+  `archive/planning-docs/`; CLAUDE.md re-pointed at `.zj/`. Planning/phase tracking now
+  lives in `.zj/` — this checklist system remains for per-branch task tracking. The
+  unfinished Phase 4/5 items below are carried in `.zj/BACKLOG.md` (owner decision
+  D-ADOPT-5).
+
 ## Notes
 
 - Templates are in `_templates/` folder
