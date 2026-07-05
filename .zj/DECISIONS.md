@@ -114,3 +114,41 @@ Numbering is append-only.
   automated/standalone-verified evidence, and flow-level UI confirmation is annotated
   "human-UAT deferred to v1.0 milestone" rather than claimed complete (preserves SC5 — nothing
   marked Complete on an unrun check).
+
+## v2.0 / Phase 8 spec — SYERP-10/11 expansion (2026-07-05)
+
+- **D-P8-1 (owner):** **Inventory and purchasing are SYERP, not MOUSSE or GELATO** — reaffirmed
+  when the owner questioned suite ownership at spec time. SYERP is the ERP hub and owns the
+  inventory *ledger* (what is stocked, how much, what it's worth) and *procurement* (POs to
+  vendors); MOUSSE *consumes* inventory + PLUM BOMs to build (later); GELATO adds *physical*
+  warehouse detail (bins, receiving floor, pick/pack/ship, lot/serial) on top of SYERP inventory
+  (later). Both MOUSSE and GELATO depend on SYERP inventory existing first — hence the
+  dependency-first sequencing (D-6). *Source: PROJECT.md ("SYERP … inventory — the hub"), PRD-7.*
+- **D-P8-2 (owner):** **Hybrid item↔PLUM identity.** An inventory item is its own SYERP record
+  with a **nullable** FK to a PLUM part. Rationale: a real shop stocks non-designed goods (raw
+  materials, packaging, consumables) that are not PLUM parts, and SYERP inventory should not
+  hard-depend on the PLUM module being enabled. Rejected: "every item is a PLUM part" (can't
+  stock non-parts; hard PLUM coupling) and "independent item master" (duplicates part data,
+  weakens the MOUSSE BOM-consumption story).
+- **D-P8-3 (owner):** **Flat named stock locations only** in SYERP inventory for v2.0; bins,
+  zones, warehouse hierarchy, pick/pack/ship, and lot/serial are **deferred to GELATO-01** to
+  avoid building the warehouse layer twice. Rejected: single implicit location (needs a schema
+  change the moment locations arrive) and a full bin hierarchy now (overlaps GELATO scope).
+- **D-P8-4 (owner):** **Moving weighted-average valuation.** Each receipt updates the item's
+  moving-average unit cost; on-hand value = qty × avg cost; all math Decimal/`Numeric(18,6)`
+  (D-11). Gives MOUSSE a real inventory cost to consume and flow back to SYERP (PRD-7 acceptance
+  signal). Rejected: quantity-only (defers the cost-flow capability MOUSSE needs) and
+  standard-cost-from-PLUM (misses purchase-price variance).
+- **D-P8-5 (owner):** **PO depth = Draft → Approve → Receive-into-inventory, no AP.** Receiving
+  posts SYERP-10 receipt transactions at PO unit cost; the workflow stops before vendor-invoice
+  matching and payment, which stay SYERP-12. Rejected: pulling basic AP invoice-match forward
+  (scope growth into SYERP-12) and PO-history-only with no receiving integration (weakest
+  integration; would need manual stock adjustments).
+- **D-P8-6:** Both the inventory-item `code` and the PO number use a **numeric-safe
+  auto-generator** (order by integer cast, never lexicographic `MAX`) — carrying forward the
+  PLUM `generate_part_number` defect lesson (Phase 7 `1b8bfa1`) so the same digit-boundary bug
+  is not re-introduced in a new generator.
+- **D-P8-7:** v2.0 **rejects** issues/adjustments/transfers that would drive a location negative,
+  and **rejects** PO over-receipt beyond ordered qty (both HTTP 4xx). Backorder / negative-stock
+  policy and over-receipt tolerance are deferred — sensible strict defaults now, revisited if a
+  real workflow needs them.

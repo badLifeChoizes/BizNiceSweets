@@ -1,21 +1,22 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-04
+Updated: 2026-07-05
 
 ## Position
 
-- **Milestone:** v1.0 — Foundation + PLUM (Phase 7 built; ready to verify + close)
-- **Phase:** 7 — Close v1.0 gaps (**build complete** — all 7 tasks done/committed)
+- **Milestone:** v1.0 — Foundation + PLUM (Phase 7 built; verify + close still **open**) ·
+  v2.0 spec started (SYERP-10/11 expanded).
+- **Phase:** 7 build complete; **8 (SYERP inventory & purchasing) now spec-ready** — owner
+  elected to plan Phase 8 ahead of formally closing v1.0 (2026-07-05).
 - **Branch:** `bugfix-plum-v1-gaps` (off `chore-architecture-planning` per D-P7-3)
 
 ## Next action
 
-`/zj:verify 07` — verify the phase goal-backward. All 7 tasks are done and committed; the two
-scope decisions taken at build (D-P7-4 harness deferred, D-P7-5 human-UAT → milestone) are the
-main things to sanity-check.
+`/zj:plan 8` — SYERP-10/11 are spec-complete with acceptance criteria (SRD, expanded 2026-07-05;
+scope decisions D-P8-1..7). Plan the inventory + purchasing phase against them.
 
-Then `/zj:milestone` to close v1.0 — **which now owns the human-UAT** (`.zj/UAT-v1.0.md`: checks
-1 & 8 already passed; 2–7 & 9–12 outstanding). Then `/zj:spec` to expand SYERP-10..12 / MOUSSE-01
-before planning Phase 8.
+**Still owed on v1.0 (do not lose):** `/zj:verify 07` then `/zj:milestone` (runs the human-UAT,
+`.zj/UAT-v1.0.md`: checks 1 & 8 passed; 2–7 & 9–12 outstanding). Planning Phase 8 first is an
+owner choice; v1.0 is not closed and Phase 7 is not yet verified.
 
 ## Build result (Phase 7)
 

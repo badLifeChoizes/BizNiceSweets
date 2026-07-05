@@ -87,10 +87,14 @@ Owner decision 2026-07-04: dependency-first order confirmed — operations befor
 CRM. **Definition of done (draft):** "Can track inventory, raise purchase orders, and execute
 work orders that consume PLUM BOMs and inventory." Refine via `/zj:spec` at milestone start.
 
-### Phase 8: SYERP Extended — inventory & purchasing  [pending]
-- **Goal:** Inventory items/quantities/locations with transaction history; purchase-order
-  workflow with vendor history.
-- **Delivers:** SYERP-10, SYERP-11.
+### Phase 8: SYERP Extended — inventory & purchasing  [pending — spec-ready]
+- **Goal:** Inventory items (optional PLUM link) with per-location on-hand, immutable
+  transaction history, and moving-average valuation; a Draft→Approve→Receive purchase-order
+  workflow whose receipts feed inventory. No AP (SYERP-12), no warehouse bins (GELATO-01).
+- **Delivers:** SYERP-10, SYERP-11 — **spec-complete** with acceptance criteria (expanded
+  2026-07-05 via `/zj:spec`; scope decisions D-P8-1..7). Ready for `/zj:plan 8`.
+- **Depends on:** SYERP hub (Partner, done) + PLUM parts (done). MOUSSE (Phase 10) and
+  GELATO both build on this inventory ledger.
 
 ### Phase 9: SYERP Extended — AP/AR & reporting  [pending]
 - **Goal:** Invoice basics and financial reporting on the GL.

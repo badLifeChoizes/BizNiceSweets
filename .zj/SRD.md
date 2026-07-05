@@ -1,5 +1,5 @@
 # SRD — BizNiceSweets
-Updated: 2026-07-04
+Updated: 2026-07-05
 
 > **Provenance:** requirement IDs and statements ingested verbatim from the GSD-era
 > `.planning/REQUIREMENTS.md` (defined 2026-06-22, last updated 2026-06-30), archived at
@@ -202,13 +202,94 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ---
 
-## Future Suites (coarse placeholders — expand via /zj:spec at milestone planning)
+## SYERP Extended — Operations (v2.0 — Phase 8)
+
+> Expanded from coarse placeholders 2026-07-05 (`/zj:spec`) ahead of Phase 8 planning.
+> Scope decisions: D-P8-1 (suite ownership), D-P8-2 (hybrid item↔PLUM), D-P8-3 (flat
+> locations, GELATO boundary), D-P8-4 (moving-average valuation), D-P8-5 (PO depth = receive,
+> no AP). IDs unchanged (append-only). SYERP-12 and later suites remain coarse placeholders.
 
 ## SYERP-10: Inventory management  [traces: PRD-7]  **Status: planned**
-- **Statement:** The system shall track inventory items, quantities, locations, and transaction history.
+- **Statement:** The system shall let a user track on-hand inventory for stocked items across
+  named stock locations, with an immutable transaction history and moving-weighted-average
+  valuation. An **inventory item** is a SYERP master record that **may optionally reference a
+  PLUM part** (`plum_part_id` nullable, D-P8-2); items without a PLUM link (raw materials,
+  packaging, shop consumables) are fully supported so inventory works even when PLUM is
+  disabled.
+- **Acceptance criteria:**
+  1. **Item master** — User can create, view, edit, and archive an inventory item with: unique
+     `code`, `name`, unit of measure, optional `plum_part_id` FK, and `active` soft-delete flag
+     (archived items hidden from default lists, mirroring `Partner`). Item `code` uses a
+     numeric-safe auto-generator (order by integer cast, never lexicographic `MAX` — the
+     PLUM `generate_part_number` lesson, D-P8-6).
+  2. **Locations** — User can create, edit, and archive **flat named stock locations** (e.g.
+     "Main", "Receiving", "WIP"). No bins, zones, or hierarchy (deferred to GELATO-01, D-P8-3).
+  3. **On-hand by location** — For any item, user can see quantity-on-hand **per location** and
+     the total across locations. On-hand is **derived** as the signed sum of that item/location's
+     transactions (never a directly-mutated column).
+  4. **Immutable transactions** — Every quantity change is recorded as an append-only inventory
+     transaction carrying: item, location, transaction type (`receipt` | `issue` | `adjustment`
+     | `transfer`), signed quantity, unit cost (where applicable), UTC timestamp, acting user,
+     and an optional source reference (e.g. a PO-receipt id). Transactions are never updated or
+     deleted; corrections are new reversing transactions.
+  5. **Moving-average valuation** — Each **receipt** updates the item's moving weighted-average
+     unit cost = `(qty_before × avg_before + qty_recv × unit_cost_recv) / (qty_before + qty_recv)`;
+     issues and adjustments value at the current average. All money/qty math uses
+     `Numeric(18,6)` / Python `Decimal` (D-11), never float. On-hand value (`total_qty × avg_cost`)
+     is viewable per item.
+  6. **Adjustment & transfer** — User can post a manual stock adjustment (with a reason) and a
+     location-to-location transfer; both write transactions, a transfer nets zero across total
+     on-hand, and an issue/adjustment/transfer that would drive a location's on-hand **negative
+     is rejected** (HTTP 4xx) in v2.0 (backorder/negative-stock policy deferred, D-P8-7).
+  7. **Audit** — Item create/edit/archive, location changes, and every transaction emit
+     attributable audit events (NFR-1).
+  8. **RBAC** — All endpoints are gated by `syerp:<action>` permission codes; an un-permissioned
+     API call is refused regardless of UI (CORE-05 pattern).
+- **Verification:** service/router tests for on-hand derivation, moving-average math (Decimal
+  exactness), negative-stock rejection, and transfer-nets-to-zero; live UI walk — create item
+  (with and without a PLUM link), create locations, receive stock, read on-hand + value per
+  location, post an adjustment and a transfer, confirm audit rows written. Flow-level UI
+  confirmation via the milestone UAT.
 
 ## SYERP-11: Purchase orders  [traces: PRD-7]  **Status: planned**
-- **Statement:** The system shall support a purchase-order workflow with vendor purchase history.
+- **Statement:** The system shall support a purchase-order workflow —
+  **Draft → Approved → Receiving (partial/complete) → Closed** — where a PO references a SYERP
+  **vendor** (`Partner.is_vendor`) and its lines reference **inventory items**; receiving a PO
+  line posts SYERP-10 **receipt transactions at the PO line unit cost**, feeding inventory
+  on-hand and moving-average valuation. The workflow **stops short of vendor-invoice / AP
+  matching and payment** — that remains SYERP-12 (D-P8-5).
+- **Acceptance criteria:**
+  1. **PO lifecycle** — User can create a PO in `Draft` for a vendor; add/edit/remove lines
+     (item, qty ordered, unit cost, optional need-by date) **while Draft**; advance to
+     `Approved` (line quantities/costs then locked); and `Close`. Invalid state transitions are
+     refused server-side (HTTP 4xx) — the FSM is enforced in the service, not just the UI.
+  2. **Numbering** — Each PO receives a unique auto-generated PO number using a numeric-safe
+     generator (integer cast, not lexicographic — D-P8-6).
+  3. **Vendor link & history** — `PurchaseOrder.vendor_id` FKs to `syerp_partner`; only partners
+     with `is_vendor = True` are selectable. A vendor's purchase history is the list of that
+     vendor's POs with status and totals.
+  4. **Receiving → inventory** — Against an `Approved` PO, user can receive a line fully or
+     partially; each receipt writes a SYERP-10 `receipt` transaction (item, into a user-chosen
+     location, qty received, unit cost from the PO line) and increments the line's received-qty.
+     Partial receipts accumulate. **Over-receipt beyond ordered qty is rejected** (HTTP 4xx) in
+     v2.0 (tolerance handling deferred, D-P8-7).
+  5. **Status roll-up** — Each line shows ordered / received / outstanding quantities; the PO
+     shows an overall status (`Draft` | `Approved` | `Partially Received` | `Received` | `Closed`),
+     auto-advancing to `Received` when every line is fully received.
+  6. **No AP** — No vendor invoice, three-way match, or payment; the PO's unit costs exist only
+     to value received inventory (SYERP-12 owns AP/AR).
+  7. **Audit** — PO create, line edits, approve, each receipt, and close emit attributable audit
+     events (NFR-1).
+  8. **RBAC** — Endpoints gated by `syerp:<action>` permission codes (CORE-05 pattern).
+- **Verification:** service tests for lifecycle-transition enforcement, numeric PO numbering,
+  vendor-only line selection, partial-receipt accumulation, and receipt-creates-inventory-
+  transaction (integration with SYERP-10 moving-average); live UI walk — raise a PO → approve →
+  receive partial then remainder → confirm item on-hand and moving-average updated → vendor
+  history lists the PO. Flow-level UI confirmation via the milestone UAT.
+
+---
+
+## Future Suites (coarse placeholders — expand via /zj:spec at milestone planning)
 
 ## SYERP-12: AP/AR and financial reporting  [traces: PRD-7]  **Status: planned**
 - **Statement:** The system shall support invoice management (AP/AR basics) and basic financial reporting on the GL.
@@ -255,14 +336,16 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-4 | SYERP-01..05, PLUM-07 | — |
 | PRD-5 | PLUM-01..16 | Phase-7 code fixes landed & code-verified (`5c33ed8`/`1b8bfa1`/`37b5f97`); PLUM-04..10 flow-level UI confirmation deferred to v1.0 milestone UAT (`.zj/UAT-v1.0.md`, D-P7-5) |
 | PRD-6 | FLAN-01 | expand at milestone planning |
-| PRD-7 | SYERP-10..12, MOUSSE-01 | coarse — expand via /zj:spec |
+| PRD-7 | SYERP-10..12, MOUSSE-01 | SYERP-10/11 spec-complete (2026-07-05, Phase 8); SYERP-12 + MOUSSE-01 still coarse |
 | PRD-8 | CRUMB-01, GELATO-01 | coarse — expand via /zj:spec |
 | PRD-9 | CRISP-01, NFR-1 | CRISP coarse |
 | PRD-10 | NFR-3 | — |
 | PRD-11 | NFR-2 | license audit outstanding |
 
-**Counts (2026-07-04, post-Phase-7):** implemented 17 (CORE-01..09, SYERP-01..05, PLUM-01..03 —
-PLUM-01 defect **resolved** & proven live, `1b8bfa1`) + 2 NFR foundations · partial 7
-(PLUM-04..10 — all three Phase-7 runtime/cache fixes landed & code-verified; flow-level UI
-confirmation deferred to v1.0 milestone UAT per D-P7-5) · planned 15 (PLUM-11..16, FLAN-01,
-SYERP-10..12, MOUSSE/CRUMB/GELATO/CRISP-01, NFR-3).
+**Counts (2026-07-05, post-Phase-7 + SYERP-10/11 spec expansion):** implemented 17
+(CORE-01..09, SYERP-01..05, PLUM-01..03 — PLUM-01 defect **resolved** & proven live, `1b8bfa1`)
++ 2 NFR foundations · partial 7 (PLUM-04..10 — all three Phase-7 runtime/cache fixes landed &
+code-verified; flow-level UI confirmation deferred to v1.0 milestone UAT per D-P7-5) · planned 15
+(PLUM-11..16, FLAN-01, SYERP-10..12, MOUSSE/CRUMB/GELATO/CRISP-01, NFR-3 — of which **SYERP-10 &
+SYERP-11 are now spec-complete** with acceptance criteria for Phase 8; the rest remain coarse
+until their milestones near).
