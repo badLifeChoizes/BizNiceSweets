@@ -46,7 +46,7 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
 
 > Tasks 1 and 2 touch the SAME file (`service.py`) — sequence them (1 then 2), do NOT parallelize. Task 3 (frontend) and Task 4 (docs) are independent of everything in Wave 1. Wave-1 backend verifies require the stack up; if it is down, bring it up first via the Context procedure (formalized in Wave 2 Task 5).
 
-### [ ] 1. Alias Partner as SyerpPartner at all 4 sites + cover every vendor code path live
+### [x] 1. Alias Partner as SyerpPartner at all 4 sites + cover every vendor code path live
 - **Serves:** SC1 · **FRs:** PLUM-07, PLUM-10, PLUM-08 (transitive)
 - **Files:** `backend/app/modules/plum/service.py`, `backend/tests/plum/test_import_export.py`
 - **Do:**
@@ -60,7 +60,7 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
 - **Verify:** `API=$(podman ps --format '{{.Names}}' | grep -E 'api' | head -1); podman exec "$API" alembic current && podman exec "$API" pytest tests/plum/test_avl.py tests/plum/test_import_export.py -x -q`
 - **Parallel-ok:** no (shares `service.py` with Task 2)
 
-### [ ] 2. Numeric-safe generate_part_number + digit-boundary regression test
+### [x] 2. Numeric-safe generate_part_number + digit-boundary regression test
 - **Serves:** SC2 · **FRs:** PLUM-01 (defect)
 - **Files:** `backend/app/modules/plum/service.py`, `backend/tests/plum/test_parts.py`
 - **Do:**
@@ -95,7 +95,7 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
 
 ### Wave 2 — bring stack up, run full live-DB PLUM suite, then blocking human-verify
 
-### [ ] 5. Bring the Podman stack up, confirm the API container name, run the full live-DB PLUM suite
+### [x] 5. Bring the Podman stack up, confirm the API container name, run the full live-DB PLUM suite
 - **Serves:** SC4 · **FRs:** PLUM-01, PLUM-07, PLUM-08, PLUM-10
 - **Files:** none (verification task)
 - **Do:**
