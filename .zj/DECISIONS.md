@@ -92,3 +92,14 @@ Numbering is append-only.
   (a strict superset of master). Branching off master would give an empty tree with nothing to
   fix. Eventual integration of `chore-architecture-planning` → `master` is a separate concern
   outside Phase 7. The plan's dedicated-branch intent is preserved; only the base changed.
+
+- **D-P7-4 (owner, at build):** The PLUM live-DB test harness is **fundamentally broken and its
+  repair is deferred** ("until it becomes blocking or it's asked for"). Discovered at build: the
+  `skip_if_no_db` suite has always silently skipped (broken psycopg2-URL probe), and once the
+  probe is fixed all 33 PLUM tests fail on a module-level async-engine/event-loop mismatch, plus
+  missing `admin-user` seeding and no per-test isolation (full root-cause list in BACKLOG.md p1).
+  Fixing it is real test-infra work outside the adopted 4-plan scope. *Consequence:* **SC4 is
+  relaxed** for Phase 7 — the PLUM fixes are proven by the Task 6 human-verify at :5173 (D-P7-1,
+  regression checks 9–12 cover SC1/SC2/SC3 end-to-end) plus lightweight standalone async scripts
+  run against live Postgres, **not** by the pytest suite. The `pytest tests/plum/` "green" clause
+  in Tasks 1/2/5 Done-when is superseded by these. Harness repair tracked as BACKLOG p1.

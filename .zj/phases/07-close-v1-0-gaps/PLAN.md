@@ -74,7 +74,7 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
 - **Verify:** `API=$(podman ps --format '{{.Names}}' | grep -E 'api' | head -1); podman exec "$API" pytest tests/plum/test_parts.py -x -q`
 - **Parallel-ok:** no (shares `service.py` with Task 1; run after Task 1)
 
-### [ ] 3. Invalidate ['plum','parts'] on import commit success
+### [x] 3. Invalidate ['plum','parts'] on import commit success
 - **Serves:** SC3 · **FRs:** PLUM-10 (cache gap)
 - **Files:** `frontend/src/routes/plum/ImportExport.tsx`
 - **Do:** Three edits matching the `ArchivePartDialog.tsx` analog verbatim: (1) widen line 30 to `import { useMutation, useQueryClient } from '@tanstack/react-query'`; (2) add `const queryClient = useQueryClient()` near the top of the `ImportExport()` body (~line 103, alongside existing useState/useRef); (3) inside `commitImportMutation`'s `onSuccess` (~line 175), after the existing `setCommittedData` / `setImportStep('committed')` / `toast(...)`, add `void queryClient.invalidateQueries({ queryKey: ['plum', 'parts'] })`. Apply to `commitImportMutation` ONLY — not `exportJsonMutation`, `exportExcelMutation`, or `uploadPreviewMutation`. Do NOT change `frontend/src/lib/queryClient.ts` staleTime.
@@ -85,7 +85,7 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
 - **Verify:** `cd frontend && npx tsc --noEmit && npm run test -- --run ImportExport`
 - **Parallel-ok:** yes
 
-### [ ] 4. Refresh CLAUDE.md Technology Stack + Architecture to describe the live stack
+### [x] 4. Refresh CLAUDE.md Technology Stack + Architecture to describe the live stack
 - **Serves:** SC6 · **FRs:** none (owner decision — clearly outside the adopted 4-plan fix scope)
 - **Files:** `/home/zack/Projects/BizNiceSweets/CLAUDE.md` (Technology Stack section starts line **43**; Architecture section starts line **146**)
 - **Do:** Rewrite the "Technology Stack" and "Architecture" sections so they describe the LIVE codebase — FastAPI + SQLAlchemy 2.0 + PostgreSQL 17 backend (`backend/`), React 19 + TypeScript + Vite + Tailwind + shadcn/ui frontend (`frontend/`), Podman/podman-compose deployment, modular monolith over one shared Postgres DB with SYERP as hub — instead of the frozen vanilla-JS prototypes (which currently claim "No server-side runtime", "None — no npm", localStorage persistence). Point at `.zj/codebase/MAP.md` as the authoritative source of the current map/stack/commands. Keep the existing stale-section warning banner's spirit: note the legacy prototype details still apply only when reading `plum/app/` or `flan/app/`. Do NOT expand into CI (backlog). Do NOT touch the "Conventions", "Project Skills", or "Project-Specific Rules" sections.
@@ -146,6 +146,7 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
 
 ## Deviations
 - **Branch base (material, owner-approved D-P7-3):** plan said branch off `master`; actually branched off `chore-architecture-planning` because master (2025-12-20) predates the re-platform and has no `backend/`/`frontend/`/`.zj/`. See DECISIONS.md D-P7-3.
+- **Live-DB test harness deferred / SC4 relaxed (material, owner-approved D-P7-4):** the `skip_if_no_db` PLUM suite has never run (broken probe; once fixed, 33/33 fail on async-engine loop mismatch + no seeding + no isolation — BACKLOG.md p1). Owner deferred the repair. **SC4's "pytest tests/plum/ green" is superseded** — Tasks 1/2/5 are verified instead by (a) standalone async scripts against live Postgres and (b) the Task 6 human-verify at :5173 (regression checks 9–12). The new/updated tests are still committed so they pass once the harness is repaired. See DECISIONS.md D-P7-4.
 
 ## Risks
 - **Pattern-2 SQLAlchemy syntax (Assumption A1, MEDIUM):** `cast(func.substring(...), Integer)` + `.op("~")` may need a spelling tweak against Postgres 17. Early-warning: a SQL error at Task 2's verify. Mitigation: budget one repair cycle inside Task 2 — caught before merge by the live-DB test.

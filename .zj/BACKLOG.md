@@ -8,13 +8,27 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   are manual; the `SyerpPartner` bug shipped through 4 plans because live-DB tests never ran.
   Minimum: ruff + pytest + eslint + vitest on push; stretch: a live-Postgres test job so
   `skip_if_no_db` tests actually run.
+- [ ] **PLUM live-DB test harness never runs (4 root causes confirmed 2026-07-04, Phase 7)** —
+  deferred by owner (D-P7-4) until blocking/asked. The `skip_if_no_db` suite has *always*
+  silently skipped, even inside the API container. Confirmed causes: (1) `tests/conftest.py`
+  `_check_db_available()` passes the `postgresql+psycopg2://` SQLAlchemy URL to raw
+  `psycopg2.connect()`, which errors `invalid dsn` → probe always False → all 33 PLUM tests
+  skip (1-line fix: `.replace("+psycopg2","")`); (2) with the probe fixed, every test fails
+  `sqlalchemy.exc.InterfaceError` — the module-level async engine (`app/core/db.py`) is bound
+  to a different event loop than each pytest-asyncio test (needs NullPool or a per-test
+  engine/session fixture); (3) no `admin-user` User is seeded though tests auth as
+  `subject="admin-user"`; (4) no per-test isolation → `uq_plum_part_number` IntegrityError
+  collisions on rerun against the persistent dev DB. This is the exact silent-skip that let
+  the `SyerpPartner` 500 ship. Until fixed, PLUM fixes are proven by human-verify (D-P7-1) +
+  standalone async scripts, not the pytest suite.
 - [ ] **Seed/startup integration test** — admin-seed path has no DB-backed regression test
   (a `MissingGreenlet` slipped past unit tests in Phase 2).
 - [ ] **Rebuild `frontend/dist` + container image** — production bundle predates Phase 3;
   `:8000` serving doesn't reflect Phases 3–6 UI until rebuilt. (May fold into Phase 7 verify.)
-- [ ] **Refresh root `CLAUDE.md` stack/architecture sections** — they still describe only the
-  vanilla-JS prototypes ("no server-side runtime", "no npm") and contradict the live
-  FastAPI/React codebase; also Windows-path references on a now-Linux workspace.
+- [x] **Refresh root `CLAUDE.md` stack/architecture sections** — done in Phase 7 Task 4
+  (commit `5db8278`); Technology Stack + Architecture now describe the live FastAPI/React stack
+  and cite `.zj/codebase/MAP.md`. (Any remaining Windows-path references elsewhere are out of
+  that task's scope.)
 
 ## p2 — architecture & docs
 
