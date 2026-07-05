@@ -149,6 +149,17 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
 - **Live-DB test harness deferred / SC4 relaxed (material, owner-approved D-P7-4):** the `skip_if_no_db` PLUM suite has never run (broken probe; once fixed, 33/33 fail on async-engine loop mismatch + no seeding + no isolation — BACKLOG.md p1). Owner deferred the repair. **SC4's "pytest tests/plum/ green" is superseded** — Tasks 1/2/5 are verified instead by (a) standalone async scripts against live Postgres and (b) the Task 6 human-verify at :5173 (regression checks 9–12). The new/updated tests are still committed so they pass once the harness is repaired. See DECISIONS.md D-P7-4.
 - **Human-UAT moved to milestone / Task 6 unblocked (material, owner-approved D-P7-5):** rather than block Phase 7 on a full 12-flow manual pass, human-UAT becomes a `/zj:milestone` activity (bisectable commits make regressions cheap to localize). Checks 1 (BOM add on Draft) & 8 (Released read-only) ran and **passed**; checks 2–7 & 9–12 are captured as TODO in `.zj/UAT-v1.0.md`. Task 7 reconciles traceability to this — code fixes on proven evidence, UI flows annotated "UAT deferred to v1.0 milestone", nothing marked Complete on an unrun check (SC5 preserved). See DECISIONS.md D-P7-5.
 
+## Noticed (unrelated to Phase 7 scope — for triage)
+- **Frontend `npm run lint` is broken:** ESLint v10 requires a flat `eslint.config.js`, which the
+  project lacks → lint errors out ("couldn't find eslint.config.(js|mjs|cjs)"). Frontend lint has
+  effectively not been running. Discovered at Phase-7 wrap-up; unrelated to the fixes. Candidate
+  BACKLOG item.
+- **`ruff` absent from the API image:** backend lint can't run in-container (same stale-image /
+  missing-dev-deps class as the pytest harness gap, BACKLOG p1). Backend ruff lint not run this
+  phase.
+- **Dev-DB data artifact:** part `P-COMMIT-AVL-1` (from an import-commit test) has no non-obsolete
+  revision, so its PartDetail renders without the BOM card. Harmless data hygiene, not a code bug.
+
 ## Risks
 - **Pattern-2 SQLAlchemy syntax (Assumption A1, MEDIUM):** `cast(func.substring(...), Integer)` + `.op("~")` may need a spelling tweak against Postgres 17. Early-warning: a SQL error at Task 2's verify. Mitigation: budget one repair cycle inside Task 2 — caught before merge by the live-DB test.
 - **Silent-skip recurrence (Pitfall 1):** running tests from the host, or against a container at schema 0005, produces false green. Early-warning: a large "skipped" count or `alembic current` != 0006 in Task 5. Mitigation: Task 5 gates on both explicitly.
