@@ -1631,7 +1631,7 @@ async def add_avl_link(
     """
     from app.modules.auth.service import write_audit
     from app.modules.plum.models import PlumAvlLink
-    from app.modules.syerp.models import SyerpPartner
+    from app.modules.syerp.models import Partner as SyerpPartner
 
     # Validate vendor is_vendor=True (T-06-07)
     vendor_result = await db.execute(
@@ -2136,7 +2136,7 @@ async def build_json_export(db: AsyncSession) -> dict:
     vendor_ids = {str(link.vendor_id) for link in all_avl_links}
     vendor_code_by_id: dict[str, str] = {}
     if vendor_ids:
-        from app.modules.syerp.models import SyerpPartner
+        from app.modules.syerp.models import Partner as SyerpPartner
 
         vend_result = await db.execute(
             select(SyerpPartner.id, SyerpPartner.code).where(
@@ -2604,7 +2604,7 @@ async def validate_import(
     """
     from app.modules.plum.models import PlumPart
     from app.modules.plum.schemas import ImportPreviewResponse, ImportRowError
-    from app.modules.syerp.models import SyerpPartner
+    from app.modules.syerp.models import Partner as SyerpPartner
 
     errors: list[ImportRowError] = []
     parts_in_file: list[dict] = data.get("parts", [])
@@ -2737,7 +2737,7 @@ async def commit_import(
         PlumPartRevision,
     )
     from app.modules.plum.schemas import ImportCommitResponse
-    from app.modules.syerp.models import SyerpPartner
+    from app.modules.syerp.models import Partner as SyerpPartner
 
     # --- Step 1: Re-validate (D-18 Pitfall 5 — never trust preview result from client) ---
     preview = await validate_import(db, data)

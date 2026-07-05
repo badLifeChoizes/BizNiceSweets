@@ -255,3 +255,133 @@ async def test_import_commit_no_delete(
         "Import deleted an existing part — violates D-18 no-delete contract"
     )
     assert detail_resp.json()["id"] == survivor_id
+
+
+# ---------------------------------------------------------------------------
+# JSON export with a seeded AVL link — exercises the vendor_code lookup
+# (build_json_export vendor resolution path, PLUM-07/PLUM-10)
+# ---------------------------------------------------------------------------
+
+
+async def test_export_json_with_avl_link(
+    client: httpx.AsyncClient,
+    skip_if_no_db: None,
+) -> None:
+    """
+    GET /plum/export/json after seeding a PlumAvlLink resolves the vendor_code
+    from syerp_partner rather than short-circuiting on an empty vendor set
+    (PLUM-07/PLUM-10). The exported part's avl entry carries the vendor's code.
+    """
+    from app.modules.auth.service import create_access_token
+
+    token = create_access_token(
+        subject="admin-user",
+        permissions=["plum:write", "plum:read", "syerp:write"],
+    )
+
+    # Seed a SYERP vendor
+    vendor_resp = await client.post(
+        "/api/v1/syerp/partners",
+        json={"name": "Export AVL Vendor Co", "is_vendor": True, "is_customer": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert vendor_resp.status_code == 201, f"Vendor create failed: {vendor_resp.text}"
+    vendor_id = vendor_resp.json()["id"]
+    vendor_code = vendor_resp.json()["code"]
+
+    # Seed a PLUM part and link it to the vendor (creates a PlumAvlLink row)
+    part_resp = await client.post(
+        "/api/v1/plum/parts",
+        json={"description": "Export AVL link test part"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert part_resp.status_code == 201
+    part_id = part_resp.json()["id"]
+
+    avl_resp = await client.post(
+        f"/api/v1/plum/parts/{part_id}/avl",
+        json={"vendor_id": vendor_id, "preferred": True},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert avl_resp.status_code == 201, f"AVL link create failed: {avl_resp.text}"
+
+    # Export must now run the vendor lookup and surface the vendor_code
+    resp = await client.get(
+        "/api/v1/plum/export/json",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+    body = resp.json()
+    avl_codes = [
+        avl.get("vendor_code")
+        for part in body.get("parts", [])
+        for avl in part.get("avl", [])
+    ]
+    assert vendor_code in avl_codes, (
+        f"Exported AVL did not resolve vendor_code {vendor_code}; got: {avl_codes}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Import commit with a valid existing vendor code — exercises the commit-time
+# vendor_code -> vendor_id resolution path (commit_import, PLUM-07/PLUM-10)
+# ---------------------------------------------------------------------------
+
+
+async def test_import_commit_valid_vendor(
+    client: httpx.AsyncClient,
+    skip_if_no_db: None,
+) -> None:
+    """
+    POST /plum/import/commit with an avl_link referencing a valid existing
+    vendor code resolves that code to a vendor_id and upserts the AVL link
+    (PLUM-07/PLUM-10). Commit returns 200 (validation passes for a known vendor).
+    """
+    from app.modules.auth.service import create_access_token
+
+    token = create_access_token(
+        subject="admin-user",
+        permissions=["plum:write", "plum:read", "syerp:write"],
+    )
+
+    # Seed a SYERP vendor so its code is a known, valid reference
+    vendor_resp = await client.post(
+        "/api/v1/syerp/partners",
+        json={"name": "Commit AVL Vendor Co", "is_vendor": True, "is_customer": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert vendor_resp.status_code == 201, f"Vendor create failed: {vendor_resp.text}"
+    vendor_code = vendor_resp.json()["code"]
+
+    # Payload: a part whose avl link references the valid vendor code
+    payload = json.dumps({
+        "schema_version": "1.0",
+        "parts": [
+            {
+                "part_number": "P-COMMIT-AVL-1",
+                "active": True,
+                "revisions": [],
+                "avl": [
+                    {
+                        "vendor_code": vendor_code,
+                        "vendor_part_number": "VP-1",
+                        "preferred": True,
+                        "notes": None,
+                        "price_breaks": [],
+                    }
+                ],
+            }
+        ],
+    }).encode()
+    files = {
+        "file": ("plum_export.json", io.BytesIO(payload), "application/json")
+    }
+    commit_resp = await client.post(
+        "/api/v1/plum/import/commit",
+        files=files,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert commit_resp.status_code == 200, (
+        f"Import commit with valid vendor failed: "
+        f"{commit_resp.status_code} {commit_resp.text}"
+    )
