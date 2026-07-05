@@ -11,8 +11,8 @@ Branch: `bugfix-plum-v1-gaps` (off `chore-architecture-planning`, D-P7-3)
 - [x] 3. Invalidate `['plum','parts']` on import commit success (SC3) — `37b5f97`
 - [x] 4. Refresh root `CLAUDE.md` Technology Stack + Architecture to live stack (SC6) — `5db8278`
 - [x] 5. Stack up; API container `compose_api_1`; `alembic current == 0006`; suite runs but all skip (harness deferred D-P7-4) — fixes proven via live-DB standalone proofs (SC4)
-- [ ] 6. Consolidated human-verify — 7 PLUM flows + 4 regression checks (BLOCKING) (SC4) — **PAUSED, awaiting user**
-- [ ] 7. Reconcile `.zj/SRD.md` + `docs/features/requirements-progress.md` to verified reality (SC5)
+- [x] 6. Human-verify: checks 1 & 8 passed; rest deferred to v1.0 milestone UAT (`.zj/UAT-v1.0.md`, D-P7-5) (SC4)
+- [x] 7. Reconcile `.zj/SRD.md` + `docs/features/requirements-progress.md` to verified reality (SC5)
 
 ## Notes
 

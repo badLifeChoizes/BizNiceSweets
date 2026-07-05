@@ -103,3 +103,14 @@ Numbering is append-only.
   regression checks 9–12 cover SC1/SC2/SC3 end-to-end) plus lightweight standalone async scripts
   run against live Postgres, **not** by the pytest suite. The `pytest tests/plum/` "green" clause
   in Tasks 1/2/5 Done-when is superseded by these. Harness repair tracked as BACKLOG p1.
+
+- **D-P7-5 (owner, at build):** **Human-UAT moves from a per-phase blocking gate to a
+  milestone-close activity.** Under the ZJ workflow the atomic, bisectable commit history makes
+  regressions cheap to localize, so full click-through UAT runs once at `/zj:milestone` rather
+  than blocking each phase. *Consequence for Phase 7:* Task 6 is unblocked — the two checks run
+  (check 1 BOM-add-on-Draft, check 8 Released-read-only) **passed**; the remaining checks
+  (2–7, 9–12) are captured as TODO in `.zj/UAT-v1.0.md` for the v1.0 milestone UAT. Task 7
+  reconciles traceability honestly against this: the code fixes are marked on their
+  automated/standalone-verified evidence, and flow-level UI confirmation is annotated
+  "human-UAT deferred to v1.0 milestone" rather than claimed complete (preserves SC5 — nothing
+  marked Complete on an unrun check).

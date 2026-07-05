@@ -107,7 +107,7 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
 - **Verify:** `API=$(podman ps --format '{{.Names}}' | grep -E 'api' | head -1); podman exec "$API" alembic current && podman exec "$API" pytest tests/plum/ -q`
 - **Parallel-ok:** no (gates Task 6; depends on Wave 1)
 
-### [ ] 6. Consolidated human-verify — 7 PLUM flows + 4 regression checks (BLOCKING, non-autonomous)
+### [x] 6. Consolidated human-verify — 7 PLUM flows + 4 regression checks (deferred to milestone, D-P7-5)
 - **Serves:** SC4 · **FRs:** PLUM-04, PLUM-05, PLUM-06, PLUM-07, PLUM-08, PLUM-09, PLUM-10
 - **Files:** none (records outcome for Wave 3 to consume; the build PAUSES here for the user)
 - **Do:** Precondition — the stack is up (Task 5), `alembic current` == 0006, and the **Vite dev server is reachable at http://localhost:5173** (owner-chosen target). Open :5173, log in as admin, and have the user exercise the 12 checks below, recording pass/fail + notes per flow. This single pass supersedes the never-run Phase-6 `06-05` Task 4 checkpoint (do NOT schedule a second manual pass — Pitfall 4). Any failure routes to a gap-closure re-plan; do NOT proceed to Wave 3 on a failed flow.
@@ -133,7 +133,7 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
 
 ### Wave 3 — traceability reconciliation (gated on the human-verify outcome)
 
-### [ ] 7. Reconcile .zj/SRD.md and requirements-progress.md against verified reality
+### [x] 7. Reconcile .zj/SRD.md and requirements-progress.md against verified reality
 - **Serves:** SC5 · **FRs:** PLUM-04..10 (status), CORE-01, CORE-09 (checkbox reconciliation)
 - **Files:** `.zj/SRD.md`, `docs/features/requirements-progress.md`
 - **Do:** Gate every status change on the Task 6 outcome. In `.zj/SRD.md`: for each PLUM-04..10 flow Task 6 recorded as PASSED, update its `**Status:**` from `partial (...)` to `implemented` (PLUM-07 → drop "broken at runtime"; PLUM-10 → drop "vendor path broken"; PLUM-01 → drop "(defect open)"); leave any FAILED flow at `partial` and do not mark it implemented. Update the traceability/counts footer (currently "PLUM-04..10 pending Phase-7 fixes/verify", counts dated 2026-07-04) to reflect the verified set. Confirm CORE-01 and CORE-09 read `implemented` (they passed Phase 1 and are only checkbox-lagged). In `docs/features/requirements-progress.md`: correct the evidence column so no PLUM-04..10 row claims Complete on an unrun test — cite the Phase-7 live-DB test results (Tasks 1–2, run via Task 5) and the Task 6 human-verify pass as evidence. Do NOT edit `CHANGELOG.md` (generated).
@@ -147,6 +147,7 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
 ## Deviations
 - **Branch base (material, owner-approved D-P7-3):** plan said branch off `master`; actually branched off `chore-architecture-planning` because master (2025-12-20) predates the re-platform and has no `backend/`/`frontend/`/`.zj/`. See DECISIONS.md D-P7-3.
 - **Live-DB test harness deferred / SC4 relaxed (material, owner-approved D-P7-4):** the `skip_if_no_db` PLUM suite has never run (broken probe; once fixed, 33/33 fail on async-engine loop mismatch + no seeding + no isolation — BACKLOG.md p1). Owner deferred the repair. **SC4's "pytest tests/plum/ green" is superseded** — Tasks 1/2/5 are verified instead by (a) standalone async scripts against live Postgres and (b) the Task 6 human-verify at :5173 (regression checks 9–12). The new/updated tests are still committed so they pass once the harness is repaired. See DECISIONS.md D-P7-4.
+- **Human-UAT moved to milestone / Task 6 unblocked (material, owner-approved D-P7-5):** rather than block Phase 7 on a full 12-flow manual pass, human-UAT becomes a `/zj:milestone` activity (bisectable commits make regressions cheap to localize). Checks 1 (BOM add on Draft) & 8 (Released read-only) ran and **passed**; checks 2–7 & 9–12 are captured as TODO in `.zj/UAT-v1.0.md`. Task 7 reconciles traceability to this — code fixes on proven evidence, UI flows annotated "UAT deferred to v1.0 milestone", nothing marked Complete on an unrun check (SC5 preserved). See DECISIONS.md D-P7-5.
 
 ## Risks
 - **Pattern-2 SQLAlchemy syntax (Assumption A1, MEDIUM):** `cast(func.substring(...), Integer)` + `.op("~")` may need a spelling tweak against Postgres 17. Early-warning: a SQL error at Task 2's verify. Mitigation: budget one repair cycle inside Task 2 — caught before merge by the live-DB test.
