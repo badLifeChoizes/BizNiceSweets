@@ -102,13 +102,18 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ## PLUM (PLM Port — v1 Core)
 
-## PLUM-01: Part CRUD  [traces: PRD-5]  **Status: implemented (defect open)**
+## PLUM-01: Part CRUD  [traces: PRD-5]  **Status: implemented**
 - **Statement:** User can create, view, edit, and delete parts.
 - **Evidence:** `backend/app/modules/plum/` models/service/router, migration 0005; `frontend/src/routes/plum/PartsList.tsx`, `PartSheet.tsx`; `backend/tests/plum/test_parts.py`; human UAT 10/10 in Phase 5.
-- **Defect:** `generate_part_number()` (`service.py:108-136`) uses lexicographic `MAX` on a
-  VARCHAR — past a digit-width boundary it returns a stale number → duplicate-key 500.
-  Live-reproduced by the audit; fix scoped in Phase 7. Explicit part numbers work.
-- **Verification:** part CRUD tests + auto-numbering regression past the 5-digit boundary (Phase 7).
+- **Defect (resolved, Phase 7 `1b8bfa1`):** `generate_part_number()` used lexicographic `MAX`
+  on a VARCHAR — past a digit-width boundary it returned a stale number → duplicate-key 500.
+  Rewritten to filter `^P[0-9]+$` then order by `cast(substring, Integer)`. **Proven live** against
+  Postgres 17 (DB already held `P100000`; generator returned `P100001` = numeric MAX+1) plus a
+  SQL proof that regex-before-cast survives non-numeric rows like `P-DUPE-01`. Regression test
+  `test_generate_part_number_digit_boundary` ships (runs once the test harness is repaired —
+  BACKLOG p1 / D-P7-4).
+- **Verification:** live-DB standalone proof (Phase 7); UI new-part auto-numbering = UAT check 12
+  (v1.0 milestone, D-P7-5).
 
 ## PLUM-02: Part search/filter  [traces: PRD-5]  **Status: implemented**
 - **Statement:** User can search and filter parts.
@@ -122,45 +127,49 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ## PLUM-04: Multi-level BOM tree  [traces: PRD-5]  **Status: partial (unverified)**
 - **Statement:** User can build a multi-level BOM and view it as an expandable tree.
-- **Evidence:** BOM CRUD/tree with BFS cycle detection (`service.py`, migration 0006); `frontend/src/routes/plum/components/BomTree.tsx` + smoke test; `backend/tests/plum/test_bom.py`. Live tree confirmed working by the audit — but Phase 6 human-verify was never run, so it stays partial until the Phase-7 consolidated verification passes.
-- **Verification:** Phase-7 human-verify of the 7 PLUM flows.
+- **Evidence:** BOM CRUD/tree with BFS cycle detection (`service.py`, migration 0006); `frontend/src/routes/plum/components/BomTree.tsx` + smoke test; `backend/tests/plum/test_bom.py`. Live tree confirmed working by the audit; check 1 (Add Part on a Draft) passed Phase-7 spot-verify; full flow stays partial pending v1.0 milestone UAT (D-P7-5).
+- **Verification:** v1.0 milestone UAT check 1 (`.zj/UAT-v1.0.md`).
 
 ## PLUM-05: Flat BOM roll-up  [traces: PRD-5]  **Status: partial (unverified)**
 - **Statement:** User can view a flat BOM with quantity roll-up across levels.
-- **Evidence:** flat-BOM accumulation in `service.py`; `BomTree.tsx` flat mode; `test_bom.py`. Live-confirmed by audit; human-verify pending (Phase 7).
-- **Verification:** Phase-7 human-verify.
+- **Evidence:** flat-BOM accumulation in `service.py`; `BomTree.tsx` flat mode; `test_bom.py`. Live-confirmed by audit; human-verify deferred to v1.0 milestone UAT (D-P7-5).
+- **Verification:** v1.0 milestone UAT check 2.
 
 ## PLUM-06: Where-used analysis  [traces: PRD-5]  **Status: partial (unverified)**
 - **Statement:** User can run where-used analysis to see which assemblies consume a part.
-- **Evidence:** where-used traversal in `service.py`; Where-Used card in `frontend/src/routes/plum/PartDetail.tsx`; `test_bom.py`. Live-confirmed by audit; human-verify pending (Phase 7).
-- **Verification:** Phase-7 human-verify.
+- **Evidence:** where-used traversal in `service.py`; Where-Used card in `frontend/src/routes/plum/PartDetail.tsx`; `test_bom.py`. Live-confirmed by audit; human-verify deferred to v1.0 milestone UAT (D-P7-5).
+- **Verification:** v1.0 milestone UAT check 3.
 
-## PLUM-07: Part-to-vendor links (AVL)  [traces: PRD-4, PRD-5]  **Status: partial (broken at runtime)**
+## PLUM-07: Part-to-vendor links (AVL)  [traces: PRD-4, PRD-5]  **Status: partial (runtime fix landed; UI UAT pending)**
 - **Statement:** User can link a part to one or more vendors (FK to SYERP vendors / AVL).
 - **Evidence:** all layers built — FK `plum_avl_link.vendor_id → syerp_partner.id` (migration
-  0006), schemas, `AvlLinkSheet.tsx`, `PriceBreakEditor.tsx`, `test_avl.py` — **but**
-  `backend/app/modules/plum/service.py` imports nonexistent `SyerpPartner` (real class:
-  `Partner`, `syerp/models.py:39`) at lines 1634/2139/2607/2740, so every AVL call returns
-  HTTP 500. Re-confirmed in code 2026-07-04. Fix is Phase 7 Wave 1.
-- **Verification:** add-vendor-link flow returns 200 and persists; `test_avl.py` run against a live DB.
+  0006), schemas, `AvlLinkSheet.tsx`, `PriceBreakEditor.tsx`, `test_avl.py`. The runtime break —
+  `service.py` importing nonexistent `SyerpPartner` (real class `Partner`, `syerp/models.py:39`)
+  at 4 sites → HTTP 500 on every AVL call — is **fixed in Phase 7 (`5c33ed8`)**, aliasing
+  `Partner as SyerpPartner`. Code-verified live: the previously-failing import now resolves and
+  `plum.service` imports clean; the import-commit vendor path passed a manual per-test run. Full
+  add-vendor-link UI flow (persist-after-refresh, Preferred badge, no 500) is deferred to v1.0
+  milestone UAT (checks 4/9, D-P7-5).
+- **Verification:** live import-resolution proof (Phase 7); v1.0 milestone UAT checks 4 & 9.
 
 ## PLUM-08: Cost roll-up  [traces: PRD-5]  **Status: partial**
 - **Statement:** User can set part pricing/cost and see cost roll-up across a BOM.
 - **Evidence:** effective-cost chain (vendor price → manual cost → BOM roll-up → uncosted),
   `Numeric(18,6)`/`Decimal` math, release cost snapshot (`service.py`); Cost & Margin card in
   `PartDetail.tsx`; `test_costing.py`. Manual + roll-up path live-verified correct by audit
-  (child 10 × qty 2 → parent 20); **vendor-price source unreachable** until PLUM-07 is fixed.
-- **Verification:** Phase-7 human-verify incl. vendor-price cost source.
+  (child 10 × qty 2 → parent 20); **vendor-price source now reachable** (PLUM-07 runtime fix
+  landed, `5c33ed8`), pending UI confirmation.
+- **Verification:** v1.0 milestone UAT check 5 (incl. vendor-price cost source).
 
 ## PLUM-09: Margin analysis  [traces: PRD-5]  **Status: partial (unverified)**
 - **Statement:** User can view margin analysis for a product.
-- **Evidence:** margin calc in `service.py` (live-verified by audit: margin 30, 150%); Cost & Margin card in `PartDetail.tsx`; `test_costing.py`. Human-verify pending (Phase 7).
-- **Verification:** Phase-7 human-verify.
+- **Evidence:** margin calc in `service.py` (live-verified by audit: margin 30, 150%); Cost & Margin card in `PartDetail.tsx`; `test_costing.py`. Human-verify deferred to v1.0 milestone UAT (D-P7-5).
+- **Verification:** v1.0 milestone UAT check 6.
 
-## PLUM-10: JSON/Excel import-export  [traces: PRD-5]  **Status: partial (vendor path broken)**
+## PLUM-10: JSON/Excel import-export  [traces: PRD-5]  **Status: partial (fixes landed; UI UAT pending)**
 - **Statement:** User can import and export PLUM data as JSON and Excel.
-- **Evidence:** lossless JSON + 3-sheet Excel export, two-step preview/commit upsert-never-delete import with 10MB guard (`service.py`, openpyxl); `frontend/src/routes/plum/ImportExport.tsx` + test; `test_import_export.py`. Basic no-vendor round-trip works; **any vendor cross-reference 500s** (same `SyerpPartner` bug, lines 2139/2607/2740). Known warning: import commit doesn't invalidate the `['plum','parts']` query cache (stale list ≤30 s) — Phase 7 Wave 1.
-- **Verification:** vendor-referencing round-trip + immediate list refresh after commit (Phase 7).
+- **Evidence:** lossless JSON + 3-sheet Excel export, two-step preview/commit upsert-never-delete import with 10MB guard (`service.py`, openpyxl); `frontend/src/routes/plum/ImportExport.tsx` + test; `test_import_export.py`. Basic no-vendor round-trip works. Two Phase-7 fixes landed: (1) the vendor cross-reference 500 (same `SyerpPartner` bug) is fixed in `5c33ed8` (import-commit vendor path passed a manual per-test run); (2) import commit now invalidates the `['plum','parts']` query cache in `37b5f97` (tsc-clean, ImportExport tests pass). Full vendor round-trip + no-refresh list update deferred to v1.0 milestone UAT (checks 7/10/11, D-P7-5). Note: Excel export may 500 on the stale API image (missing `openpyxl` — BACKLOG), not a code regression.
+- **Verification:** code-level (Phase 7 `5c33ed8`+`37b5f97`); v1.0 milestone UAT checks 7, 10, 11.
 
 ---
 
@@ -244,7 +253,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-2 | CORE-02..05 | — |
 | PRD-3 | CORE-06..08 | — |
 | PRD-4 | SYERP-01..05, PLUM-07 | — |
-| PRD-5 | PLUM-01..16 | PLUM-04..10 pending Phase-7 fixes/verify |
+| PRD-5 | PLUM-01..16 | Phase-7 code fixes landed & code-verified (`5c33ed8`/`1b8bfa1`/`37b5f97`); PLUM-04..10 flow-level UI confirmation deferred to v1.0 milestone UAT (`.zj/UAT-v1.0.md`, D-P7-5) |
 | PRD-6 | FLAN-01 | expand at milestone planning |
 | PRD-7 | SYERP-10..12, MOUSSE-01 | coarse — expand via /zj:spec |
 | PRD-8 | CRUMB-01, GELATO-01 | coarse — expand via /zj:spec |
@@ -252,6 +261,8 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-10 | NFR-3 | — |
 | PRD-11 | NFR-2 | license audit outstanding |
 
-**Counts (2026-07-04):** implemented 17 (CORE-01..09, SYERP-01..05, PLUM-01..03 — PLUM-01 with
-an open defect) + 2 NFR foundations · partial 7 (PLUM-04..10) · planned 15 (PLUM-11..16,
-FLAN-01, SYERP-10..12, MOUSSE/CRUMB/GELATO/CRISP-01, NFR-3).
+**Counts (2026-07-04, post-Phase-7):** implemented 17 (CORE-01..09, SYERP-01..05, PLUM-01..03 —
+PLUM-01 defect **resolved** & proven live, `1b8bfa1`) + 2 NFR foundations · partial 7
+(PLUM-04..10 — all three Phase-7 runtime/cache fixes landed & code-verified; flow-level UI
+confirmation deferred to v1.0 milestone UAT per D-P7-5) · planned 15 (PLUM-11..16, FLAN-01,
+SYERP-10..12, MOUSSE/CRUMB/GELATO/CRISP-01, NFR-3).
