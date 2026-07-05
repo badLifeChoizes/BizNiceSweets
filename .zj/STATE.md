@@ -4,18 +4,22 @@ Updated: 2026-07-05
 ## Position
 
 - **Milestone:** v1.0 — Foundation + PLUM (Phase 7 built; verify + close still **open**) ·
-  v2.0 spec started (SYERP-10/11 expanded).
-- **Phase:** 7 build complete; **8 (SYERP inventory & purchasing) now spec-ready** — owner
-  elected to plan Phase 8 ahead of formally closing v1.0 (2026-07-05).
-- **Branch:** `bugfix-plum-v1-gaps` (off `chore-architecture-planning` per D-P7-3)
+  v2.0 — Phase 8 **planned** (PLAN.md ready, 25 tasks).
+- **Phase:** 8 (SYERP inventory & purchasing) **planned and ready to build** —
+  `.zj/phases/08-syerp-inventory-purchasing/PLAN.md`; all decisions resolved (D-P8-8..15).
+  Owner elected to plan/build Phase 8 ahead of formally closing v1.0.
+- **Branch:** currently `bugfix-plum-v1-gaps`; Phase 8 build cuts
+  `feature-syerp-inventory-purchasing` from this tip (D-P8-11 — NOT `master`, which lacks
+  backend/frontend/.zj per D-P7-3).
 
 ## Next action
 
-`/zj:plan 8` — SYERP-10/11 are spec-complete with acceptance criteria (SRD, expanded 2026-07-05;
-scope decisions D-P8-1..7). Plan the inventory + purchasing phase against them.
+`/zj:build 8` — execute `.zj/phases/08-syerp-inventory-purchasing/PLAN.md` (25 tasks, wave order:
+inventory backend → inventory UI → purchasing backend → purchasing UI → verify). First step cuts
+`feature-syerp-inventory-purchasing` off the current tip (D-P8-11).
 
 **Still owed on v1.0 (do not lose):** `/zj:verify 07` then `/zj:milestone` (runs the human-UAT,
-`.zj/UAT-v1.0.md`: checks 1 & 8 passed; 2–7 & 9–12 outstanding). Planning Phase 8 first is an
+`.zj/UAT-v1.0.md`: checks 1 & 8 passed; 2–7 & 9–12 outstanding). Building Phase 8 first is an
 owner choice; v1.0 is not closed and Phase 7 is not yet verified.
 
 ## Build result (Phase 7)

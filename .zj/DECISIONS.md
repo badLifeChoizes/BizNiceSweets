@@ -152,3 +152,42 @@ Numbering is append-only.
   and **rejects** PO over-receipt beyond ordered qty (both HTTP 4xx). Backorder / negative-stock
   policy and over-receipt tolerance are deferred — sensible strict defaults now, revisited if a
   real workflow needs them.
+
+## Phase 8 planning (2026-07-05)
+
+- **D-P8-8 (owner):** Phase 8 is **one full-stack phase**, delivered in wave order: inventory
+  backend → inventory UI → purchasing backend → purchasing UI → verify. PO receiving is built and
+  verified on a working inventory ledger; the receipt→moving-average integration is proven
+  end-to-end. Rejected: split by capability (inventory Phase 8 / purchasing Phase 9) and
+  backend-first-UI-later — owner wants a complete, demoable operations slice in one phase.
+- **D-P8-9 (owner):** **UI folded into the plan — no separate DESIGN.md.** Item and location CRUD
+  reuse the existing SYERP list+sheet+archive template (`Vendors.tsx`/`Customers.tsx`/`PartnerSheet`);
+  the novel screens (on-hand-by-location, adjust/transfer, PO create/approve/receive) are specified
+  directly in the tasks. *Why:* the SYERP CRUD template is a strong enough starting point that a
+  separate design pass wasn't worth the step.
+- **D-P8-10 (owner):** **A single `syerp:write` gates all mutations, including PO approval**
+  (Draft→Approved); reads use `syerp:read`. No separate approve permission. Approver identity is
+  captured via the audit event (`po.approved` + `approved_by`). *Why:* keeps Phase-8 RBAC scope
+  tight and matches the current SYERP pattern; approval-authority separation can be added later
+  without a data migration. Rejected: a distinct `syerp:approve` code.
+- **D-P8-11 (owner):** Phase 8 branch = **`feature-syerp-inventory-purchasing` cut from the current
+  `bugfix-plum-v1-gaps` tip**, NOT from `master`. *Why:* `master` (HEAD `f4e2bd3`, 2025-12-20)
+  predates the entire re-platform and contains no `backend/`/`frontend/`/`.zj/` (the same trap
+  documented in D-P7-3); only the current tip carries the real codebase plus the Phase-7 fixes.
+  Phase 8 therefore builds atop unmerged Phase 7 — consistent with the owner's choice to plan 8
+  before formally closing v1.0.
+- **D-P8-12 (owner):** **Moving-average valuation is stored** as a `moving_avg_cost Numeric(18,6)`
+  column on `syerp_inventory_item`, recomputed transactionally on each receipt. On-hand *quantity*
+  stays a derived `SUM(quantity)` over the immutable ledger, and every receipt's `unit_cost` is
+  retained in the ledger, so the average remains auditable/replayable — a mutated-by-design column,
+  not a violation of the "on-hand is derived" rule (D-P8-4). Rejected: full ledger-replay on every
+  read (more code, slower reads, no offsetting benefit at single-shop scale).
+- **D-P8-13 (owner):** Auto-generated code prefixes — inventory items **`ITEM-0001`**, purchase
+  orders **`PO-0001`** — both via the numeric-safe generator (regex-filter then integer-cast order,
+  D-P8-6), distinct from partner `P-0001`.
+- **D-P8-14 (owner):** A fresh deploy **seeds one idempotent `Main` stock location** (upsert-by-name,
+  mirroring `coa_seed.py`) so receiving/adjustments work out-of-the-box. Rejected: no seed (adds a
+  manual setup step before any stock movement).
+- **D-P8-15:** PO line `qty_received` is a **stored accumulator** on the line (POs are mutable
+  working documents, not the immutable ledger), cross-checkable against `SUM(quantity)` of the
+  receipt transactions whose `source_id` = the line id.
