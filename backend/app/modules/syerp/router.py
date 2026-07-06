@@ -16,6 +16,7 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   GET    /syerp/inventory/items/{item_id}/onhand        — derived on-hand + value (syerp:read)
   GET    /syerp/inventory/items/{item_id}/transactions  — ledger history (syerp:read)
   POST   /syerp/inventory/items/{item_id}/receipts       — post costed receipt (syerp:write)
+  POST   /syerp/inventory/items/{item_id}/adjustments    — post stock adjustment (syerp:write)
   GET    /syerp/inventory/locations              — list locations (syerp:read)
   POST   /syerp/inventory/locations              — create location (syerp:write)
   GET    /syerp/inventory/locations/{location_id}  — get location (syerp:read)
@@ -42,6 +43,7 @@ Audit logging (D-10, T-04-08):
   - location.updated: on PATCH when active does not change to False.
   - location.archived: on PATCH when patch sets active=False.
   - inventory.receipt: on POST /inventory/items/{id}/receipts success.
+  - inventory.adjustment: on POST /inventory/items/{id}/adjustments success.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -57,6 +59,7 @@ from app.core.db import get_db
 from app.modules.auth.dependencies import require_permission
 from app.modules.auth.service import write_audit
 from app.modules.syerp.schemas import (
+    AdjustmentCreate,
     GLAccountRead,
     InventoryItemCreate,
     InventoryItemRead,
@@ -85,6 +88,7 @@ from app.modules.syerp.service import (
     list_items,
     list_locations,
     list_partners,
+    post_adjustment,
     post_receipt,
     update_item,
     update_location,
@@ -374,6 +378,50 @@ async def post_receipt_endpoint(
         detail=(
             f"Receipt: {data.qty} @ {data.unit_cost} of item {item_id} "
             f"to location {data.location_id}"
+        ),
+    )
+    return txn
+
+
+@router.post(
+    "/inventory/items/{item_id}/adjustments",
+    response_model=TransactionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_adjustment_endpoint(
+    item_id: str,
+    data: AdjustmentCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> TransactionRead:
+    """
+    Post a stock adjustment against an inventory item (AC10-6, D-P8-7).
+
+    Appends one immutable signed `adjustment` ledger row with a required `reason`.
+    A negative `qty_delta` covers the manual write-off / "issue" case (the `issue`
+    txn_type stays reserved for MOUSSE). Rejects with 422 if the resulting
+    location on-hand would go below zero (per-location negative-stock guard) —
+    no row is written. The item's moving-average is left untouched (only receipts
+    move it, AC10-5). Requires syerp:write. Returns 404 if the item or location
+    does not exist. Writes an inventory.adjustment audit row.
+    """
+    txn = await post_adjustment(
+        db,
+        item_id=item_id,
+        location_id=data.location_id,
+        qty_delta=data.qty_delta,
+        reason=data.reason,
+        actor_id=str(current_user.id),
+    )
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="inventory.adjustment",
+        target_type="inventory_txn",
+        target_id=str(txn.id),
+        detail=(
+            f"Adjustment: {data.qty_delta} of item {item_id} at location "
+            f"{data.location_id} ({data.reason})"
         ),
     )
     return txn

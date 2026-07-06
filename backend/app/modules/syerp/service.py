@@ -870,3 +870,115 @@ async def post_receipt(
         reason=txn.reason,
         created_at=txn.created_at,
     )
+
+
+# ---------------------------------------------------------------------------
+# Stock adjustments (Phase 8, Task 6, AC10-6, D-P8-7)
+# ---------------------------------------------------------------------------
+#
+# An adjustment corrects an item's on-hand at ONE location by a SIGNED delta.
+# A negative delta covers the manual write-off / "issue" case in v2.0 — the
+# `issue` txn_type stays RESERVED for MOUSSE, so manual stock-out is posted as
+# a negative `adjustment` here.
+#
+# Negative-stock guard is PER-LOCATION (D-P8-7): a delta may not drive that
+# location's on-hand below zero. On-hand is derived (AC10-3), so the guard sums
+# the item's signed txn quantities AT the given location and checks
+# current_loc_onhand + qty_delta >= 0. Adjustments NEVER move moving_avg_cost —
+# only receipts do (AC10-5); positive adjustments add stock at the current
+# average, leaving the average unchanged.
+
+
+def _adjustment_violates_floor(current_loc_onhand: Decimal, qty_delta: Decimal) -> bool:
+    """
+    Pure per-location negative-stock predicate (no DB — unit-testable).
+
+    Returns True when applying `qty_delta` to the current location on-hand would
+    drive it below zero (`current_loc_onhand + qty_delta < 0`), i.e. the
+    adjustment must be REJECTED (AC10-6, D-P8-7). A delta that lands exactly on
+    zero is allowed (it empties the location, which is valid). All arithmetic is
+    Decimal so the boundary is exact with no float drift.
+    """
+    return current_loc_onhand + qty_delta < 0
+
+
+async def post_adjustment(
+    db: AsyncSession,
+    item_id: str,
+    location_id: int,
+    qty_delta: Decimal,
+    reason: str,
+    actor_id: str,
+) -> "TransactionRead":
+    """
+    Post a stock adjustment: append one signed `adjustment` ledger row.
+
+    In a single transaction (AC10-4,6; D-P8-7):
+      1. Derive `current_loc_onhand` = the item's on-hand AT `location_id`
+         (SUM of that item's InventoryTxn.quantity WHERE location_id matches).
+      2. Reject with 422 if the resulting location on-hand
+         (`current_loc_onhand + qty_delta`) would be < 0 — NO row is appended
+         (per-location negative-stock guard, _adjustment_violates_floor).
+      3. Append ONE immutable `adjustment` InventoryTxn with the SIGNED
+         `qty_delta`, no unit_cost, the `reason`, and the actor.
+
+    The item's moving_avg_cost is deliberately left UNTOUCHED — only costed
+    receipts move the average (AC10-5); a positive adjustment adds quantity at
+    the current average. Raises 404 if the item or location does not exist (via
+    get_item / get_location). The 422 status mirrors the receipt guard.
+
+    Returns the created row as a TransactionRead (joined location name). The
+    router writes the inventory.adjustment audit row.
+    """
+    from app.modules.syerp.models import InventoryTxn
+    from app.modules.syerp.schemas import TransactionRead
+
+    # 404s if either does not exist (mirrors get_item / get_location).
+    item = await get_item(db, item_id)  # noqa: F841 — loaded to 404 on missing item
+    location = await get_location(db, location_id)
+
+    # Per-location on-hand: signed SUM of this item's txns AT this location.
+    result = await db.execute(
+        select(func.sum(InventoryTxn.quantity)).where(
+            InventoryTxn.item_id == item_id,
+            InventoryTxn.location_id == location_id,
+        )
+    )
+    current_loc_onhand: Decimal = result.scalar() or Decimal("0")
+
+    if _adjustment_violates_floor(current_loc_onhand, qty_delta):
+        # Reject BEFORE any mutation — no row is appended on rejection.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Adjustment of {qty_delta} would drive location {location_id} "
+                f"on-hand below zero (current {current_loc_onhand})."
+            ),
+        )
+
+    txn = InventoryTxn(
+        item_id=item_id,
+        location_id=location_id,
+        txn_type="adjustment",
+        quantity=qty_delta,
+        unit_cost=None,
+        actor_id=actor_id,
+        reason=reason,
+    )
+    db.add(txn)
+    # moving_avg_cost is intentionally NOT touched — only receipts move it (AC10-5).
+
+    await db.commit()
+    await db.refresh(txn)
+
+    return TransactionRead(
+        id=txn.id,
+        item_id=txn.item_id,
+        location_id=txn.location_id,
+        location_name=location.name,
+        txn_type=txn.txn_type,
+        quantity=txn.quantity,
+        unit_cost=txn.unit_cost,
+        reason=txn.reason,
+        created_at=txn.created_at,
+    )

@@ -341,6 +341,28 @@ class ReceiptCreate(BaseModel):
     source_id: Optional[str] = Field(None, max_length=36)
 
 
+class AdjustmentCreate(BaseModel):
+    """
+    Stock-adjustment posting payload (POST /syerp/inventory/items/{id}/adjustments).
+
+    An adjustment corrects the on-hand quantity of an item at one location by a
+    SIGNED `qty_delta` (Task 6). A negative delta covers the manual "issue" /
+    write-off case in v2.0 — the `issue` txn_type stays reserved for MOUSSE.
+
+    `reason` is REQUIRED and non-empty (min_length=1): every adjustment must
+    record why stock moved, for audit/traceability (AC10-6). Adjustments do NOT
+    carry a unit_cost and never move the item's moving-average — only receipts
+    do (AC10-5).
+
+    The negative-stock guard (resulting LOCATION on-hand would be < 0) is
+    enforced in the service, not here, because it depends on live DB state.
+    """
+
+    location_id: int
+    qty_delta: Decimal
+    reason: str = Field(..., min_length=1, max_length=255)
+
+
 class TransactionRead(BaseModel):
     """
     One immutable inventory-ledger row returned to API callers (AC10-4).
