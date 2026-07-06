@@ -26,6 +26,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MoreHorizontal, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -86,6 +87,7 @@ function StatusBadge({ active }: { active: boolean }) {
 
 export function InventoryItems() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   // ── Search (debounced, server-side) ──
   const [searchValue, setSearchValue] = useState('')
@@ -231,7 +233,12 @@ export function InventoryItems() {
           </TableHeader>
           <TableBody>
             {items.map((item) => (
-              <TableRow key={item.id} className="h-12">
+              <TableRow
+                key={item.id}
+                className="h-12 cursor-pointer"
+                onClick={() => navigate(`/syerp/inventory/items/${item.id}`)}
+                aria-label={`View item ${item.name}`}
+              >
                 <TableCell className="font-medium">{item.name}</TableCell>
                 <TableCell>{item.code}</TableCell>
                 <TableCell>{item.unit_of_measure}</TableCell>
@@ -246,24 +253,38 @@ export function InventoryItems() {
                         size="icon"
                         className="h-11 w-11"
                         aria-label={`Item actions for ${item.name}`}
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                         <span className="sr-only">Open actions menu</span>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEditSheet(item)}>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openEditSheet(item)
+                        }}
+                      >
                         Edit
                       </DropdownMenuItem>
                       {item.active ? (
                         <DropdownMenuItem
-                          onClick={() => openArchiveDialog(item)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openArchiveDialog(item)
+                          }}
                           className="text-destructive focus:text-destructive"
                         >
                           Archive
                         </DropdownMenuItem>
                       ) : (
-                        <DropdownMenuItem onClick={() => handleRestore(item)}>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleRestore(item)
+                          }}
+                        >
                           Restore
                         </DropdownMenuItem>
                       )}
