@@ -13,7 +13,7 @@ The boundary-correctness guarantee — that "PO-9" succeeds to "PO-0010" and nev
 to a smaller/lexicographic value — lives in the pure _next_po_number helper,
 which these tests cover without a database.
 """
-from app.modules.syerp.service import _next_po_number
+from app.modules.syerp.service import PO_TRANSITIONS, _next_po_number
 
 
 # ---------------------------------------------------------------------------
@@ -69,3 +69,63 @@ def test_generator_ignores_non_numeric_and_foreign_numbers() -> None:
 def test_generator_ignores_non_numeric_only_returns_first() -> None:
     """When no strictly-numeric PO- number exists, generation starts at PO-0001."""
     assert _next_po_number(["PO-A1", "PO-XYZ", "ITEM-0002"]) == "PO-0001"
+
+
+# ---------------------------------------------------------------------------
+# PO_TRANSITIONS — pure, no-DB FSM validity (Phase 8, Task 16)
+# ---------------------------------------------------------------------------
+#
+# advance_po_status accepts a transition iff target in PO_TRANSITIONS[current].
+# These tests pin the table itself (the predicate the service applies): every
+# legal transition is present, every illegal one is absent. The live HTTP walk
+# (approve → close, illegal transitions → 4xx) is Task 19's verify script.
+
+
+def test_po_transitions_table_exact_shape() -> None:
+    """The transition table matches the D-P8 FSM spec exactly (sets per status)."""
+    assert PO_TRANSITIONS == {
+        "draft": {"approved"},
+        "approved": {"partially_received", "received", "closed"},
+        "partially_received": {"received", "closed"},
+        "received": {"closed"},
+        "closed": set(),
+    }
+
+
+def test_draft_only_advances_to_approved() -> None:
+    """A draft PO can only be approved — no jumping straight to received/closed."""
+    assert "approved" in PO_TRANSITIONS["draft"]
+    assert "received" not in PO_TRANSITIONS["draft"]
+    assert "closed" not in PO_TRANSITIONS["draft"]
+    assert PO_TRANSITIONS["draft"] == {"approved"}
+
+
+def test_approving_twice_is_illegal() -> None:
+    """approved → approved is not a legal transition (re-approval is rejected)."""
+    assert "approved" not in PO_TRANSITIONS["approved"]
+
+
+def test_approved_can_receive_or_close() -> None:
+    """From approved the PO may roll to receiving states or close directly."""
+    assert PO_TRANSITIONS["approved"] == {"partially_received", "received", "closed"}
+
+
+def test_partially_received_can_complete_or_close() -> None:
+    """partially_received advances to received or closed, never back to approved."""
+    assert PO_TRANSITIONS["partially_received"] == {"received", "closed"}
+    assert "approved" not in PO_TRANSITIONS["partially_received"]
+
+
+def test_received_only_closes() -> None:
+    """A fully-received PO can only be closed."""
+    assert PO_TRANSITIONS["received"] == {"closed"}
+
+
+def test_closed_is_terminal() -> None:
+    """closed has no outgoing transitions — it is a terminal state."""
+    assert PO_TRANSITIONS["closed"] == set()
+
+
+def test_closing_a_draft_is_illegal() -> None:
+    """A draft cannot be closed directly (must be approved first)."""
+    assert "closed" not in PO_TRANSITIONS["draft"]

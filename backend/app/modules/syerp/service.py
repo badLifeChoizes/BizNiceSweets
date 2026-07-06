@@ -25,6 +25,7 @@ archived vendors (Pitfall 5 from RESEARCH.md).
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
@@ -1508,3 +1509,69 @@ async def remove_line(db: AsyncSession, po_id: str, line_id: str) -> None:
 
     await db.delete(line)
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Purchase-order FSM transitions (Phase 8, Task 16)
+# ---------------------------------------------------------------------------
+#
+# PO_TRANSITIONS mirrors PLUM's VALID_TRANSITIONS shape (a mapping from each
+# status to the set of allowed successor states). advance_po_status validates a
+# requested transition against this table and rejects an illegal one with 422
+# (AC11-1). The approve/close endpoints call it directly; receiving (Task 17)
+# reuses it (or sets status directly) to roll the header forward to
+# partially_received / received. Approving additionally stamps approved_at /
+# approved_by (D-P8-10).
+
+PO_TRANSITIONS: dict[str, set[str]] = {
+    "draft":              {"approved"},
+    "approved":           {"partially_received", "received", "closed"},
+    "partially_received": {"received", "closed"},
+    "received":           {"closed"},
+    "closed":             set(),  # terminal — no outgoing transitions
+}
+
+
+async def advance_po_status(
+    db: AsyncSession, po_id: str, target: str, actor_id: str
+) -> "PORead":
+    """
+    Advance a purchase order through the FSM (Phase 8, Task 16).
+
+    Validates:
+      - PO exists (404 if not).
+      - target is an allowed successor of the current status per PO_TRANSITIONS
+        (422 if not — AC11-1).
+
+    On target == "approved", additionally stamps approved_at (tz-aware UTC now)
+    and approved_by = actor_id (D-P8-10). Commits in one transaction and returns
+    the updated order as a PORead (header + nested lines).
+
+    Reusable by receiving (Task 17): any transition present in PO_TRANSITIONS is
+    accepted, so the approved → partially_received / received roll-up can call
+    this helper. The approve/close endpoints wire only the "approved" and
+    "closed" targets. The router writes the target-specific audit event
+    (po.approved / po.closed).
+    """
+    po = await _get_po_row(db, po_id)
+
+    allowed = PO_TRANSITIONS.get(po.status, set())
+    if target not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Cannot transition purchase order from '{po.status}' to '{target}'. "
+                f"Allowed transitions: {sorted(allowed)}"
+            ),
+        )
+
+    po.status = target
+    if target == "approved":
+        po.approved_at = datetime.now(timezone.utc)
+        po.approved_by = actor_id
+
+    await db.commit()
+    await db.refresh(po)
+
+    lines = await _load_po_lines(db, po_id)
+    return _po_to_read(po, lines)

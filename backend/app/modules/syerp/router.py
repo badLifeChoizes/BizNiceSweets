@@ -28,6 +28,8 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   POST   /syerp/purchasing/orders/{po_id}/lines            — add line (syerp:write)
   PATCH  /syerp/purchasing/orders/{po_id}/lines/{line_id}  — update line (syerp:write)
   DELETE /syerp/purchasing/orders/{po_id}/lines/{line_id}  — remove line (syerp:write)
+  POST   /syerp/purchasing/orders/{po_id}/approve  — approve PO (syerp:write)
+  POST   /syerp/purchasing/orders/{po_id}/close    — close PO (syerp:write)
   GET    /syerp/gl/accounts            — list GL accounts (syerp:read)
 
 mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
@@ -56,6 +58,8 @@ Audit logging (D-10, T-04-08):
   - po.line_added: on POST /purchasing/orders/{id}/lines success.
   - po.line_updated: on PATCH /purchasing/orders/{id}/lines/{line_id} success.
   - po.line_removed: on DELETE /purchasing/orders/{id}/lines/{line_id} success.
+  - po.approved: on POST /purchasing/orders/{id}/approve success.
+  - po.closed: on POST /purchasing/orders/{id}/close success.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -94,6 +98,7 @@ from app.modules.syerp.schemas import (
 )
 from app.modules.syerp.service import (
     add_line,
+    advance_po_status,
     archive_partner,
     create_item,
     create_location,
@@ -754,6 +759,59 @@ async def remove_po_line_endpoint(
         target_id=str(line_id),
         detail=f"PO {po_id} line {line_id} removed",
     )
+
+
+@router.post("/purchasing/orders/{po_id}/approve", response_model=PORead)
+async def approve_po_endpoint(
+    po_id: str,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PORead:
+    """
+    Approve a draft purchase order (draft → approved, D-P8-10).
+
+    Stamps approved_at / approved_by from the caller identity and freezes line
+    edits (enforced by Task 15's Draft-only guard). Rejects any illegal
+    transition with 422 (e.g. approving an already-approved PO — AC11-1).
+    Requires syerp:write permission. Writes a po.approved audit log row. Returns
+    404 if the PO does not exist.
+    """
+    po = await advance_po_status(db, po_id, "approved", str(current_user.id))
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="po.approved",
+        target_type="purchase_order",
+        target_id=str(po.id),
+        detail=f"Purchase order approved: {po.po_number}",
+    )
+    return po
+
+
+@router.post("/purchasing/orders/{po_id}/close", response_model=PORead)
+async def close_po_endpoint(
+    po_id: str,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PORead:
+    """
+    Close a purchase order (→ closed from approved / partially_received /
+    received).
+
+    Rejects any illegal transition with 422 (e.g. closing a draft — AC11-1).
+    Requires syerp:write permission. Writes a po.closed audit log row. Returns
+    404 if the PO does not exist.
+    """
+    po = await advance_po_status(db, po_id, "closed", str(current_user.id))
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="po.closed",
+        target_type="purchase_order",
+        target_id=str(po.id),
+        detail=f"Purchase order closed: {po.po_number}",
+    )
+    return po
 
 
 # ---------------------------------------------------------------------------
