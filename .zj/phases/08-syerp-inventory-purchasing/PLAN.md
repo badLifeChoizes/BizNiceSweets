@@ -88,7 +88,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 
 ### WAVE A — Inventory backend (SYERP-10)
 
-### [ ] 1. Create the inventory schema (migration 0007 + ORM models)
+### [x] 1. Create the inventory schema (migration 0007 + ORM models)
 - **Files:** `backend/alembic/versions/0007_syerp_inventory.py` (new, chains `→0006`);
   `backend/app/modules/syerp/models.py` (append three classes).
 - **Do:** Add ORM models + matching DDL for:
@@ -114,7 +114,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   `alembic downgrade -1 && alembic upgrade head` round-trips clean; `python -c "import app.modules.syerp.models"` (via backend venv) errors-free.
 - **Parallel-ok:** no (foundation for all of Wave A).
 
-### [ ] 2. Inventory item CRUD + numeric-safe item-code generator
+### [x] 2. Inventory item CRUD + numeric-safe item-code generator
 - **Files:** `backend/app/modules/syerp/service.py` (add `generate_item_code`, `create_item`,
   `list_items`, `get_item`, `update_item`); `backend/app/modules/syerp/schemas.py`
   (`InventoryItemCreate/Update/Read`); `backend/app/modules/syerp/router.py`
@@ -133,7 +133,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   (asserts `ITEM-9` → `ITEM-10`, never lexicographic). (pytest live-DB parts may skip — harness broken.)
 - **Parallel-ok:** yes (with Task 3).
 
-### [ ] 3. Stock-location CRUD
+### [x] 3. Stock-location CRUD
 - **Files:** `service.py` (`create_location`, `list_locations`, `get_location`, `update_location`);
   `schemas.py` (`StockLocationCreate/Update/Read`); `router.py`
   (`/syerp/inventory/locations` GET/POST/GET-one/PATCH); optional idempotent seed of `Main` in
@@ -148,7 +148,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   the seed twice in that script and counting rows.
 - **Parallel-ok:** yes (with Task 2).
 
-### [ ] 4. On-hand & valuation read (derivation query)
+### [x] 4. On-hand & valuation read (derivation query)
 - **Files:** `service.py` (`get_item_onhand(db, item_id)` → per-location `SUM(quantity)` + total +
   `total_qty * moving_avg_cost`); `schemas.py` (`OnHandByLocation`, `ItemOnHandRead`); `router.py`
   (`GET /syerp/inventory/items/{item_id}/onhand`, `syerp:read`).
@@ -162,7 +162,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   hand-computed Decimals.
 - **Parallel-ok:** no (depends on Task 1; consumed by Wave B).
 
-### [ ] 5. Receipt transaction posting + moving-average recompute
+### [x] 5. Receipt transaction posting + moving-average recompute
 - **Files:** `service.py` (pure helper `compute_new_moving_avg(qty_before, avg_before, qty_recv,
   unit_cost) -> Decimal`; `post_receipt(db, item_id, location_id, qty, unit_cost, actor_id,
   source_type=None, source_id=None)`); `schemas.py` (`ReceiptCreate`); `router.py`
@@ -179,7 +179,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   `backend/tests/syerp/test_inventory.py`; plus `verify_inventory.py` end-to-end against live DB.
 - **Parallel-ok:** no (Tasks 6, 7, and all of Wave C receiving depend on it).
 
-### [ ] 6. Adjustment transaction posting (reason + negative-stock rejection)
+### [x] 6. Adjustment transaction posting (reason + negative-stock rejection)
 - **Files:** `service.py` (`post_adjustment(db, item_id, location_id, qty_delta, reason, actor_id)`);
   `schemas.py` (`AdjustmentCreate`, `reason` required); `router.py`
   (`POST /syerp/inventory/items/{item_id}/adjustments`, `syerp:write`).
@@ -194,7 +194,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   and a positive adjustment path; pure-unit assertion that avg is untouched by adjustments.
 - **Parallel-ok:** yes (with Task 7, after Task 5).
 
-### [ ] 7. Transfer transaction posting (paired legs, nets-zero, negative guard)
+### [x] 7. Transfer transaction posting (paired legs, nets-zero, negative guard)
 - **Files:** `service.py` (`post_transfer(db, item_id, from_location_id, to_location_id, qty,
   actor_id)`); `schemas.py` (`TransferCreate`); `router.py`
   (`POST /syerp/inventory/items/{item_id}/transfers`, `syerp:write`).
@@ -208,7 +208,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   source-underflow rejection.
 - **Parallel-ok:** yes (with Task 6, after Task 5).
 
-### [ ] 8. Inventory logic tests + standalone live-DB verification script
+### [x] 8. Inventory logic tests + standalone live-DB verification script
 - **Files:** `backend/tests/syerp/test_inventory.py` (pytest, mirrors `test_partners.py`);
   `backend/scripts/verify_inventory.py` (new standalone `asyncio.run` script).
 - **Do:** pytest covers item-code generator boundary (pure), `compute_new_moving_avg` (pure),
@@ -224,7 +224,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 
 ### WAVE B — Inventory UI (SYERP-10)
 
-### [ ] 9. Inventory Items screen (list + ItemSheet + archive) with route & nav
+### [x] 9. Inventory Items screen (list + ItemSheet + archive) with route & nav
 - **Files:** `frontend/src/routes/syerp/InventoryItems.tsx`,
   `components/InventoryItemSheet.tsx`, reuse `components/PartnerArchiveDialog.tsx` pattern into
   `components/ItemArchiveDialog.tsx`; add tab in `components/SyerpNav.tsx`; route in
@@ -239,7 +239,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 - **Verify:** `cd frontend && npm run test -- InventoryItems && npm run build` (tsc clean).
 - **Parallel-ok:** yes (with Task 10).
 
-### [ ] 10. Stock Locations screen (list + LocationSheet + archive) with route & nav
+### [x] 10. Stock Locations screen (list + LocationSheet + archive) with route & nav
 - **Files:** `frontend/src/routes/syerp/StockLocations.tsx`,
   `components/StockLocationSheet.tsx`; SyerpNav tab; route `/syerp/inventory/locations` in
   `App.tsx`; `StockLocations.test.tsx`.
@@ -249,7 +249,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 - **Verify:** `npm run test -- StockLocations && npm run build`.
 - **Parallel-ok:** yes (with Task 9).
 
-### [ ] 11. Item detail: on-hand-by-location + valuation + transaction history
+### [x] 11. Item detail: on-hand-by-location + valuation + transaction history
 - **Files:** `frontend/src/routes/syerp/InventoryItemDetail.tsx`; route
   `/syerp/inventory/items/:id` in `App.tsx`; row/name link from `InventoryItems.tsx`;
   `InventoryItemDetail.test.tsx`.
@@ -262,7 +262,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 - **Verify:** `npm run test -- InventoryItemDetail && npm run build`.
 - **Parallel-ok:** no (hosts Tasks 12–13; needs Tasks 9 & 4).
 
-### [ ] 12. Stock Adjustment dialog
+### [x] 12. Stock Adjustment dialog
 - **Files:** `frontend/src/routes/syerp/components/StockAdjustDialog.tsx`; wired from
   `InventoryItemDetail.tsx`; `StockAdjustDialog.test.tsx`.
 - **Do:** Fields: location Select, signed quantity, **required** reason. POST to
@@ -273,7 +273,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 - **Verify:** `npm run test -- StockAdjustDialog && npm run build`.
 - **Parallel-ok:** yes (with Task 13).
 
-### [ ] 13. Stock Transfer dialog
+### [x] 13. Stock Transfer dialog
 - **Files:** `frontend/src/routes/syerp/components/StockTransferDialog.tsx`; wired from
   `InventoryItemDetail.tsx`; `StockTransferDialog.test.tsx`.
 - **Do:** Fields: from-location, to-location, quantity. POST to `…/items/{id}/transfers`; block
@@ -286,7 +286,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 
 ### WAVE C — Purchasing backend (SYERP-11)
 
-### [ ] 14. Create the purchasing schema (migration 0008 + ORM models)
+### [x] 14. Create the purchasing schema (migration 0008 + ORM models)
 - **Files:** `backend/alembic/versions/0008_syerp_purchasing.py` (chains `→0007`);
   `backend/app/modules/syerp/models.py` (append two classes).
 - **Do:**
@@ -305,7 +305,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   against dev Postgres; models import clean.
 - **Parallel-ok:** no (foundation for Wave C).
 
-### [ ] 15. PO draft CRUD + numeric-safe PO-number generator + vendor-only guard
+### [x] 15. PO draft CRUD + numeric-safe PO-number generator + vendor-only guard
 - **Files:** `service.py` (`generate_po_number`, `create_po`, `list_pos`, `get_po`, `add_line`,
   `update_line`, `remove_line` — line mutations allowed **only while `status=='draft'`**);
   `schemas.py` (`POCreate`, `POLineCreate/Update`, `PORead`, `POLineRead`); `router.py`
@@ -321,7 +321,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   boundary test in `backend/tests/syerp/test_purchasing.py`.
 - **Parallel-ok:** no (Tasks 16–18 depend on it).
 
-### [ ] 16. PO FSM transitions (approve / close) with server-side rejection
+### [x] 16. PO FSM transitions (approve / close) with server-side rejection
 - **Files:** `service.py` (`PO_TRANSITIONS` table + `advance_po_status(db, po_id, target, actor_id)`
   mirroring `plum` `VALID_TRANSITIONS`/`advance_revision_status`); `router.py`
   (`POST …/orders/{id}/approve`, `POST …/orders/{id}/close`, both `syerp:write`).
@@ -335,7 +335,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 - **Verify:** `verify_purchasing.py` walks legal + several illegal transitions asserting status codes.
 - **Parallel-ok:** yes (with Task 18, after Task 15).
 
-### [ ] 17. PO receiving → inventory receipt (over-receipt reject + status roll-up)
+### [x] 17. PO receiving → inventory receipt (over-receipt reject + status roll-up)
 - **Files:** `service.py` (`receive_line(db, po_id, line_id, location_id, qty, actor_id)`);
   `schemas.py` (`ReceiveLine`); `router.py` (`POST …/orders/{id}/lines/{line_id}/receive`,
   `syerp:write`).
@@ -353,7 +353,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   (Task 19) and Task 20 — NOT by the broken pytest harness.
 - **Parallel-ok:** no (the crux; needs Tasks 5, 15, 16).
 
-### [ ] 18. Vendor purchase-history read
+### [x] 18. Vendor purchase-history read
 - **Files:** `service.py` (extend `list_pos` to accept `vendor_id`; compute per-PO total =
   `SUM(line.qty_ordered*line.unit_cost)`); `schemas.py` (`PORead` includes `total` + received
   roll-up); `router.py` (the `?vendor_id=` list already from Task 15 — ensure totals+status returned).
@@ -365,7 +365,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   correct totals.
 - **Parallel-ok:** yes (with Task 16, after Task 15).
 
-### [ ] 19. Purchasing logic tests + standalone live-DB verification script
+### [x] 19. Purchasing logic tests + standalone live-DB verification script
 - **Files:** `backend/tests/syerp/test_purchasing.py`; `backend/scripts/verify_purchasing.py`.
 - **Do:** pytest covers PO-number boundary (pure), FSM rejection, vendor-only guard, partial-receipt
   accumulation, over-receipt rejection, and receipt-creates-inventory-txn (live-DB — skips under
@@ -382,7 +382,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 
 ### WAVE D — Purchasing UI (SYERP-11)
 
-### [ ] 20. PO list screen (status + totals, vendor filter) with route & nav
+### [x] 20. PO list screen (status + totals, vendor filter) with route & nav
 - **Files:** `frontend/src/routes/syerp/PurchaseOrders.tsx`; SyerpNav tab; route
   `/syerp/purchasing/orders` in `App.tsx`; `PurchaseOrders.test.tsx`.
 - **Do:** Table: PO number | vendor | status badge | total | created. `?vendor_id=` filter Select.
@@ -392,7 +392,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 - **Verify:** `npm run test -- PurchaseOrders && npm run build`.
 - **Parallel-ok:** yes (with Task 23, after backend Wave C).
 
-### [ ] 21. PO create / draft-edit screen (vendor picker + line editor)
+### [x] 21. PO create / draft-edit screen (vendor picker + line editor)
 - **Files:** `frontend/src/routes/syerp/PurchaseOrderCreate.tsx` (or a Sheet); route
   `/syerp/purchasing/orders/new`; `PurchaseOrderCreate.test.tsx`.
 - **Do:** Vendor Select populated from `GET /api/v1/syerp/partners?role=vendor` (vendor-only,
@@ -402,7 +402,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 - **Verify:** `npm run test -- PurchaseOrderCreate && npm run build`.
 - **Parallel-ok:** yes (with Task 22).
 
-### [ ] 22. PO detail screen (roll-up + approve/close actions)
+### [x] 22. PO detail screen (roll-up + approve/close actions)
 - **Files:** `frontend/src/routes/syerp/PurchaseOrderDetail.tsx`; route
   `/syerp/purchasing/orders/:id`; `PurchaseOrderDetail.test.tsx`.
 - **Do:** Header shows PO number/vendor/status. Lines table: item | ordered | received | outstanding
@@ -414,7 +414,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 - **Verify:** `npm run test -- PurchaseOrderDetail && npm run build`.
 - **Parallel-ok:** yes (with Task 21).
 
-### [ ] 23. Receiving dialog (per-line qty + location picker)
+### [x] 23. Receiving dialog (per-line qty + location picker)
 - **Files:** `frontend/src/routes/syerp/components/ReceiveLineDialog.tsx`; wired from
   `PurchaseOrderDetail.tsx`; `ReceiveLineDialog.test.tsx`.
 - **Do:** Fields: receive qty (default = outstanding), location Select (from stock locations). POST
@@ -427,7 +427,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 
 ### WAVE E — Verify
 
-### [ ] 24. End-to-end live integration proof (receipt → on-hand → moving-average)
+### [x] 24. End-to-end live integration proof (receipt → on-hand → moving-average)
 - **Files:** `backend/scripts/verify_e2e_p8.py` (may compose the Task 8 + Task 19 scripts).
 - **Do:** Against a **freshly-migrated** live Postgres (`alembic upgrade head` from empty), run the
   full D-P8-8 cross-requirement flow: create item + `Main` location + vendor → PO → approve →
@@ -439,7 +439,7 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
   `cd backend && alembic upgrade head && python scripts/verify_e2e_p8.py`.
 - **Parallel-ok:** no (final gate; needs all of A–D).
 
-### [ ] 25. Update requirement statuses, progress, and UAT checklist
+### [x] 25. Update requirement statuses, progress, and UAT checklist
 - **Files:** `.zj/SRD.md` (SYERP-10, SYERP-11 → implemented/partial with evidence);
   `docs/features/requirements-progress.md`; the milestone UAT doc (append SYERP-10/11 human-verify
   checks mirroring `.zj/UAT-v1.0.md` style); `docs/tasks/{branch}.md` checklist finalized/archived.
@@ -495,3 +495,40 @@ no AP; numeric-safe generators; reject negative stock + over-receipt; all money/
 | SYERP-11.6 No AP | (scope — Out of scope; confirmed by 19, 24) |
 | SYERP-11.7 Audit | 15, 16, 17 |
 | SYERP-11.8 RBAC | 15, 16, 17, 18 |
+
+---
+
+## Deviations
+- **Wrap-up** (trivial, `e1b7f84`): full-suite run surfaced a regression the per-task tests missed
+  in isolation — `InventoryItemDetail.test.tsx` (written against Task-11 STUB dialogs) opened the
+  now-real Adjust/Transfer dialogs, whose location `useQuery` hit the mock's catch-all and returned
+  a non-array → `locations.filter` threw. Fixed the test mock to serve `/inventory/locations` an
+  array. Production unaffected (API returns arrays; `locations` defaults to `[]`). Suite now 47/47.
+- **T19** (trivial): plan's `pytest -k "po_number or fsm"` selected 0 tests (real node names are
+  `test_generator_*`/`test_po_transitions_*`). Engineer registered `po_number`/`fsm` pytest markers
+  in `backend/pyproject.toml` and tagged the existing pure tests so the plan's exact command now
+  selects the intended 14-test no-DB subset. No test logic changed.
+- **T1** (trivial): New migration file required an `ABOUTME:` header (enforced by the `zj guard`
+  PostToolUse hook for new source files); prepended a 3-line comment block. Verify ran against the
+  compose `db` via a throwaway `compose_api` container (the `db` service is intentionally not
+  host-published), exercising the identical code/DB — `0006→0007` upgrade, `0007→0006→0007`
+  round-trip, and `import app.modules.syerp.models` all clean.
+
+## Noticed (report to owner at wrap-up)
+- No `docs/tasks/feature-syerp-inventory-purchasing.md` checklist exists though CLAUDE.md asks for
+  one per code branch. ZJ uses PLAN.md checkboxes as the build tracker; flag whether the owner wants
+  the parallel docs/tasks file seeded.
+- `ruff` is not installed in `backend/.venv` nor in the runtime image, so `ruff check` could not be
+  run during T1–T8. Lint verification for the phase must be resolved before wrap-up (install ruff, or
+  run it in a container). Confirmed absent from BOTH the local `.venv` and the `compose_api` image.
+- **T8**: Starlette deprecation — `HTTP_422_UNPROCESSABLE_ENTITY` is deprecated for
+  `HTTP_422_UNPROCESSABLE_CONTENT`; fires from `post_receipt`/`post_adjustment`/`post_transfer`.
+  Cosmetic; sweep before it becomes noise (not blocking).
+- **T24**: podman-compose in this env does NOT substitute repo-root `.env` into container env
+  vars — a bare `up -d db` creates Postgres with an empty `POSTGRES_PASSWORD` and refuses to init.
+  Work around with `set -a; . ./.env; set +a` before `podman-compose up`. Foot-gun in the
+  `verify_*.py` HOW-TO blocks; worth a one-line note or wrapper. Not a code defect.
+- **T9**: `npm run lint` is broken repo-wide — ESLint 10.5 requires a flat `eslint.config.js` that
+  doesn't exist (only legacy config). Pre-existing; blocks CLAUDE.md's zero-warning policy. Combined
+  with missing ruff, **NEITHER backend nor frontend lint gate runs** — surface to owner, likely a
+  chore before merge/CI. `tsc -b` (in `npm run build`) is currently the only enforced FE static check.
