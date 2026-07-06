@@ -13,6 +13,8 @@ The boundary-correctness guarantee — that "ITEM-9" succeeds to "ITEM-0010" and
 never to a smaller/lexicographic value — lives in the pure _next_item_code
 helper, which these tests cover without a database.
 """
+import httpx
+
 from app.modules.syerp.service import _next_item_code
 
 
@@ -69,3 +71,76 @@ def test_generator_ignores_non_numeric_and_foreign_codes() -> None:
 def test_generator_ignores_non_numeric_only_returns_first() -> None:
     """When no strictly-numeric ITEM- code exists, generation starts at ITEM-0001."""
     assert _next_item_code(["ITEM-A1", "ITEM-XYZ", "P-0002"]) == "ITEM-0001"
+
+
+# ---------------------------------------------------------------------------
+# Default stock-location seed (D-P8-14) — wiring + idempotency
+# ---------------------------------------------------------------------------
+
+
+def test_default_location_seed_registered_where_coa_seed_runs() -> None:
+    """
+    seed_default_location must be wired into run_seeds alongside seed_gl_accounts.
+
+    Guards the wiring (Decision 3 = yes): a fresh deploy runs the location seed
+    at startup so receiving works out-of-the-box. Inspecting the run_seeds source
+    keeps this a no-DB regression guard for the registration itself; the live
+    seed-twice-counts-one assertion is exercised by verify_inventory.py (Task 8)
+    and by test_default_location_seed_idempotent below when a DB is available.
+    """
+    import inspect
+
+    from app.core import seed as seed_module
+
+    source = inspect.getsource(seed_module.run_seeds)
+    assert "seed_default_location" in source, (
+        "seed_default_location is not wired into run_seeds — receiving would not "
+        "work out-of-the-box on a fresh deploy (D-P8-14)."
+    )
+    assert "seed_gl_accounts" in source, "coa_seed regressed out of run_seeds"
+
+
+def test_default_location_name_is_main() -> None:
+    """The single seeded location is named 'Main' (D-P8-14)."""
+    from app.modules.syerp.inventory_seed import DEFAULT_LOCATION_NAME
+
+    assert DEFAULT_LOCATION_NAME == "Main"
+
+
+async def test_default_location_seed_idempotent(
+    client: httpx.AsyncClient,
+    skip_if_no_db: None,
+) -> None:
+    """
+    Running seed_default_location twice yields exactly one 'Main' location.
+
+    Mirrors test_gl_seed_idempotent: select-before-insert (upsert-by-name)
+    means re-running the seed on every podman-compose up leaves the row count
+    for name='Main' at exactly 1. Skips cleanly when no live DB is reachable.
+    """
+    from sqlalchemy import func, select
+
+    from app.core.db import AsyncSessionLocal
+    from app.modules.syerp.inventory_seed import DEFAULT_LOCATION_NAME, seed_default_location
+    from app.modules.syerp.models import StockLocation
+
+    # Ensure the location exists (first seed run may be a no-op if already seeded)
+    async with AsyncSessionLocal() as session:
+        await seed_default_location(session)
+
+    # Run the seed a second time — must be a no-op
+    async with AsyncSessionLocal() as session:
+        await seed_default_location(session)
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(func.count())
+            .select_from(StockLocation)
+            .where(StockLocation.name == DEFAULT_LOCATION_NAME)
+        )
+        count = result.scalar()
+
+    assert count == 1, (
+        f"Expected exactly one '{DEFAULT_LOCATION_NAME}' location after re-seeding, "
+        f"got {count}. seed_default_location is not idempotent!"
+    )

@@ -232,6 +232,53 @@ class InventoryItemRead(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Stock location schemas (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+class StockLocationCreate(BaseModel):
+    """
+    Stock location creation payload (POST /syerp/inventory/locations).
+
+    `name` is the unique key (there is no generated code — StockLocation has an
+    Integer autoincrement PK). A fresh deploy already contains a seeded "Main"
+    location (D-P8-14), so this endpoint is for adding further locations.
+    """
+
+    name: str = Field(..., max_length=100)
+
+
+class StockLocationUpdate(BaseModel):
+    """
+    Stock location update payload (PATCH /syerp/inventory/locations/{id}).
+
+    All fields Optional — PATCH semantics. Only provided (non-None) fields are
+    applied. `active=False` archives the location (soft-delete), dropping it
+    from the default list.
+    """
+
+    name: Optional[str] = Field(None, max_length=100)
+    active: Optional[bool] = None
+
+
+class StockLocationRead(BaseModel):
+    """
+    Stock location data returned to API callers.
+
+    Serialized from a StockLocation ORM instance via from_attributes=True.
+    """
+
+    id: int
+    name: str
+    active: bool
+
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
 # GL Account schema
 # ---------------------------------------------------------------------------
 

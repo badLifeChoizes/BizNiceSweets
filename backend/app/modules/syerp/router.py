@@ -13,6 +13,10 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   POST   /syerp/inventory/items            — create item (syerp:write)
   GET    /syerp/inventory/items/{item_id}  — get item (syerp:read)
   PATCH  /syerp/inventory/items/{item_id}  — update/archive item (syerp:write)
+  GET    /syerp/inventory/locations              — list locations (syerp:read)
+  POST   /syerp/inventory/locations              — create location (syerp:write)
+  GET    /syerp/inventory/locations/{location_id}  — get location (syerp:read)
+  PATCH  /syerp/inventory/locations/{location_id}  — update/archive (syerp:write)
   GET    /syerp/gl/accounts            — list GL accounts (syerp:read)
 
 mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
@@ -31,6 +35,9 @@ Audit logging (D-10, T-04-08):
   - item.created: on POST /inventory/items success.
   - item.updated: on PATCH when active does not change to False.
   - item.archived: on PATCH when patch sets active=False.
+  - location.created: on POST /inventory/locations success.
+  - location.updated: on PATCH when active does not change to False.
+  - location.archived: on PATCH when patch sets active=False.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -53,17 +60,24 @@ from app.modules.syerp.schemas import (
     PartnerCreate,
     PartnerRead,
     PartnerUpdate,
+    StockLocationCreate,
+    StockLocationRead,
+    StockLocationUpdate,
 )
 from app.modules.syerp.service import (
     archive_partner,
     create_item,
+    create_location,
     create_partner,
     get_item,
+    get_location,
     get_partner,
     list_gl_accounts,
     list_items,
+    list_locations,
     list_partners,
     update_item,
+    update_location,
     update_partner,
 )
 
@@ -275,6 +289,108 @@ async def update_item_endpoint(
         detail=f"Inventory item {audit_action.split('.')[1]}: {item.code}",
     )
     return item
+
+
+# ---------------------------------------------------------------------------
+# Stock locations (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/inventory/locations", response_model=list[StockLocationRead])
+async def list_locations_endpoint(
+    include_archived: bool = False,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[StockLocationRead]:
+    """
+    List stock locations.
+
+    Query params:
+      include_archived: when true, includes active=False locations (default false).
+
+    Requires syerp:read permission.
+    """
+    return await list_locations(db, include_archived=include_archived)
+
+
+@router.post(
+    "/inventory/locations",
+    response_model=StockLocationRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_location_endpoint(
+    data: StockLocationCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> StockLocationRead:
+    """
+    Create a new stock location.
+
+    `name` is the unique key; a duplicate name returns 409 Conflict.
+    Requires syerp:write permission. Writes a location.created audit log row.
+    """
+    location = await create_location(db, data)
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="location.created",
+        target_type="stock_location",
+        target_id=str(location.id),
+        detail=f"Stock location created: {location.name}",
+    )
+    return location
+
+
+@router.get("/inventory/locations/{location_id}", response_model=StockLocationRead)
+async def get_location_endpoint(
+    location_id: int,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> StockLocationRead:
+    """
+    Get a single stock location by id.
+
+    Requires syerp:read permission. Returns 404 if the location does not exist.
+    """
+    return await get_location(db, location_id)
+
+
+@router.patch("/inventory/locations/{location_id}", response_model=StockLocationRead)
+async def update_location_endpoint(
+    location_id: int,
+    data: StockLocationUpdate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> StockLocationRead:
+    """
+    Partially update a stock location (PATCH semantics).
+
+    Sending {active: false} archives the location (soft-delete), dropping it
+    from the default list. Requires syerp:write permission. Writes audit log
+    with the correct action:
+      - "location.archived" when active transitions True → False
+      - "location.updated" for all other mutations
+
+    Returns 404 if the location does not exist.
+    """
+    # Read current state before mutation to detect archive transition
+    existing = await get_location(db, location_id)
+    was_active = existing.active
+
+    location = await update_location(db, location_id, data)
+
+    is_archiving = data.active is False and was_active is True
+    audit_action = "location.archived" if is_archiving else "location.updated"
+
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action=audit_action,
+        target_type="stock_location",
+        target_id=str(location.id),
+        detail=f"Stock location {audit_action.split('.')[1]}: {location.name}",
+    )
+    return location
 
 
 # ---------------------------------------------------------------------------
