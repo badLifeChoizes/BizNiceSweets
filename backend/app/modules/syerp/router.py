@@ -30,6 +30,7 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   DELETE /syerp/purchasing/orders/{po_id}/lines/{line_id}  — remove line (syerp:write)
   POST   /syerp/purchasing/orders/{po_id}/approve  — approve PO (syerp:write)
   POST   /syerp/purchasing/orders/{po_id}/close    — close PO (syerp:write)
+  POST   /syerp/purchasing/orders/{po_id}/lines/{line_id}/receive — receive line (syerp:write)
   GET    /syerp/gl/accounts            — list GL accounts (syerp:read)
 
 mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
@@ -60,6 +61,7 @@ Audit logging (D-10, T-04-08):
   - po.line_removed: on DELETE /purchasing/orders/{id}/lines/{line_id} success.
   - po.approved: on POST /purchasing/orders/{id}/approve success.
   - po.closed: on POST /purchasing/orders/{id}/close success.
+  - po.received: on POST /purchasing/orders/{id}/lines/{line_id}/receive success.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -90,6 +92,7 @@ from app.modules.syerp.schemas import (
     POLineUpdate,
     PORead,
     ReceiptCreate,
+    ReceiveLine,
     StockLocationCreate,
     StockLocationRead,
     StockLocationUpdate,
@@ -118,6 +121,7 @@ from app.modules.syerp.service import (
     post_adjustment,
     post_receipt,
     post_transfer,
+    receive_line,
     remove_line,
     update_item,
     update_line,
@@ -810,6 +814,51 @@ async def close_po_endpoint(
         target_type="purchase_order",
         target_id=str(po.id),
         detail=f"Purchase order closed: {po.po_number}",
+    )
+    return po
+
+
+@router.post(
+    "/purchasing/orders/{po_id}/lines/{line_id}/receive",
+    response_model=PORead,
+)
+async def receive_po_line_endpoint(
+    po_id: str,
+    line_id: str,
+    data: ReceiveLine,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PORead:
+    """
+    Receive a PO line into stock (Task 17, AC11-4/5, the phase crux).
+
+    Posts a REAL costed inventory receipt at the line's unit cost — feeding
+    SYERP-10 on-hand + moving-average — accumulates against qty_received, and rolls
+    the header status forward (received when every line is fully received, else
+    partially_received), all in one atomic transaction. Rejects with 422 when the
+    PO is not approved / partially_received, when qty <= 0, or on over-receipt
+    (qty_received + qty > qty_ordered) — no receipt is posted. Requires syerp:write.
+    Returns 404 if the PO, line, item, or location does not exist. Writes a
+    po.received audit log row (with qty + location detail).
+    """
+    po = await receive_line(
+        db,
+        po_id=po_id,
+        line_id=line_id,
+        location_id=data.location_id,
+        qty=data.qty,
+        actor_id=str(current_user.id),
+    )
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="po.received",
+        target_type="purchase_order",
+        target_id=str(po.id),
+        detail=(
+            f"PO {po_id} line {line_id} received: {data.qty} to location "
+            f"{data.location_id} (status: {po.status})"
+        ),
     )
     return po
 

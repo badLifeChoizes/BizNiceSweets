@@ -13,7 +13,14 @@ The boundary-correctness guarantee — that "PO-9" succeeds to "PO-0010" and nev
 to a smaller/lexicographic value — lives in the pure _next_po_number helper,
 which these tests cover without a database.
 """
-from app.modules.syerp.service import PO_TRANSITIONS, _next_po_number
+from decimal import Decimal
+
+from app.modules.syerp.service import (
+    PO_TRANSITIONS,
+    _is_over_receipt,
+    _next_po_number,
+    _po_rollup_status,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -129,3 +136,76 @@ def test_closed_is_terminal() -> None:
 def test_closing_a_draft_is_illegal() -> None:
     """A draft cannot be closed directly (must be approved first)."""
     assert "closed" not in PO_TRANSITIONS["draft"]
+
+
+# ---------------------------------------------------------------------------
+# _is_over_receipt — pure, no-DB over-receipt guard (Phase 8, Task 17, AC11-4)
+# ---------------------------------------------------------------------------
+#
+# receive_line rejects a receipt iff qty_received + qty > qty_ordered. The exact
+# boundary (== qty_ordered) is ALLOWED (a line may be fully received in one shot).
+# These tests pin that predicate in Decimal (no float drift); the live HTTP walk
+# (a real receipt bumps on-hand + moving-avg, over-receipt → 422) is Task 19/20.
+
+
+def test_over_receipt_rejects_when_sum_exceeds_ordered() -> None:
+    """qty_received + qty > qty_ordered is an over-receipt → reject (True)."""
+    assert _is_over_receipt(Decimal("6"), Decimal("5"), Decimal("10")) is True
+
+
+def test_over_receipt_allows_exact_boundary() -> None:
+    """qty_received + qty == qty_ordered fully receives the line → allowed (False)."""
+    assert _is_over_receipt(Decimal("6"), Decimal("4"), Decimal("10")) is False
+
+
+def test_over_receipt_allows_partial_under_ordered() -> None:
+    """A partial receipt well under the ordered quantity is allowed (False)."""
+    assert _is_over_receipt(Decimal("0"), Decimal("3"), Decimal("10")) is False
+
+
+def test_over_receipt_first_receipt_over_ordered_rejects() -> None:
+    """A first receipt larger than qty_ordered is an over-receipt → reject (True)."""
+    assert _is_over_receipt(Decimal("0"), Decimal("11"), Decimal("10")) is True
+
+
+def test_over_receipt_is_exact_in_decimal() -> None:
+    """The boundary is exact in Decimal — 0.1 + 0.2 == 0.3 has no float drift."""
+    assert _is_over_receipt(Decimal("0.1"), Decimal("0.2"), Decimal("0.3")) is False
+    assert _is_over_receipt(Decimal("0.1"), Decimal("0.2001"), Decimal("0.3")) is True
+
+
+# ---------------------------------------------------------------------------
+# _po_rollup_status — pure, no-DB header roll-up (Phase 8, Task 17, AC11-5)
+# ---------------------------------------------------------------------------
+#
+# After a successful receipt the header is `received` iff EVERY line is fully
+# received (qty_received >= qty_ordered), otherwise `partially_received`. The list
+# is (qty_ordered, qty_received) pairs. Called only post-receipt, so it never has
+# to return `approved`.
+
+
+def test_rollup_received_when_all_lines_full() -> None:
+    """Every line fully received → the PO rolls up to `received`."""
+    pairs = [(Decimal("10"), Decimal("10")), (Decimal("5"), Decimal("5"))]
+    assert _po_rollup_status(pairs) == "received"
+
+
+def test_rollup_partial_when_one_line_short() -> None:
+    """One line still short → the PO stays `partially_received`."""
+    pairs = [(Decimal("10"), Decimal("10")), (Decimal("5"), Decimal("2"))]
+    assert _po_rollup_status(pairs) == "partially_received"
+
+
+def test_rollup_partial_when_single_line_partly_received() -> None:
+    """A single partly-received line rolls up to `partially_received`."""
+    assert _po_rollup_status([(Decimal("10"), Decimal("3"))]) == "partially_received"
+
+
+def test_rollup_received_on_single_fully_received_line() -> None:
+    """A single fully-received line rolls up to `received`."""
+    assert _po_rollup_status([(Decimal("10"), Decimal("10"))]) == "received"
+
+
+def test_rollup_received_treats_over_as_full() -> None:
+    """qty_received >= qty_ordered counts as full (>= not ==), so it is `received`."""
+    assert _po_rollup_status([(Decimal("10"), Decimal("12"))]) == "received"

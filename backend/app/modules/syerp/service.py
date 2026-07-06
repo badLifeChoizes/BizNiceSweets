@@ -810,6 +810,7 @@ async def post_receipt(
     actor_id: str,
     source_type: str | None = None,
     source_id: str | None = None,
+    commit: bool = True,
 ) -> "TransactionRead":
     """
     Post a costed receipt: append one ledger row and recompute the moving average.
@@ -826,6 +827,15 @@ async def post_receipt(
     Rejects qty <= 0 or unit_cost < 0 with 422 (mirrors the ReceiptCreate schema
     guard; defends the service against non-HTTP callers too). Raises 404 if the
     item or location does not exist (via get_item / get_location).
+
+    `commit` (default True) controls whether this function commits the unit of
+    work itself. Standalone receipt posting commits (True). PO-driven receiving
+    (Task 17, receive_line) passes commit=False so the receipt row, the
+    moving-average update, the line's qty_received increment, and the PO status
+    roll-up all land in ONE atomic transaction — the shared write is flushed (so
+    the row + PK/timestamp exist for the refresh) but the single commit is owned
+    by receive_line. This is the "one commit at the end" refactor that guarantees
+    a receipt can never be persisted without its accumulator bump.
 
     Returns the created row as a TransactionRead (joined location name), mirroring
     list_item_transactions. The router writes the inventory.receipt audit row.
@@ -869,7 +879,13 @@ async def post_receipt(
     db.add(txn)
     item.moving_avg_cost = avg_new
 
-    await db.commit()
+    # commit=True: standalone receipt owns the commit. commit=False: caller
+    # (receive_line) owns a single atomic commit; flush so the row + PK/timestamp
+    # exist for the refresh below without ending the transaction.
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(txn)
 
     return TransactionRead(
@@ -1569,6 +1585,151 @@ async def advance_po_status(
     if target == "approved":
         po.approved_at = datetime.now(timezone.utc)
         po.approved_by = actor_id
+
+    await db.commit()
+    await db.refresh(po)
+
+    lines = await _load_po_lines(db, po_id)
+    return _po_to_read(po, lines)
+
+
+# ---------------------------------------------------------------------------
+# PO receiving → inventory receipt (Phase 8, Task 17, AC11-4/5, D-P8-7)
+# ---------------------------------------------------------------------------
+#
+# Receiving is the phase crux: it posts a REAL costed inventory receipt through
+# the Task-5 post_receipt (the single source of truth for on-hand + moving-avg),
+# accumulates against the line's qty_received (Decision 5), rolls the header
+# status forward, and rejects over-receipt — all in ONE atomic transaction.
+#
+# The two decisions the pure helpers pin (no DB, unit-testable):
+#   - over-receipt: qty_received + qty > qty_ordered is REJECTED; the boundary
+#     qty_received + qty == qty_ordered is ALLOWED (a line may be fully received
+#     in one shot). Decimal comparison — exact, no float drift (D-11).
+#   - status roll-up: the PO is `received` iff EVERY line is fully received
+#     (qty_received >= qty_ordered), otherwise `partially_received` (AC11-5).
+
+
+def _is_over_receipt(qty_received: Decimal, qty: Decimal, qty_ordered: Decimal) -> bool:
+    """
+    Pure over-receipt predicate (no DB — unit-testable).
+
+    Returns True when receiving `qty` more would push the line's cumulative
+    received quantity PAST what was ordered (`qty_received + qty > qty_ordered`),
+    i.e. the receipt must be REJECTED (AC11-4, D-P8-7). The exact boundary —
+    `qty_received + qty == qty_ordered` — is ALLOWED (it fully receives the line).
+    All arithmetic is Decimal so the boundary is exact with no float drift.
+    """
+    return qty_received + qty > qty_ordered
+
+
+def _po_rollup_status(line_qtys: "Iterable[tuple[Decimal, Decimal]]") -> str:
+    """
+    Pure PO status roll-up predicate (no DB — unit-testable).
+
+    Given (qty_ordered, qty_received) pairs for EVERY line of a PO, returns the
+    receiving-driven header status: `received` when every line is fully received
+    (qty_received >= qty_ordered), otherwise `partially_received` (AC11-5). All
+    comparisons are Decimal (exact). Called only after a successful receipt, so at
+    least one line has moved — the result is never `approved`.
+    """
+    if all(received >= ordered for ordered, received in line_qtys):
+        return "received"
+    return "partially_received"
+
+
+async def receive_line(
+    db: AsyncSession,
+    po_id: str,
+    line_id: str,
+    location_id: int,
+    qty: Decimal,
+    actor_id: str,
+) -> "PORead":
+    """
+    Receive `qty` of a PO line into stock (Phase 8, Task 17, AC11-4/5).
+
+    Guard order — every rejection is 422 with NO mutation:
+      1. The PO must be `approved` or `partially_received` (receiving is illegal on
+         a draft, a fully-received, or a closed order).
+      2. `qty` must be > 0.
+      3. Over-receipt is rejected: `qty_received + qty > qty_ordered`
+         (_is_over_receipt); the exact boundary (== qty_ordered) is allowed.
+    The line is loaded scoped to `po_id` (404 if it does not exist on that PO).
+
+    On success, in ONE atomic transaction (the phase crux):
+      - Post a REAL costed inventory receipt via the Task-5 post_receipt at the
+        line's unit_cost, source-linked to this line (source_type='po_receipt',
+        source_id=line.id) — feeding SYERP-10 on-hand + moving-average (AC11-4).
+        post_receipt is the single source of truth for the ledger + valuation; it
+        is NOT reimplemented here. It runs with commit=False so the receipt row,
+        the qty_received increment, and the status roll-up share one commit —
+        a receipt can never be persisted without its accumulator bump.
+      - Increment line.qty_received by qty (Decision 5 accumulator).
+      - Recompute the header status across ALL lines (_po_rollup_status): `received`
+        when every line is fully received, else `partially_received` (AC11-5).
+
+    Status roll-up sets po.status DIRECTLY rather than routing through
+    advance_po_status. This is deliberate: a second partial receipt while the PO is
+    already `partially_received` is a legitimate re-affirmation, but
+    partially_received → partially_received is NOT in PO_TRANSITIONS (the FSM guard
+    would 422 it). Receiving owns this roll-up, so it bypasses the transition guard
+    for the computed value; the FSM guard still governs the operator-driven
+    approve/close endpoints (Task 16).
+
+    Returns the updated order as a PORead (header + nested lines). The router
+    writes the po.received audit row (with qty + location detail).
+    """
+    po = await _get_po_row(db, po_id)
+
+    # Guard 1: receiving is only valid on an open, approved order.
+    if po.status not in ("approved", "partially_received"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Purchase order lines can only be received while the PO is "
+                f"'approved' or 'partially_received' (current status: {po.status})."
+            ),
+        )
+
+    line = await _get_line_row(db, po_id, line_id)
+
+    # Guard 2: a receipt is stock IN — zero/negative is not a receipt.
+    if qty <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Receive quantity must be greater than zero.",
+        )
+
+    # Guard 3: over-receipt (== boundary allowed). Reject BEFORE any mutation.
+    if _is_over_receipt(line.qty_received, qty, line.qty_ordered):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Cannot receive {qty}: line already received {line.qty_received} "
+                f"of {line.qty_ordered} ordered (over-receipt)."
+            ),
+        )
+
+    # Post the REAL costed receipt through the single source of truth, commit=False
+    # so the receipt + accumulator bump + status roll-up commit atomically together.
+    await post_receipt(
+        db,
+        item_id=line.item_id,
+        location_id=location_id,
+        qty=qty,
+        unit_cost=line.unit_cost,
+        actor_id=actor_id,
+        source_type="po_receipt",
+        source_id=line.id,
+        commit=False,
+    )
+    line.qty_received += qty
+
+    # Roll the header status forward across ALL lines (autoflush surfaces the
+    # qty_received increment above to this query).
+    lines = await _load_po_lines(db, po_id)
+    po.status = _po_rollup_status([(ln.qty_ordered, ln.qty_received) for ln in lines])
 
     await db.commit()
     await db.refresh(po)

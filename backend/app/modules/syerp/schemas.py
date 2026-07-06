@@ -513,6 +513,21 @@ class PORead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ReceiveLine(BaseModel):
+    """
+    PO line receiving payload (POST /syerp/purchasing/orders/{id}/lines/{line_id}/receive).
+
+    Receives `qty` of the line into `location_id`, posting a REAL costed inventory
+    receipt at the line's unit cost (Task 17, AC11-4). `qty` must be > 0 at the
+    boundary; the service additionally rejects over-receipt (`qty_received + qty >
+    qty_ordered`) and receiving on a PO that is not `approved` /
+    `partially_received`. `qty` is a fixed-point Decimal (never float — D-11).
+    """
+
+    location_id: int
+    qty: Decimal = Field(..., gt=0)
+
+
 # ---------------------------------------------------------------------------
 # GL Account schema
 # ---------------------------------------------------------------------------
