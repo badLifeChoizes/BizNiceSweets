@@ -1,6 +1,6 @@
 // ABOUTME: Component tests for the SYERP Inventory Item detail screen — header,
 // ABOUTME: on-hand-by-location + valuation, immutable transaction ledger, and the
-// ABOUTME: Adjust/Transfer action seams (stub dialogs, Tasks 12/13).
+// ABOUTME: Adjust/Transfer action seams (real dialogs, Tasks 12/13).
 
 /**
  * InventoryItemDetail — component tests.
@@ -85,11 +85,18 @@ const TRANSACTIONS = [
   },
 ]
 
+// Locations for the (now real, Tasks 12/13) Adjust/Transfer dialogs' location Select.
+const LOCATIONS = [
+  { id: 1, name: 'Main Warehouse', active: true },
+  { id: 2, name: 'Assembly Line', active: true },
+]
+
 // Route the mocked GET by URL so query order doesn't matter.
 function mockGetByUrl() {
   mockApiClientGet.mockImplementation((url: string) => {
     if (url.endsWith('/onhand')) return Promise.resolve({ data: ONHAND })
     if (url.endsWith('/transactions')) return Promise.resolve({ data: TRANSACTIONS })
+    if (url.includes('/inventory/locations')) return Promise.resolve({ data: LOCATIONS })
     return Promise.resolve({ data: ITEM })
   })
 }
