@@ -16,7 +16,7 @@ Pitfall 8 — an "orphan" partner has no useful meaning in the domain).
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -405,6 +405,112 @@ class TransactionRead(BaseModel):
     unit_cost: Optional[Decimal] = None
     reason: Optional[str] = None
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Purchase order schemas (Phase 8, Task 15)
+# ---------------------------------------------------------------------------
+#
+# A PO header carries its lines nested (PORead.lines) so a single GET returns the
+# whole order — the frontend never has to stitch a header to a separate line list.
+# Lines are created/edited/removed through the dedicated /orders/{id}/lines
+# endpoints (only while the PO is in Draft), not through POCreate — a new PO is
+# born empty and lines are added afterwards, mirroring the two-step UI flow.
+
+
+class POLineCreate(BaseModel):
+    """
+    Purchase-order line creation payload (POST /syerp/purchasing/orders/{id}/lines).
+
+    `line_no` is intentionally absent — the service auto-assigns the next
+    sequential line number per PO. Quantities/costs are fixed-point Decimals
+    (never float — D-11): `qty_ordered` must be > 0 and `unit_cost` >= 0.
+    `qty_received` is not settable here — it starts at 0 and is only moved by the
+    receiving path (Decision 5). Lines may be added only while the PO is Draft
+    (enforced in the service, AC11-1).
+    """
+
+    item_id: str = Field(..., max_length=36)
+    qty_ordered: Decimal = Field(..., gt=0)
+    unit_cost: Decimal = Field(..., ge=0)
+    need_by_date: Optional[date] = None
+
+
+class POLineUpdate(BaseModel):
+    """
+    Purchase-order line update payload (PATCH /syerp/purchasing/orders/{id}/lines/{line_id}).
+
+    All fields Optional — PATCH semantics; only provided (non-None) fields are
+    applied. `qty_ordered` (> 0) and `unit_cost` (>= 0) stay fixed-point Decimals.
+    `qty_received` and `line_no` are not editable here (receiving owns qty_received;
+    line_no is server-assigned). Edits are allowed only while the PO is Draft
+    (enforced in the service, AC11-1).
+    """
+
+    item_id: Optional[str] = Field(None, max_length=36)
+    qty_ordered: Optional[Decimal] = Field(None, gt=0)
+    unit_cost: Optional[Decimal] = Field(None, ge=0)
+    need_by_date: Optional[date] = None
+
+
+class POLineRead(BaseModel):
+    """
+    Purchase-order line returned to API callers.
+
+    Serialized from a PurchaseOrderLine ORM instance via from_attributes=True.
+    Quantities/costs are fixed-point Decimals (Numeric(18,6)), never float.
+    """
+
+    id: str
+    po_id: str
+    item_id: str
+    line_no: int
+    qty_ordered: Decimal
+    unit_cost: Decimal
+    qty_received: Decimal
+    need_by_date: Optional[date] = None
+
+    model_config = {"from_attributes": True}
+
+
+class POCreate(BaseModel):
+    """
+    Purchase-order header creation payload (POST /syerp/purchasing/orders).
+
+    `vendor_id` MUST reference an existing Partner with is_vendor=True — the
+    service rejects a non-vendor (or missing) partner with 422 (AC11-3). A new PO
+    is created empty and in Draft; lines are added afterwards through the
+    /orders/{id}/lines endpoints. `po_number` is server-generated (numeric-safe
+    PO-#### series), never client-supplied.
+    """
+
+    vendor_id: str = Field(..., max_length=36)
+    notes: Optional[str] = None
+
+
+class PORead(BaseModel):
+    """
+    Purchase-order header returned to API callers, with its lines nested.
+
+    Lines are embedded (`lines: list[POLineRead]`) so a single GET returns the
+    complete order. Assembled in the service (not via a lazy ORM relationship) to
+    avoid MissingGreenlet in the async context (RESEARCH.md Pitfall 2). `status`
+    walks draft | approved | partially_received | received | closed;
+    approved_at/approved_by are NULL until the PO is approved.
+    """
+
+    id: str
+    po_number: str
+    vendor_id: str
+    status: str
+    notes: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    lines: list[POLineRead] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
 
 
 # ---------------------------------------------------------------------------

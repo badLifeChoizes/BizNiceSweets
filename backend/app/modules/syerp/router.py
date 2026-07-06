@@ -22,6 +22,12 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   POST   /syerp/inventory/locations              — create location (syerp:write)
   GET    /syerp/inventory/locations/{location_id}  — get location (syerp:read)
   PATCH  /syerp/inventory/locations/{location_id}  — update/archive (syerp:write)
+  GET    /syerp/purchasing/orders             — list POs (+?vendor_id=) (syerp:read)
+  POST   /syerp/purchasing/orders             — create PO draft (syerp:write)
+  GET    /syerp/purchasing/orders/{po_id}     — get PO + lines (syerp:read)
+  POST   /syerp/purchasing/orders/{po_id}/lines            — add line (syerp:write)
+  PATCH  /syerp/purchasing/orders/{po_id}/lines/{line_id}  — update line (syerp:write)
+  DELETE /syerp/purchasing/orders/{po_id}/lines/{line_id}  — remove line (syerp:write)
   GET    /syerp/gl/accounts            — list GL accounts (syerp:read)
 
 mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
@@ -46,6 +52,10 @@ Audit logging (D-10, T-04-08):
   - inventory.receipt: on POST /inventory/items/{id}/receipts success.
   - inventory.adjustment: on POST /inventory/items/{id}/adjustments success.
   - inventory.transfer: on POST /inventory/items/{id}/transfers success.
+  - po.created: on POST /purchasing/orders success.
+  - po.line_added: on POST /purchasing/orders/{id}/lines success.
+  - po.line_updated: on PATCH /purchasing/orders/{id}/lines/{line_id} success.
+  - po.line_removed: on DELETE /purchasing/orders/{id}/lines/{line_id} success.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -70,6 +80,11 @@ from app.modules.syerp.schemas import (
     PartnerCreate,
     PartnerRead,
     PartnerUpdate,
+    POCreate,
+    POLineCreate,
+    POLineRead,
+    POLineUpdate,
+    PORead,
     ReceiptCreate,
     StockLocationCreate,
     StockLocationRead,
@@ -78,23 +93,29 @@ from app.modules.syerp.schemas import (
     TransferCreate,
 )
 from app.modules.syerp.service import (
+    add_line,
     archive_partner,
     create_item,
     create_location,
     create_partner,
+    create_po,
     get_item,
     get_item_onhand,
     get_location,
     get_partner,
+    get_po,
     list_gl_accounts,
     list_item_transactions,
     list_items,
     list_locations,
     list_partners,
+    list_pos,
     post_adjustment,
     post_receipt,
     post_transfer,
+    remove_line,
     update_item,
+    update_line,
     update_location,
     update_partner,
 )
@@ -577,6 +598,162 @@ async def update_location_endpoint(
         detail=f"Stock location {audit_action.split('.')[1]}: {location.name}",
     )
     return location
+
+
+# ---------------------------------------------------------------------------
+# Purchase orders (Phase 8, Task 15)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/purchasing/orders", response_model=list[PORead])
+async def list_pos_endpoint(
+    vendor_id: str | None = None,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[PORead]:
+    """
+    List purchase orders (newest-first), each with its lines nested.
+
+    Query params:
+      vendor_id: when supplied, restricts the list to POs for that vendor.
+
+    Requires syerp:read permission.
+    """
+    return await list_pos(db, vendor_id=vendor_id)
+
+
+@router.post(
+    "/purchasing/orders",
+    response_model=PORead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_po_endpoint(
+    data: POCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PORead:
+    """
+    Create a new purchase order (Draft, empty of lines).
+
+    Auto-generates a numeric-safe PO-#### number. `vendor_id` must reference an
+    existing Partner with is_vendor=True (422 otherwise, AC11-3). Requires
+    syerp:write permission. Writes a po.created audit log row.
+    """
+    po = await create_po(db, data)
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="po.created",
+        target_type="purchase_order",
+        target_id=str(po.id),
+        detail=f"Purchase order created: {po.po_number} (vendor {po.vendor_id})",
+    )
+    return po
+
+
+@router.get("/purchasing/orders/{po_id}", response_model=PORead)
+async def get_po_endpoint(
+    po_id: str,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> PORead:
+    """
+    Get a single purchase order (header + nested lines) by id.
+
+    Requires syerp:read permission. Returns 404 if the PO does not exist.
+    """
+    return await get_po(db, po_id)
+
+
+@router.post(
+    "/purchasing/orders/{po_id}/lines",
+    response_model=POLineRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_po_line_endpoint(
+    po_id: str,
+    data: POLineCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> POLineRead:
+    """
+    Append a line to a purchase order (Draft-only, AC11-1).
+
+    line_no is auto-assigned sequentially. Rejects with 422 if the PO is not in
+    Draft, and with 404 if the PO or the referenced item does not exist. Requires
+    syerp:write permission. Writes a po.line_added audit log row.
+    """
+    line = await add_line(db, po_id, data)
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="po.line_added",
+        target_type="purchase_order_line",
+        target_id=str(line.id),
+        detail=(
+            f"PO {po_id} line {line.line_no} added: "
+            f"{line.qty_ordered} @ {line.unit_cost} of item {line.item_id}"
+        ),
+    )
+    return line
+
+
+@router.patch(
+    "/purchasing/orders/{po_id}/lines/{line_id}",
+    response_model=POLineRead,
+)
+async def update_po_line_endpoint(
+    po_id: str,
+    line_id: str,
+    data: POLineUpdate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> POLineRead:
+    """
+    Partially update a PO line (PATCH semantics, Draft-only, AC11-1).
+
+    Only provided fields are applied. Rejects with 422 if the PO is not in Draft,
+    and with 404 if the PO, the line, or a reassigned item does not exist.
+    Requires syerp:write permission. Writes a po.line_updated audit log row.
+    """
+    line = await update_line(db, po_id, line_id, data)
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="po.line_updated",
+        target_type="purchase_order_line",
+        target_id=str(line.id),
+        detail=f"PO {po_id} line {line.line_no} updated",
+    )
+    return line
+
+
+@router.delete(
+    "/purchasing/orders/{po_id}/lines/{line_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_po_line_endpoint(
+    po_id: str,
+    line_id: str,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """
+    Remove a line from a purchase order (Draft-only, AC11-1).
+
+    Rejects with 422 if the PO is not in Draft, and with 404 if the PO or line
+    does not exist. Requires syerp:write permission. Writes a po.line_removed
+    audit log row (with the line_id from the path). Returns 204 No Content.
+    """
+    await remove_line(db, po_id, line_id)
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="po.line_removed",
+        target_type="purchase_order_line",
+        target_id=str(line_id),
+        detail=f"PO {po_id} line {line_id} removed",
+    )
 
 
 # ---------------------------------------------------------------------------

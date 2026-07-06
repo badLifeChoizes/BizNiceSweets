@@ -35,13 +35,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from app.modules.syerp.models import GLAccount, InventoryItem, Partner, StockLocation
+    from app.modules.syerp.models import (
+        GLAccount,
+        InventoryItem,
+        Partner,
+        PurchaseOrder,
+        PurchaseOrderLine,
+        StockLocation,
+    )
     from app.modules.syerp.schemas import (
         InventoryItemCreate,
         InventoryItemUpdate,
         ItemOnHandRead,
         PartnerCreate,
         PartnerUpdate,
+        POCreate,
+        POLineCreate,
+        POLineRead,
+        POLineUpdate,
+        PORead,
         StockLocationCreate,
         StockLocationUpdate,
         TransactionRead,
@@ -1131,3 +1143,368 @@ async def post_transfer(
             created_at=in_leg.created_at,
         ),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Purchase-order number generation (Phase 8, Task 15)
+# ---------------------------------------------------------------------------
+#
+# PO numbers follow the numeric-safe PO-#### series, exactly mirroring the ITEM-
+# generator above (Decision 2): the pure _next_po_number helper is unit-testable
+# with NO DB so the digit-boundary guarantee (PO-9 -> PO-0010, numeric-not-
+# lexicographic) is pinned in isolation, and generate_po_number is the DB half
+# that casts the digits after "PO-" to an integer and orders numerically.
+
+_PO_NUMBER_RE = re.compile(r"^PO-[0-9]+$")
+
+
+def _next_po_number(existing_numbers: "Iterable[str]") -> str:
+    """
+    Compute the next PO-#### number from the set of existing PO numbers.
+
+    Pure (no DB) so the digit-boundary guarantee is unit-testable in isolation.
+    Considers only strictly-numeric PO-series numbers (matching ``^PO-[0-9]+$``),
+    selects the *numerically* highest suffix, and returns that value + 1 zero-padded
+    to 4 digits. Returns "PO-0001" when no PO-series numbers exist yet.
+
+    The selection is numeric, never lexicographic: given {"PO-9", "PO-10"} it picks
+    10 (not the lexicographically-larger "PO-9") and returns "PO-0011". A
+    lexicographic MAX would return "PO-9" as the max and re-issue "PO-0010",
+    colliding once the suffix crosses a digit-width boundary — the same Phase-7
+    partner defect the numeric generator exists to avoid.
+    """
+    suffixes = [
+        int(number.split("-", 1)[1])
+        for number in existing_numbers
+        if _PO_NUMBER_RE.match(number)
+    ]
+    if not suffixes:
+        return "PO-0001"
+    return f"PO-{max(suffixes) + 1:04d}"
+
+
+async def generate_po_number(db: AsyncSession) -> str:
+    """
+    Generate the next purchase-order number in the PO-#### series (Task 15).
+
+    Finds the current highest *numeric* suffix among strictly-numeric PO-series
+    numbers (matching ``^PO-[0-9]+$``) by casting the digits after "PO-" to an
+    integer and ordering numerically, then delegates the increment to the pure
+    _next_po_number helper. Returns "PO-0001" when no PO-series numbers exist.
+
+    The regex filter MUST precede the cast: a bare cast over ``LIKE 'PO-%'`` would
+    throw on any non-numeric number. ``func.substring(po_number, 4)`` skips the
+    3-character "PO-" prefix (Postgres substring is 1-indexed, so position 4 is
+    the first digit).
+
+    The DB unique constraint on syerp_purchase_order.po_number is the authoritative
+    guard; this function is a best-effort generator. The caller must handle
+    IntegrityError on collision (RESEARCH.md Pattern 3).
+    """
+    from app.modules.syerp.models import PurchaseOrder
+
+    result = await db.execute(
+        select(PurchaseOrder.po_number)
+        .where(PurchaseOrder.po_number.op("~")(r"^PO-[0-9]+$"))
+        .order_by(cast(func.substring(PurchaseOrder.po_number, 4), Integer).desc())
+        .limit(1)
+    )
+    max_number: str | None = result.scalar()
+
+    return _next_po_number([max_number] if max_number is not None else [])
+
+
+# ---------------------------------------------------------------------------
+# Purchase-order CRUD (Phase 8, Task 15)
+# ---------------------------------------------------------------------------
+#
+# PORead nests its lines (assembled here, not via a lazy ORM relationship, to
+# avoid MissingGreenlet in the async context — RESEARCH.md Pitfall 2). Line
+# mutations (add/edit/remove) are permitted ONLY while status == 'draft'
+# (AC11-1); the _require_draft guard rejects otherwise with 422 (matching the
+# inventory guards). create_po requires a vendor_id whose Partner has
+# is_vendor==True (AC11-3).
+
+
+def _po_to_read(po: "PurchaseOrder", lines: "Iterable[PurchaseOrderLine]") -> "PORead":
+    """Assemble a PORead schema from a PurchaseOrder ORM row and its lines."""
+    from app.modules.syerp.schemas import POLineRead, PORead
+
+    return PORead(
+        id=po.id,
+        po_number=po.po_number,
+        vendor_id=po.vendor_id,
+        status=po.status,
+        notes=po.notes,
+        approved_at=po.approved_at,
+        approved_by=po.approved_by,
+        created_at=po.created_at,
+        updated_at=po.updated_at,
+        lines=[POLineRead.model_validate(line) for line in lines],
+    )
+
+
+async def _load_po_lines(db: AsyncSession, po_id: str) -> "list[PurchaseOrderLine]":
+    """Return a PO's lines ordered by line_no (helper for PORead assembly)."""
+    from app.modules.syerp.models import PurchaseOrderLine
+
+    result = await db.execute(
+        select(PurchaseOrderLine)
+        .where(PurchaseOrderLine.po_id == po_id)
+        .order_by(PurchaseOrderLine.line_no)
+    )
+    return list(result.scalars().all())
+
+
+async def _get_po_row(db: AsyncSession, po_id: str) -> "PurchaseOrder":
+    """
+    Load a PurchaseOrder ORM row by id (internal helper).
+
+    Raises HTTP 404 if no PO with the given id exists (mirrors get_item).
+    """
+    from app.modules.syerp.models import PurchaseOrder
+
+    result = await db.execute(select(PurchaseOrder).where(PurchaseOrder.id == po_id))
+    po = result.scalars().first()
+
+    if po is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Purchase order {po_id} not found",
+        )
+
+    return po
+
+
+def _require_draft(po: "PurchaseOrder") -> None:
+    """
+    Guard: reject a line mutation when the PO is not in Draft (AC11-1).
+
+    Raises 422 (matching the inventory guards) if po.status != 'draft'. Line
+    add/edit/remove are only valid while the order is still a draft; once it is
+    approved or receiving has begun the lines are frozen.
+    """
+    if po.status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Purchase order lines can only be modified while the PO is in "
+                f"Draft (current status: {po.status})."
+            ),
+        )
+
+
+async def create_po(db: AsyncSession, data: "POCreate") -> "PORead":
+    """
+    Insert a new purchase-order header (Draft, empty of lines).
+
+    Requires data.vendor_id to reference an existing Partner with is_vendor==True;
+    a missing partner or a non-vendor partner is rejected with 422 (AC11-3),
+    matching the inventory guards. Auto-generates a numeric-safe PO-#### number
+    (generate_po_number). On a unique-constraint IntegrityError (auto-generated
+    number race) retries ONCE with a fresh number (RESEARCH.md Pattern 3) — the
+    number is always server-generated, so there is no user-supplied 409 branch.
+
+    Returns the created order as a PORead (with an empty lines list). The router
+    writes the po.created audit row.
+    """
+    import sqlalchemy.exc
+
+    from app.modules.syerp.models import Partner, PurchaseOrder
+
+    # Vendor gate (AC11-3): the partner must exist AND be a vendor.
+    result = await db.execute(select(Partner).where(Partner.id == data.vendor_id))
+    vendor = result.scalars().first()
+    if vendor is None or not vendor.is_vendor:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Partner {data.vendor_id} is not a vendor (is_vendor must be True).",
+        )
+
+    po_number = await generate_po_number(db)
+    po = PurchaseOrder(po_number=po_number, vendor_id=data.vendor_id, notes=data.notes)
+    db.add(po)
+
+    try:
+        await db.flush()
+    except sqlalchemy.exc.IntegrityError:
+        await db.rollback()
+        # Auto-generated number collision — retry once with a fresh number.
+        po_number = await generate_po_number(db)
+        po = PurchaseOrder(po_number=po_number, vendor_id=data.vendor_id, notes=data.notes)
+        db.add(po)
+        await db.flush()
+
+    await db.commit()
+    await db.refresh(po)
+    return _po_to_read(po, [])
+
+
+async def list_pos(db: AsyncSession, vendor_id: str | None = None) -> "list[PORead]":
+    """
+    Return purchase orders (newest-first), optionally filtered by vendor.
+
+    Args:
+        vendor_id: when supplied, restricts the list to POs for that vendor.
+
+    Each PO is returned as a PORead with its lines nested. Lines are fetched in a
+    single query over all returned PO ids and grouped in memory (no per-PO N+1).
+    Ordered by created_at DESC, then po_number DESC for a stable tie-break.
+    """
+    from app.modules.syerp.models import PurchaseOrder, PurchaseOrderLine
+
+    stmt = select(PurchaseOrder)
+    if vendor_id is not None:
+        stmt = stmt.where(PurchaseOrder.vendor_id == vendor_id)
+    stmt = stmt.order_by(PurchaseOrder.created_at.desc(), PurchaseOrder.po_number.desc())
+
+    result = await db.execute(stmt)
+    pos = list(result.scalars().all())
+
+    if not pos:
+        return []
+
+    po_ids = [po.id for po in pos]
+    lines_result = await db.execute(
+        select(PurchaseOrderLine)
+        .where(PurchaseOrderLine.po_id.in_(po_ids))
+        .order_by(PurchaseOrderLine.line_no)
+    )
+    lines_by_po: dict[str, list["PurchaseOrderLine"]] = {po_id: [] for po_id in po_ids}
+    for line in lines_result.scalars().all():
+        lines_by_po[line.po_id].append(line)
+
+    return [_po_to_read(po, lines_by_po[po.id]) for po in pos]
+
+
+async def get_po(db: AsyncSession, po_id: str) -> "PORead":
+    """
+    Load a purchase order (header + nested lines) by id.
+
+    Raises HTTP 404 if no PO with the given id exists (mirrors get_item).
+    """
+    po = await _get_po_row(db, po_id)
+    lines = await _load_po_lines(db, po_id)
+    return _po_to_read(po, lines)
+
+
+async def _next_line_no(db: AsyncSession, po_id: str) -> int:
+    """Return the next sequential line_no for a PO (max(line_no)+1, else 1)."""
+    from app.modules.syerp.models import PurchaseOrderLine
+
+    result = await db.execute(
+        select(func.max(PurchaseOrderLine.line_no)).where(PurchaseOrderLine.po_id == po_id)
+    )
+    current_max: int | None = result.scalar()
+    return (current_max or 0) + 1
+
+
+async def add_line(db: AsyncSession, po_id: str, data: "POLineCreate") -> "POLineRead":
+    """
+    Append a line to a purchase order (Draft-only, AC11-1).
+
+    Rejects with 404 if the PO or the referenced item does not exist, and with
+    422 if the PO is not in Draft (line mutations are frozen after Draft). The
+    new line's line_no is auto-assigned sequentially (max(line_no)+1). qty_received
+    starts at 0 (only receiving moves it, Decision 5).
+
+    Returns the created line as a POLineRead. The router writes the po.line_added
+    audit row.
+    """
+    from app.modules.syerp.models import PurchaseOrderLine
+    from app.modules.syerp.schemas import POLineRead
+
+    po = await _get_po_row(db, po_id)
+    _require_draft(po)
+    # 404 if the item does not exist (mirrors the receipt/adjustment guards).
+    await get_item(db, data.item_id)
+
+    line = PurchaseOrderLine(
+        po_id=po_id,
+        item_id=data.item_id,
+        line_no=await _next_line_no(db, po_id),
+        qty_ordered=data.qty_ordered,
+        unit_cost=data.unit_cost,
+        need_by_date=data.need_by_date,
+    )
+    db.add(line)
+
+    await db.commit()
+    await db.refresh(line)
+    return POLineRead.model_validate(line)
+
+
+async def _get_line_row(
+    db: AsyncSession, po_id: str, line_id: str
+) -> "PurchaseOrderLine":
+    """
+    Load a PO line by id, scoped to its parent PO (internal helper).
+
+    Raises HTTP 404 if no line with the given id exists on that PO.
+    """
+    from app.modules.syerp.models import PurchaseOrderLine
+
+    result = await db.execute(
+        select(PurchaseOrderLine).where(
+            PurchaseOrderLine.id == line_id,
+            PurchaseOrderLine.po_id == po_id,
+        )
+    )
+    line = result.scalars().first()
+
+    if line is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Purchase order line {line_id} not found on PO {po_id}",
+        )
+
+    return line
+
+
+async def update_line(
+    db: AsyncSession, po_id: str, line_id: str, data: "POLineUpdate"
+) -> "POLineRead":
+    """
+    Apply a partial update to a PO line (PATCH semantics, Draft-only, AC11-1).
+
+    Only provided (non-None) fields are written. Rejects with 404 if the PO or the
+    line does not exist, and with 422 if the PO is not in Draft. If item_id is
+    changed, the new item must exist (404 otherwise). qty_received / line_no are
+    not editable here.
+
+    Returns the updated line as a POLineRead. The router writes the po.line_updated
+    audit row.
+    """
+    from app.modules.syerp.schemas import POLineRead
+
+    po = await _get_po_row(db, po_id)
+    _require_draft(po)
+    line = await _get_line_row(db, po_id, line_id)
+
+    update_data = data.model_dump(exclude_unset=True)
+    if update_data.get("item_id") is not None:
+        # 404 if the reassigned item does not exist.
+        await get_item(db, update_data["item_id"])
+
+    for field, value in update_data.items():
+        setattr(line, field, value)
+
+    await db.commit()
+    await db.refresh(line)
+    return POLineRead.model_validate(line)
+
+
+async def remove_line(db: AsyncSession, po_id: str, line_id: str) -> None:
+    """
+    Remove a line from a purchase order (Draft-only, AC11-1).
+
+    Rejects with 404 if the PO or the line does not exist, and with 422 if the PO
+    is not in Draft. The router writes the po.line_removed audit row (with the
+    line_id from the path).
+    """
+    po = await _get_po_row(db, po_id)
+    _require_draft(po)
+    line = await _get_line_row(db, po_id, line_id)
+
+    await db.delete(line)
+    await db.commit()
