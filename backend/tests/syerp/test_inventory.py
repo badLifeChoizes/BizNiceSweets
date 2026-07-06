@@ -13,9 +13,11 @@ The boundary-correctness guarantee — that "ITEM-9" succeeds to "ITEM-0010" and
 never to a smaller/lexicographic value — lives in the pure _next_item_code
 helper, which these tests cover without a database.
 """
+from decimal import Decimal
+
 import httpx
 
-from app.modules.syerp.service import _next_item_code
+from app.modules.syerp.service import _derive_onhand, _next_item_code
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +73,77 @@ def test_generator_ignores_non_numeric_and_foreign_codes() -> None:
 def test_generator_ignores_non_numeric_only_returns_first() -> None:
     """When no strictly-numeric ITEM- code exists, generation starts at ITEM-0001."""
     assert _next_item_code(["ITEM-A1", "ITEM-XYZ", "P-0002"]) == "ITEM-0001"
+
+
+# ---------------------------------------------------------------------------
+# _derive_onhand — pure, no-DB valuation core (Task 4)
+# ---------------------------------------------------------------------------
+#
+# On-hand is derived from SUM(txn.quantity) per location (AC10-3); the pure core
+# here filters zero-net locations, sums the grand total, and values it against
+# moving_avg_cost — all in Decimal, so these assert exact values with no float
+# drift. The live SUM/group_by query is exercised by verify_inventory.py (Task 8).
+
+
+def test_derive_onhand_sums_per_location_and_values() -> None:
+    """Grand total is the sum of per-location nets; value = total * avg cost."""
+    rows = [
+        (1, "Main", Decimal("10")),
+        (2, "Overflow", Decimal("5")),
+    ]
+    nonzero, total_qty, value = _derive_onhand(rows, Decimal("2.5"))
+
+    assert nonzero == rows
+    assert total_qty == Decimal("15")
+    # 15 * 2.5 = 37.5 exactly (Decimal, no float drift)
+    assert value == Decimal("37.5")
+
+
+def test_derive_onhand_omits_zero_net_locations() -> None:
+    """A location whose signed txns net to exactly zero is omitted (documented policy)."""
+    rows = [
+        (1, "Main", Decimal("8")),
+        (2, "Returns", Decimal("0")),  # e.g. +3 then -3
+    ]
+    nonzero, total_qty, value = _derive_onhand(rows, Decimal("1"))
+
+    assert nonzero == [(1, "Main", Decimal("8"))]
+    assert total_qty == Decimal("8")
+    assert value == Decimal("8")
+
+
+def test_derive_onhand_handles_negative_net() -> None:
+    """Signed sums can be negative (over-issue); value follows the signed total."""
+    rows = [(1, "Main", Decimal("-4"))]
+    nonzero, total_qty, value = _derive_onhand(rows, Decimal("3"))
+
+    assert nonzero == [(1, "Main", Decimal("-4"))]
+    assert total_qty == Decimal("-4")
+    assert value == Decimal("-12")
+
+
+def test_derive_onhand_empty_returns_zero_decimals() -> None:
+    """No movements → empty rows, and total/value are Decimal('0'), never int 0."""
+    nonzero, total_qty, value = _derive_onhand([], Decimal("9.999999"))
+
+    assert nonzero == []
+    assert total_qty == Decimal("0")
+    assert isinstance(total_qty, Decimal)
+    assert value == Decimal("0")
+    assert isinstance(value, Decimal)
+
+
+def test_derive_onhand_no_float_drift_on_fractional_sums() -> None:
+    """Summing 0.1 three times yields exactly 0.3 (Decimal), not 0.30000000000000004."""
+    rows = [
+        (1, "A", Decimal("0.1")),
+        (2, "B", Decimal("0.1")),
+        (3, "C", Decimal("0.1")),
+    ]
+    _, total_qty, value = _derive_onhand(rows, Decimal("1.5"))
+
+    assert total_qty == Decimal("0.3")
+    assert value == Decimal("0.45")
 
 
 # ---------------------------------------------------------------------------

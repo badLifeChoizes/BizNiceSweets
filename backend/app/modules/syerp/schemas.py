@@ -279,6 +279,67 @@ class StockLocationRead(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# On-hand & valuation schemas (Phase 8, Task 4)
+# ---------------------------------------------------------------------------
+
+
+class OnHandByLocation(BaseModel):
+    """
+    One row of derived on-hand stock for an item at a single location.
+
+    `quantity` is the signed SUM(InventoryTxn.quantity) for the item at this
+    location (AC10-3) — a derived aggregate, never a stored column. It is a
+    fixed-point Decimal (Numeric(18,6)), never float.
+    """
+
+    location_id: int
+    location_name: str
+    quantity: Decimal
+
+
+class ItemOnHandRead(BaseModel):
+    """
+    Derived on-hand + valuation view for a single inventory item.
+
+    `locations` lists only locations with a nonzero net on-hand (zero-net
+    locations are omitted — see get_item_onhand docstring). `total_quantity`
+    is the grand total across those locations; `onhand_value` is
+    `total_quantity * moving_avg_cost` (AC10-5), all computed in Decimal.
+    """
+
+    item_id: str
+    moving_avg_cost: Decimal
+    locations: list[OnHandByLocation]
+    total_quantity: Decimal
+    onhand_value: Decimal
+
+
+# ---------------------------------------------------------------------------
+# Inventory transaction (ledger) schema (Phase 8, Task 11 read half)
+# ---------------------------------------------------------------------------
+
+
+class TransactionRead(BaseModel):
+    """
+    One immutable inventory-ledger row returned to API callers (AC10-4).
+
+    Serialized from an InventoryTxn joined to its StockLocation for the
+    human-readable `location_name`. Quantities/costs are fixed-point Decimals,
+    never float. This is read-only history — the ledger is append-only.
+    """
+
+    id: str
+    item_id: str
+    location_id: int
+    location_name: str
+    txn_type: str
+    quantity: Decimal
+    unit_cost: Optional[Decimal] = None
+    reason: Optional[str] = None
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
 # GL Account schema
 # ---------------------------------------------------------------------------
 

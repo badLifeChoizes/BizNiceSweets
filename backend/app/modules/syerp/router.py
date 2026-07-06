@@ -13,6 +13,8 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   POST   /syerp/inventory/items            — create item (syerp:write)
   GET    /syerp/inventory/items/{item_id}  — get item (syerp:read)
   PATCH  /syerp/inventory/items/{item_id}  — update/archive item (syerp:write)
+  GET    /syerp/inventory/items/{item_id}/onhand        — derived on-hand + value (syerp:read)
+  GET    /syerp/inventory/items/{item_id}/transactions  — ledger history (syerp:read)
   GET    /syerp/inventory/locations              — list locations (syerp:read)
   POST   /syerp/inventory/locations              — create location (syerp:write)
   GET    /syerp/inventory/locations/{location_id}  — get location (syerp:read)
@@ -57,12 +59,14 @@ from app.modules.syerp.schemas import (
     InventoryItemCreate,
     InventoryItemRead,
     InventoryItemUpdate,
+    ItemOnHandRead,
     PartnerCreate,
     PartnerRead,
     PartnerUpdate,
     StockLocationCreate,
     StockLocationRead,
     StockLocationUpdate,
+    TransactionRead,
 )
 from app.modules.syerp.service import (
     archive_partner,
@@ -70,9 +74,11 @@ from app.modules.syerp.service import (
     create_location,
     create_partner,
     get_item,
+    get_item_onhand,
     get_location,
     get_partner,
     list_gl_accounts,
+    list_item_transactions,
     list_items,
     list_locations,
     list_partners,
@@ -289,6 +295,41 @@ async def update_item_endpoint(
         detail=f"Inventory item {audit_action.split('.')[1]}: {item.code}",
     )
     return item
+
+
+@router.get("/inventory/items/{item_id}/onhand", response_model=ItemOnHandRead)
+async def get_item_onhand_endpoint(
+    item_id: str,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> ItemOnHandRead:
+    """
+    Return derived on-hand-by-location + valuation for an inventory item.
+
+    On-hand is a derived aggregate — SUM(InventoryTxn.quantity) grouped by
+    location (AC10-3), never a stored quantity column. Value is
+    total_quantity * moving_avg_cost (AC10-5). Zero-net locations are omitted.
+
+    Read-only: no audit row. Requires syerp:read. Returns 404 if the item does
+    not exist.
+    """
+    return await get_item_onhand(db, item_id)
+
+
+@router.get("/inventory/items/{item_id}/transactions", response_model=list[TransactionRead])
+async def list_item_transactions_endpoint(
+    item_id: str,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[TransactionRead]:
+    """
+    Return an item's inventory-ledger rows (append-only history, AC10-4).
+
+    Newest-first (created_at DESC). Each row includes its location name via a
+    join to StockLocation. Read-only immutable history: no audit row.
+    Requires syerp:read. Returns 404 if the item does not exist.
+    """
+    return await list_item_transactions(db, item_id)
 
 
 # ---------------------------------------------------------------------------

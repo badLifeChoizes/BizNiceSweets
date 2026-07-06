@@ -25,6 +25,7 @@ archived vendors (Pitfall 5 from RESEARCH.md).
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
@@ -38,10 +39,12 @@ if TYPE_CHECKING:
     from app.modules.syerp.schemas import (
         InventoryItemCreate,
         InventoryItemUpdate,
+        ItemOnHandRead,
         PartnerCreate,
         PartnerUpdate,
         StockLocationCreate,
         StockLocationUpdate,
+        TransactionRead,
     )
 
 
@@ -607,3 +610,131 @@ async def update_item(
     await db.commit()
     await db.refresh(item)
     return item
+
+
+# ---------------------------------------------------------------------------
+# On-hand & valuation reads (Phase 8, Task 4)
+# ---------------------------------------------------------------------------
+#
+# On-hand is a DERIVED aggregate (AC10-3): it is ALWAYS computed as the signed
+# SUM(InventoryTxn.quantity) grouped by location — there is no stored quantity
+# column to read. Value uses the item's moving_avg_cost (AC10-5). All arithmetic
+# is Decimal (fixed-point), never float (D-11).
+#
+# Zero-net policy (documented choice): a location whose signed transactions net
+# to exactly zero is OMITTED from the per-location rows and does not contribute
+# to the grand total. Only locations currently holding stock (nonzero net) are
+# returned. This keeps the on-hand view a picture of *where stock actually is*.
+
+
+def _derive_onhand(
+    location_rows: "Iterable[tuple[int, str, Decimal]]",
+    moving_avg_cost: Decimal,
+) -> "tuple[list[tuple[int, str, Decimal]], Decimal, Decimal]":
+    """
+    Pure valuation core for on-hand derivation (no DB — unit-testable).
+
+    Given per-location (location_id, location_name, net_quantity) rows and an
+    item's moving-average unit cost, returns:
+      - the subset of rows with a NONZERO net quantity (zero-net locations
+        omitted — documented policy above),
+      - the grand-total quantity summed across those nonzero rows,
+      - the on-hand value = grand_total_qty * moving_avg_cost.
+
+    All sums/products are Decimal so there is no float drift: e.g. summing
+    Decimal("0.1") three times yields exactly Decimal("0.3"). The grand total
+    seeds from Decimal("0") so an item with no movements returns Decimal("0"),
+    not an int.
+    """
+    nonzero = [(lid, name, qty) for lid, name, qty in location_rows if qty != 0]
+    total_qty = sum((qty for _, _, qty in nonzero), Decimal("0"))
+    value = total_qty * moving_avg_cost
+    return nonzero, total_qty, value
+
+
+async def get_item_onhand(db: AsyncSession, item_id: str) -> "ItemOnHandRead":
+    """
+    Return the derived on-hand-by-location + valuation for an inventory item.
+
+    On-hand is derived, never stored (AC10-3):
+      select(txn.location_id, StockLocation.name, func.sum(txn.quantity))
+        .join(StockLocation).where(item_id==).group_by(location_id, name)
+
+    The per-location rows carry the signed SUM of every InventoryTxn.quantity
+    for the item at that location (positive receipts + negative issues). Value
+    is grand_total_qty * item.moving_avg_cost (AC10-5), computed in Decimal.
+
+    Zero-net locations are omitted (see module note above). Raises HTTP 404 if
+    the item does not exist (mirrors get_item).
+    """
+    from app.modules.syerp.models import InventoryTxn, StockLocation
+    from app.modules.syerp.schemas import ItemOnHandRead, OnHandByLocation
+
+    item = await get_item(db, item_id)
+
+    stmt = (
+        select(
+            InventoryTxn.location_id,
+            StockLocation.name,
+            func.sum(InventoryTxn.quantity),
+        )
+        .join(StockLocation, StockLocation.id == InventoryTxn.location_id)
+        .where(InventoryTxn.item_id == item_id)
+        .group_by(InventoryTxn.location_id, StockLocation.name)
+        .order_by(StockLocation.name)
+    )
+    result = await db.execute(stmt)
+    location_rows = [(lid, name, qty) for lid, name, qty in result.all()]
+
+    nonzero, total_qty, value = _derive_onhand(location_rows, item.moving_avg_cost)
+
+    return ItemOnHandRead(
+        item_id=item.id,
+        moving_avg_cost=item.moving_avg_cost,
+        locations=[
+            OnHandByLocation(location_id=lid, location_name=name, quantity=qty)
+            for lid, name, qty in nonzero
+        ],
+        total_quantity=total_qty,
+        onhand_value=value,
+    )
+
+
+async def list_item_transactions(db: AsyncSession, item_id: str) -> "list[TransactionRead]":
+    """
+    Return an item's inventory-ledger rows, newest-first (Task 11 read half).
+
+    Thin read-only projection over the append-only InventoryTxn ledger (AC10-4):
+    each row is joined to its StockLocation for the human-readable location name.
+    Ordered by created_at DESC, then id DESC for a stable tie-break (a transfer
+    posts two rows sharing a timestamp).
+
+    Raises HTTP 404 if the item does not exist (mirrors get_item).
+    """
+    from app.modules.syerp.models import InventoryTxn, StockLocation
+    from app.modules.syerp.schemas import TransactionRead
+
+    await get_item(db, item_id)
+
+    stmt = (
+        select(InventoryTxn, StockLocation.name)
+        .join(StockLocation, StockLocation.id == InventoryTxn.location_id)
+        .where(InventoryTxn.item_id == item_id)
+        .order_by(InventoryTxn.created_at.desc(), InventoryTxn.id.desc())
+    )
+    result = await db.execute(stmt)
+
+    return [
+        TransactionRead(
+            id=txn.id,
+            item_id=txn.item_id,
+            location_id=txn.location_id,
+            location_name=name,
+            txn_type=txn.txn_type,
+            quantity=txn.quantity,
+            unit_cost=txn.unit_cost,
+            reason=txn.reason,
+            created_at=txn.created_at,
+        )
+        for txn, name in result.all()
+    ]
