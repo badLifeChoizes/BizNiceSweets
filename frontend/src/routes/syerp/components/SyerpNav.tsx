@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 const TABS = [
   { to: '/syerp/vendors', label: 'Vendors' },
   { to: '/syerp/customers', label: 'Customers' },
+  { to: '/syerp/inventory/items', label: 'Inventory Items' },
   { to: '/syerp/gl', label: 'Chart of Accounts' },
 ]
 

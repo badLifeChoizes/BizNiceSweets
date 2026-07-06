@@ -13,6 +13,7 @@ import { Home } from '@/routes/Home'
 // SYERP routes (Phase 4)
 import { Vendors } from '@/routes/syerp/Vendors'
 import { Customers } from '@/routes/syerp/Customers'
+import { InventoryItems } from '@/routes/syerp/InventoryItems'
 import { GLAccounts } from '@/routes/syerp/GLAccounts'
 
 // PLUM routes (Phase 5 + 6)
@@ -37,6 +38,7 @@ export function App() {
         <Route path="/syerp" element={<Navigate to="/syerp/vendors" replace />} />
         <Route path="/syerp/vendors" element={<Vendors />} />
         <Route path="/syerp/customers" element={<Customers />} />
+        <Route path="/syerp/inventory/items" element={<InventoryItems />} />
         <Route path="/syerp/gl" element={<GLAccounts />} />
 
         {/* PLUM module routes — Sidebar nav lands on /plum → redirect to parts list */}
