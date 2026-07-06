@@ -16,6 +16,7 @@ import { Customers } from '@/routes/syerp/Customers'
 import { InventoryItems } from '@/routes/syerp/InventoryItems'
 import { InventoryItemDetail } from '@/routes/syerp/InventoryItemDetail'
 import { StockLocations } from '@/routes/syerp/StockLocations'
+import { PurchaseOrders } from '@/routes/syerp/PurchaseOrders'
 import { GLAccounts } from '@/routes/syerp/GLAccounts'
 
 // PLUM routes (Phase 5 + 6)
@@ -43,6 +44,7 @@ export function App() {
         <Route path="/syerp/inventory/items" element={<InventoryItems />} />
         <Route path="/syerp/inventory/items/:id" element={<InventoryItemDetail />} />
         <Route path="/syerp/inventory/locations" element={<StockLocations />} />
+        <Route path="/syerp/purchasing/orders" element={<PurchaseOrders />} />
         <Route path="/syerp/gl" element={<GLAccounts />} />
 
         {/* PLUM module routes — Sidebar nav lands on /plum → redirect to parts list */}

@@ -17,6 +17,7 @@ const TABS = [
   { to: '/syerp/customers', label: 'Customers' },
   { to: '/syerp/inventory/items', label: 'Inventory Items' },
   { to: '/syerp/inventory/locations', label: 'Stock Locations' },
+  { to: '/syerp/purchasing/orders', label: 'Purchase Orders' },
   { to: '/syerp/gl', label: 'Chart of Accounts' },
 ]
 
