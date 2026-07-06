@@ -497,6 +497,11 @@ class PORead(BaseModel):
     avoid MissingGreenlet in the async context (RESEARCH.md Pitfall 2). `status`
     walks draft | approved | partially_received | received | closed;
     approved_at/approved_by are NULL until the PO is approved.
+
+    `total` and the *_qty roll-ups are computed in the service from the loaded
+    lines (no extra query) so vendor purchase-history lists (AC11-3) and the
+    status table (AC11-5) get ordered value + ordered/received/outstanding
+    quantities without an N+1. Decimals are exact (never float — D-11).
     """
 
     id: str
@@ -508,6 +513,13 @@ class PORead(BaseModel):
     approved_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # Per-PO roll-ups computed in the service from the loaded lines (no N+1):
+    # `total` = SUM(qty_ordered * unit_cost) — the PO's ordered value (AC11-3);
+    # the *_qty fields drive the vendor status table (AC11-5). All Decimal, exact.
+    total: Decimal = Decimal("0")
+    total_ordered_qty: Decimal = Decimal("0")
+    total_received_qty: Decimal = Decimal("0")
+    outstanding_qty: Decimal = Decimal("0")
     lines: list[POLineRead] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}

@@ -19,6 +19,7 @@ from app.modules.syerp.service import (
     PO_TRANSITIONS,
     _is_over_receipt,
     _next_po_number,
+    _po_aggregates,
     _po_rollup_status,
 )
 
@@ -209,3 +210,46 @@ def test_rollup_received_on_single_fully_received_line() -> None:
 def test_rollup_received_treats_over_as_full() -> None:
     """qty_received >= qty_ordered counts as full (>= not ==), so it is `received`."""
     assert _po_rollup_status([(Decimal("10"), Decimal("12"))]) == "received"
+
+
+# ---------------------------------------------------------------------------
+# _po_aggregates — pure, no-DB per-PO roll-ups (Phase 8, Task 18, AC11-3/5)
+# ---------------------------------------------------------------------------
+#
+# Given (qty_ordered, unit_cost, qty_received) for every line, returns the PO's
+# total value = SUM(qty_ordered * unit_cost) plus ordered/received/outstanding
+# quantities. All arithmetic is Decimal so the sums are exact — no float drift.
+
+
+def test_aggregates_multi_line_totals() -> None:
+    """total = SUM(qty*cost); quantities sum; outstanding = ordered − received."""
+    lines = [
+        (Decimal("10"), Decimal("2.50"), Decimal("4")),
+        (Decimal("5"), Decimal("3.00"), Decimal("5")),
+    ]
+    agg = _po_aggregates(lines)
+    assert agg.total == Decimal("40.00")  # 10*2.50 + 5*3.00
+    assert agg.total_ordered_qty == Decimal("15")
+    assert agg.total_received_qty == Decimal("9")
+    assert agg.outstanding_qty == Decimal("6")
+
+
+def test_aggregates_empty_po_is_all_zero() -> None:
+    """A PO with no lines rolls up to zero across every field."""
+    agg = _po_aggregates([])
+    assert agg.total == Decimal("0")
+    assert agg.total_ordered_qty == Decimal("0")
+    assert agg.total_received_qty == Decimal("0")
+    assert agg.outstanding_qty == Decimal("0")
+
+
+def test_aggregates_are_exact_in_decimal() -> None:
+    """Fractional qty/cost sum exactly in Decimal (0.1 + 0.2 has no float drift)."""
+    lines = [
+        (Decimal("0.1"), Decimal("1"), Decimal("0.1")),
+        (Decimal("0.2"), Decimal("1"), Decimal("0")),
+    ]
+    agg = _po_aggregates(lines)
+    assert agg.total == Decimal("0.3")
+    assert agg.total_ordered_qty == Decimal("0.3")
+    assert agg.outstanding_qty == Decimal("0.2")

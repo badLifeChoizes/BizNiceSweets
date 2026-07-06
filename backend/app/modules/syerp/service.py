@@ -27,7 +27,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from fastapi import HTTPException, status
 from sqlalchemy import Integer, cast, func, or_, select
@@ -1243,10 +1243,51 @@ async def generate_po_number(db: AsyncSession) -> str:
 # is_vendor==True (AC11-3).
 
 
+class _POAggregates(NamedTuple):
+    """Per-PO Decimal roll-ups derived from its lines (AC11-3 / AC11-5)."""
+
+    total: Decimal
+    total_ordered_qty: Decimal
+    total_received_qty: Decimal
+    outstanding_qty: Decimal
+
+
+def _po_aggregates(
+    lines: "Iterable[tuple[Decimal, Decimal, Decimal]]",
+) -> _POAggregates:
+    """
+    Pure per-PO aggregate helper (no DB — unit-testable).
+
+    Given (qty_ordered, unit_cost, qty_received) for EVERY line of a PO, returns:
+      - `total` = SUM(qty_ordered * unit_cost) — the PO's ordered value (AC11-3);
+      - `total_ordered_qty` / `total_received_qty` = SUM of each quantity;
+      - `outstanding_qty` = ordered − received.
+    All arithmetic is Decimal so the sums are exact (no float drift, no rounding);
+    these numbers feed the vendor status table (AC11-5).
+    """
+    total = Decimal("0")
+    total_ordered = Decimal("0")
+    total_received = Decimal("0")
+    for qty_ordered, unit_cost, qty_received in lines:
+        total += qty_ordered * unit_cost
+        total_ordered += qty_ordered
+        total_received += qty_received
+    return _POAggregates(
+        total=total,
+        total_ordered_qty=total_ordered,
+        total_received_qty=total_received,
+        outstanding_qty=total_ordered - total_received,
+    )
+
+
 def _po_to_read(po: "PurchaseOrder", lines: "Iterable[PurchaseOrderLine]") -> "PORead":
     """Assemble a PORead schema from a PurchaseOrder ORM row and its lines."""
     from app.modules.syerp.schemas import POLineRead, PORead
 
+    lines = list(lines)
+    agg = _po_aggregates(
+        (line.qty_ordered, line.unit_cost, line.qty_received) for line in lines
+    )
     return PORead(
         id=po.id,
         po_number=po.po_number,
@@ -1257,6 +1298,10 @@ def _po_to_read(po: "PurchaseOrder", lines: "Iterable[PurchaseOrderLine]") -> "P
         approved_by=po.approved_by,
         created_at=po.created_at,
         updated_at=po.updated_at,
+        total=agg.total,
+        total_ordered_qty=agg.total_ordered_qty,
+        total_received_qty=agg.total_received_qty,
+        outstanding_qty=agg.outstanding_qty,
         lines=[POLineRead.model_validate(line) for line in lines],
     )
 
