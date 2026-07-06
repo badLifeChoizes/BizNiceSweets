@@ -17,6 +17,7 @@ Pitfall 8 — an "orphan" partner has no useful meaning in the domain).
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -161,6 +162,69 @@ class PartnerRead(BaseModel):
     notes: Optional[str] = None
 
     # Timestamps
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Inventory item schemas (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+class InventoryItemCreate(BaseModel):
+    """
+    Inventory item creation payload (POST /syerp/inventory/items).
+
+    `code` is optional — the server auto-generates a numeric-safe ITEM-####
+    series code if not supplied (Decision 2). `plum_part_id` is optional: an
+    item may be a pure SYERP stock item unlinked to any PLUM part (D-P8-2).
+
+    `moving_avg_cost` is intentionally absent — a new item starts at the model
+    default of 0 and is only ever recomputed by costed receipts (Task 5),
+    never set directly through the item API (D-11).
+    """
+
+    name: str = Field(..., max_length=255)
+    code: Optional[str] = Field(None, max_length=20)
+    unit_of_measure: str = Field(..., max_length=50)
+    plum_part_id: Optional[str] = Field(None, max_length=36)
+
+
+class InventoryItemUpdate(BaseModel):
+    """
+    Inventory item update payload (PATCH /syerp/inventory/items/{id}).
+
+    All fields Optional — PATCH semantics. Only provided (non-None) fields are
+    applied. `active=False` archives the item (soft-delete), dropping it from
+    the default list. `moving_avg_cost` is deliberately not updatable here —
+    it is owned by the receipt costing path (Task 5), not the item API (D-11).
+    """
+
+    name: Optional[str] = Field(None, max_length=255)
+    code: Optional[str] = Field(None, max_length=20)
+    unit_of_measure: Optional[str] = Field(None, max_length=50)
+    plum_part_id: Optional[str] = Field(None, max_length=36)
+    active: Optional[bool] = None
+
+
+class InventoryItemRead(BaseModel):
+    """
+    Inventory item data returned to API callers.
+
+    Serialized from an InventoryItem ORM instance via from_attributes=True.
+    `moving_avg_cost` is a fixed-point Decimal (Numeric(18,6)) — never float.
+    """
+
+    id: str
+    code: str
+    name: str
+    unit_of_measure: str
+    plum_part_id: Optional[str] = None
+    moving_avg_cost: Decimal
+    active: bool
+
     created_at: datetime
     updated_at: datetime
 

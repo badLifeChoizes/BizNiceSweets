@@ -2,12 +2,17 @@
 SYERP API router.
 
 Phase 4: Partner CRUD + GL accounts browse endpoints.
+Phase 8: Inventory item CRUD endpoints (SYERP inventory & purchasing).
 
 Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   GET    /syerp/partners               — list/search partners (syerp:read)
   POST   /syerp/partners               — create partner (syerp:write)
   GET    /syerp/partners/{partner_id}  — get partner (syerp:read)
   PATCH  /syerp/partners/{partner_id}  — update/archive partner (syerp:write)
+  GET    /syerp/inventory/items            — list/search items (syerp:read)
+  POST   /syerp/inventory/items            — create item (syerp:write)
+  GET    /syerp/inventory/items/{item_id}  — get item (syerp:read)
+  PATCH  /syerp/inventory/items/{item_id}  — update/archive item (syerp:write)
   GET    /syerp/gl/accounts            — list GL accounts (syerp:read)
 
 mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
@@ -23,6 +28,9 @@ Audit logging (D-10, T-04-08):
   - partner.created: on POST /partners success.
   - partner.updated: on PATCH when active does not change to False.
   - partner.archived: on PATCH when patch sets active=False.
+  - item.created: on POST /inventory/items success.
+  - item.updated: on PATCH when active does not change to False.
+  - item.archived: on PATCH when patch sets active=False.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -37,13 +45,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.modules.auth.dependencies import require_permission
 from app.modules.auth.service import write_audit
-from app.modules.syerp.schemas import GLAccountRead, PartnerCreate, PartnerRead, PartnerUpdate
+from app.modules.syerp.schemas import (
+    GLAccountRead,
+    InventoryItemCreate,
+    InventoryItemRead,
+    InventoryItemUpdate,
+    PartnerCreate,
+    PartnerRead,
+    PartnerUpdate,
+)
 from app.modules.syerp.service import (
     archive_partner,
+    create_item,
     create_partner,
+    get_item,
     get_partner,
     list_gl_accounts,
+    list_items,
     list_partners,
+    update_item,
     update_partner,
 )
 
@@ -151,6 +171,110 @@ async def update_partner_endpoint(
         detail=f"Partner {audit_action.split('.')[1]}: {partner.name}",
     )
     return partner
+
+
+# ---------------------------------------------------------------------------
+# Inventory items (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/inventory/items", response_model=list[InventoryItemRead])
+async def list_items_endpoint(
+    q: str | None = None,
+    include_archived: bool = False,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[InventoryItemRead]:
+    """
+    List / search inventory items.
+
+    Query params:
+      q: substring search across code and name (server-side, parameterized).
+      include_archived: when true, includes active=False items (default false).
+
+    Requires syerp:read permission.
+    """
+    return await list_items(db, q=q, include_archived=include_archived)
+
+
+@router.post(
+    "/inventory/items",
+    response_model=InventoryItemRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_item_endpoint(
+    data: InventoryItemCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> InventoryItemRead:
+    """
+    Create a new inventory item.
+
+    Auto-generates a numeric-safe ITEM-#### code if not supplied in the payload.
+    Requires syerp:write permission. Writes an item.created audit log row.
+    """
+    item = await create_item(db, data)
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="item.created",
+        target_type="inventory_item",
+        target_id=str(item.id),
+        detail=f"Inventory item created: {item.code} ({item.name})",
+    )
+    return item
+
+
+@router.get("/inventory/items/{item_id}", response_model=InventoryItemRead)
+async def get_item_endpoint(
+    item_id: str,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> InventoryItemRead:
+    """
+    Get a single inventory item by id.
+
+    Requires syerp:read permission. Returns 404 if the item does not exist.
+    """
+    return await get_item(db, item_id)
+
+
+@router.patch("/inventory/items/{item_id}", response_model=InventoryItemRead)
+async def update_item_endpoint(
+    item_id: str,
+    data: InventoryItemUpdate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> InventoryItemRead:
+    """
+    Partially update an inventory item (PATCH semantics).
+
+    Sending {active: false} archives the item (soft-delete), dropping it from
+    the default list. Requires syerp:write permission. Writes audit log with
+    the correct action:
+      - "item.archived" when active transitions True → False
+      - "item.updated" for all other mutations
+
+    Returns 404 if the item does not exist.
+    """
+    # Read current state before mutation to detect archive transition
+    existing = await get_item(db, item_id)
+    was_active = existing.active
+
+    item = await update_item(db, item_id, data)
+
+    is_archiving = data.active is False and was_active is True
+    audit_action = "item.archived" if is_archiving else "item.updated"
+
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action=audit_action,
+        target_type="inventory_item",
+        target_id=str(item.id),
+        detail=f"Inventory item {audit_action.split('.')[1]}: {item.code}",
+    )
+    return item
 
 
 # ---------------------------------------------------------------------------
