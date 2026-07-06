@@ -982,3 +982,152 @@ async def post_adjustment(
         reason=txn.reason,
         created_at=txn.created_at,
     )
+
+
+# ---------------------------------------------------------------------------
+# Stock transfers (Phase 8, Task 7, AC10-6)
+# ---------------------------------------------------------------------------
+#
+# A transfer moves quantity between two locations WITHOUT changing the item's
+# total on-hand or its moving-average cost (transfers never move the average —
+# only receipts do, AC10-5). It is recorded as TWO paired InventoryTxn legs that
+# share a freshly-generated transfer_group_id (AC10-4): a `-qty` leg at the source
+# location and a `+qty` leg at the destination, both txn_type='transfer', both
+# valued at the item's CURRENT moving_avg_cost. The signed pair nets to exactly
+# zero, so total item on-hand is unchanged and per-location on-hand shifts.
+#
+# The source-underflow guard is the SAME per-location floor as adjustments: the
+# `-qty` leg must not drive the source location's on-hand below zero. That is
+# exactly _adjustment_violates_floor(current_from_onhand, -qty) — the source leg
+# IS a negative adjustment of the source location (current_from_onhand - qty < 0
+# ⟺ current_from_onhand < qty). Reusing the predicate keeps the floor semantics
+# identical to Task 6 (D-P8-7).
+
+
+async def post_transfer(
+    db: AsyncSession,
+    item_id: str,
+    from_location_id: int,
+    to_location_id: int,
+    qty: Decimal,
+    actor_id: str,
+) -> "list[TransactionRead]":
+    """
+    Post a stock transfer: append the two paired `transfer` ledger legs.
+
+    In a single transaction (AC10-4,6; D-P8-7):
+      1. Reject with 422 if from_location_id == to_location_id (a self-transfer is
+         a no-op) or qty <= 0 (a transfer is a positive movement) — NO rows.
+      2. Derive `current_from_onhand` = the item's on-hand AT from_location_id
+         (SUM of that item's InventoryTxn.quantity WHERE location_id matches).
+      3. Reject with 422 if the `-qty` leg would drive the source location on-hand
+         below zero (over-draw, _adjustment_violates_floor(from_onhand, -qty)) —
+         NO rows are appended.
+      4. Append EXACTLY TWO immutable `transfer` InventoryTxn rows sharing a fresh
+         transfer_group_id: `-qty` at from_location_id, `+qty` at to_location_id,
+         both valued at the item's CURRENT moving_avg_cost.
+
+    The signed pair nets to zero, so total item on-hand is unchanged; the item's
+    moving_avg_cost is deliberately left UNTOUCHED (only receipts move it, AC10-5).
+    Raises 404 if the item or either location does not exist (via get_item /
+    get_location). The 422 status mirrors the receipt/adjustment guards.
+
+    Returns the two created rows as TransactionRead (joined location names), out
+    leg first then in leg. The router writes the inventory.transfer audit row.
+    """
+    import uuid
+
+    from app.modules.syerp.models import InventoryTxn
+    from app.modules.syerp.schemas import TransactionRead
+
+    if from_location_id == to_location_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Transfer source and destination locations must differ.",
+        )
+    if qty <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Transfer quantity must be greater than zero.",
+        )
+
+    # 404s if the item or either location does not exist.
+    item = await get_item(db, item_id)
+    from_location = await get_location(db, from_location_id)
+    to_location = await get_location(db, to_location_id)
+
+    # Per-location source on-hand: signed SUM of this item's txns AT the source.
+    result = await db.execute(
+        select(func.sum(InventoryTxn.quantity)).where(
+            InventoryTxn.item_id == item_id,
+            InventoryTxn.location_id == from_location_id,
+        )
+    )
+    current_from_onhand: Decimal = result.scalar() or Decimal("0")
+
+    # The `-qty` source leg is a negative adjustment of the source location, so the
+    # over-draw guard is the same per-location floor (current_from_onhand - qty < 0
+    # ⟺ current_from_onhand < qty). Reject BEFORE any mutation — no rows on reject.
+    if _adjustment_violates_floor(current_from_onhand, -qty):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Transfer of {qty} exceeds location {from_location_id} on-hand "
+                f"(current {current_from_onhand})."
+            ),
+        )
+
+    # Both legs share one freshly-generated group id and the CURRENT average cost.
+    transfer_group_id = str(uuid.uuid4())
+    unit_cost = item.moving_avg_cost
+
+    out_leg = InventoryTxn(
+        item_id=item_id,
+        location_id=from_location_id,
+        txn_type="transfer",
+        quantity=-qty,
+        unit_cost=unit_cost,
+        actor_id=actor_id,
+        transfer_group_id=transfer_group_id,
+    )
+    in_leg = InventoryTxn(
+        item_id=item_id,
+        location_id=to_location_id,
+        txn_type="transfer",
+        quantity=qty,
+        unit_cost=unit_cost,
+        actor_id=actor_id,
+        transfer_group_id=transfer_group_id,
+    )
+    db.add(out_leg)
+    db.add(in_leg)
+    # moving_avg_cost is intentionally NOT touched — only receipts move it (AC10-5).
+
+    await db.commit()
+    await db.refresh(out_leg)
+    await db.refresh(in_leg)
+
+    return [
+        TransactionRead(
+            id=out_leg.id,
+            item_id=out_leg.item_id,
+            location_id=out_leg.location_id,
+            location_name=from_location.name,
+            txn_type=out_leg.txn_type,
+            quantity=out_leg.quantity,
+            unit_cost=out_leg.unit_cost,
+            reason=out_leg.reason,
+            created_at=out_leg.created_at,
+        ),
+        TransactionRead(
+            id=in_leg.id,
+            item_id=in_leg.item_id,
+            location_id=in_leg.location_id,
+            location_name=to_location.name,
+            txn_type=in_leg.txn_type,
+            quantity=in_leg.quantity,
+            unit_cost=in_leg.unit_cost,
+            reason=in_leg.reason,
+            created_at=in_leg.created_at,
+        ),
+    ]

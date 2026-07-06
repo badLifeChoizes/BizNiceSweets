@@ -363,6 +363,30 @@ class AdjustmentCreate(BaseModel):
     reason: str = Field(..., min_length=1, max_length=255)
 
 
+class TransferCreate(BaseModel):
+    """
+    Stock-transfer posting payload (POST /syerp/inventory/items/{id}/transfers).
+
+    A transfer moves `qty` of an item FROM one location TO another (Task 7). It
+    posts TWO paired `transfer` ledger legs sharing a transfer_group_id — a `-qty`
+    leg at `from_location_id` and a `+qty` leg at `to_location_id` — so total item
+    on-hand nets to zero and the moving-average is left untouched (only receipts
+    move it, AC10-5).
+
+    `qty` must be > 0 (a transfer is a positive movement between locations; the
+    sign is applied per-leg by the service). The remaining guards depend on live
+    DB state and are enforced in the service:
+      - `from_location_id == to_location_id` is rejected (422) — a self-transfer
+        is a no-op.
+      - source-location on-hand < `qty` (over-draw) is rejected (422, AC10-6) so
+        a transfer can never drive the source location negative.
+    """
+
+    from_location_id: int
+    to_location_id: int
+    qty: Decimal = Field(..., gt=0)
+
+
 class TransactionRead(BaseModel):
     """
     One immutable inventory-ledger row returned to API callers (AC10-4).

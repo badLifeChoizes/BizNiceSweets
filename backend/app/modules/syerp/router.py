@@ -17,6 +17,7 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   GET    /syerp/inventory/items/{item_id}/transactions  — ledger history (syerp:read)
   POST   /syerp/inventory/items/{item_id}/receipts       — post costed receipt (syerp:write)
   POST   /syerp/inventory/items/{item_id}/adjustments    — post stock adjustment (syerp:write)
+  POST   /syerp/inventory/items/{item_id}/transfers       — post stock transfer (syerp:write)
   GET    /syerp/inventory/locations              — list locations (syerp:read)
   POST   /syerp/inventory/locations              — create location (syerp:write)
   GET    /syerp/inventory/locations/{location_id}  — get location (syerp:read)
@@ -44,6 +45,7 @@ Audit logging (D-10, T-04-08):
   - location.archived: on PATCH when patch sets active=False.
   - inventory.receipt: on POST /inventory/items/{id}/receipts success.
   - inventory.adjustment: on POST /inventory/items/{id}/adjustments success.
+  - inventory.transfer: on POST /inventory/items/{id}/transfers success.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -73,6 +75,7 @@ from app.modules.syerp.schemas import (
     StockLocationRead,
     StockLocationUpdate,
     TransactionRead,
+    TransferCreate,
 )
 from app.modules.syerp.service import (
     archive_partner,
@@ -90,6 +93,7 @@ from app.modules.syerp.service import (
     list_partners,
     post_adjustment,
     post_receipt,
+    post_transfer,
     update_item,
     update_location,
     update_partner,
@@ -425,6 +429,52 @@ async def post_adjustment_endpoint(
         ),
     )
     return txn
+
+
+@router.post(
+    "/inventory/items/{item_id}/transfers",
+    response_model=list[TransactionRead],
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_transfer_endpoint(
+    item_id: str,
+    data: TransferCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> list[TransactionRead]:
+    """
+    Post a stock transfer between two locations (AC10-4,6; D-P8-7).
+
+    Appends TWO paired immutable `transfer` ledger legs sharing one
+    transfer_group_id — a `-qty` leg at `from_location_id` and a `+qty` leg at
+    `to_location_id`, both valued at the item's current moving-average cost. Total
+    item on-hand nets to zero and the moving-average is left untouched (only
+    receipts move it, AC10-5). Rejects with 422 if the source and destination are
+    the same, `qty` <= 0, or the transfer would over-draw the source location
+    (per-location negative-stock guard) — no rows are written. Requires
+    syerp:write. Returns 404 if the item or either location does not exist. Writes
+    an inventory.transfer audit row.
+    """
+    txns = await post_transfer(
+        db,
+        item_id=item_id,
+        from_location_id=data.from_location_id,
+        to_location_id=data.to_location_id,
+        qty=data.qty,
+        actor_id=str(current_user.id),
+    )
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="inventory.transfer",
+        target_type="inventory_txn",
+        target_id=str(txns[0].id),
+        detail=(
+            f"Transfer: {data.qty} of item {item_id} from location "
+            f"{data.from_location_id} to location {data.to_location_id}"
+        ),
+    )
+    return txns
 
 
 # ---------------------------------------------------------------------------

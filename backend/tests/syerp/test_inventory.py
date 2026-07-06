@@ -303,6 +303,91 @@ def test_adjustment_does_not_move_moving_average() -> None:
 
 
 # ---------------------------------------------------------------------------
+# post_transfer — pure, no-DB source-underflow guard + nets-zero invariant (Task 7)
+# ---------------------------------------------------------------------------
+#
+# A transfer moves qty between two locations as TWO paired `transfer` legs (a
+# `-qty` leg at the source, a `+qty` leg at the destination) sharing a
+# transfer_group_id. Two invariants make the transfer safe, and both are provable
+# without a DB:
+#   1. The source `-qty` leg must not over-draw the source location. That guard is
+#      the SAME per-location floor as adjustments: the source leg IS a negative
+#      adjustment of the source, so _adjustment_violates_floor(from_onhand, -qty)
+#      decides reject/allow (from_onhand - qty < 0 ⟺ from_onhand < qty).
+#   2. The two legs sum to exactly zero, so total item on-hand is unchanged.
+# The live invariant/over-draw assertions run in verify_inventory.py (Task 8).
+
+
+def test_transfer_source_underflow_predicate_rejects_over_draw() -> None:
+    """
+    The source over-draw guard reuses the per-location floor: transferring more
+    than the source holds (`from_onhand < qty`) is rejected.
+
+    The `-qty` source leg is a negative adjustment of the source location, so the
+    over-draw check is exactly _adjustment_violates_floor(from_onhand, -qty):
+    from_onhand - qty < 0 ⟺ from_onhand < qty.
+    """
+    from_onhand = Decimal("5")
+    qty = Decimal("8")  # over-draw: 5 on hand, move 8
+    # from_onhand < qty → over-draw → must reject
+    assert from_onhand < qty
+    assert _adjustment_violates_floor(from_onhand, -qty) is True
+
+
+def test_transfer_source_exact_empty_is_allowed() -> None:
+    """Moving exactly the source on-hand empties it to zero and is allowed."""
+    from_onhand = Decimal("5")
+    qty = Decimal("5")  # lands on exactly 0 at the source
+    assert not (from_onhand < qty)
+    assert _adjustment_violates_floor(from_onhand, -qty) is False
+
+
+def test_transfer_legs_net_to_zero() -> None:
+    """
+    The paired legs (`-qty` out, `+qty` in) sum to exactly zero → total item
+    on-hand is unchanged by a transfer (the nets-zero invariant at the leg level).
+    """
+    qty = Decimal("7.5")
+    out_leg = -qty
+    in_leg = qty
+    assert out_leg + in_leg == Decimal("0")
+    # Decimal, so no float drift even on fractional quantities.
+    assert isinstance(out_leg + in_leg, Decimal)
+
+
+def test_transfer_legs_net_to_zero_no_float_drift() -> None:
+    """Fractional legs still net exactly to zero in Decimal (no 0.1+0.1+0.1 drift)."""
+    qty = Decimal("0.1")
+    assert (-qty) + qty == Decimal("0")
+
+
+def test_transfer_does_not_move_moving_average() -> None:
+    """
+    Transfers must NOT alter the item's moving-average (AC10-5) — only receipts do.
+
+    post_transfer never calls compute_new_moving_avg and never assigns
+    item.moving_avg_cost. This asserts the invariant at the pure/source level,
+    mirroring test_adjustment_does_not_move_moving_average. The live "avg unchanged
+    after a transfer" assertion runs in verify_inventory.py (Task 8).
+    """
+    import inspect
+
+    from app.modules.syerp import service
+
+    source = inspect.getsource(service.post_transfer)
+    assert "compute_new_moving_avg" not in source, (
+        "post_transfer must NOT recompute the moving average (AC10-5) — only "
+        "receipts move it."
+    )
+    # The transfer path must never ASSIGN item.moving_avg_cost. It READS it (to
+    # value the legs) via `item.moving_avg_cost`, but there must be no assignment
+    # statement (`moving_avg_cost =` / `.moving_avg_cost =`).
+    assert "moving_avg_cost =" not in source, (
+        "post_transfer must leave item.moving_avg_cost untouched (AC10-5)."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Default stock-location seed (D-P8-14) — wiring + idempotency
 # ---------------------------------------------------------------------------
 
