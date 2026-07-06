@@ -29,6 +29,27 @@ Tracks completed requirements by phase, with implementing plans and evidence.
 
 ---
 
-*Last updated: 2026-07-04 — Phase 7 (close v1.0 gaps): PLUM-01 defect resolved & proven live;
+## SYERP Module
+
+> **Evidence caveat (Phase 8, D-P7-4):** the backend live-DB pytest harness is still broken, so
+> Phase-8 truth comes from **standalone async scripts run against live Postgres** (`backend/scripts/
+> verify_inventory.py`, `verify_purchasing.py`, `verify_e2e_p8.py`) plus pure-Decimal/FSM/generator
+> unit tests that need no DB. No SYERP-10/11 status below rests on an unrun live pytest. Flow-level
+> HUMAN UI confirmation (in-browser click-through) is deferred to the v2.0 milestone UAT
+> (`.zj/UAT-v2.0.md`, D-P7-5), exactly as Phase 7 did for PLUM.
+
+| Requirement | Description | Phase | Plans | Evidence | Status |
+|-------------|-------------|-------|-------|----------|--------|
+| SYERP-10 | Inventory: items, flat locations, immutable txn ledger, on-hand-by-location, moving-average valuation, adjust/transfer with negative-stock reject | Phase 8 | 08 | Migration `0007_syerp_inventory.py` (`b5c5c31`); item CRUD + numeric-safe `ITEM-####` (`511d6ae`); location CRUD + idempotent `Main` seed (`06f318c`); derived on-hand/valuation/ledger reads (`e35021e`); receipt + pure-Decimal `compute_new_moving_avg` (`8e1b31f`); adjustment + negative guard (`0074bf0`); transfer nets-zero + underflow guard (`5f2a228`); UI `1fd2423`/`8e75af9`/`8b2c748`/`c9d6952`/`cdf0e6c`. **Live-DB: `verify_inventory.py` 14/14 PASS (`e309260`); `verify_e2e_p8.py` 18/18 PASS on fresh DB (`3703c51`).** Unit: `backend/tests/syerp/test_inventory.py` | Backend built & live-verified; UI flow UAT pending (v2.0 milestone) |
+| SYERP-11 | Purchase orders: Draft→Approved→Receiving→Closed FSM, numeric PO#, vendor-only, receiving posts SYERP-10 receipts, status roll-up, over-receipt reject, vendor history | Phase 8 | 08 | Migration `0008_syerp_purchasing.py` (`cafa93f`); PO draft CRUD + numeric-safe `PO-####` + vendor-only guard (`b5d7882`); approve/close FSM (`92896ea`); receiving → real inventory receipt + over-receipt reject + roll-up (`79181bd`); vendor history totals (`ce5f666`); UI `6d8afcc`/`e21ac2a`/`cd03899`/`8aa6b65`. **Live-DB: `verify_purchasing.py` 18/18 PASS (`451ec7d`); `verify_e2e_p8.py` 18/18 PASS on fresh DB (`3703c51`).** Unit: `backend/tests/syerp/test_purchasing.py` | Backend built & live-verified; UI flow UAT pending (v2.0 milestone) |
+
+---
+
+*Last updated: 2026-07-06 — Phase 8 (SYERP inventory & purchasing): SYERP-10/11 backend built and
+**live-verified** by three standalone Postgres scripts (`verify_inventory` 14/14, `verify_purchasing`
+18/18, fresh-DB `verify_e2e_p8` 18/18); flow-level UI confirmation deferred to the v2.0 milestone UAT
+(D-P7-5). Live pytest harness still broken (D-P7-4).*
+
+*Prior: 2026-07-04 — Phase 7 (close v1.0 gaps): PLUM-01 defect resolved & proven live;
 PLUM-04..10 code fixes landed & code-verified, flow-level UI confirmation deferred to v1.0
 milestone UAT (D-P7-5). Prior "Complete" marks rested on tests that never ran (D-P7-4).*

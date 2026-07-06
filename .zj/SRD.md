@@ -209,7 +209,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 > locations, GELATO boundary), D-P8-4 (moving-average valuation), D-P8-5 (PO depth = receive,
 > no AP). IDs unchanged (append-only). SYERP-12 and later suites remain coarse placeholders.
 
-## SYERP-10: Inventory management  [traces: PRD-7]  **Status: planned**
+## SYERP-10: Inventory management  [traces: PRD-7]  **Status: implemented (backend verified live; UI flow UAT pending)**
 - **Statement:** The system shall let a user track on-hand inventory for stocked items across
   named stock locations, with an immutable transaction history and moving-weighted-average
   valuation. An **inventory item** is a SYERP master record that **may optionally reference a
@@ -245,13 +245,31 @@ future scope (expanded via `/zj:spec` when their milestones near).
      attributable audit events (NFR-1).
   8. **RBAC** — All endpoints are gated by `syerp:<action>` permission codes; an un-permissioned
      API call is refused regardless of UI (CORE-05 pattern).
+- **Evidence:** all eight acceptance criteria built in the existing `syerp` module and proven
+  end-to-end against live Postgres (Phase 8, branch `feature-syerp-inventory-purchasing`; D-P8-8/9/10,
+  D-P8-12/13/14). Backend: migration `0007_syerp_inventory.py` (`syerp_inventory_item` /
+  `syerp_stock_location` / append-only `syerp_inventory_txn` ledger, `b5c5c31`); item CRUD +
+  numeric-safe `ITEM-####` generator (`511d6ae`); location CRUD + idempotent `Main` seed wired into
+  `run_seeds` (`06f318c`); derived on-hand-by-location + valuation + txn-history reads (`e35021e`);
+  receipt posting + pure-Decimal `compute_new_moving_avg` scale-6 ROUND_HALF_UP (`8e1b31f`);
+  adjustment + per-location negative-stock guard (`0074bf0`); transfer paired-legs net-zero +
+  source-underflow guard (`5f2a228`). Frontend (`frontend/src/routes/syerp/`): InventoryItems +
+  ItemSheet + archive (`1fd2423`), StockLocations (`8e75af9`), InventoryItemDetail on-hand/valuation/
+  ledger (`8b2c748`), StockAdjustDialog (`c9d6952`), StockTransferDialog (`cdf0e6c`) — colocated
+  Vitest green, `tsc -b` clean. **Live-DB proof** (the pytest live harness is broken per D-P7-4 —
+  truth from standalone scripts): `backend/scripts/verify_inventory.py` **14/14 PASS** (avg
+  3.000000, on-hand value 60.000000, negative-adjustment reject, transfer nets-zero, seed idempotent,
+  `e309260`); `backend/scripts/verify_e2e_p8.py` **18/18 PASS on a freshly-migrated DB** (alembic
+  0001→0008 from empty, `Main` seeded out-of-the-box, `3703c51`). Pure-Decimal + generator unit tests
+  green under plain pytest: `backend/tests/syerp/test_inventory.py`. Flow-level HUMAN UI confirmation
+  deferred to the milestone UAT (`.zj/UAT-v2.0.md`, D-P7-5 precedent).
 - **Verification:** service/router tests for on-hand derivation, moving-average math (Decimal
   exactness), negative-stock rejection, and transfer-nets-to-zero; live UI walk — create item
   (with and without a PLUM link), create locations, receive stock, read on-hand + value per
-  location, post an adjustment and a transfer, confirm audit rows written. Flow-level UI
-  confirmation via the milestone UAT.
+  location, post an adjustment and a transfer, confirm audit rows written. Backend behavior proven
+  by the two verify scripts above; flow-level UI confirmation via the v2.0 milestone UAT.
 
-## SYERP-11: Purchase orders  [traces: PRD-7]  **Status: planned**
+## SYERP-11: Purchase orders  [traces: PRD-7]  **Status: implemented (backend verified live; UI flow UAT pending)**
 - **Statement:** The system shall support a purchase-order workflow —
   **Draft → Approved → Receiving (partial/complete) → Closed** — where a PO references a SYERP
   **vendor** (`Partner.is_vendor`) and its lines reference **inventory items**; receiving a PO
@@ -281,11 +299,28 @@ future scope (expanded via `/zj:spec` when their milestones near).
   7. **Audit** — PO create, line edits, approve, each receipt, and close emit attributable audit
      events (NFR-1).
   8. **RBAC** — Endpoints gated by `syerp:<action>` permission codes (CORE-05 pattern).
+- **Evidence:** all eight acceptance criteria built and proven end-to-end against live Postgres
+  (Phase 8, branch `feature-syerp-inventory-purchasing`; D-P8-8/9/10, D-P8-15). Backend: migration
+  `0008_syerp_purchasing.py` (`syerp_purchase_order` / `syerp_purchase_order_line`, `cafa93f`); PO
+  draft CRUD + numeric-safe `PO-####` generator + vendor-only guard (`b5d7882`); approve/close FSM
+  `PO_TRANSITIONS` stamping `approved_at`/`approved_by` (`92896ea`); PO receiving → real SYERP-10
+  receipt via `post_receipt` with over-receipt reject + status roll-up in one atomic txn (`79181bd`);
+  vendor PO history per-PO total + received roll-up (`ce5f666`). Frontend (`frontend/src/routes/syerp/`):
+  PurchaseOrders list (`6d8afcc`), PurchaseOrderCreate (`e21ac2a`), PurchaseOrderDetail approve/close
+  (`cd03899`), ReceiveLineDialog (`8aa6b65`) — colocated Vitest green, `tsc -b` clean. **Live-DB
+  proof** (pytest live harness broken per D-P7-4 — truth from standalone scripts):
+  `backend/scripts/verify_purchasing.py` **18/18 PASS** (PO receive posts real inventory txns,
+  moving-avg 5.000000, over-receipt 422, roll-up partially→received, vendor total 50, `451ec7d`);
+  `backend/scripts/verify_e2e_p8.py` **18/18 PASS on a freshly-migrated DB** (full Draft→Approved→
+  partial-receive→remainder flow, exact on-hand + moving-avg, `3703c51`). Pure FSM + PO-number
+  generator unit tests green under plain pytest: `backend/tests/syerp/test_purchasing.py`. Flow-level
+  HUMAN UI confirmation deferred to the milestone UAT (`.zj/UAT-v2.0.md`, D-P7-5 precedent).
 - **Verification:** service tests for lifecycle-transition enforcement, numeric PO numbering,
   vendor-only line selection, partial-receipt accumulation, and receipt-creates-inventory-
   transaction (integration with SYERP-10 moving-average); live UI walk — raise a PO → approve →
   receive partial then remainder → confirm item on-hand and moving-average updated → vendor
-  history lists the PO. Flow-level UI confirmation via the milestone UAT.
+  history lists the PO. Backend behavior proven by the two verify scripts above; flow-level UI
+  confirmation via the v2.0 milestone UAT.
 
 ---
 
@@ -336,16 +371,17 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-4 | SYERP-01..05, PLUM-07 | — |
 | PRD-5 | PLUM-01..16 | Phase-7 code fixes landed & code-verified (`5c33ed8`/`1b8bfa1`/`37b5f97`); PLUM-04..10 flow-level UI confirmation deferred to v1.0 milestone UAT (`.zj/UAT-v1.0.md`, D-P7-5) |
 | PRD-6 | FLAN-01 | expand at milestone planning |
-| PRD-7 | SYERP-10..12, MOUSSE-01 | SYERP-10/11 spec-complete (2026-07-05, Phase 8); SYERP-12 + MOUSSE-01 still coarse |
+| PRD-7 | SYERP-10..12, MOUSSE-01 | SYERP-10/11 backend built & live-verified (Phase 8: migrations 0007/0008; `verify_inventory`/`verify_purchasing`/`verify_e2e_p8` scripts), UI flow UAT deferred to v2.0 milestone (D-P7-5); SYERP-12 + MOUSSE-01 still coarse |
 | PRD-8 | CRUMB-01, GELATO-01 | coarse — expand via /zj:spec |
 | PRD-9 | CRISP-01, NFR-1 | CRISP coarse |
 | PRD-10 | NFR-3 | — |
 | PRD-11 | NFR-2 | license audit outstanding |
 
-**Counts (2026-07-05, post-Phase-7 + SYERP-10/11 spec expansion):** implemented 17
-(CORE-01..09, SYERP-01..05, PLUM-01..03 — PLUM-01 defect **resolved** & proven live, `1b8bfa1`)
-+ 2 NFR foundations · partial 7 (PLUM-04..10 — all three Phase-7 runtime/cache fixes landed &
-code-verified; flow-level UI confirmation deferred to v1.0 milestone UAT per D-P7-5) · planned 15
-(PLUM-11..16, FLAN-01, SYERP-10..12, MOUSSE/CRUMB/GELATO/CRISP-01, NFR-3 — of which **SYERP-10 &
-SYERP-11 are now spec-complete** with acceptance criteria for Phase 8; the rest remain coarse
-until their milestones near).
+**Counts (2026-07-06, post-Phase-8):** implemented 19 (CORE-01..09, SYERP-01..05, PLUM-01..03 —
+PLUM-01 defect **resolved** & proven live, `1b8bfa1`; plus **SYERP-10 & SYERP-11**, whose backend
+is built & **live-verified** in Phase 8 by `verify_inventory.py` (14/14), `verify_purchasing.py`
+(18/18), and a fresh-DB `verify_e2e_p8.py` (18/18) — only flow-level HUMAN UI confirmation is
+deferred to the v2.0 milestone UAT, D-P7-5) + 2 NFR foundations · partial 7 (PLUM-04..10 — all three
+Phase-7 runtime/cache fixes landed & code-verified; flow-level UI confirmation deferred to v1.0
+milestone UAT per D-P7-5) · planned 13 (PLUM-11..16, FLAN-01, SYERP-12, MOUSSE/CRUMB/GELATO/CRISP-01,
+NFR-3 — coarse placeholders until their milestones near).
