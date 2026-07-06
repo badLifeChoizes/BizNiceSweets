@@ -25,7 +25,7 @@ archived vendors (Pitfall 5 from RESEARCH.md).
 from __future__ import annotations
 
 import re
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
@@ -738,3 +738,135 @@ async def list_item_transactions(db: AsyncSession, item_id: str) -> "list[Transa
         )
         for txn, name in result.all()
     ]
+
+
+# ---------------------------------------------------------------------------
+# Costed receipts + moving-average recompute (Phase 8, Task 5, AC10-5)
+# ---------------------------------------------------------------------------
+#
+# The moving average is ITEM-LEVEL, not per-location (D-11): the cost of a unit
+# does not depend on which shelf it sits on. So a receipt weights the NEW unit
+# cost against the item's TOTAL on-hand across ALL locations.
+#
+# All arithmetic is Decimal (fixed-point), never float. A non-terminating
+# quotient (e.g. dividing by 3) is quantized to scale 6 with ROUND_HALF_UP so
+# the result is deterministic and matches the moving_avg_cost Numeric(18,6)
+# column exactly — drift here is the phase's earliest failure sign.
+
+# Scale-6 quantum matching moving_avg_cost / unit_cost Numeric(18,6).
+_COST_QUANTUM = Decimal("0.000001")
+
+
+def compute_new_moving_avg(
+    qty_before: Decimal,
+    avg_before: Decimal,
+    qty_recv: Decimal,
+    unit_cost: Decimal,
+) -> Decimal:
+    """
+    Recompute the item-level moving-average unit cost after a costed receipt.
+
+    PURE (no DB, no float) so the valuation core is unit-testable in isolation.
+
+    Weighted formula (AC10-5, D-11):
+        avg_new = (qty_before * avg_before + qty_recv * unit_cost)
+                  / (qty_before + qty_recv)
+
+    First receipt (qty_before == 0) short-circuits to `unit_cost` — there is no
+    prior stock to weight against, and this avoids any division-by-zero edge.
+    (The general formula also collapses to unit_cost when qty_before is 0, since
+    qty_recv is always > 0; the explicit guard just makes that intent obvious.)
+
+    The quotient is quantized to scale 6 (Decimal("0.000001")) with ROUND_HALF_UP
+    so non-terminating results (e.g. 20/15 → 1.333333) are deterministic and fit
+    the Numeric(18,6) column with no float drift.
+    """
+    if qty_before == 0:
+        new_avg = unit_cost
+    else:
+        new_avg = (qty_before * avg_before + qty_recv * unit_cost) / (qty_before + qty_recv)
+    return new_avg.quantize(_COST_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+async def post_receipt(
+    db: AsyncSession,
+    item_id: str,
+    location_id: int,
+    qty: Decimal,
+    unit_cost: Decimal,
+    actor_id: str,
+    source_type: str | None = None,
+    source_id: str | None = None,
+) -> "TransactionRead":
+    """
+    Post a costed receipt: append one ledger row and recompute the moving average.
+
+    In a single transaction (AC10-4,5,7,8):
+      1. Derive `qty_before` = the item's TOTAL on-hand across ALL locations
+         (SUM of every InventoryTxn.quantity for the item) — the moving average
+         is item-level, not per-location.
+      2. Compute the new item-level moving average via compute_new_moving_avg.
+      3. Append ONE immutable `receipt` InventoryTxn (positive signed quantity,
+         unit_cost set, actor + optional source link).
+      4. Update item.moving_avg_cost to the recomputed value.
+
+    Rejects qty <= 0 or unit_cost < 0 with 422 (mirrors the ReceiptCreate schema
+    guard; defends the service against non-HTTP callers too). Raises 404 if the
+    item or location does not exist (via get_item / get_location).
+
+    Returns the created row as a TransactionRead (joined location name), mirroring
+    list_item_transactions. The router writes the inventory.receipt audit row.
+    """
+    from app.modules.syerp.models import InventoryTxn
+    from app.modules.syerp.schemas import TransactionRead
+
+    if qty <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Receipt quantity must be greater than zero.",
+        )
+    if unit_cost < 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Receipt unit cost must not be negative.",
+        )
+
+    # 404s if either does not exist (mirrors get_item / get_location).
+    item = await get_item(db, item_id)
+    location = await get_location(db, location_id)
+
+    # qty_before = total on-hand across ALL locations (item-level average).
+    result = await db.execute(
+        select(func.sum(InventoryTxn.quantity)).where(InventoryTxn.item_id == item_id)
+    )
+    qty_before: Decimal = result.scalar() or Decimal("0")
+
+    avg_new = compute_new_moving_avg(qty_before, item.moving_avg_cost, qty, unit_cost)
+
+    txn = InventoryTxn(
+        item_id=item_id,
+        location_id=location_id,
+        txn_type="receipt",
+        quantity=qty,
+        unit_cost=unit_cost,
+        actor_id=actor_id,
+        source_type=source_type,
+        source_id=source_id,
+    )
+    db.add(txn)
+    item.moving_avg_cost = avg_new
+
+    await db.commit()
+    await db.refresh(txn)
+
+    return TransactionRead(
+        id=txn.id,
+        item_id=txn.item_id,
+        location_id=txn.location_id,
+        location_name=location.name,
+        txn_type=txn.txn_type,
+        quantity=txn.quantity,
+        unit_cost=txn.unit_cost,
+        reason=txn.reason,
+        created_at=txn.created_at,
+    )

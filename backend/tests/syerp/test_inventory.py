@@ -17,7 +17,11 @@ from decimal import Decimal
 
 import httpx
 
-from app.modules.syerp.service import _derive_onhand, _next_item_code
+from app.modules.syerp.service import (
+    _derive_onhand,
+    _next_item_code,
+    compute_new_moving_avg,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +148,83 @@ def test_derive_onhand_no_float_drift_on_fractional_sums() -> None:
 
     assert total_qty == Decimal("0.3")
     assert value == Decimal("0.45")
+
+
+# ---------------------------------------------------------------------------
+# compute_new_moving_avg — pure, no-DB moving-average recompute (Task 5, AC10-5)
+# ---------------------------------------------------------------------------
+#
+# The moving average is the valuation crux: every downstream on-hand value rides
+# on it being EXACTLY right in Decimal (no float drift). These tests pin the
+# formula, the first-receipt short-circuit, and the deterministic scale-6
+# quantize. The live posting path (post_receipt) is exercised end-to-end by
+# verify_inventory.py (Task 8).
+
+
+def test_moving_avg_first_receipt_is_unit_cost() -> None:
+    """First receipt (qty_before == 0) → avg == unit_cost, no div-by-zero."""
+    result = compute_new_moving_avg(
+        Decimal("0"), Decimal("0"), Decimal("10"), Decimal("2")
+    )
+    assert result == Decimal("2")
+    # Quantized to scale 6, still numerically equal to the unit cost.
+    assert result == Decimal("2.000000")
+    assert isinstance(result, Decimal)
+
+
+def test_moving_avg_weighted_second_receipt_is_exact() -> None:
+    """
+    10@2 then 10@4 weights to exactly 3.000000 (AC10-5).
+
+    (10*2 + 10*4) / (10+10) = 60/20 = 3 — a terminating quotient, so the result
+    is the exact Decimal("3.000000"), never a float-tainted 2.9999999… .
+    """
+    # First receipt establishes avg = 2 on 10 units.
+    avg_after_first = compute_new_moving_avg(
+        Decimal("0"), Decimal("0"), Decimal("10"), Decimal("2")
+    )
+    assert avg_after_first == Decimal("2.000000")
+
+    # Second receipt: 10 more units at unit cost 4 against 10 units @ avg 2.
+    result = compute_new_moving_avg(
+        Decimal("10"), avg_after_first, Decimal("10"), Decimal("4")
+    )
+    assert result == Decimal("3.000000")
+    assert isinstance(result, Decimal)
+
+
+def test_moving_avg_non_terminating_quotient_quantizes_to_scale_6() -> None:
+    """
+    10@1 then 5@2 → 20/15 = 1.3333… quantized HALF_UP to exactly 1.333333.
+
+    This exercises the fixed scale-6 quantize on a non-terminating quotient: the
+    result must be deterministic and match the Numeric(18,6) column, never an
+    unbounded repeating Decimal or a float.
+    """
+    result = compute_new_moving_avg(
+        Decimal("10"), Decimal("1"), Decimal("5"), Decimal("2")
+    )
+    # 20/15 = 1.33333333… → HALF_UP at scale 6 → 1.333333
+    assert result == Decimal("1.333333")
+    assert isinstance(result, Decimal)
+
+
+def test_moving_avg_returns_decimal_with_no_float_drift() -> None:
+    """
+    Return type is Decimal and equals a string-constructed Decimal exactly.
+
+    0.1@1 then 0.2@1.55 must land on exactly the scale-6 value computed with
+    Decimal arithmetic — proving no float ever contaminates the pipeline.
+        (0.1*1 + 0.2*1.55) / (0.1+0.2) = (0.1 + 0.31) / 0.3 = 0.41/0.3
+        = 1.36666… → HALF_UP scale 6 → 1.366667
+    """
+    result = compute_new_moving_avg(
+        Decimal("0.1"), Decimal("1"), Decimal("0.2"), Decimal("1.55")
+    )
+    assert result == Decimal("1.366667")
+    assert isinstance(result, Decimal)
+    # Exactly equal to the string-constructed Decimal (no float representation).
+    assert str(result) == "1.366667"
 
 
 # ---------------------------------------------------------------------------

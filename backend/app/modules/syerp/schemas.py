@@ -319,6 +319,28 @@ class ItemOnHandRead(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class ReceiptCreate(BaseModel):
+    """
+    Costed-receipt posting payload (POST /syerp/inventory/items/{id}/receipts).
+
+    A receipt adds stock at a known unit cost and drives the item's
+    moving-average recompute (AC10-5, Task 5). Constraints mirror the service
+    guard so bad input is rejected at the boundary with a 422:
+      - `qty` > 0 (a receipt is stock IN; zero/negative is not a receipt).
+      - `unit_cost` >= 0 (a receipt may be free, but never negative-cost).
+
+    `source_type` / `source_id` are the optional soft polymorphic link back to
+    the originating document (e.g. a PO receipt); no FK, so the ledger stays
+    valid even if the source module is disabled.
+    """
+
+    location_id: int
+    qty: Decimal = Field(..., gt=0)
+    unit_cost: Decimal = Field(..., ge=0)
+    source_type: Optional[str] = Field(None, max_length=50)
+    source_id: Optional[str] = Field(None, max_length=36)
+
+
 class TransactionRead(BaseModel):
     """
     One immutable inventory-ledger row returned to API callers (AC10-4).

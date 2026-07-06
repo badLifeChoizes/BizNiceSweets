@@ -15,6 +15,7 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   PATCH  /syerp/inventory/items/{item_id}  — update/archive item (syerp:write)
   GET    /syerp/inventory/items/{item_id}/onhand        — derived on-hand + value (syerp:read)
   GET    /syerp/inventory/items/{item_id}/transactions  — ledger history (syerp:read)
+  POST   /syerp/inventory/items/{item_id}/receipts       — post costed receipt (syerp:write)
   GET    /syerp/inventory/locations              — list locations (syerp:read)
   POST   /syerp/inventory/locations              — create location (syerp:write)
   GET    /syerp/inventory/locations/{location_id}  — get location (syerp:read)
@@ -40,6 +41,7 @@ Audit logging (D-10, T-04-08):
   - location.created: on POST /inventory/locations success.
   - location.updated: on PATCH when active does not change to False.
   - location.archived: on PATCH when patch sets active=False.
+  - inventory.receipt: on POST /inventory/items/{id}/receipts success.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -63,6 +65,7 @@ from app.modules.syerp.schemas import (
     PartnerCreate,
     PartnerRead,
     PartnerUpdate,
+    ReceiptCreate,
     StockLocationCreate,
     StockLocationRead,
     StockLocationUpdate,
@@ -82,6 +85,7 @@ from app.modules.syerp.service import (
     list_items,
     list_locations,
     list_partners,
+    post_receipt,
     update_item,
     update_location,
     update_partner,
@@ -330,6 +334,49 @@ async def list_item_transactions_endpoint(
     Requires syerp:read. Returns 404 if the item does not exist.
     """
     return await list_item_transactions(db, item_id)
+
+
+@router.post(
+    "/inventory/items/{item_id}/receipts",
+    response_model=TransactionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_receipt_endpoint(
+    item_id: str,
+    data: ReceiptCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> TransactionRead:
+    """
+    Post a costed receipt against an inventory item (AC10-5).
+
+    Appends one immutable `receipt` ledger row (positive quantity, unit_cost set)
+    and recomputes the item-level moving-average cost, atomically. `qty` must be
+    > 0 and `unit_cost` >= 0 (422 otherwise). Requires syerp:write. Returns 404 if
+    the item or location does not exist. Writes an inventory.receipt audit row.
+    """
+    txn = await post_receipt(
+        db,
+        item_id=item_id,
+        location_id=data.location_id,
+        qty=data.qty,
+        unit_cost=data.unit_cost,
+        actor_id=str(current_user.id),
+        source_type=data.source_type,
+        source_id=data.source_id,
+    )
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="inventory.receipt",
+        target_type="inventory_txn",
+        target_id=str(txn.id),
+        detail=(
+            f"Receipt: {data.qty} @ {data.unit_cost} of item {item_id} "
+            f"to location {data.location_id}"
+        ),
+    )
+    return txn
 
 
 # ---------------------------------------------------------------------------
