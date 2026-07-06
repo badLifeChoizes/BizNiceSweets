@@ -16,6 +16,7 @@ const TABS = [
   { to: '/syerp/vendors', label: 'Vendors' },
   { to: '/syerp/customers', label: 'Customers' },
   { to: '/syerp/inventory/items', label: 'Inventory Items' },
+  { to: '/syerp/inventory/locations', label: 'Stock Locations' },
   { to: '/syerp/gl', label: 'Chart of Accounts' },
 ]
 
@@ -31,7 +32,7 @@ export function SyerpNav() {
               '-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors',
               isActive
                 ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             )
           }
         >
