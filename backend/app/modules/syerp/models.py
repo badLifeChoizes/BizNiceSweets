@@ -12,6 +12,8 @@ Tables defined here:
 Phase 4: Added Partner and GLAccount models (SYERP Core Hub).
 Phase 8: Added InventoryItem, StockLocation and InventoryTxn models
          (SYERP inventory & purchasing — migration 0007).
+         Added PurchaseOrder and PurchaseOrderLine models
+         (SYERP purchasing — migration 0008).
 
 All models inherit from Base so that Base.metadata is populated when
 app.core.models (the central aggregator) is imported by Alembic's env.py.
@@ -25,10 +27,10 @@ CRITICAL naming decisions:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.base import Base
@@ -286,3 +288,107 @@ class InventoryTxn(Base):
     reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # transfer_group_id: pairs the two legs (out + in) of a transfer
     transfer_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# PurchaseOrder — purchase-order header (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+class PurchaseOrder(Base):
+    """
+    Purchase-order header — a request to buy goods from a vendor.
+
+    Uses a String(36) uuid PK (mirrors Partner / InventoryItem) because it is
+    referenced by FKs from PO lines and is non-enumerable.
+
+    vendor_id is an FK into syerp_partner.id (the vendor being purchased from).
+
+    status walks a controlled lifecycle: draft | approved | partially_received
+    | received | closed. Receiving accumulates against each line's qty_received
+    (Decision 5) and rolls the header status forward.
+
+    approved_at / approved_by record the approver identity and timestamp
+    (D-P8-10); both are NULL until the PO is approved.
+    """
+
+    __tablename__ = "syerp_purchase_order"
+
+    # --- Primary key — UUID string (mirrors syerp_partner.id) --------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Identity ----------------------------------------------------------
+    po_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+    # vendor_id: FK into syerp_partner.id (the vendor being purchased from)
+    vendor_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_partner.id"), nullable=False, index=True
+    )
+
+    # status: draft | approved | partially_received | received | closed
+    status: Mapped[str] = mapped_column(String(30), default="draft", nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # --- Approval (D-P8-10) — approver identity + timestamp, NULL until approved
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+    # --- Timestamps --------------------------------------------------------
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# PurchaseOrderLine — purchase-order line item (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+class PurchaseOrderLine(Base):
+    """
+    Purchase-order line — one item ordered on a PurchaseOrder.
+
+    Uses a String(36) uuid PK (mirrors the other purchasing rows).
+
+    po_id FKs into the header; item_id FKs into syerp_inventory_item.id (the
+    item being purchased).
+
+    qty_ordered / unit_cost are fixed-point Numeric(18,6) (never float — D-11).
+    qty_received is a running accumulator (Decision 5) that receiving increments;
+    it defaults to 0 and never exceeds qty_ordered.
+
+    need_by_date is an optional requested delivery date (date-only).
+    """
+
+    __tablename__ = "syerp_purchase_order_line"
+
+    # --- Primary key — UUID string -----------------------------------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Links -------------------------------------------------------------
+    po_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_purchase_order.id"), nullable=False, index=True
+    )
+    item_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_inventory_item.id"), nullable=False
+    )
+    line_no: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # --- Quantities & cost (Decision 5, D-11) — fixed-point, never float ----
+    qty_ordered: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
+    # qty_received: running accumulator incremented by receiving (Decision 5)
+    qty_received: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), default=Decimal("0"), nullable=False
+    )
+
+    # need_by_date: optional requested delivery date (date-only)
+    need_by_date: Mapped[date | None] = mapped_column(Date, nullable=True)
