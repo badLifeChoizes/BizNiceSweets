@@ -1,6 +1,10 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "po_number: pure PO-number generator (digit-boundary) tests — no DB (Phase 8, Task 15)",
+    "fsm: pure PO status FSM (PO_TRANSITIONS) tests — no DB (Phase 8, Task 16)",
+]
 
 [tool.ruff]
 line-length = 100
