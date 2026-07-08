@@ -87,14 +87,20 @@ Owner decision 2026-07-04: dependency-first order confirmed — operations befor
 CRM. **Definition of done (draft):** "Can track inventory, raise purchase orders, and execute
 work orders that consume PLUM BOMs and inventory." Refine via `/zj:spec` at milestone start.
 
-### Phase 8: SYERP Extended — inventory & purchasing  [planned — PLAN.md ready]
+### Phase 8: SYERP Extended — inventory & purchasing  [verified]
 - **Goal:** Inventory items (optional PLUM link) with per-location on-hand, immutable
   transaction history, and moving-average valuation; a Draft→Approve→Receive purchase-order
   workflow whose receipts feed inventory. No AP (SYERP-12), no warehouse bins (GELATO-01).
-- **Delivers:** SYERP-10, SYERP-11 — **spec-complete** with acceptance criteria (expanded
-  2026-07-05 via `/zj:spec`; scope decisions D-P8-1..7). Ready for `/zj:plan 8`.
+- **Delivers:** SYERP-10, SYERP-11 — built + verified live (Phase 8, branch
+  `feature-syerp-inventory-purchasing`, `b5c5c31~1..554c3fe`). All 16 ACs proven against live
+  Postgres (`verify_inventory` 15/15, `verify_purchasing` 18/18, `verify_e2e_p8` 18/18 fresh-DB);
+  FK-degradation defect fixed in verify (`554c3fe`). Deferred (BACKLOG p1, D-P7-4): port the
+  verify-script assertions into runnable integration tests once the async pytest harness is
+  repaired; UI-flow human UAT at the v2.0 milestone (`.zj/UAT-v2.0.md`, D-P7-5).
 - **Depends on:** SYERP hub (Partner, done) + PLUM parts (done). MOUSSE (Phase 10) and
   GELATO both build on this inventory ledger.
+- **Evidence:** `.zj/phases/08-syerp-inventory-purchasing/{PLAN,VERIFICATION,REVIEW}.md`;
+  tag `zj/good-08-syerp-inventory-purchasing`.
 
 ### Phase 9: SYERP Extended — AP/AR & reporting  [pending]
 - **Goal:** Invoice basics and financial reporting on the GL.

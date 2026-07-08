@@ -210,6 +210,8 @@ future scope (expanded via `/zj:spec` when their milestones near).
 > no AP). IDs unchanged (append-only). SYERP-12 and later suites remain coarse placeholders.
 
 ## SYERP-10: Inventory management  [traces: PRD-7]  **Status: implemented (backend verified live; UI flow UAT pending)**
+- **Verified:** 554c3fe (Phase 08 verify, 2026-07-08 — all 8 ACs proven live; crux/audit/RBAC
+  regression tests deferred to BACKLOG p1, harness repair D-P7-4)
 - **Statement:** The system shall let a user track on-hand inventory for stocked items across
   named stock locations, with an immutable transaction history and moving-weighted-average
   valuation. An **inventory item** is a SYERP master record that **may optionally reference a
@@ -270,6 +272,8 @@ future scope (expanded via `/zj:spec` when their milestones near).
   by the two verify scripts above; flow-level UI confirmation via the v2.0 milestone UAT.
 
 ## SYERP-11: Purchase orders  [traces: PRD-7]  **Status: implemented (backend verified live; UI flow UAT pending)**
+- **Verified:** 554c3fe (Phase 08 verify, 2026-07-08 — all 8 ACs proven live incl. receive→inventory
+  crux; regression tests deferred to BACKLOG p1, harness repair D-P7-4)
 - **Statement:** The system shall support a purchase-order workflow —
   **Draft → Approved → Receiving (partial/complete) → Closed** — where a PO references a SYERP
   **vendor** (`Partner.is_vendor`) and its lines reference **inventory items**; receiving a PO

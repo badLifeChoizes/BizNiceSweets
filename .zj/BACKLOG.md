@@ -21,6 +21,15 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   collisions on rerun against the persistent dev DB. This is the exact silent-skip that let
   the `SyerpPartner` 500 ship. Until fixed, PLUM fixes are proven by human-verify (D-P7-1) +
   standalone async scripts, not the pytest suite.
+- [ ] **Port Phase-8 verify-script assertions into runnable integration tests** (Phase 8 verify,
+  2026-07-08, owner-accepted deferral). SYERP-10/11's crux behaviors have **no automated regression
+  protection** — their only proof is standalone `backend/scripts/verify_{inventory,purchasing,e2e_p8}.py`
+  that no suite runs: (1) the receive→on-hand→moving-average integration (SYERP-11.4), (2) audit rows
+  written at the router (SYERP-10.7/11.7 — the verify scripts call service fns directly, bypassing
+  where `write_audit` lives), (3) a syerp-endpoint 401/403 test (SYERP-10.8/11.8 — only the generic
+  `tests/auth/test_rbac.py` covers the mechanism). Blocked on the async live-DB harness repair above;
+  once that lands, port the script assertions into pytest integration tests and drop the "UI flow UAT
+  pending / script-only" caveats from the SRD. A silent break in the crux currently passes every gate.
 - [ ] **Seed/startup integration test** — admin-seed path has no DB-backed regression test
   (a `MissingGreenlet` slipped past unit tests in Phase 2).
 - [ ] **Rebuild `frontend/dist` + container image** — production bundle predates Phase 3;
