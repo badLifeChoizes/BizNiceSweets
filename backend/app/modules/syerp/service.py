@@ -494,6 +494,26 @@ def _build_item_kwargs(code: str, data: "InventoryItemCreate") -> dict:
     }
 
 
+async def _validate_plum_part(db: AsyncSession, plum_part_id: str | None) -> None:
+    """
+    Reject a non-existent PLUM part link with a clean 422 (D-P8-2: the PLUM link
+    is advisory and must degrade gracefully — never surface as an unhandled FK
+    IntegrityError/HTTP 500). A None id (no link) is always valid; the plum_part
+    table exists even when the PLUM module is toggled off, so the lookup is safe.
+    """
+    if plum_part_id is None:
+        return
+
+    from app.modules.plum.models import PlumPart
+
+    exists = await db.execute(select(PlumPart.id).where(PlumPart.id == plum_part_id))
+    if exists.scalar() is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"PLUM part {plum_part_id} does not exist.",
+        )
+
+
 async def create_item(db: AsyncSession, data: "InventoryItemCreate") -> "InventoryItem":
     """
     Insert a new inventory item row.
@@ -512,6 +532,8 @@ async def create_item(db: AsyncSession, data: "InventoryItemCreate") -> "Invento
     import sqlalchemy.exc
 
     from app.modules.syerp.models import InventoryItem
+
+    await _validate_plum_part(db, data.plum_part_id)
 
     user_supplied_code = bool(data.code)
     code = data.code or await generate_item_code(db)
@@ -617,6 +639,8 @@ async def update_item(
     item = await get_item(db, item_id)
 
     update_data = data.model_dump(exclude_unset=True)
+    if "plum_part_id" in update_data:
+        await _validate_plum_part(db, update_data["plum_part_id"])
     for field, value in update_data.items():
         setattr(item, field, value)
 

@@ -172,6 +172,30 @@ async def run() -> None:
         )
 
         # -------------------------------------------------------------------
+        # 2b. Bad plum_part_id degrades to a clean 4xx, NOT an HTTP 500
+        #     (D-P8-2: the PLUM link is advisory — regression guard for the
+        #     FK-misclassified-as-code-collision defect fixed in Phase-8 verify).
+        # -------------------------------------------------------------------
+        bad_link_status = None
+        async with session_factory() as session:
+            try:
+                await create_item(
+                    session,
+                    InventoryItemCreate(
+                        name=f"VERIFY BadLink {unique}",
+                        unit_of_measure="ea",
+                        plum_part_id="00000000-0000-0000-0000-000000000000",
+                    ),
+                )
+            except HTTPException as exc:
+                bad_link_status = exc.status_code
+        check(
+            "create_item with a non-existent plum_part_id raises 4xx (not 500)",
+            bad_link_status is not None and 400 <= bad_link_status < 500,
+            f"got status {bad_link_status!r}",
+        )
+
+        # -------------------------------------------------------------------
         # 3. Receive 10@2 then 10@4 at A → moving_avg_cost == 3.000000
         # -------------------------------------------------------------------
         async with session_factory() as session:
