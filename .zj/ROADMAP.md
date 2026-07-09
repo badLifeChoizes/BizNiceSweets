@@ -1,10 +1,25 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-04 (history reconstructed at ZJ adoption from git + GSD artifacts archived at `archive/planning-gsd/`)
+Updated: 2026-07-09 (v1.0 milestone close; history reconstructed at ZJ adoption from git + GSD artifacts archived at `archive/planning-gsd/`)
 
-## Milestone v1.0 — Foundation + PLUM
-**Definition of done:** "Can deploy it, log in, manage vendors/customers, and design parts
-with multi-level BOMs and cost roll-up." Status: **one phase from closing** — Phases 1–6
-shipped; Phase 7 closes the audited gaps.
+## v1.0 — Foundation + PLUM  [done]
+
+**Closed 2026-07-09.** Definition of done — *"Can deploy it, log in, manage vendors/customers,
+and design parts with multi-level BOMs and cost roll-up"* — audited goal-backward against the
+running stack (`.zj/MILESTONE-v1.0-AUDIT.md`). All four clauses proven live.
+
+- **Audit found what seven phase verifications missed:** G1 (Where-Used labelled every parent
+  "Direct parent" — a backend/frontend contract drift, fixed `63ea954`), G2 (Excel export 500 on
+  a stale API image, fixed by rebuild), G3 (live-DB pytest harness skips 98 tests — deferred,
+  BACKLOG p1 / D-P7-4).
+- **Evidence:** 66 live-DB assertions across five `backend/scripts/verify_*.py`, 0 failures;
+  backend pytest 90 passed / 98 skipped; frontend Vitest 54 passed; `tsc -b` clean;
+  `zj doctor` 0 errors.
+- **Records:** `CHANGELOG.md` (98 entries), `.zj/logs/milestone-v1.0.md` (≈47 h over 30 sessions),
+  `.zj/LEARNINGS.md` "Milestone v1.0", `.zj/DECISIONS.md` index (44 entries).
+- **Tag:** applied at branch HEAD, which also contains Phase 8 (v2.0) work — see **D-M1-1**. No
+  commit in history is a clean v1.0 tree, because Phase 8 was built on the unclosed Phase-7
+  branch (D-P8-11).
+- **Human UAT:** `.zj/UAT-v1.0.md` — the last gate before the tag is applied.
 
 ### Phase 0: Prototypes & program planning  [done — adopted 2026-07-04]
 - **Goal:** Prove the domain logic and plan the re-platform.
@@ -100,10 +115,14 @@ shipped; Phase 7 closes the audited gaps.
 
 ---
 
-## Milestone v2.0 — Operations (SYERP extended + MOUSSE)
+## v2.0 — Operations (SYERP extended + MOUSSE)  [in progress]
 Owner decision 2026-07-04: dependency-first order confirmed — operations before FLAN port /
 CRM. **Definition of done (draft):** "Can track inventory, raise purchase orders, and execute
 work orders that consume PLUM BOMs and inventory." Refine via `/zj:spec` at milestone start.
+
+Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the BACKLOG p1 items
+(pytest live-DB harness, both lint gates, CI pipeline) and the v2.0 human UAT
+(`.zj/UAT-v2.0.md`).
 
 ### Phase 8: SYERP Extended — inventory & purchasing  [done]
 - **Goal:** Inventory items (optional PLUM link) with per-location on-hand, immutable

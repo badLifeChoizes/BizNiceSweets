@@ -17,7 +17,8 @@ and now the **v1.0 milestone close** (`/zj:milestone`).
   - [x] Proven live: `/plum/export/excel` → 200, payload is a real `.xlsx`
 - [x] Full regression: 66 live-DB assertions, backend 90 passed/98 skipped, frontend 54 passed, `tsc -b` clean
 - [x] Doctor artifact-format fixes (`STATE.md` required fields)
-- [ ] **G3** broken pytest DB harness (98 skips) — deferred, BACKLOG p1 / D-P7-4
-- [ ] Human UAT — 10 of 12 checks (`.zj/UAT-v1.0.md`) — owner runs
-- [ ] Records: CHANGELOG, work log, learnings roll-up, decisions index
-- [ ] Tag v1.0 + archive phases + roll roadmap forward
+- [x] **G3** broken pytest DB harness (98 skips) — deferred by owner, BACKLOG p1 / D-P7-4 / D-M1-2
+- [x] Records: CHANGELOG (98 entries), work log, learnings roll-up, decisions index (44)
+- [x] Archive Phase 7 → `.zj/history/v1.0/phases/`; roll ROADMAP + PROJECT + STATE forward
+- [ ] Human UAT — 10 of 12 checks (`.zj/UAT-v1.0.md`) — **owner runs**
+- [ ] Tag `v1.0` at HEAD (D-M1-1) — blocked on the UAT above

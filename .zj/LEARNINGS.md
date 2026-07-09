@@ -120,3 +120,58 @@ regression tool.** Every phase we close on scripts adds to a growing pile of unp
 - **The dev container image is stale**: in-container Excel export raises `ModuleNotFoundError: openpyxl`
   despite `requirements.txt` pinning it, and `pytest` isn't installed either. Any "run it in the
   container" verify step pays this tax until the image is rebuilt.
+
+---
+
+## Milestone v1.0 — Foundation + PLUM (closed 2026-07-09)
+
+Roll-up of Phases 1–7. Distilled from the phase retros plus the milestone audit
+(`.zj/MILESTONE-v1.0-AUDIT.md`), which found one major defect the phases had all missed.
+
+### Repeat these
+
+- **Audit goal-backward from the definition of done, not from the phase list.** Every phase in
+  v1.0 was `[verified]`/PASS, and the milestone still surfaced a major defect (G1). Phase
+  verification asks "did the plan get built?"; the milestone asks "does the product do what it
+  promised?" They are not the same question, and the second one is the one that matters.
+- **Standalone live-DB `verify_*.py` scripts are the real integration gate** while the pytest
+  harness is down. 66 assertions across five scripts, all green, caught nothing false and proved
+  the entire DoD backend. They earned their keep.
+- **Making each success criterion an executable test** (Phase 7) — proven red *and* green — is
+  what turned "we believe this works" into "this is pinned." The red proof is the load-bearing
+  half; a test that has never failed is a test that has never been checked.
+- **Statuses that stay pessimistic until proven are cheap insurance.** PLUM-06 sat at
+  `partial (unverified)` for two phases. That caution was *correct* — it was hiding G1. A status
+  is a claim about current code; do not upgrade it to make a table look finished.
+
+### Never do these again
+
+- **Never let "verified live" mean "verified at the API."** G1's backend traversal was correct
+  and provable; the UI threw its answer away by keying off a field the API never sent. API-level
+  proof does not transfer to the component that consumes it. When a capability spans a
+  contract, verify *through* the contract, from the surface the user touches.
+- **Never let a frontend read a field the backend does not emit.** The whole G1 class of bug is
+  a silent contract drift: `entry.via_part_number` was always `undefined`, optional-chained into a
+  plausible-looking fallback, so it degraded into a *wrong answer* instead of an error. Optional
+  fields with sensible-looking fallbacks hide contract breaks. Prefer a required field, or assert
+  the contract in a test.
+- **Never trust a doc's file path.** `SRD SYERP-05` cited `syerp/seed.py` for months; the file is
+  `coa_seed.py`. The root instructions repeated the same wrong name. Doc rot is silent and it
+  compounds — `zj doctor` had 18 errors nobody had run.
+- **Never describe a broken quality gate as a working one.** The root instructions advertised a
+  "zero-warning policy" while *both* lint gates were non-functional (ESLint 10 with a legacy
+  `.eslintrc.cjs` and no parser deps; `ruff` pinned but never installed). A gate you believe in but
+  do not run is worse than no gate — it buys false confidence.
+- **Never under-report the blast radius of a broken harness.** The SRD called the skips a PLUM
+  problem. They were 98 skips across auth (38), plum (34), syerp (17), and core (7) — roughly 3×
+  wider than documented, i.e. *every* module's DB-backed tests.
+
+### Process notes
+
+- **The commit-ordering trap:** Phase 7 (v1.0) fixes landed *after* all 30 of Phase 8's (v2.0)
+  commits, because Phase 8 was planned before v1.0 formally closed (D-P8-11). Consequence: no
+  commit in history is a clean v1.0 tree. If milestones are meant to be taggable, do not start
+  the next milestone's build on the previous one's unclosed branch.
+- **A milestone-close audit is worth its cost.** It found G1 (major, unprotected), G2 (a stale
+  container image masking a working feature), 18 doctor errors, a stale PRD status, and a
+  3×-understated harness gap — none of which seven phase verifications had caught.

@@ -1,8 +1,58 @@
 # DECISIONS — BizNiceSweets
-Updated: 2026-07-04
+Updated: 2026-07-09
 
 Recovered decisions are marked `(recovered)` with their original source (now archived).
 Numbering is append-only.
+
+## Index
+
+One line per decision, newest last. Entries below are append-only — regenerate this index
+at milestone close, never hand-edit it. 44 decisions.
+
+- **D-1:** Business domain = hybrid open-source business suite of 7 integrated suites (SYERP, PLUM, FLAN, MOUSSE, CRUMB, GELATO, CRISP), each usable…
+- **D-2:** Manufacturing (facilities, work centers, routings) lives in MOUSSE, not PLUM — PLUM is product development; released products hand off to MOUSSE.…
+- **D-3:** Modular monolith over one shared PostgreSQL database, SYERP as hub, modules integrate via foreign keys — simpler ops than microservices at this scale
+- **D-4:** Full rewrite of all suites onto FastAPI + SQLAlchemy 2.0 + PostgreSQL / React + TypeScript + Tailwind + shadcn/ui, deployed via Podman Compose
+- **D-5:** Self-hosted + offline-capable + open-core licensing — user ownership, no SaaS lock-in, permissive deps only.
+- **D-6:** Dependency-first phase order (Foundation → Product Dev → Operations → Customer/Logistics → Quality); a value-first reorder was considered and…
+- **D-7:** Milestone 1 = thin foundation + the PLUM port together, so the milestone ends with a usable tool, not just plumbing.
+- **D-8:** Auth = PyJWT 2.13 + pwdlib[argon2] — not python-jose (CVEs), not passlib (abandoned)
+- **D-9:** RBAC = User↔Role↔Permission M2M with module:action permission codes; UI gating is convenience only — backend 403 is the authz boundary.
+- **D-10:** Seeds are idempotent select-before-insert, run at startup lifespan; migrations auto-apply on container boot (backend/entrypoint.sh).
+- **D-11:** All PLUM cost/qty math uses Numeric(18,6)/Python Decimal — never float; export serializes Decimal as string.
+- **D-12:** One-Released-revision-per-part enforced at DB level (partial unique index), not just in service code.
+- **D-13:** Effective-cost resolution order = vendor price → manual cost → BOM roll-up → uncosted; cost snapshot frozen at release time.
+- **D-14:** Import is two-step preview/commit, upsert-never-delete, stateless re-parse on commit, 10MB guard.
+- **D-15:** Tailwind v4 requires shadcn color tokens registered via @theme inline in src/index.css, or panels render transparent app-wide.
+- **D-ADOPT-1:** Project adopted into ZJ. .zj/ is the sole planning source of truth; the GSD system (.planning/) and the superseded program-planning docs…
+- **D-ADOPT-2:** Phase 7 (close v1.0 gaps) adopted as-is from the GSD plans — same 4-plan scope; /zj:plan 7 translates rather than re-derives.
+- **D-ADOPT-3:** Next milestone after v1.0 = SYERP extended + MOUSSE (dependency-first confirmed), ahead of the FLAN port and PLUM advanced.
+- **D-ADOPT-4:** HTML prototypes (plum/app/plm_v54.html, flan/app/prj-mgmt-v24.html) are frozen reference only — no further development or bug fixes; they exist as…
+- **D-ADOPT-5:** The unfinished suite-documentation and integration-spec items from docs/tasks/chore-architecture-planning.md are kept as backlog, not abandoned.
+- **D-ADOPT-6:** Requirement-status corrections at adoption: docs/features/requirements-progress.md claims PLUM-04..10 "Complete" — contradicted by the live audit…
+- **D-P7-1:** Phase-7 human-verify runs against the Vite dev server (http://localhost:5173) only — no frontend/dist / container-image rebuild task
+- **D-P7-2:** Phase 7 stays scoped to the adopted 4 GSD plans plus one task to correct the root CLAUDE.md "Technology Stack" / "Architecture" sections (they…
+- **D-P7-3:** bugfix-plum-v1-gaps is branched off chore-architecture-planning, not master as the PLAN originally stated
+- **D-P7-4:** The PLUM live-DB test harness is fundamentally broken and its repair is deferred ("until it becomes blocking or it's asked for")
+- **D-P7-5:** Human-UAT moves from a per-phase blocking gate to a milestone-close activity
+- **D-P7-6:** part_number keeps no format constraint — String(50) / Field(None, max_length=50) stands; no regex pattern is added to PartCreate
+- **D-P8-1:** Inventory and purchasing are SYERP, not MOUSSE or GELATO — reaffirmed when the owner questioned suite ownership at spec time
+- **D-P8-2:** Hybrid item↔PLUM identity
+- **D-P8-3:** Flat named stock locations only in SYERP inventory for v2.0; bins, zones, warehouse hierarchy, pick/pack/ship, and lot/serial are deferred to…
+- **D-P8-4:** Moving weighted-average valuation
+- **D-P8-5:** PO depth = Draft → Approve → Receive-into-inventory, no AP. Receiving posts SYERP-10 receipt transactions at PO unit cost; the workflow stops…
+- **D-P8-6:** Both the inventory-item code and the PO number use a numeric-safe auto-generator (order by integer cast, never lexicographic MAX) — carrying…
+- **D-P8-7:** v2.0 rejects issues/adjustments/transfers that would drive a location negative, and rejects PO over-receipt beyond ordered qty (both HTTP 4xx)
+- **D-P8-8:** Phase 8 is one full-stack phase, delivered in wave order: inventory backend → inventory UI → purchasing backend → purchasing UI → verify
+- **D-P8-9:** UI folded into the plan — no separate DESIGN.md
+- **D-P8-10:** A single syerp:write gates all mutations, including PO approval (Draft→Approved); reads use syerp:read
+- **D-P8-11:** Phase 8 branch = feature-syerp-inventory-purchasing cut from the current bugfix-plum-v1-gaps tip, NOT from master
+- **D-P8-12:** Moving-average valuation is stored as a moving_avg_cost Numeric(18,6) column on syerp_inventory_item, recomputed transactionally on each receipt
+- **D-P8-13:** Auto-generated code prefixes — inventory items ITEM-0001, purchase orders PO-0001 — both via the numeric-safe generator (regex-filter then…
+- **D-P8-14:** A fresh deploy seeds one idempotent Main stock location (upsert-by-name, mirroring coa_seed.py) so receiving/adjustments work out-of-the-box
+- **D-P8-15:** PO line qty_received is a stored accumulator on the line (POs are mutable working documents, not the immutable ledger), cross-checkable against…
+- **D-M1-1:** The v1.0 tag is applied at the milestone HEAD, which contains Phase 8 (v2.0) work
+- **D-M1-2:** Gaps G1 and G2 were fixed at milestone close rather than deferred (63ea954 + API image rebuild); G3 (broken live-DB pytest harness) stays deferred…
 
 ## Product & Architecture
 
@@ -205,3 +255,21 @@ Numbering is append-only.
 - **D-P8-15:** PO line `qty_received` is a **stored accumulator** on the line (POs are mutable
   working documents, not the immutable ledger), cross-checkable against `SUM(quantity)` of the
   receipt transactions whose `source_id` = the line id.
+
+## v1.0 milestone close (2026-07-09)
+
+- **D-M1-1 (owner):** **The v1.0 tag is applied at the milestone HEAD, which contains Phase 8
+  (v2.0) work.** *Why:* Phase 7's blocker fix (`7562a02`), its guard (`8975eeb`), and the
+  milestone-audit fix (`63ea954`) were all committed *after* Phase 8's 30 commits, because Phase 8
+  was planned and built on the unclosed Phase-7 branch (D-P8-11). No commit in history is
+  therefore a clean v1.0 tree. A cherry-pick of the three fixes onto the last pre-Phase-8 commit
+  was considered and **rejected** — it would duplicate commits and create a divergent line for
+  cosmetic tag purity. *Consequence:* checking out `v1.0` yields inventory and purchasing too;
+  the changelog says so explicitly. **Do not start the next milestone's build on an unclosed
+  milestone's branch** — this is the concrete cost of having done so.
+- **D-M1-2 (owner):** **Gaps G1 and G2 were fixed at milestone close rather than deferred**
+  (`63ea954` + API image rebuild); **G3 (broken live-DB pytest harness) stays deferred** to
+  BACKLOG p1 / D-P7-4. *Why:* G1 sat inside the definition of done ("multi-level BOMs") and
+  guaranteed a UAT failure; G2 was a stale-image artifact with no code change required. G3 is
+  test-infrastructure work whose absence is compensated, for now, by the `verify_*.py` live-DB
+  gates and the Vitest suite — both of which do run.

@@ -44,14 +44,29 @@ The re-platform is **substantially built** — this is no longer a prototypes-pl
   (`frontend/src/`).
 - Deployment: Podman Compose (`compose/compose.yml`), auto-migrating container entrypoint.
 - Shipped: auth/RBAC, app shell with module toggles, SYERP partners + chart of accounts,
-  PLUM parts/revisions/BOM/costing/AVL/import-export.
-- Two known runtime blockers (`SyerpPartner` ImportError; lexicographic part-number MAX)
-  keep v1.0 from closing — Phase 7 (pending) fixes them. See SRD statuses.
+  PLUM parts/revisions/BOM/costing/AVL/import-export, SYERP inventory + purchasing (v2.0
+  Phase 8).
+- **Milestone v1.0 closed 2026-07-09.** The Phase-7 blockers (`SyerpPartner` ImportError;
+  lexicographic part-number MAX) are fixed and proven live. The milestone audit found and
+  fixed one further major defect the phase verifications had missed (Where-Used labelled every
+  parent "Direct parent" — see `.zj/MILESTONE-v1.0-AUDIT.md`, gap G1).
 - Legacy HTML prototypes (`plum/app/plm_v54.html`, `flan/app/prj-mgmt-v24.html`) are
   **frozen reference implementations** — domain-logic reference for porting, no further
   development or bug fixes (owner decision, 2026-07-04).
 
 Full codebase detail: `.zj/codebase/MAP.md`.
+
+## Definition of done — current milestone (v2.0 Operations)
+
+> "Can track inventory, raise purchase orders, and execute work orders that consume PLUM BOMs
+> and inventory."
+
+Carried forward from the owner's 2026-07-04 dependency-first decision (D-ADOPT-3). Phase 8
+(inventory + purchasing) is done and verified; Phase 9 (AP/AR + reporting) and Phase 10 (MOUSSE
+work orders) remain. Refine via `/zj:spec` before planning Phase 9.
+
+**Shipped milestone:** v1.0 — *"Can deploy it, log in, manage vendors/customers, and design
+parts with multi-level BOMs and cost roll-up."* Closed 2026-07-09.
 
 ## Constraints
 
