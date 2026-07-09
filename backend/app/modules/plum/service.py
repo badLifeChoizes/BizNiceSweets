@@ -63,7 +63,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import Numeric, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
@@ -110,8 +110,8 @@ async def generate_part_number(db: AsyncSession) -> str:
     Generate the next part number in the P##### series.
 
     Finds the current highest *numeric* suffix among strictly-numeric P-series
-    part numbers (matching ``^P[0-9]+$``) by casting the digits after "P" to an
-    integer and ordering numerically, then returns the next value zero-padded to
+    part numbers (matching ``^P[0-9]+$``) by casting the digits after "P" to a
+    number and ordering numerically, then returns the next value zero-padded to
     5 digits. Returns "P00001" when no P-series part numbers exist yet.
 
     The regex filter MUST precede the cast: a bare cast over ``LIKE 'P%'`` would
@@ -119,6 +119,13 @@ async def generate_part_number(db: AsyncSession) -> str:
     previous implementation used lexicographic MAX(part_number), which returned a
     smaller successor once the suffix crossed a digit-width boundary (e.g.
     "P99999" sorted above "P100000"), producing duplicate part numbers.
+
+    The cast target is Numeric, not Integer: part_number is String(50) with no
+    format constraint, so a caller may legally create "P9999999999", whose suffix
+    matches the regex but exceeds int4 — an Integer cast would raise "value out of
+    range for type integer" here and 500 every subsequent auto-numbered create
+    until the row was deleted by hand. Numeric cannot overflow for any 50-char
+    digit string.
 
     The DB unique constraint on plum_part.part_number is the authoritative guard;
     this function is a best-effort generator. The caller must handle
@@ -129,7 +136,7 @@ async def generate_part_number(db: AsyncSession) -> str:
     result = await db.execute(
         select(PlumPart.part_number)
         .where(PlumPart.part_number.op("~")(r"^P[0-9]+$"))
-        .order_by(cast(func.substring(PlumPart.part_number, 2), Integer).desc())
+        .order_by(cast(func.substring(PlumPart.part_number, 2), Numeric).desc())
         .limit(1)
     )
     max_pn: str | None = result.scalar()
