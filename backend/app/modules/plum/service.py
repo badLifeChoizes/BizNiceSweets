@@ -1503,7 +1503,8 @@ async def get_where_used(
     Return direct and indirect parent assemblies that reference this part (PLUM-06).
 
     Traverses the BOM graph in reverse (upward) from part_id. Direct parents
-    are depth=1; indirect (grandparents etc.) are depth>1 with indirect=True.
+    are depth=1; indirect (grandparents etc.) are depth>1 with indirect=True
+    and via_part_number naming the intermediate part they are reached through.
 
     Returns a list of WhereUsedRow dicts. Deduplicates by parent_part_id
     (a part may appear at multiple depths — only the shallowest is kept).
@@ -1512,12 +1513,14 @@ async def get_where_used(
 
     # BFS upward: find revisions whose BOM includes part_id as a child
     found: dict[str, dict] = {}  # parent_part_id → WhereUsedRow dict
-    # Queue: list of (part_id_to_search_up_from, depth)
-    queue: list[tuple[str, int]] = [(part_id, 0)]
+    # Queue: (part_id_to_search_up_from, depth, that part's number). The part
+    # number rides along so an indirect parent can name the intermediate part it
+    # is reached through — it is exactly the part we are searching up from.
+    queue: list[tuple[str, int, str | None]] = [(part_id, 0, None)]
     searched_parts: set[str] = {part_id}
 
     while queue:
-        current_part_id, current_depth = queue.pop(0)
+        current_part_id, current_depth, current_part_number = queue.pop(0)
         next_depth = current_depth + 1
 
         if next_depth > max_depth:
@@ -1561,12 +1564,13 @@ async def get_where_used(
                     "parent_revision_status": rev.status,
                     "direct": not is_indirect,
                     "indirect": is_indirect,
+                    "via_part_number": current_part_number if is_indirect else None,
                 }
 
             # Continue searching upward from this parent if not already searched
             if parent_part_id not in searched_parts:
                 searched_parts.add(parent_part_id)
-                queue.append((parent_part_id, next_depth))
+                queue.append((parent_part_id, next_depth, parent_part.part_number))
 
     return list(found.values())
 

@@ -308,6 +308,8 @@ class WhereUsedRow(BaseModel):
 
     `direct`: True if this parent directly references the query part.
     `indirect`: True if the reference is via a nested BOM path (transitive).
+    `via_part_number`: for an indirect parent, the intermediate part through
+    which the query part is reached on the shallowest path. None when direct.
     """
 
     parent_part_id: str
@@ -317,6 +319,7 @@ class WhereUsedRow(BaseModel):
     parent_revision_status: str
     direct: bool = True
     indirect: bool = False
+    via_part_number: str | None = None
 
 
 # ---------------------------------------------------------------------------

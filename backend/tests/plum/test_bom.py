@@ -328,3 +328,16 @@ async def test_where_used_indirect(
     # A should be marked indirect
     a_row = next(r for r in rows if r["parent_part_id"] == a_id)
     assert a_row.get("indirect") is True, "A should be marked indirect=True"
+
+    # A is reached through B — the UI renders "Indirect via {via_part_number}",
+    # so an indirect row without this field silently degrades to "Direct parent"
+    # (milestone-audit defect G1).
+    b_part_number = b_resp.json()["part_number"]
+    assert a_row.get("via_part_number") == b_part_number, (
+        "Indirect ancestor A must name B as the part it is reached through"
+    )
+
+    # B is a direct parent: no intermediate part.
+    b_row = next(r for r in rows if r["parent_part_id"] == b_id)
+    assert b_row.get("direct") is True, "B should be marked direct=True"
+    assert b_row.get("via_part_number") is None, "Direct parent B has no via part"

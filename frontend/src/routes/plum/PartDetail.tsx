@@ -113,6 +113,8 @@ interface WhereUsedEntry {
   parent_revision_label?: string | null
   parent_revision_status?: string | null
   relationship?: string | null
+  direct?: boolean
+  indirect?: boolean
   via_part_number?: string | null
   depth?: number
 }
@@ -515,8 +517,8 @@ export function PartDetail() {
 
   // Sort where-used: direct first, then indirect
   const sortedWhereUsed = [...whereUsed].sort((a, b) => {
-    const aIsDirect = !a.via_part_number
-    const bIsDirect = !b.via_part_number
+    const aIsDirect = !a.indirect
+    const bIsDirect = !b.indirect
     if (aIsDirect && !bIsDirect) return -1
     if (!aIsDirect && bIsDirect) return 1
     return (a.parent_part_number ?? '').localeCompare(b.parent_part_number ?? '')
@@ -1271,9 +1273,11 @@ export function PartDetail() {
                     <RevisionStatusBadge status={entry.parent_revision_status} />
                   )}
                   <span className="text-xs text-muted-foreground">
-                    {entry.via_part_number
-                      ? `Indirect via ${entry.via_part_number}`
-                      : 'Direct parent'}
+                    {!entry.indirect
+                      ? 'Direct parent'
+                      : entry.via_part_number
+                        ? `Indirect via ${entry.via_part_number}`
+                        : 'Indirect parent'}
                   </span>
                 </li>
               ))}
