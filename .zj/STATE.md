@@ -104,20 +104,17 @@ gates cover them), but repair it before the guards drift out of sync with the py
 - **Lint gates BOTH non-functional (pre-existing):** no `ruff` in `.venv`; ESLint 10 lacks flat
   `eslint.config.js`. Correctness rests on the above, not lint. Pre-merge chore (BACKLOG candidate).
 
-## Next action
+### Prior next action (Phase 8 verify — now complete)
 
-`/zj:verify 08` — verify Phase 8 goal-backward against SYERP-10/11 acceptance criteria + review the
-diff. Branch `feature-syerp-inventory-purchasing` (28 commits: b5c5c31…e1b7f84). Then `/zj:ship` /
-merge, and the still-owed v1.0 close (`/zj:verify 07` → `/zj:milestone`, `.zj/UAT-v1.0.md`).
+`/zj:verify 08` ran 2026-07-08 (PASS, tag `zj/good-08-syerp-inventory-purchasing`), and
+`/zj:verify 07` ran 2026-07-09 (PASS, tag `zj/good-07-close-v1-0-gaps`). **Both are done** — see
+"## Next action" at the top of this file for what is actually next. The only v1.0 debt left is the
+12-check human-UAT at `/zj:milestone` (`.zj/UAT-v1.0.md`, 2/12).
 - **Known non-blockers logged** (PLAN.md Noticed): ruff absent (no backend lint), ESLint 10 flat-config
   missing (no frontend lint — already a Phase-7 item), Starlette 422 deprecation, Radix test-shim.
 
 Original next action (pre-build): `/zj:build 8` — 25 tasks, wave order inventory backend → inventory
 UI → purchasing backend → purchasing UI → verify.
-
-**Still owed on v1.0 (do not lose):** `/zj:verify 07` then `/zj:milestone` (runs the human-UAT,
-`.zj/UAT-v1.0.md`: checks 1 & 8 passed; 2–7 & 9–12 outstanding). Building Phase 8 first is an
-owner choice; v1.0 is not closed and Phase 7 is not yet verified.
 
 ## Build result (Phase 7)
 
