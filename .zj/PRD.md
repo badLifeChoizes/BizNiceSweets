@@ -10,6 +10,7 @@ Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` G
 - **Source:** original program roadmap (2025-12-21); PROJECT.md core value
 - **Acceptance signal:** `podman-compose up` on a fresh machine yields a working, migrated,
   logged-in-able suite.
+- **Evidence:** CORE-01, CORE-09 (see SRD).
 - **Status: implemented** — verified live by the v1.0 milestone audit (2026-07-01).
 
 ## PRD-2: Secure multi-user access
@@ -21,6 +22,7 @@ Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` G
 - **Source:** Milestone-1 requirements (CORE-02..05)
 - **Acceptance signal:** Admin creates users and roles; a user without a permission is
   refused by the API (not just hidden in the UI).
+- **Evidence:** CORE-02, CORE-03, CORE-04, CORE-05 (see SRD).
 - **Status: implemented**
 
 ## PRD-3: Modular suite shell
@@ -33,6 +35,7 @@ Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` G
 - **Source:** Milestone-1 requirements (CORE-06..08); architecture decision (modular monolith)
 - **Acceptance signal:** Toggling a module updates navigation live; SYERP cannot be disabled
   (hub guard).
+- **Evidence:** CORE-06, CORE-07, CORE-08 (see SRD).
 - **Status: implemented**
 
 ## PRD-4: SYERP hub — business partners and financial skeleton
@@ -43,6 +46,7 @@ Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` G
 - **Priority:** must
 - **Source:** Milestone-1 requirements (SYERP-01..05); hub-architecture decision
 - **Acceptance signal:** Vendors/customers manageable in-app; PLUM can link parts to vendors.
+- **Evidence:** SYERP-01, SYERP-02, SYERP-03, SYERP-04, SYERP-05 (see SRD).
 - **Status: implemented**
 
 ## PRD-5: PLUM — product design and costing
@@ -55,6 +59,7 @@ Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` G
 - **Source:** PLUM prototype (v54) domain logic; Milestone-1 requirements (PLUM-01..10)
 - **Acceptance signal:** A user designs a multi-level assembly with costs rolled up from
   vendor pricing, and can round-trip the data via export/import.
+- **Evidence:** PLUM-01, PLUM-02, PLUM-03 implemented; PLUM-04, PLUM-05, PLUM-06, PLUM-07, PLUM-08, PLUM-09, PLUM-10 partial pending v1.0 UAT (see SRD).
 - **Status: partial** — parts/revisions/BOM/costing shipped; AVL and vendor import/export
   broken at runtime + Phase-6 human verification never run (see SRD PLUM-04..10; Phase 7).
 
@@ -79,7 +84,10 @@ Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` G
 - **Source:** program roadmap Phase 2 (archived `docs/ROADMAP.md`); owner decision 2026-07-04
 - **Acceptance signal:** A work order for a released PLUM assembly consumes inventory and
   reports cost back to SYERP.
-- **Status: planned**
+- **Evidence:** SYERP-10, SYERP-11 implemented (Phase 8, backend verified live); SYERP-12, MOUSSE-01 planned (see SRD).
+- **Status: partial** — inventory + purchasing shipped and verified live (v2.0 Phase 8); AP/AR
+  reporting (SYERP-12) and manufacturing execution (MOUSSE-01) still planned. Corrected at the
+  v1.0 milestone close: this entry still read `planned` after Phase 8 landed.
 
 ## PRD-8: Customer and logistics — CRM and warehouse
 - **Statement:** The product shall support selling and shipping: leads → opportunities →
@@ -103,6 +111,7 @@ Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` G
 - **Source:** program roadmap Phase 4 (archived); compliance-posture constraint
 - **Acceptance signal:** Every significant action is attributable in an audit log; CRISP
   workflows reference manufacturing and inventory records.
+- **Evidence:** NFR-1 implemented (audit-trail foundation); CRISP-01 planned (see SRD).
 - **Status: partial** — audit-trail foundation implemented (audit events written across
   auth/SYERP/PLUM services); CRISP module planned.
 
@@ -125,5 +134,6 @@ Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` G
 - **Source:** original vision (2025-12-21)
 - **Acceptance signal:** Dependency audit shows permissive licenses; public release possible
   without relicensing.
+- **Evidence:** NFR-2 implemented but unaudited (permissive-license dependencies) (see SRD).
 - **Status: partial** — stack chosen for permissive licenses throughout (MIT/Apache/PostgreSQL);
   no public release or license audit yet.

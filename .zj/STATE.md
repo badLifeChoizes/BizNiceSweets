@@ -3,6 +3,11 @@ Updated: 2026-07-09
 
 ## Position
 
+- **Project:** BizNiceSweets
+- **Step:** fix
+- **Last update:** 2026-07-09
+- **Next action:** `/zj:milestone` v1.0 gap-closure fix loop — G1 (where-used label) + G2 (image rebuild),
+  then the 12-check human UAT (`.zj/UAT-v1.0.md`, 2/12) is the last gate before tagging.
 - **Milestone:** v1.0 — Foundation + PLUM (Phase 7 **done**; milestone close still **open** —
   human-UAT owed) · v2.0 — Phase 8 **DONE** (verified + retro complete).
 - **Phase:** 7 (close v1.0 gaps) **verified + retro'd 2026-07-09** — roadmap `[done]`. Verified code

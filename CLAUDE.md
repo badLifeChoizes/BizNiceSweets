@@ -69,7 +69,7 @@ The vanilla-JS / CDN / localStorage details in the "Legacy prototypes" subsectio
 - **Styling:** Tailwind CSS 4.3.1 via `@tailwindcss/vite` (no `tailwind.config` file); shadcn/ui-style primitives (Radix + cva) generated into `src/components/ui/`
 - **Server state:** TanStack Query 5.101.1; single axios 1.18.1 client (`src/api/client.ts`) handles tokens
 - **UX:** sonner for toasts
-- **Dev/test:** Vitest 4.1.9 + Testing Library + jsdom; ESLint 10 + typescript-eslint; Prettier 3.8.4 (zero-warning policy)
+- **Dev/test:** Vitest 4.1.9 + Testing Library + jsdom; Prettier 3.8.4. **Both lint gates are currently non-functional** (BACKLOG p1): ESLint 10 is flat-config-only but the repo still ships `.eslintrc.cjs`, the `lint` script passes the removed `--ext` flag, and the `@typescript-eslint` parser/plugin packages are absent from `devDependencies`; `ruff` is pinned in `requirements-dev.txt` but not installed in `backend/.venv`. Correctness rests on the test suites and `backend/scripts/verify_*.py`, not on lint.
 
 ## Database & Deployment
 - **Database:** PostgreSQL 17 (`postgres:17-alpine`) — one shared database for all modules, never port-mapped to the host
@@ -89,7 +89,7 @@ The vanilla-JS / CDN / localStorage details in the "Legacy prototypes" subsectio
 ## Suite Status
 | Suite | Live location | Status |
 |-------|---------------|--------|
-| SYERP (ERP — hub) | `backend/app/modules/syerp/`, `frontend/src/routes/syerp/` | Building (partners + GL) |
+| SYERP (ERP — hub) | `backend/app/modules/syerp/`, `frontend/src/routes/syerp/` | Building (partners + GL; inventory + purchasing added in Phase 8 / v2.0) |
 | PLUM (PLM) | `backend/app/modules/plum/`, `frontend/src/routes/plum/` | Building (parts, revisions, BOM, costing, AVL, import/export); legacy `plum/app/plm_v54.html` |
 | FLAN (Project Mgmt) | — (legacy `flan/app/prj-mgmt-v24.html`) | Prototype only, not yet re-platformed |
 | CRUMB (CRM) | — | Planned |
@@ -162,7 +162,7 @@ and applies **only** to `plum/app/` and `flan/app/`.
 ## Backend structure
 - **Entry point:** `backend/app/main.py` — FastAPI app factory. Startup: entrypoint waits for Postgres and runs `alembic upgrade head`, lifespan runs idempotent seeds, modules self-register, then the SPA catch-all mounts last.
 - **Module registry:** each module package's `__init__.py` calls `registry.register(module)`; `mount_all(app)` wires every router under `/api/v1` (`backend/app/core/registry.py`). Registered today: `syerp`, `plum`, `auth`.
-- **Module layout (repeated pattern):** `backend/app/modules/<name>/{__init__,models,schemas,router,service,seed}.py`. Business logic lives in `service.py`; routers are thin.
+- **Module layout (repeated pattern):** `backend/app/modules/<name>/{__init__,models,schemas,router,service}.py`. Business logic lives in `service.py`; routers are thin. Seeding is per-module but **not uniformly named**: `auth/seed.py` and `plum/seed.py`, but SYERP splits its into `syerp/coa_seed.py` and `syerp/inventory_seed.py` — all wired from `backend/app/core/seed.py`.
 - **Cross-cutting platform code:** `backend/app/core/` — config (pydantic-settings, `SecretStr`), async engine/session (`db.py`), module-toggle + settings routers, seed orchestration (`seed.py`).
 - **Cross-module integration via FKs:** PLUM AVL rows reference SYERP partners — the concrete realization of "SYERP as the hub."
 - **Migrations:** Alembic revisions in `backend/alembic/versions/` are the schema source of truth; every model change adds one.

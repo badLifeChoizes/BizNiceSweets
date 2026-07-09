@@ -66,7 +66,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ## CORE-09: Versioned migrations  [traces: PRD-1]  **Status: implemented**
 - **Statement:** Database schema is managed via versioned migrations (Alembic) that apply cleanly on a fresh deploy.
-- **Evidence:** `backend/alembic/versions/0001`–`0006` single chained history; auto-run by `backend/entrypoint.sh:23`; chain 0001→0006 verified clean by audit.
+- **Evidence:** single chained history from `backend/alembic/versions/0001_initial_baseline.py` through `backend/alembic/versions/0008_syerp_purchasing.py`; auto-run by `backend/entrypoint.sh:23`. The v1.0 chain (0001→0006) was verified clean by audit; revisions 0007 and 0008 are v2.0 Phase 8.
 - **Verification:** fresh DB migrates to head on container start.
 
 ---
@@ -75,7 +75,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ## SYERP-01: Vendor CRUD  [traces: PRD-4]  **Status: implemented**
 - **Statement:** User can create, view, edit, and delete vendors.
-- **Evidence:** `backend/app/modules/syerp/` (`Partner` model, `models.py:39`); `frontend/src/routes/syerp/Vendors.tsx`; archive-via-PATCH pattern; human-verified in Phase 4 (with 4 UAT fixes landed).
+- **Evidence:** `Partner` model at `backend/app/modules/syerp/models.py:39`; `frontend/src/routes/syerp/Vendors.tsx`; archive-via-PATCH pattern; human-verified in Phase 4 (with 4 UAT fixes landed).
 - **Verification:** Vendors screen CRUD + `Vendors.test.tsx`.
 
 ## SYERP-02: Vendor search/filter  [traces: PRD-4]  **Status: implemented**
@@ -85,7 +85,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ## SYERP-03: Customer CRUD  [traces: PRD-4]  **Status: implemented**
 - **Statement:** User can create, view, edit, and delete customers.
-- **Evidence:** `frontend/src/routes/syerp/Customers.tsx` + shared `PartnerSheet`; `Customers.test.tsx`.
+- **Evidence:** `frontend/src/routes/syerp/Customers.tsx` + shared `frontend/src/routes/syerp/components/PartnerSheet.tsx`; `frontend/src/routes/syerp/Customers.test.tsx`.
 - **Verification:** as SYERP-01, customer-flagged partners.
 
 ## SYERP-04: Customer search/filter  [traces: PRD-4]  **Status: implemented**
@@ -95,7 +95,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ## SYERP-05: General-ledger skeleton  [traces: PRD-4]  **Status: implemented**
 - **Statement:** System provides a basic general-ledger account structure (chart-of-accounts skeleton).
-- **Evidence:** seeded standard CoA (two-pass parent-code resolution, `backend/app/modules/syerp/seed.py`); read-only `frontend/src/routes/syerp/GLAccounts.tsx`; `backend/tests/syerp/test_gl.py`.
+- **Evidence:** seeded standard CoA (two-pass parent-code resolution, `backend/app/modules/syerp/coa_seed.py`); read-only `frontend/src/routes/syerp/GLAccounts.tsx`; `backend/tests/syerp/test_gl.py`.
 - **Verification:** CoA renders grouped by account type after fresh seed.
 
 ---
@@ -103,10 +103,12 @@ future scope (expanded via `/zj:spec` when their milestones near).
 ## PLUM (PLM Port — v1 Core)
 
 ## PLUM-01: Part CRUD  [traces: PRD-5]  **Status: implemented**
-- **Verified:** 8975eeb (Phase 07 verify, 2026-07-09 — numeric successor proven live past the
-  5→6-digit boundary; guarded by `scripts/verify_part_numbering.py` + `tests/plum/test_part_number.py`)
+- **Verified:** 63ea954 (re-stamped at the v1.0 milestone close, 2026-07-09 — `service.py` changed
+  after the 8975eeb stamp for the PLUM-06 G1 fix; part CRUD re-proven live, 201 on create and
+  numeric successor still correct past the 5→6-digit boundary; guarded by
+  `backend/scripts/verify_part_numbering.py` + `backend/tests/plum/test_part_number.py`)
 - **Statement:** User can create, view, edit, and delete parts.
-- **Evidence:** `backend/app/modules/plum/` models/service/router, migration 0005; `frontend/src/routes/plum/PartsList.tsx`, `PartSheet.tsx`; `backend/tests/plum/test_parts.py`; human UAT 10/10 in Phase 5.
+- **Evidence:** `backend/app/modules/plum/models.py`, `backend/app/modules/plum/service.py`, `backend/app/modules/plum/router.py`, migration `backend/alembic/versions/0005_plum_tables.py`; `frontend/src/routes/plum/PartsList.tsx`, `frontend/src/routes/plum/components/PartSheet.tsx`; `backend/tests/plum/test_parts.py`; human UAT 10 of 10 in Phase 5.
 - **Defect (resolved, Phase 7 `1b8bfa1`):** `generate_part_number()` used lexicographic `MAX`
   on a VARCHAR — past a digit-width boundary it returned a stale number → duplicate-key 500.
   Rewritten to filter `^P[0-9]+$` then order by `cast(substring, Numeric)`. **Proven live** against
@@ -127,12 +129,12 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ## PLUM-02: Part search/filter  [traces: PRD-5]  **Status: implemented**
 - **Statement:** User can search and filter parts.
-- **Evidence:** `frontend/src/routes/plum/PartsList.tsx`; `test_parts.py`; live search confirmed by audit.
+- **Evidence:** `frontend/src/routes/plum/PartsList.tsx`; `backend/tests/plum/test_parts.py`; live search confirmed by audit.
 - **Verification:** search/filter against live API.
 
 ## PLUM-03: Revisions and status workflow  [traces: PRD-5]  **Status: implemented**
 - **Statement:** User can create part revisions and advance a part through its status workflow.
-- **Evidence:** revision FSM in `service.py` with one-Released partial unique index (DB-level invariant); `NewRevisionDialog.tsx`, `AdvanceStatusDialog.tsx`; `backend/tests/plum/test_revisions.py`; Released immutability enforced in UI (Phase-5 UAT fix).
+- **Evidence:** revision FSM in `backend/app/modules/plum/service.py` with one-Released partial unique index (DB-level invariant); `frontend/src/routes/plum/components/NewRevisionDialog.tsx`, `frontend/src/routes/plum/components/AdvanceStatusDialog.tsx`; `backend/tests/plum/test_revisions.py`; Released immutability enforced in UI (Phase-5 UAT fix).
 - **Verification:** FSM tests; Draft→Released→Obsolete walk in-app.
 
 ## PLUM-04: Multi-level BOM tree  [traces: PRD-5]  **Status: partial (unverified)**
@@ -145,10 +147,11 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Evidence:** flat-BOM accumulation in `service.py`; `BomTree.tsx` flat mode; `test_bom.py`. Live-confirmed by audit; human-verify deferred to v1.0 milestone UAT (D-P7-5).
 - **Verification:** v1.0 milestone UAT check 2.
 
-## PLUM-06: Where-used analysis  [traces: PRD-5]  **Status: partial (unverified)**
+## PLUM-06: Where-used analysis  [traces: PRD-5]  **Status: partial (UI defect fixed at milestone audit; UI UAT pending)**
 - **Statement:** User can run where-used analysis to see which assemblies consume a part.
-- **Evidence:** where-used traversal in `service.py`; Where-Used card in `frontend/src/routes/plum/PartDetail.tsx`; `test_bom.py`. Live-confirmed by audit; human-verify deferred to v1.0 milestone UAT (D-P7-5).
-- **Verification:** v1.0 milestone UAT check 3.
+- **Evidence:** where-used traversal in `backend/app/modules/plum/service.py` (`get_where_used`, now emits `via_part_number`); `WhereUsedRow` in `backend/app/modules/plum/schemas.py`; Where-Used card in `frontend/src/routes/plum/PartDetail.tsx`; guards `frontend/src/routes/plum/PartDetail.test.tsx` (5 tests, runs in the ordinary vitest suite) and `backend/tests/plum/test_bom.py` (via-part assertions, currently skipped — D-P7-4).
+- **Note:** the backend traversal was always correct, but the **UI labelled every parent "Direct parent"** because it derived the label from a `via_part_number` the API never sent (v1.0 milestone-audit gap **G1**, fixed `63ea954`). The Phase-6/7 "live-confirmed by audit" claim covered the API only — this is why the `partial (unverified)` status was right to hold.
+- **Verification:** proven live 2026-07-09 (indirect ancestor names its intermediate part); visual affordance = v1.0 milestone UAT check 3.
 
 ## PLUM-07: Part-to-vendor links (AVL)  [traces: PRD-4, PRD-5]  **Status: partial (runtime fix landed + backend guarded; UI UAT pending)**
 - **Verified:** 8975eeb (Phase 07 verify, 2026-07-09 — `add_avl_link` accepts an `is_vendor=True`
@@ -412,6 +415,15 @@ MOUSSE/CRUMB/GELATO/CRISP-01, NFR-3 — coarse placeholders until their mileston
 
 > **Honest caveat (do not lose):** the v1.0 human-UAT is **2/12** (`.zj/UAT-v1.0.md`; checks 1 & 8
 > passed). Nothing above is marked `implemented` on the strength of a check that never ran — PLUM-04..10
-> remain `partial` for exactly that reason. The PLUM pytest harness is still broken (BACKLOG p1), so
-> `tests/plum/*` DB tests silently skip; the regression protection cited above lives in the
+> remain `partial` for exactly that reason. The live-DB pytest harness is still broken (BACKLOG p1,
+> D-P7-4), so DB tests silently skip; the regression protection cited above lives in the
 > `scripts/verify_*.py` live-DB gates and the frontend Vitest suite, all of which do run.
+>
+> **The skip is not PLUM-only** (corrected by the v1.0 milestone audit, 2026-07-09): `pytest -q`
+> reports **90 passed, 98 skipped**, and the 98 span **auth 38, plum 34, syerp 17, core 7** — every
+> module's DB-backed tests, not just `tests/plum/*`. Earlier wording here and in `STATE.md` understated
+> the blast radius by ~3×. Gap **G3** in `.zj/MILESTONE-v1.0-AUDIT.md`.
+>
+> **A milestone-audit lesson:** "live-confirmed by audit" for PLUM-06 meant the *API* was confirmed.
+> The UI silently discarded the API's answer (gap G1). API-level proof does not transfer to the
+> component that consumes it — see `.zj/LEARNINGS.md`, Milestone v1.0.
