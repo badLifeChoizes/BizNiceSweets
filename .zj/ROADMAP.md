@@ -64,7 +64,7 @@ shipped; Phase 7 closes the audited gaps.
 - **Notes:** the only unverified phase — human-verify checkpoint never ran; milestone audit
   (2026-07-01) found the `SyerpPartner` blocker and the part-number bug → Phase 7.
 
-### Phase 7: Close v1.0 gaps  [verified]
+### Phase 7: Close v1.0 gaps  [done]
 - **Goal:** PLUM AVL and vendor import/export work end-to-end without runtime errors,
   auto part-numbering is numerically correct, the Parts List refreshes after import, and
   Phase 6's flows are human-verified with traceability reconciled.
@@ -83,6 +83,10 @@ shipped; Phase 7 closes the audited gaps.
     half, runs in the ordinary pytest suite), `ImportExport.test.tsx` (SC3, positive + negative path).
   - **Still owed:** the 12-check human-UAT (`.zj/UAT-v1.0.md`, 2/12 done) at `/zj:milestone`, and the
     PLUM pytest-harness repair (BACKLOG p1) — the latter no longer leaves any criterion unprotected.
+- **Retro 2026-07-09** (`/zj:retro 07`): learnings in `.zj/LEARNINGS.md` "Phase 07" — the review, not
+  the live verify, caught the blocker (domain reasoning vs. happy-path drive); a fix can be worse than
+  its bug; "verified live" ≠ "protected". Deferrals homed: lint gates + stale API image → BACKLOG p1;
+  auto-number race → BACKLOG p2; `part_number` format constraint + dev-DB artifact → D-P7-6 / won't-fix.
 - **Scope (adopted as-is from GSD Phase 7, owner decision 2026-07-04):**
   1. Backend `service.py`: alias/rename `SyerpPartner` → `Partner` at 4 sites + numeric-safe
      `generate_part_number` + live-DB regression coverage.

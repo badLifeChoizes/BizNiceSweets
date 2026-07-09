@@ -115,6 +115,20 @@ Numbering is append-only.
   "human-UAT deferred to v1.0 milestone" rather than claimed complete (preserves SC5 — nothing
   marked Complete on an unrun check).
 
+## Phase 7 retro (2026-07-09)
+
+- **D-P7-6 (owner):** **`part_number` keeps no format constraint** — `String(50)` /
+  `Field(None, max_length=50)` stands; no regex pattern is added to `PartCreate`. A pattern would
+  reject part numbers real users legitimately rely on. *Consequence:* the auto-numbering ORDER BY
+  must stay `cast(..., Numeric)`, which cannot overflow for any 50-char digit string. **Do not
+  "simplify" the cast back to `Integer` or `BigInteger`** — that reintroduces the persistent-500 DoS
+  fixed in `7562a02`. Pinned by `backend/scripts/verify_part_numbering.py` scenario 3 and stated in
+  the `generate_part_number` docstring.
+
+- **Won't fix (Phase 7 `Noticed`):** dev-DB row `P-COMMIT-AVL-1` (left by an import-commit test) has
+  no non-obsolete revision, so its PartDetail renders without the BOM card. This is dev-database data
+  hygiene on a disposable volume, not a code defect — no backlog entry, no fix.
+
 ## v2.0 / Phase 8 spec — SYERP-10/11 expansion (2026-07-05)
 
 - **D-P8-1 (owner):** **Inventory and purchasing are SYERP, not MOUSSE or GELATO** — reaffirmed

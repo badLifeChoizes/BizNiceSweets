@@ -3,11 +3,11 @@ Updated: 2026-07-09
 
 ## Position
 
-- **Milestone:** v1.0 — Foundation + PLUM (Phase 7 **verified**; milestone close still **open** —
+- **Milestone:** v1.0 — Foundation + PLUM (Phase 7 **done**; milestone close still **open** —
   human-UAT owed) · v2.0 — Phase 8 **DONE** (verified + retro complete).
-- **Phase:** 7 (close v1.0 gaps) **verified 2026-07-09** — roadmap `[verified]`. Verified code tip
-  `8975eeb`; tag `zj/good-07-close-v1-0-gaps` at the artifacts commit `ac56fa1` (same convention as
-  Phase 8). Verdict PASS after a fix loop.
+- **Phase:** 7 (close v1.0 gaps) **verified + retro'd 2026-07-09** — roadmap `[done]`. Verified code
+  tip `8975eeb`; tag `zj/good-07-close-v1-0-gaps` at the artifacts commit `ac56fa1` (same convention
+  as Phase 8). Verdict PASS after a fix loop. Learnings in `.zj/LEARNINGS.md` (Phase 07).
   - **One blocker found and fixed** (`7562a02`): the phase's own SC2 numeric part-number fix cast
     the suffix to **int4**. `part_number` is `String(50)` with no format constraint, so a legal
     `P9999999999` matched `^P[0-9]+$` and overflowed the cast — **every** subsequent auto-numbered
@@ -21,7 +21,10 @@ Updated: 2026-07-09
     `frontend/src/routes/plum/ImportExport.test.tsx` (SC3, positive + negative path).
   - Full re-verification after the fix loop: **66 live-DB assertions, 0 failures** across five
     scripts; backend 90 passed / 98 skipped; frontend 49 passed; build clean.
-  - Artifacts: `.zj/phases/07-close-v1-0-gaps/{VERIFICATION.md,REVIEW.md}`.
+  - Artifacts: `.zj/phases/07-close-v1-0-gaps/{PLAN.md,VERIFICATION.md,REVIEW.md}`.
+  - Retro deferrals homed: lint gates + stale API image → BACKLOG p1; auto-number double-collision
+    race → BACKLOG p2; `part_number` format constraint (won't add) → D-P7-6; dev-DB `P-COMMIT-AVL-1`
+    artifact → won't fix.
 - **Phase:** 8 (SYERP inventory & purchasing) **verified + retro'd 2026-07-08** — roadmap `[done]`.
   All 16 SYERP-10/11 acceptance criteria proven live (`verify_inventory` 15/15,
   `verify_purchasing` 18/18, `verify_e2e_p8` 18/18 fresh-DB). One code defect found + fixed in the
@@ -36,17 +39,14 @@ Updated: 2026-07-09
 
 ## Next action
 
-**Both phases now verified. Choose the next move:**
+**Phases 7 and 8 are both verified and retro'd. Choose the next move:**
 1. **`/zj:milestone`** — closes v1.0. This is where the **12-check human-UAT** finally runs
    (`.zj/UAT-v1.0.md`, currently **2/12**: checks 1 & 8 passed). Both Phase 7 and Phase 8 deferred
    it here (D-P7-5); it is the last real debt against v1.0 and nothing is marked `implemented` on
    the strength of it. Regression checks 9–12 exercise the exact fixes verified above.
 2. `/zj:ship` / merge `feature-syerp-inventory-purchasing` (verified + tagged; carries Phases 7+8).
-   Optionally `/zj:log phase 08` first to file the formal work log.
-3. `/zj:retro 07` — Phase 7 produced a genuine lesson worth keeping: *a fix can be more dangerous
-   than the bug it fixes* (lexicographic duplicate → persistent int4 DoS), and *a committed test
-   that never runs reads as coverage while proving nothing*.
-4. `/zj:plan 09` — SYERP AP/AR & reporting (only once the branch situation above is resolved).
+   Optionally `/zj:log phase 07` / `/zj:log phase 08` first to file the formal work logs.
+3. `/zj:plan 09` — SYERP AP/AR & reporting (only once the branch situation above is resolved).
 
 **Standing debt:** the PLUM pytest harness is still broken (BACKLOG p1, D-P7-4) — `tests/plum/*`
 DB tests silently skip. It no longer leaves any Phase-7 criterion unprotected (the `verify_*.py`
@@ -132,28 +132,6 @@ UI → purchasing backend → purchasing UI → verify.
 1. **PLUM live-DB test harness never runs** (broken probe + async-engine loop + no seed/isolation)
    — D-P7-4, BACKLOG p1. Fixes currently proven via standalone async scripts, not pytest.
 2. **v1.0 human-UAT** — `.zj/UAT-v1.0.md`, run at `/zj:milestone` (D-P7-5).
-
-## Known blockers (fixed by Phase 7 — all re-confirmed in live code 2026-07-04)
-
-1. `backend/app/modules/plum/service.py` imports nonexistent `SyerpPartner` (lines
-   1634/2139/2607/2740; real class `Partner`) → AVL + vendor import/export HTTP 500. → Plan Task 1.
-2. `generate_part_number()` (service.py:108) lexicographic MAX → duplicate part numbers past a
-   digit-width boundary. → Plan Task 2.
-3. ImportExport commit (`ImportExport.tsx`) doesn't invalidate `['plum','parts']` → stale
-   Parts List ≤30 s. → Plan Task 3.
-
-## Phase 7 plan shape
-
-- **Wave 1 (code):** T1 backend SyerpPartner alias + live vendor-path coverage · T2 numeric
-  part-number + boundary test (same file — after T1) · T3 frontend cache invalidation ·
-  T4 CLAUDE.md stack/architecture refresh (independent, owner decision D-P7-2).
-- **Wave 2 (verify):** T5 stack up + discover API container + `alembic 0006` + full live-DB PLUM
-  suite (0 unexpected skips) · T6 blocking consolidated human-verify at :5173 (D-P7-1).
-- **Wave 3 (docs):** T7 reconcile `.zj/SRD.md` + `docs/features/requirements-progress.md`,
-  gated on the T6 outcome.
-
-Planning decisions recorded: DECISIONS.md D-P7-1 (verify at :5173 only), D-P7-2 (scope = 4 GSD
-plans + CLAUDE.md refresh; CI stays backlog).
 
 ## Adoption note
 

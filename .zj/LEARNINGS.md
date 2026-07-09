@@ -67,3 +67,56 @@ scripts, so a silent break in the phase crux (SYERP-11.4), audit-row writes (10.
 (10.8/11.8) would pass every automated gate. That's the owner-accepted deferral, already BACKLOG
 p1 — but the lesson is explicit: **standalone verify scripts are a verification tool, never a
 regression tool.** Every phase we close on scripts adds to a growing pile of unpinned behavior.
+
+## Phase 07 — Close v1.0 gaps (verified 2026-07-09; built 2026-07-04, retro'd after Phase 8)
+
+### Patterns that worked (repeat these)
+- **The review caught what the live verification could not.** `/zj:verify` drove
+  `generate_part_number()` against a live DB — seeded `P99999`, `P100000`, `P-DUPE-01`, got the
+  right answer, marked SC2 PASS. The reviewer instead read `schemas.py:122`, saw `part_number` is
+  `String(50)` with **no pattern constraint**, and reasoned about the *input domain* rather than the
+  exercised path: a legal `P9999999999` matches `^P[0-9]+$` and overflows the new
+  `cast(..., Integer)`. That is the blocker. **Empirical drive proves the happy path; only domain
+  reasoning finds the poison input.** Keep running both — a live-green verify is not a substitute
+  for a review, and this is the phase that proves it.
+- **The fix loop's "every criterion becomes an executable, red/green-proven test" rule.** Each guard
+  was validated by *reverting the fix and watching it fail*: revert one of four aliases → only that
+  assertion breaks; revert `Numeric`→`Integer` → `NumericValueOutOfRangeError`; delete the
+  `invalidateQueries` line → the positive test fails and the negative stays green. A test never seen
+  red is an assumption. Make this the default close-out for a GAPS verdict.
+- **Splitting a generator's tests into a pure half and a live-DB half** (`tests/plum/test_part_number.py`
+  runs in the ordinary suite; `scripts/verify_part_numbering.py` covers the SQL). The pure half
+  survives the broken harness. Same shape Phase 8 used for `_next_item_code` — now confirmed twice.
+
+### Surprises (assumptions that were wrong → corrected truth)
+- **A fix can be strictly worse than the bug it fixes.** The old lexicographic `MAX()` produced
+  *duplicate* part numbers — annoying, recoverable, per-request. The Phase-7 "fix" traded it for a
+  **permanent, user-triggerable denial of service**: any `plum:write` user could plant one legal row
+  and every subsequent auto-numbered `create_part` returned 500 forever, recoverable only by hand-
+  deleting the row. **Rule:** when a fix introduces a cast or coercion over a column, check the
+  column's *declared* domain (`String(50)`, no pattern), not the values you imagine it holds. Widen
+  to a type that cannot fail over that whole domain (`Numeric`, not `BigInteger` — the latter just
+  moves the cliff to 19 digits).
+- **"Verified live" ≠ "protected."** SC1 and SC2 both passed live and both had **zero** executable
+  regression protection: the committed `tests/plum/{test_avl,test_import_export,test_parts}.py` cases
+  that nominally cover them have *never once executed* (harness broken). A phase can be honestly PASS
+  and still leave its own fixes free to silently re-break. Verification must report *pinned-by*
+  separately from *works* — the VERIFICATION.md "Regression protection" table is what surfaced this.
+- **The silent skip is the root cause behind this entire phase.** `_check_db_available()` feeds a
+  `postgresql+psycopg2://` SQLAlchemy URL to raw `psycopg2.connect()`, which rejects it; a bare
+  `except` turns that into "no DB → skip." 34 skipped reads as green. That one line is why the
+  `SyerpPartner` ImportError shipped through four plans. **A large skip count is a FAIL, not a pass**
+  — every DB-touching phase must assert the skip count, not just the exit code.
+
+### Cost sinks (time planning didn't predict)
+- **Verifying a phase *after* the next one shipped on top of it.** Phase 8 was built on the Phase-7
+  branch before Phase 7 was verified, so verification had to (a) confirm the three fixes were still
+  intact at a downstream HEAD and (b) re-run all three Phase-8 verify scripts after the `Numeric`
+  fix touched shared PLUM service code — 66 live assertions re-run instead of 15. **Verify before
+  you stack.** The ZJ phase order exists for this.
+- **Neither lint gate ran — again** (`npm run lint` errors out: ESLint 10 wants a flat
+  `eslint.config.js` that doesn't exist; `ruff` is absent from both `.venv` and the API image). Third
+  phase in a row. Now homed as its own BACKLOG p1 item rather than being rediscovered per-phase.
+- **The dev container image is stale**: in-container Excel export raises `ModuleNotFoundError: openpyxl`
+  despite `requirements.txt` pinning it, and `pytest` isn't installed either. Any "run it in the
+  container" verify step pays this tax until the image is rebuilt.

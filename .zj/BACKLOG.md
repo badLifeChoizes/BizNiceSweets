@@ -30,10 +30,20 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `tests/auth/test_rbac.py` covers the mechanism). Blocked on the async live-DB harness repair above;
   once that lands, port the script assertions into pytest integration tests and drop the "UI flow UAT
   pending / script-only" caveats from the SRD. A silent break in the crux currently passes every gate.
+- [ ] **Neither lint gate runs (Phases 6/7/8 — recurring)** — `npm run lint` errors out because
+  ESLint 10 requires a flat `eslint.config.js` the project lacks, so frontend lint has effectively
+  never run; `ruff` is absent from both `backend/.venv` and the API image, so backend lint can't run
+  either. `tsc -b` is the only enforced static check. Fix: add `frontend/eslint.config.js` (flat
+  config) and install ruff as a dev dep / add it to the image. Treat as a hard pre-merge chore, not
+  a per-phase surprise. Folds into the CI item above once both commands work.
 - [ ] **Seed/startup integration test** — admin-seed path has no DB-backed regression test
   (a `MissingGreenlet` slipped past unit tests in Phase 2).
-- [ ] **Rebuild `frontend/dist` + container image** — production bundle predates Phase 3;
-  `:8000` serving doesn't reflect Phases 3–6 UI until rebuilt. (May fold into Phase 7 verify.)
+- [ ] **Rebuild `frontend/dist` + the API container image** — production bundle predates Phase 3;
+  `:8000` serving doesn't reflect Phases 3–6 UI until rebuilt. The **API image is stale too**
+  (Phase 7 verify, 2026-07-09): in-container Excel export raises `ModuleNotFoundError: openpyxl`
+  though `requirements.txt` pins `openpyxl==3.1.5`, and `pytest` isn't installed — so every
+  "run it in the container" verify step pays a tax. Rebuild both, or add a test stage carrying
+  dev deps.
 - [x] **Refresh root `CLAUDE.md` stack/architecture sections** — done in Phase 7 Task 4
   (commit `5db8278`); Technology Stack + Architecture now describe the live FastAPI/React stack
   and cite `.zj/codebase/MAP.md`. (Any remaining Windows-path references elsewhere are out of
