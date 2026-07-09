@@ -5,8 +5,33 @@ Per **D-P7-5**, human click-through UAT is a milestone-close activity, run once 
 Podman stack up (`podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`;
 API container `compose_api_1`, `alembic current` == `0008 (head)`). Log in as admin.
 
-Draft parts available for BOM/flow testing: **ITEST-ASM-01**, **P100000** (Released parts
-P00001/P00002/P99999 correctly hide edit affordances).
+## Fixtures actually present in the dev DB (re-confirmed 2026-07-09)
+
+> The previously-listed fixtures (`ITEST-ASM-01`, `P100000`, Released `P00001`/`P00002`/`P99999`)
+> **no longer exist** — the dev volume was recreated. There are currently **no Released parts at
+> all**. Checks 1 and 8 already passed on 2026-07-04 and are not re-run, so no Released fixture
+> is needed.
+
+The milestone audit left two purpose-built structures. All revisions are **Draft, label `A`**.
+
+**Cost / shared-sub-assembly tree — use `P100004`:**
+
+```
+P100004  ──3×──►  P100003  ──2×──►  P100002  ──4×──►  P100001  (material cost 2.50)
+   └─────5×────────────────────────►  P100002          ← shared sub-assembly
+```
+Rolled up: `P100002` = 4 × 2.50 = **10.00**; `P100003` = 2 × 10 = **20.00**;
+`P100004` = (3 × 20) + (5 × 10) = **110.00**. `P100004` sale price = **50.00** → margin **−60.00**
+(**−54.55 %**), i.e. below cost. Flat BOM of `P100004`: `P100002` must appear **once**, total qty
+**11** (5 direct + 3×2 nested).
+
+**Where-used chain — use `P100007`:** `P100005 ──2×──► P100006 ──3×──► P100007`
+(a second identical chain exists: `P100008 → P100009 → P100010`).
+
+**Vendors for AVL:** `P-0003 AUDIT AVL Vendor`, `P-0001 AUDIT Vendor Acme`, `V-VER-1 Verifier Vendor`.
+
+**Next auto part number:** highest is `P100010`, so check 12 must yield **`P100011`**.
+*Run check 12 last* — every part you create shifts this number.
 
 > **Both known blockers are cleared as of the 2026-07-09 milestone audit:**
 > - Check 3 was guaranteed to fail — the Where-Used card labelled *every* parent "Direct parent"
@@ -51,6 +76,93 @@ machine cannot see**:
 | 9, 10 | **no error toast appears** (absence is unobservable via API) |
 | 11 | the Parts List visibly updates **without a manual refresh** (mechanism pinned by vitest) |
 | 12 | essentially closable by machine — proven live (`P100000` → `P100001`) |
+
+## Runbook — the 10 remaining checks, in order
+
+Run them in this order: read-only checks first, mutating checks last (imports and part creation
+change the fixtures the earlier checks rely on).
+
+### 0. Bring the stack up
+
+```bash
+cd /home/zack/Projects/BizNiceSweets
+podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d
+podman exec compose_api_1 sh -c 'cd /app && alembic current'   # must print: 0008 (head)
+```
+If you recreated the `api` container from scratch, **rebuild it first** or G2 (Excel 500) returns:
+`podman-compose -f compose/compose.yml -f compose/compose.dev.yml build api`
+
+Open **http://localhost:5173** (Vite dev server, per D-P7-1 — *not* :8000, which serves a stale
+bundle). Log in as the admin from `.env` (`BNS_ADMIN_EMAIL` / `BNS_ADMIN_PASSWORD`).
+
+---
+
+### Check 2 — Flat BOM: shared sub-assembly is ONE row (PLUM-05)
+Parts → `P100004` → **BOM** card → switch to **Flat** view.
+- ✅ `P100002` appears on **exactly one row**, Total Qty **11** (not two rows of 5 and 6).
+- ✅ A **Total BOM Cost footer** renders, showing **110.00**.
+- ✅ `P100001` shows total qty 44; `P100003` shows 3.
+
+### Check 3 — Where-used labels (PLUM-06) ← *the G1 fix*
+Parts → `P100007` → **Where-Used** card.
+- ✅ `P100006` labelled **“Direct parent”**.
+- ✅ `P100005` labelled **“Indirect via P100006”**.
+- ✅ The direct parent sorts **above** the indirect one.
+- ❌ If *both* say “Direct parent”, the G1 fix regressed — stop and report.
+
+### Check 5 — Cost & Margin sources (PLUM-08)
+Still on `P100004` → **Cost & Margin** card.
+- ✅ Effective Cost **110.00**, source shown as **roll-up** (no manual cost is set).
+- ✅ Now open `P100001`: source is **manual** (material cost 2.50).
+- ✅ After check 4 links a vendor with a price, that part's source becomes **vendor-price**.
+
+### Check 6 — Below-cost margin renders RED (PLUM-09)
+On `P100004` (sale 50.00, cost 110.00):
+- ✅ Margin shows **−60.00** and Margin % **−54.55 %**.
+- ✅ Both are styled **red**. *(This is the one a machine cannot see — look at the colour.)*
+- ✅ Raise Sale Price above 110 → the red styling clears.
+
+### Check 4 + Check 9 — AVL add (PLUM-07, SC1)
+Parts → any Draft part (e.g. `P100001`) → **AVL** card → **Add Vendor**.
+- ✅ The vendor picker lists `AUDIT AVL Vendor` / `Verifier Vendor`.
+- ✅ Save → **no 500, no error toast** *(check 9 — you are confirming an* absence *)*.
+- ✅ Reload the page: the link **persists**.
+- ✅ Mark it Preferred → a **Preferred badge** is visibly rendered.
+
+### Check 7 — Import / Export round-trip (PLUM-10) ← *the G2 fix*
+PLUM → **Import / Export**.
+- ✅ **Export JSON** downloads.
+- ✅ **Export Excel** downloads a real `.xlsx` and **does not 500** *(this was G2)*.
+- ✅ Re-import the JSON → preview shows **0 errors** → **Confirm** → message says
+  **“No records deleted”** (import is upsert-never-delete, D-14).
+- ✅ A file >10 MB is **rejected** (10 MB guard).
+
+### Check 10 — Import with a vendor reference (SC1)
+Export JSON *after* check 4 (so it contains an AVL vendor reference), then re-import it.
+- ✅ Preview renders and **Confirm** completes with **no 500 and no error toast**.
+  *(This is the path the `SyerpPartner` → `Partner` alias fix repaired.)*
+
+### Check 11 — Parts List refreshes without manual refresh (SC3)
+Immediately after the Confirm in check 10, **do not press F5**.
+- ✅ Navigate to the Parts List — it already reflects the import.
+- ✅ Better: keep the Parts List visible in a second tab and watch it update on Confirm.
+  *(Mechanism is pinned by `ImportExport.test.tsx`; you are confirming it's visibly wired.)*
+
+### Check 12 — Auto part number (SC2) — **run this LAST**
+Parts → **Create Part**, leave **Part Number blank**, fill only the description → Save.
+- ✅ A fresh unique number is assigned. Expected **`P100011`** *(if you created no other parts;
+  otherwise it is highest + 1)*.
+- ✅ **No duplicate-key 500.**
+- ✅ Create a second one → `P100012`. The counter does not stall or repeat.
+
+---
+
+### Recording the result
+Tick the Status column above. If everything passes, the milestone tag is unblocked:
+```bash
+git tag -a v1.0 -m "Foundation + PLUM"
+```
+Per **D-M1-1** that tree also contains Phase 8 (v2.0) work — expected, recorded, not accidental.
 
 ## If a check fails
 Bisect against the atomic Phase-7 commits (`git log --oneline`) — each fix is one commit — or
