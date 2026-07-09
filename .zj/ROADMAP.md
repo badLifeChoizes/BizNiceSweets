@@ -69,7 +69,8 @@ shipped; Phase 7 closes the audited gaps.
   auto part-numbering is numerically correct, the Parts List refreshes after import, and
   Phase 6's flows are human-verified with traceability reconciled.
 - **Delivers:** PLUM-07, PLUM-10 (fix); PLUM-01 defect (fix); PLUM-04..06, 08, 09 (verify → implemented).
-- **Verified 2026-07-09** (`/zj:verify 07`, tip `8975eeb`, tag `zj/good-07-close-v1-0-gaps`):
+- **Verified 2026-07-09** (`/zj:verify 07`, verified code tip `8975eeb`; tag
+  `zj/good-07-close-v1-0-gaps` at the artifacts commit `ac56fa1`):
   SC1/SC2/SC3/SC5/SC6 proven empirically; SC4 met as amended by D-P7-4 (standalone live-Postgres
   proof substitutes for the broken pytest harness) and D-P7-5 (human-UAT owned by `/zj:milestone`).
   Artifacts: `VERIFICATION.md`, `REVIEW.md`.

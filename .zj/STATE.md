@@ -5,8 +5,9 @@ Updated: 2026-07-09
 
 - **Milestone:** v1.0 — Foundation + PLUM (Phase 7 **verified**; milestone close still **open** —
   human-UAT owed) · v2.0 — Phase 8 **DONE** (verified + retro complete).
-- **Phase:** 7 (close v1.0 gaps) **verified 2026-07-09** — roadmap `[verified]`, tag
-  `zj/good-07-close-v1-0-gaps` at `8975eeb`. Verdict PASS after a fix loop.
+- **Phase:** 7 (close v1.0 gaps) **verified 2026-07-09** — roadmap `[verified]`. Verified code tip
+  `8975eeb`; tag `zj/good-07-close-v1-0-gaps` at the artifacts commit `ac56fa1` (same convention as
+  Phase 8). Verdict PASS after a fix loop.
   - **One blocker found and fixed** (`7562a02`): the phase's own SC2 numeric part-number fix cast
     the suffix to **int4**. `part_number` is `String(50)` with no format constraint, so a legal
     `P9999999999` matched `^P[0-9]+$` and overflowed the cast — **every** subsequent auto-numbered
