@@ -46,6 +46,13 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   Phase 10 (MOUSSE). **Note (Phase 8):** `syerp/service.py` has now grown to ~1,800 lines
   (inventory + purchasing landed here) — the same smell is starting in the hub module; fold it
   into this split when done.
+- [ ] **Auto-number double-collision race in `create_part`** (Phase 7 verify, 2026-07-09) —
+  `backend/app/modules/plum/service.py` retries a collided auto-generated `part_number` exactly
+  once, and the retry's `db.flush()` is unguarded. Two concurrent no-`part_number` creates are
+  handled; **three** can surface an unhandled `IntegrityError` → 500. Pre-existing (not introduced
+  by the Phase-7 numeric fix), same read-check-write class as the ledger races below, and equally
+  benign single-shop. Fix by looping the retry (bounded) or taking the number from a Postgres
+  sequence instead of `MAX()+1`.
 - [ ] **Audit-write atomicity vs. the mutation** (Phase 8 review, 2026-07-08) — every service
   mutation commits, then the router calls `write_audit`, which does its own `db.commit()`
   (inherited Phase-4 pattern, consistent module-wide). A process death or `write_audit` failure

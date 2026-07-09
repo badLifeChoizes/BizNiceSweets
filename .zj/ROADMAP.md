@@ -64,11 +64,24 @@ shipped; Phase 7 closes the audited gaps.
 - **Notes:** the only unverified phase — human-verify checkpoint never ran; milestone audit
   (2026-07-01) found the `SyerpPartner` blocker and the part-number bug → Phase 7.
 
-### Phase 7: Close v1.0 gaps  [pending — next]
+### Phase 7: Close v1.0 gaps  [verified]
 - **Goal:** PLUM AVL and vendor import/export work end-to-end without runtime errors,
   auto part-numbering is numerically correct, the Parts List refreshes after import, and
   Phase 6's flows are human-verified with traceability reconciled.
 - **Delivers:** PLUM-07, PLUM-10 (fix); PLUM-01 defect (fix); PLUM-04..06, 08, 09 (verify → implemented).
+- **Verified 2026-07-09** (`/zj:verify 07`, tip `8975eeb`, tag `zj/good-07-close-v1-0-gaps`):
+  SC1/SC2/SC3/SC5/SC6 proven empirically; SC4 met as amended by D-P7-4 (standalone live-Postgres
+  proof substitutes for the broken pytest harness) and D-P7-5 (human-UAT owned by `/zj:milestone`).
+  Artifacts: `VERIFICATION.md`, `REVIEW.md`.
+  - **One blocker found and fixed in the verify fix loop** (`7562a02`): the phase's own SC2 fix cast
+    the part-number suffix to int4, so a legal `P9999999999` row made **every** auto-numbered
+    `create_part` return 500 permanently — a user-triggerable, persistent DoS. Cast is now `Numeric`.
+  - **Criteria became executable tests** (each proven red/green): `scripts/verify_plum_vendor_paths.py`
+    (SC1, 8 live assertions across all four alias sites), `scripts/verify_part_numbering.py` (SC2 SQL
+    half, 7 live assertions incl. the overflow guard), `tests/plum/test_part_number.py` (SC2 pure
+    half, runs in the ordinary pytest suite), `ImportExport.test.tsx` (SC3, positive + negative path).
+  - **Still owed:** the 12-check human-UAT (`.zj/UAT-v1.0.md`, 2/12 done) at `/zj:milestone`, and the
+    PLUM pytest-harness repair (BACKLOG p1) — the latter no longer leaves any criterion unprotected.
 - **Scope (adopted as-is from GSD Phase 7, owner decision 2026-07-04):**
   1. Backend `service.py`: alias/rename `SyerpPartner` → `Partner` at 4 sites + numeric-safe
      `generate_part_number` + live-DB regression coverage.

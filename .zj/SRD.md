@@ -103,17 +103,27 @@ future scope (expanded via `/zj:spec` when their milestones near).
 ## PLUM (PLM Port — v1 Core)
 
 ## PLUM-01: Part CRUD  [traces: PRD-5]  **Status: implemented**
+- **Verified:** 8975eeb (Phase 07 verify, 2026-07-09 — numeric successor proven live past the
+  5→6-digit boundary; guarded by `scripts/verify_part_numbering.py` + `tests/plum/test_part_number.py`)
 - **Statement:** User can create, view, edit, and delete parts.
 - **Evidence:** `backend/app/modules/plum/` models/service/router, migration 0005; `frontend/src/routes/plum/PartsList.tsx`, `PartSheet.tsx`; `backend/tests/plum/test_parts.py`; human UAT 10/10 in Phase 5.
 - **Defect (resolved, Phase 7 `1b8bfa1`):** `generate_part_number()` used lexicographic `MAX`
   on a VARCHAR — past a digit-width boundary it returned a stale number → duplicate-key 500.
-  Rewritten to filter `^P[0-9]+$` then order by `cast(substring, Integer)`. **Proven live** against
+  Rewritten to filter `^P[0-9]+$` then order by `cast(substring, Numeric)`. **Proven live** against
   Postgres 17 (DB already held `P100000`; generator returned `P100001` = numeric MAX+1) plus a
-  SQL proof that regex-before-cast survives non-numeric rows like `P-DUPE-01`. Regression test
-  `test_generate_part_number_digit_boundary` ships (runs once the test harness is repaired —
-  BACKLOG p1 / D-P7-4).
-- **Verification:** live-DB standalone proof (Phase 7); UI new-part auto-numbering = UAT check 12
-  (v1.0 milestone, D-P7-5).
+  SQL proof that regex-before-cast survives non-numeric rows like `P-DUPE-01`.
+- **Blocker (introduced by that fix; resolved at `/zj:verify 07`, `7562a02`):** the rewrite cast the
+  suffix to **int4**. `part_number` is `String(50)` with no format constraint, so a legal
+  `P9999999999` matched the regex and overflowed the cast — Postgres raised "value out of range for
+  type integer" and **every** subsequent auto-numbered create returned 500 until the row was deleted
+  by hand (any `plum:write` user could trigger it; reproduced end-to-end). Cast target is now
+  `Numeric`, which cannot overflow for a 50-char digit string.
+- **Verification:** live-DB standalone proof (Phase 7). Durable guards now run:
+  `backend/scripts/verify_part_numbering.py` (7 live assertions — boundary, non-numeric row,
+  `> int4` overflow; proven red/green) and `backend/tests/plum/test_part_number.py` (4 pure tests
+  that execute in the ordinary pytest suite). `test_generate_part_number_digit_boundary` still ships
+  but remains non-executable until the harness is repaired (BACKLOG p1 / D-P7-4). UI new-part
+  auto-numbering = UAT check 12 (v1.0 milestone, D-P7-5).
 
 ## PLUM-02: Part search/filter  [traces: PRD-5]  **Status: implemented**
 - **Statement:** User can search and filter parts.
@@ -140,7 +150,10 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Evidence:** where-used traversal in `service.py`; Where-Used card in `frontend/src/routes/plum/PartDetail.tsx`; `test_bom.py`. Live-confirmed by audit; human-verify deferred to v1.0 milestone UAT (D-P7-5).
 - **Verification:** v1.0 milestone UAT check 3.
 
-## PLUM-07: Part-to-vendor links (AVL)  [traces: PRD-4, PRD-5]  **Status: partial (runtime fix landed; UI UAT pending)**
+## PLUM-07: Part-to-vendor links (AVL)  [traces: PRD-4, PRD-5]  **Status: partial (runtime fix landed + backend guarded; UI UAT pending)**
+- **Verified:** 8975eeb (Phase 07 verify, 2026-07-09 — `add_avl_link` accepts an `is_vendor=True`
+  Partner and rejects a non-vendor with 422, proven live; guarded by
+  `scripts/verify_plum_vendor_paths.py`. UI flow still UAT-pending, so status stays `partial`.)
 - **Statement:** User can link a part to one or more vendors (FK to SYERP vendors / AVL).
 - **Evidence:** all layers built — FK `plum_avl_link.vendor_id → syerp_partner.id` (migration
   0006), schemas, `AvlLinkSheet.tsx`, `PriceBreakEditor.tsx`, `test_avl.py`. The runtime break —
@@ -166,7 +179,12 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Evidence:** margin calc in `service.py` (live-verified by audit: margin 30, 150%); Cost & Margin card in `PartDetail.tsx`; `test_costing.py`. Human-verify deferred to v1.0 milestone UAT (D-P7-5).
 - **Verification:** v1.0 milestone UAT check 6.
 
-## PLUM-10: JSON/Excel import-export  [traces: PRD-5]  **Status: partial (fixes landed; UI UAT pending)**
+## PLUM-10: JSON/Excel import-export  [traces: PRD-5]  **Status: partial (fixes landed + backend/cache guarded; UI UAT pending)**
+- **Verified:** 8975eeb (Phase 07 verify, 2026-07-09 — `build_json_export` resolves vendor_id→code,
+  `validate_import` accepts a resolvable vendor_code and errors on an unknown one, `commit_import`
+  upserts the AVL link: all proven live and guarded by `scripts/verify_plum_vendor_paths.py`.
+  Cache invalidation on commit pinned by `ImportExport.test.tsx` (positive + negative path). Full
+  vendor round-trip through the UI still UAT-pending, so status stays `partial`.)
 - **Statement:** User can import and export PLUM data as JSON and Excel.
 - **Evidence:** lossless JSON + 3-sheet Excel export, two-step preview/commit upsert-never-delete import with 10MB guard (`service.py`, openpyxl); `frontend/src/routes/plum/ImportExport.tsx` + test; `test_import_export.py`. Basic no-vendor round-trip works. Two Phase-7 fixes landed: (1) the vendor cross-reference 500 (same `SyerpPartner` bug) is fixed in `5c33ed8` (import-commit vendor path passed a manual per-test run); (2) import commit now invalidates the `['plum','parts']` query cache in `37b5f97` (tsc-clean, ImportExport tests pass). Full vendor round-trip + no-refresh list update deferred to v1.0 milestone UAT (checks 7/10/11, D-P7-5). Note: Excel export may 500 on the stale API image (missing `openpyxl` — BACKLOG), not a code regression.
 - **Verification:** code-level (Phase 7 `5c33ed8`+`37b5f97`); v1.0 milestone UAT checks 7, 10, 11.
@@ -373,7 +391,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-2 | CORE-02..05 | — |
 | PRD-3 | CORE-06..08 | — |
 | PRD-4 | SYERP-01..05, PLUM-07 | — |
-| PRD-5 | PLUM-01..16 | Phase-7 code fixes landed & code-verified (`5c33ed8`/`1b8bfa1`/`37b5f97`); PLUM-04..10 flow-level UI confirmation deferred to v1.0 milestone UAT (`.zj/UAT-v1.0.md`, D-P7-5) |
+| PRD-5 | PLUM-01..16 | Phase-7 **verified** 2026-07-09 (`8975eeb`): fixes `5c33ed8`/`1b8bfa1`/`37b5f97` proven live, plus blocker `7562a02` (int4 overflow bricked auto-numbering) found and fixed in the verify fix loop; PLUM-01/07/10 backends now guarded by `verify_plum_vendor_paths.py`, `verify_part_numbering.py`, `test_part_number.py`, `ImportExport.test.tsx`. PLUM-04..10 flow-level UI confirmation still deferred to v1.0 milestone UAT (`.zj/UAT-v1.0.md`, 2/12 done, D-P7-5) |
 | PRD-6 | FLAN-01 | expand at milestone planning |
 | PRD-7 | SYERP-10..12, MOUSSE-01 | SYERP-10/11 backend built & live-verified (Phase 8: migrations 0007/0008; `verify_inventory`/`verify_purchasing`/`verify_e2e_p8` scripts), UI flow UAT deferred to v2.0 milestone (D-P7-5); SYERP-12 + MOUSSE-01 still coarse |
 | PRD-8 | CRUMB-01, GELATO-01 | coarse — expand via /zj:spec |
@@ -381,11 +399,19 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-10 | NFR-3 | — |
 | PRD-11 | NFR-2 | license audit outstanding |
 
-**Counts (2026-07-06, post-Phase-8):** implemented 19 (CORE-01..09, SYERP-01..05, PLUM-01..03 —
-PLUM-01 defect **resolved** & proven live, `1b8bfa1`; plus **SYERP-10 & SYERP-11**, whose backend
-is built & **live-verified** in Phase 8 by `verify_inventory.py` (14/14), `verify_purchasing.py`
+**Counts (2026-07-09, post-Phase-7-verify):** implemented 19 (CORE-01..09, SYERP-01..05, PLUM-01..03 —
+PLUM-01 defect **resolved** & proven live, `1b8bfa1`, and the int4-overflow blocker its fix
+introduced now closed, `7562a02`; plus **SYERP-10 & SYERP-11**, whose backend
+is built & **live-verified** in Phase 8 by `verify_inventory.py` (15/15), `verify_purchasing.py`
 (18/18), and a fresh-DB `verify_e2e_p8.py` (18/18) — only flow-level HUMAN UI confirmation is
 deferred to the v2.0 milestone UAT, D-P7-5) + 2 NFR foundations · partial 7 (PLUM-04..10 — all three
-Phase-7 runtime/cache fixes landed & code-verified; flow-level UI confirmation deferred to v1.0
-milestone UAT per D-P7-5) · planned 13 (PLUM-11..16, FLAN-01, SYERP-12, MOUSSE/CRUMB/GELATO/CRISP-01,
-NFR-3 — coarse placeholders until their milestones near).
+Phase-7 runtime/cache fixes landed, **verified live and guarded** by `verify_plum_vendor_paths.py`
+(8/8) + `verify_part_numbering.py` (7/7) + `ImportExport.test.tsx`; flow-level UI confirmation
+deferred to v1.0 milestone UAT per D-P7-5) · planned 13 (PLUM-11..16, FLAN-01, SYERP-12,
+MOUSSE/CRUMB/GELATO/CRISP-01, NFR-3 — coarse placeholders until their milestones near).
+
+> **Honest caveat (do not lose):** the v1.0 human-UAT is **2/12** (`.zj/UAT-v1.0.md`; checks 1 & 8
+> passed). Nothing above is marked `implemented` on the strength of a check that never ran — PLUM-04..10
+> remain `partial` for exactly that reason. The PLUM pytest harness is still broken (BACKLOG p1), so
+> `tests/plum/*` DB tests silently skip; the regression protection cited above lives in the
+> `scripts/verify_*.py` live-DB gates and the frontend Vitest suite, all of which do run.

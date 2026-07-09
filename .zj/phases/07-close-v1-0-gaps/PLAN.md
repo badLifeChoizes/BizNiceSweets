@@ -159,6 +159,15 @@ None. Scope is fully adopted (D-ADOPT-2) and the two open owner decisions (:5173
   phase.
 - **Dev-DB data artifact:** part `P-COMMIT-AVL-1` (from an import-commit test) has no non-obsolete
   revision, so its PartDetail renders without the BOM card. Harmless data hygiene, not a code bug.
+- **Auto-number double-collision race (found at `/zj:verify 07`, pre-existing):** `create_part`
+  (`service.py`) retries a collided auto-number exactly once and the retry's `db.flush()` is
+  unguarded, so three concurrent no-`part_number` creates can still surface an unhandled
+  `IntegrityError` → 500. Not introduced by Phase 7. → BACKLOG.
+- **`part_number` has no format constraint** (`schemas.py:122`, `max_length=50` only). The
+  `Numeric` cast makes this harmless for auto-numbering, and the owner decided against adding a
+  pattern (could reject part numbers real users rely on). Recorded so the next person doesn't
+  "simplify" the cast back to `Integer` — see the docstring and
+  `scripts/verify_part_numbering.py` scenario 3.
 
 ## Risks
 - **Pattern-2 SQLAlchemy syntax (Assumption A1, MEDIUM):** `cast(func.substring(...), Integer)` + `.op("~")` may need a spelling tweak against Postgres 17. Early-warning: a SQL error at Task 2's verify. Mitigation: budget one repair cycle inside Task 2 — caught before merge by the live-DB test.

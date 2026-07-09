@@ -16,16 +16,16 @@ Tracks completed requirements by phase, with implementing plans and evidence.
 
 | Requirement | Description | Phase | Plans | Evidence | Status |
 |-------------|-------------|-------|-------|----------|--------|
-| PLUM-01 | User can create, view, edit, and delete parts | Phase 5, 7 | 05-01, 05-02, 07 | Phase-7 numeric part# fix `1b8bfa1` — **proven live** (DB had `P100000` → generator returned `P100001`); `test_generate_part_number_digit_boundary` ships (runs once harness fixed) | Complete |
+| PLUM-01 | User can create, view, edit, and delete parts | Phase 5, 7 | 05-01, 05-02, 07 | Phase-7 numeric part# fix `1b8bfa1` — **proven live** (DB had `P100000` → generator returned `P100001`). `/zj:verify 07` found that fix cast the suffix to int4: a legal `P9999999999` row made every auto-numbered create 500 **permanently** — fixed `7562a02` (`Numeric` cast). Guarded by `scripts/verify_part_numbering.py` (7/7 live, red/green proven) + `tests/plum/test_part_number.py` (4 pure tests that actually run) | Complete |
 | PLUM-02 | User can search and filter parts | Phase 5 | 05-01, 05-02 | test_parts.py (Phase-5 UAT 10/10) | Complete |
 | PLUM-03 | User can create part revisions and advance a part through its status workflow | Phase 5 | 05-01, 05-02 | test_revisions.py (Phase-5 UAT); Released-immutability spot-checked Phase-7 (UAT check 8) | Complete |
 | PLUM-04 | User can build a multi-level BOM and view it as an expandable tree | Phase 6, 7 | 06-01, 06-02, 06-04, 06-05 | BomTree.tsx; UAT check 1 (Add Part on Draft) **passed** Phase-7; test_bom.py pending harness | Code done; UI UAT pending (check 2 for flat view) |
 | PLUM-05 | User can view a flat BOM with quantity roll-up across levels | Phase 6 | 06-01, 06-02, 06-04, 06-05 | BomTree.tsx flat mode; test_bom.py pending harness | Code done; UI UAT pending (check 2) |
 | PLUM-06 | User can run where-used analysis to see which assemblies consume a part | Phase 6 | 06-01, 06-02, 06-05 | PartDetail.tsx Where-Used card; test_bom.py pending harness | Code done; UI UAT pending (check 3) |
-| PLUM-07 | User can link a part to one or more vendors (FK to SYERP vendors / AVL) | Phase 6, 7 | 06-01, 06-02, 06-04, 06-05, 07 | Runtime 500 fixed `5c33ed8` (Partner alias) — import resolves live, commit path passed a manual per-test run; AvlLinkSheet.tsx | Runtime fix landed & code-verified; UI UAT pending (checks 4, 9) |
+| PLUM-07 | User can link a part to one or more vendors (FK to SYERP vendors / AVL) | Phase 6, 7 | 06-01, 06-02, 06-04, 06-05, 07 | Runtime 500 fixed `5c33ed8` (Partner alias); AvlLinkSheet.tsx. `/zj:verify 07`: `add_avl_link` accepts an `is_vendor=True` Partner and 422s a non-vendor — proven live and guarded by `scripts/verify_plum_vendor_paths.py` (red/green proven per alias site) | Runtime fix landed, backend verified live & guarded; UI UAT pending (checks 4, 9) |
 | PLUM-08 | User can set part pricing/cost and see cost roll-up across a BOM | Phase 6 | 06-01, 06-02, 06-05 | Cost & Margin card; manual+roll-up live-verified (audit); vendor-price source now reachable (PLUM-07 fixed) | Code done; UI UAT pending (check 5) |
 | PLUM-09 | User can view margin analysis for a product | Phase 6 | 06-01, 06-02, 06-05 | Cost & Margin card; margin calc live-verified (audit) | Code done; UI UAT pending (check 6) |
-| PLUM-10 | User can import and export PLUM data as JSON and Excel | Phase 6, 7 | 06-01, 06-03, 06-05, 07 | Vendor-path 500 fixed `5c33ed8`; cache invalidation on commit `37b5f97` (tsc-clean, ImportExport tests pass) | Fixes landed & code-verified; UI UAT pending (checks 7, 10, 11) |
+| PLUM-10 | User can import and export PLUM data as JSON and Excel | Phase 6, 7 | 06-01, 06-03, 06-05, 07 | Vendor-path 500 fixed `5c33ed8`; cache invalidation on commit `37b5f97`. `/zj:verify 07`: `build_json_export`/`validate_import`/`commit_import` vendor paths proven live and guarded by `scripts/verify_plum_vendor_paths.py`; invalidation pinned by `ImportExport.test.tsx` (positive **and** negative path) | Fixes landed, backend verified live & guarded; UI UAT pending (checks 7, 10, 11) |
 
 ---
 
@@ -45,8 +45,16 @@ Tracks completed requirements by phase, with implementing plans and evidence.
 
 ---
 
-*Last updated: 2026-07-06 — Phase 8 (SYERP inventory & purchasing): SYERP-10/11 backend built and
-**live-verified** by three standalone Postgres scripts (`verify_inventory` 14/14, `verify_purchasing`
+*Last updated: 2026-07-09 — `/zj:verify 07` (Phase 7 verified, tag `zj/good-07-close-v1-0-gaps`).
+Verdict PASS after a fix loop that closed one **blocker**: the phase's own numeric part-number fix
+cast the suffix to int4, so a legal `P9999999999` row made every auto-numbered `create_part` return
+500 permanently (`7562a02`). Each code criterion now has an executable, red/green-proven guard:
+`verify_plum_vendor_paths.py` (8/8), `verify_part_numbering.py` (7/7), `tests/plum/test_part_number.py`
+(4 pure), `ImportExport.test.tsx`. Live pytest harness still broken (D-P7-4, BACKLOG p1) but no
+criterion depends on it. **v1.0 human-UAT remains 2/12** — owed at `/zj:milestone`.*
+
+*Prior: 2026-07-06 — Phase 8 (SYERP inventory & purchasing): SYERP-10/11 backend built and
+**live-verified** by three standalone Postgres scripts (`verify_inventory` 15/15, `verify_purchasing`
 18/18, fresh-DB `verify_e2e_p8` 18/18); flow-level UI confirmation deferred to the v2.0 milestone UAT
 (D-P7-5). Live pytest harness still broken (D-P7-4).*
 

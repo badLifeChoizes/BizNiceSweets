@@ -1,29 +1,55 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-08
+Updated: 2026-07-09
 
 ## Position
 
-- **Milestone:** v1.0 — Foundation + PLUM (Phase 7 built; verify + close still **open**) ·
-  v2.0 — Phase 8 **DONE** (verified + retro complete).
+- **Milestone:** v1.0 — Foundation + PLUM (Phase 7 **verified**; milestone close still **open** —
+  human-UAT owed) · v2.0 — Phase 8 **DONE** (verified + retro complete).
+- **Phase:** 7 (close v1.0 gaps) **verified 2026-07-09** — roadmap `[verified]`, tag
+  `zj/good-07-close-v1-0-gaps` at `8975eeb`. Verdict PASS after a fix loop.
+  - **One blocker found and fixed** (`7562a02`): the phase's own SC2 numeric part-number fix cast
+    the suffix to **int4**. `part_number` is `String(50)` with no format constraint, so a legal
+    `P9999999999` matched `^P[0-9]+$` and overflowed the cast — **every** subsequent auto-numbered
+    `create_part` returned 500, permanently, until the row was deleted by hand. Any `plum:write`
+    user could trigger it. Reproduced end-to-end (201 to plant, then 500 forever); cast → `Numeric`.
+  - **Criteria became executable tests**, each proven red/green:
+    `backend/scripts/verify_plum_vendor_paths.py` (SC1, 8 live assertions, drives all four
+    function-local alias sites independently), `backend/scripts/verify_part_numbering.py` (SC2 SQL
+    half, 7 live assertions incl. the overflow guard), `backend/tests/plum/test_part_number.py`
+    (SC2 pure half, 4 tests that run in the ordinary pytest suite),
+    `frontend/src/routes/plum/ImportExport.test.tsx` (SC3, positive + negative path).
+  - Full re-verification after the fix loop: **66 live-DB assertions, 0 failures** across five
+    scripts; backend 90 passed / 98 skipped; frontend 49 passed; build clean.
+  - Artifacts: `.zj/phases/07-close-v1-0-gaps/{VERIFICATION.md,REVIEW.md}`.
 - **Phase:** 8 (SYERP inventory & purchasing) **verified + retro'd 2026-07-08** — roadmap `[done]`.
   All 16 SYERP-10/11 acceptance criteria proven live (`verify_inventory` 15/15,
   `verify_purchasing` 18/18, `verify_e2e_p8` 18/18 fresh-DB). One code defect found + fixed in the
   fix loop (`554c3fe` — bad `plum_part_id` now 4xx not 500). Tag `zj/good-08-syerp-inventory-purchasing`.
   Retro lessons captured in `.zj/LEARNINGS.md` (Phase 08). Deferrals homed: BACKLOG p1 (port
   verify-script assertions to integration tests, D-P7-4/D-P7-5), BACKLOG p2 (audit-write atomicity,
-  ledger concurrency races — accepted single-shop), BACKLOG p3 (Starlette 422 sweep).
-- **Branch:** `feature-syerp-inventory-purchasing` (verified tip `554c3fe`), cut from
-  `bugfix-plum-v1-gaps` per D-P8-11 — atop unmerged Phase 7, not yet on `master`.
+  ledger concurrency races — accepted single-shop; **+ auto-number double-collision race**),
+  BACKLOG p3 (Starlette 422 sweep).
+- **Branch:** `feature-syerp-inventory-purchasing` (tip now carries the Phase-7 verify fixes), cut
+  from `bugfix-plum-v1-gaps` per D-P8-11 — atop unmerged Phase 7, not yet on `master`.
+  **Note:** the Phase-7 blocker fix landed on *this* branch, not on `bugfix-plum-v1-gaps`.
 
 ## Next action
 
-**Phase 8 retro complete — choose the next move:**
-1. `/zj:ship` / merge `feature-syerp-inventory-purchasing` (retro done; branch is verified + tagged).
+**Both phases now verified. Choose the next move:**
+1. **`/zj:milestone`** — closes v1.0. This is where the **12-check human-UAT** finally runs
+   (`.zj/UAT-v1.0.md`, currently **2/12**: checks 1 & 8 passed). Both Phase 7 and Phase 8 deferred
+   it here (D-P7-5); it is the last real debt against v1.0 and nothing is marked `implemented` on
+   the strength of it. Regression checks 9–12 exercise the exact fixes verified above.
+2. `/zj:ship` / merge `feature-syerp-inventory-purchasing` (verified + tagged; carries Phases 7+8).
    Optionally `/zj:log phase 08` first to file the formal work log.
-2. **Still owed on v1.0 (do not lose):** `/zj:verify 07` then `/zj:milestone` — runs the human UAT
-   (`.zj/UAT-v1.0.md`: checks 1 & 8 passed; 2–7 & 9–12 outstanding). Phase 7 is built but not
-   verified and v1.0 is not closed; Phase 8 was built/verified ahead of it by owner choice.
-3. `/zj:plan 09` — SYERP AP/AR & reporting (only once the branch situation above is resolved).
+3. `/zj:retro 07` — Phase 7 produced a genuine lesson worth keeping: *a fix can be more dangerous
+   than the bug it fixes* (lexicographic duplicate → persistent int4 DoS), and *a committed test
+   that never runs reads as coverage while proving nothing*.
+4. `/zj:plan 09` — SYERP AP/AR & reporting (only once the branch situation above is resolved).
+
+**Standing debt:** the PLUM pytest harness is still broken (BACKLOG p1, D-P7-4) — `tests/plum/*`
+DB tests silently skip. It no longer leaves any Phase-7 criterion unprotected (the `verify_*.py`
+gates cover them), but repair it before the guards drift out of sync with the pytest suite.
 
 ### Prior next action (build, now complete)
 **BUILD IN FLIGHT — Phase 8** on branch `feature-syerp-inventory-purchasing` (cut from
