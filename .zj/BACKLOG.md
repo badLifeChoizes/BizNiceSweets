@@ -43,7 +43,24 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 - [ ] **Split `backend/app/modules/plum/service.py` (~3,000 lines)** before MOUSSE/CRISP copy
   the pattern — the monolith-file smell the prototypes suffered from. Target: before/at
-  Phase 10 (MOUSSE).
+  Phase 10 (MOUSSE). **Note (Phase 8):** `syerp/service.py` has now grown to ~1,800 lines
+  (inventory + purchasing landed here) — the same smell is starting in the hub module; fold it
+  into this split when done.
+- [ ] **Audit-write atomicity vs. the mutation** (Phase 8 review, 2026-07-08) — every service
+  mutation commits, then the router calls `write_audit`, which does its own `db.commit()`
+  (inherited Phase-4 pattern, consistent module-wide). A process death or `write_audit` failure
+  between the two commits persists the mutation with **no audit row**. Not a new defect, but
+  traceability is a first-class medical-device-origin concern: if strict audit-with-mutation
+  atomicity is wanted, thread `commit=False` through the audit insert so it shares the mutation's
+  transaction (one commit). Revisit before CRISP (QMS) or any compliance sign-off.
+- [ ] **Concurrency races on the inventory ledger** (Phase 8 review, accepted-risk for
+  single-shop, Plan Risk #4) — moving-average recompute, the over-receipt guard, and the
+  negative-stock guards each read-check-write **without a row lock**. Single-threaded every path
+  is correct (verified); under concurrent writers the moving average *drifts* (self-heals on the
+  next receipt) but the two hard invariants this phase guarantees — `qty_received ≤ qty_ordered`
+  and per-location on-hand `≥ 0` — **can be breached**. Accepted for single-shop v2.0. Revisit
+  when MOUSSE (Phase 10) also writes this ledger, or the first multi-writer deployment — add
+  `SELECT … FOR UPDATE` / serialized posting then.
 - [ ] **Integration specs** (kept from chore-architecture-planning): PLUM↔MOUSSE,
   PLUM↔SYERP, FLAN↔SYERP, shared vendor/document infrastructure.
 - [ ] **Suite documentation sets** (kept): SYERP, CRUMB, MOUSSE, CRISP, GELATO under
@@ -64,3 +81,7 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   supersede them (prototypes are frozen per D-ADOPT-4).
 - [ ] **Milestone bookkeeping** — GSD Wave-0 `wave_0_complete` flags were never set for any
   phase (historical; relevant only if auditing the archive).
+- [ ] **Starlette 422 deprecation sweep** (Phase 8) — `HTTP_422_UNPROCESSABLE_ENTITY` is
+  deprecated for `HTTP_422_UNPROCESSABLE_CONTENT`; fires from `post_receipt` / `post_adjustment` /
+  `post_transfer` / `receive_line` in `backend/app/modules/syerp/service.py` and likely older
+  modules. Cosmetic; one mechanical sweep before it becomes log noise.

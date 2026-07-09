@@ -87,7 +87,7 @@ Owner decision 2026-07-04: dependency-first order confirmed — operations befor
 CRM. **Definition of done (draft):** "Can track inventory, raise purchase orders, and execute
 work orders that consume PLUM BOMs and inventory." Refine via `/zj:spec` at milestone start.
 
-### Phase 8: SYERP Extended — inventory & purchasing  [verified]
+### Phase 8: SYERP Extended — inventory & purchasing  [done]
 - **Goal:** Inventory items (optional PLUM link) with per-location on-hand, immutable
   transaction history, and moving-average valuation; a Draft→Approve→Receive purchase-order
   workflow whose receipts feed inventory. No AP (SYERP-12), no warehouse bins (GELATO-01).

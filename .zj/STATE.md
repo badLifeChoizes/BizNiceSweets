@@ -4,24 +4,26 @@ Updated: 2026-07-08
 ## Position
 
 - **Milestone:** v1.0 — Foundation + PLUM (Phase 7 built; verify + close still **open**) ·
-  v2.0 — Phase 8 **VERIFIED** (PASS with owner-accepted deferrals).
-- **Phase:** 8 (SYERP inventory & purchasing) **verified 2026-07-08** — `/zj:verify 08` PASS.
+  v2.0 — Phase 8 **DONE** (verified + retro complete).
+- **Phase:** 8 (SYERP inventory & purchasing) **verified + retro'd 2026-07-08** — roadmap `[done]`.
   All 16 SYERP-10/11 acceptance criteria proven live (`verify_inventory` 15/15,
   `verify_purchasing` 18/18, `verify_e2e_p8` 18/18 fresh-DB). One code defect found + fixed in the
   fix loop (`554c3fe` — bad `plum_part_id` now 4xx not 500). Tag `zj/good-08-syerp-inventory-purchasing`.
-  Deferred to BACKLOG p1 (owner decision, D-P7-4/D-P7-5): port verify-script assertions into runnable
-  integration tests once the async pytest harness is repaired; UI-flow human UAT at v2.0 milestone.
+  Retro lessons captured in `.zj/LEARNINGS.md` (Phase 08). Deferrals homed: BACKLOG p1 (port
+  verify-script assertions to integration tests, D-P7-4/D-P7-5), BACKLOG p2 (audit-write atomicity,
+  ledger concurrency races — accepted single-shop), BACKLOG p3 (Starlette 422 sweep).
 - **Branch:** `feature-syerp-inventory-purchasing` (verified tip `554c3fe`), cut from
   `bugfix-plum-v1-gaps` per D-P8-11 — atop unmerged Phase 7, not yet on `master`.
 
 ## Next action
 
-**Phase 8 verified — choose the next move:**
-1. `/zj:retro 08` — capture Phase-8 lessons (the verify-script-vs-broken-harness pattern is worth
-   keeping), then `/zj:ship` / merge `feature-syerp-inventory-purchasing`.
+**Phase 8 retro complete — choose the next move:**
+1. `/zj:ship` / merge `feature-syerp-inventory-purchasing` (retro done; branch is verified + tagged).
+   Optionally `/zj:log phase 08` first to file the formal work log.
 2. **Still owed on v1.0 (do not lose):** `/zj:verify 07` then `/zj:milestone` — runs the human UAT
    (`.zj/UAT-v1.0.md`: checks 1 & 8 passed; 2–7 & 9–12 outstanding). Phase 7 is built but not
    verified and v1.0 is not closed; Phase 8 was built/verified ahead of it by owner choice.
+3. `/zj:plan 09` — SYERP AP/AR & reporting (only once the branch situation above is resolved).
 
 ### Prior next action (build, now complete)
 **BUILD IN FLIGHT — Phase 8** on branch `feature-syerp-inventory-purchasing` (cut from
