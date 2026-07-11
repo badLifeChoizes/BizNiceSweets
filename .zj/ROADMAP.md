@@ -143,7 +143,7 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
 - **Evidence:** `.zj/phases/08-syerp-inventory-purchasing/{PLAN,VERIFICATION,REVIEW}.md`;
   tag `zj/good-08-syerp-inventory-purchasing`.
 
-### Phase 9: SYERP Extended — GL, AP & financial reporting  [pending — spec'd 2026-07-11]
+### Phase 9: SYERP Extended — GL, AP & financial reporting  [pending — spec'd 2026-07-11; SPLIT into 9a/9b/9c at plan, 2026-07-11]
 - **Goal:** Real books: a double-entry GL posting engine, an accounts-payable workflow (vendor
   bills matched to PO receipts, with payments), and financial reporting — with inventory receipts
   and AP documents auto-posting balanced journal entries so AP aging and the Trial Balance / P&L /
@@ -151,15 +151,31 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
 - **Delivers:** SYERP-12 (9 acceptance criteria — see SRD). **AR is not here** — SYERP-13 (AR)
   is deferred to the CRUMB milestone (D-P9-4).
 - **Scope decisions:** D-P9-1 (full subledger auto-post, chosen over document-only aging),
-  D-P9-2 (AP = bill↔PO-receipt match + payments), D-P9-3 (GR/IR clearing posting model; CoA
-  account codes confirmed at plan time), D-P9-4 (AR → CRUMB).
-- **Likely split at `/zj:plan`:** this is the largest option the owner could have chosen
-  (D-P9-1) — expect to break it into sub-phases (9a GL journal engine + receipt auto-post →
-  9b AP bills/match/payments → 9c reporting & statements) rather than one mega-phase, mirroring
-  the MOUSSE split note. Extends Phase-8 receiving (adds an atomic JE side-effect), so re-run the
-  Phase-8 verify scripts as a regression gate.
-- **Note (owner-facing):** `coa_seed.py` must gain the posting accounts (Inventory asset, GR/IR,
-  AP control, Cash/Bank, expense fallback) — surface the exact codes for confirmation at planning.
+  D-P9-2 (AP = bill↔PO-receipt match + payments), D-P9-3 (GR/IR clearing posting model — codes
+  now confirmed, see 9a), D-P9-4 (AR → CRUMB).
+- **Split confirmed at `/zj:plan 09` (D-P9a-1..5):** broken into three ZJ sub-phases rather than one
+  mega-phase, each planned/built/verified independently:
+
+#### Phase 9a: GL posting engine + receipt auto-post  [planned 2026-07-11 — ready to build]
+- **Goal:** A double-entry GL posting engine — balanced, immutable, reversible journal entries with
+  derived account balances and an account register — plus a manual general-journal UI, and PO
+  receipts auto-post a balanced GR/IR journal entry atomically with the stock ledger.
+- **Delivers:** SYERP-12 **AC1** (journal & posting engine), **AC2** (derived balances + register),
+  **AC3** (receipt → Dr Inventory 1130 / Cr GR/IR 2150 auto-post), plus AC8/AC9 for that surface.
+- **Key decisions:** GR/IR = new seeded **2150** LIABILITY under 2100 (Inventory 1130 / AP 2110 /
+  Cash 1110 already exist); JEs append-only immutable (D-P9a-1); manual JE UI in scope; branch off
+  **master** (D-P9a-2 — the D-P8-11 master-behind trap is resolved). Extends Phase-8 `receive_line`
+  with an atomic JE side-effect → the Phase-8 verify scripts are a regression gate.
+- **Plan:** `.zj/phases/09a-gl-posting-engine/PLAN.md` — 13 tasks. Next: `/zj:build 09a`.
+
+#### Phase 9b: AP bills, PO match & payments  [pending — plan after 9a]
+- **Delivers:** SYERP-12 **AC4** (vendor bill + PO-receipt match, Dr GR/IR-or-Expense / Cr AP,
+  Draft→Posted→Paid FSM), **AC5** (payments Dr AP / Cr Cash, partial, overpayment 4xx). Plan
+  resolves: unmatched-bill line account selection, payment cash/bank account choice.
+
+#### Phase 9c: AP aging + financial statements  [pending — plan after 9b]
+- **Delivers:** SYERP-12 **AC6** (AP aging buckets, ties to AP control balance), **AC7** (Trial
+  Balance, P&L, Balance Sheet from posted GL activity).
 
 ### Phase 10: MOUSSE — manufacturing execution core  [pending]
 - **Goal:** Work orders with routing consume PLUM BOMs and SYERP inventory; costs flow back

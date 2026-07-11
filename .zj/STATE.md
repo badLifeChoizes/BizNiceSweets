@@ -4,13 +4,20 @@ Updated: 2026-07-11
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** spec (v2.0 Phase-9 requirements set) → next is `/zj:plan 09`
+- **Step:** plan complete (Phase 9a) → next is `/zj:build 09a`
 - **Last update:** 2026-07-11
-- **Next action:** `/zj:plan 09` for **SYERP-12 — GL + AP + financial reporting**. The spec is
-  done (2026-07-11): SYERP-12 expanded to 9 ACs (SRD), PRD-7/8 refined, v2.0 DoD confirmed,
-  D-P9-1..5 recorded. **Expect to split Phase 9** into sub-phases at plan time (9a GL journal
-  engine + receipt auto-post → 9b AP bills/match/payments → 9c reporting) — it's the largest
-  scope option (D-P9-1). AR is out of Phase 9 (SYERP-13 → CRUMB milestone). Phase 8 already retro'd.
+- **Next action:** `/zj:build 09a` — **Phase 9a: GL posting engine + receipt auto-post**
+  (`.zj/phases/09a-gl-posting-engine/PLAN.md`, 13 tasks, status: ready). Covers SYERP-12
+  **AC1/AC2/AC3** + AC8/AC9: double-entry JournalEntry/JournalLine (append-only immutable, reversal
+  via self-FK — D-P9a-1), derived account balances + register, a manual general-journal UI, and the
+  crux — PO `receive_line` atomically posts a balanced JE **Dr Inventory 1130 / Cr GR/IR 2150** at
+  receipt cost (new seeded account 2150). **First task at build:** cut branch
+  `feature-syerp-gl-posting-engine` **off `master`** (D-P9a-2 — the D-P8-11 master-behind trap is
+  resolved; master carries Phases 1–8 post-PR-#1). Regression gate: re-run the Phase-8 verify
+  scripts (the JE side-effect must not move on-hand/moving-average).
+  - **Phase 9 was split at plan time (D-P9a-1..5):** 9a now → then `/zj:plan 09b` (AP bills/match/
+    payments, AC4/AC5) → `/zj:plan 09c` (AP aging + statements, AC6/AC7). AR stays out (SYERP-13 →
+    CRUMB, D-P9-4). Full spec context (D-P9-1..5) below. Phase 8 already retro'd.
 - **Phase-9 spec (2026-07-11):** owner chose full subledger→GL auto-posting (D-P9-1) over
   document-only aging; AP = vendor bill matched to PO receipts + payments (D-P9-2); GR/IR clearing
   posting model (D-P9-3, CoA account codes to confirm at plan time); AR deferred to CRUMB (D-P9-4,

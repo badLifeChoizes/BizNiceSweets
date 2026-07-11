@@ -8,7 +8,7 @@ Numbering is append-only.
 ## Index
 
 One line per decision, newest last. Entries below are append-only — regenerate this index
-at milestone close, never hand-edit it. 50 decisions.
+at milestone close, never hand-edit it. 55 decisions.
 
 - **D-1:** Business domain = hybrid open-source business suite of 7 integrated suites (SYERP, PLUM, FLAN, MOUSSE, CRUMB, GELATO, CRISP), each usable…
 - **D-2:** Manufacturing (facilities, work centers, routings) lives in MOUSSE, not PLUM — PLUM is product development; released products hand off to MOUSSE.…
@@ -60,6 +60,11 @@ at milestone close, never hand-edit it. 50 decisions.
 - **D-P9-3:** Posting model = GR/IR clearing (receipt Dr Inventory/Cr GR-IR; bill Dr GR-IR/Cr AP; payment Dr AP/Cr Cash) — receipt path gains an atomic JE side-effect; exact CoA account codes confirmed at /zj:plan
 - **D-P9-4:** Accounts receivable deferred to the CRUMB milestone — SYERP-12 narrowed to AP+GL+reporting, AR split to new append-only SYERP-13
 - **D-P9-5:** v2.0 definition of done unchanged — all three clauses kept, MOUSSE (Phase 10) still required to close; MOUSSE-01 expanded at Phase-10 planning
+- **D-P9a-1:** JournalEntry/JournalLine are append-only immutable (no status column, mirror InventoryTxn); reversal = new entry via self-FK reversal_of_id; money Numeric(18,6); one of debit/credit per line
+- **D-P9a-2:** Phase 9a branches `feature-syerp-gl-posting-engine` off master (not the Phase-8 branch) — the D-P8-11 "master behind" trap was resolved at the v1.0 ship (PR #1 FF-merged to master)
+- **D-P9a-3:** GL endpoint paths = /syerp/gl/journal-entries[/{id}][/reverse] + /syerp/gl/accounts/{id}/register?from=&to=
+- **D-P9a-4:** JE reversal swaps debit⇄credit, sets reversal_of_id, dated today (current period), optional memo — not a same-period reversal
+- **D-P9a-5:** Receipt auto-post writes both po.received and gl.journal_posted audit rows so the GR/IR JE is attributable (AC8)
 
 ## Product & Architecture
 
@@ -293,6 +298,43 @@ at milestone close, never hand-edit it. 50 decisions.
   definition. **Reinforces the G1 lesson:** "API verified live" never transfers to the UI that
   consumes it — five of the twelve UAT checks were closable only by a human in a browser, and three
   of them exposed real bugs.
+
+## Phase 9a planning — GL posting engine split + build decisions (2026-07-11)
+
+Phase 9 (SYERP-12) is split into three ZJ sub-phases at planning (owner-confirmed, extends
+D-P9-1's "expect to split"): **9a** = GL posting engine + receipt auto-post + manual journal UI
+(covers SYERP-12 AC1/AC2/AC3 and AC8/AC9 for that surface); **9b** = AP bills/match/payments
+(AC4/AC5); **9c** = AP aging + financial statements (AC6/AC7). 9a is planned/built/verified
+first. GR/IR account confirmed as new seeded **2150 "Goods Received Not Invoiced (GR/IR)"**,
+LIABILITY under Current Liabilities 2100 (D-P9-3 left the codes open; Inventory 1130, AP 2110,
+Cash 1110 already exist). Manual journal-entry UI is IN scope for 9a (owner chose it over
+auto-post-only), and UI is folded into the plan with no separate DESIGN.md (D-P8-9 precedent).
+
+- **D-P9a-1 (owner-default):** `JournalEntry` / `JournalLine` are **append-only and immutable** —
+  no mutable status column; a posted entry is the only state a row can be in, mirroring the
+  `InventoryTxn` ledger. Corrections are **reversing entries** (new row, self-FK `reversal_of_id`),
+  never edits or deletes. Money is `Numeric(18,6)`/`Decimal` (D-11); each line carries exactly one
+  of debit/credit, both ≥ 0. *Why:* audit-trail/traceability is first-class (medical-device origin),
+  and it reuses the proven Phase-8 ledger pattern rather than inventing a mutable GL.
+- **D-P9a-2 (owner, corrects a stale premise):** Phase 9a branches **`feature-syerp-gl-posting-engine`
+  off `master`**, not off the Phase-8 branch. The architect draft assumed master was 263 commits
+  behind (D-P8-11), but that debt was **resolved at the v1.0 ship (2026-07-11)** — PR #1
+  fast-forward-merged `feature-syerp-inventory-purchasing` → `master`, so master now carries
+  Phases 1–8 (verified: `backend/`/`frontend/`/`.zj/` tracked on master, HEAD `f2466d3`). The
+  D-P8-11 trap ("branch off the working tip, not master") no longer applies because **master is now
+  the working tip**. *Consequence:* the next-milestone-on-unclosed-branch cost noted in D-M1-1 is
+  paid off; 9a builds on a clean, merged master.
+- **D-P9a-3 (owner-default):** GL endpoint paths — `POST/GET /syerp/gl/journal-entries`,
+  `GET /syerp/gl/journal-entries/{id}`, `POST /syerp/gl/journal-entries/{id}/reverse`,
+  `GET /syerp/gl/accounts/{id}/register?from=&to=` (existing `GET /syerp/gl/accounts` unchanged).
+- **D-P9a-4 (owner-default):** JE **reversal swaps debit⇄credit** on every line, sets
+  `reversal_of_id`, takes an optional memo (default `"Reversal of {id}"`), and is **dated today**
+  (lands in the current period), not back-dated to the original. Revisit if same-period reversal is
+  later needed.
+- **D-P9a-5 (owner-default):** The PO-receive endpoint writes **both `po.received` and
+  `gl.journal_posted`** audit rows (after `receive_line` commits), so the auto-posted GR/IR JE is
+  attributable per AC8 — chosen over folding the JE id into the `po.received` detail (less
+  discoverable).
 
 ## v2.0 / Phase 9 spec — SYERP-12 expansion (2026-07-11)
 
