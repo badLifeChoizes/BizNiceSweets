@@ -1,5 +1,5 @@
 # SRD — BizNiceSweets
-Updated: 2026-07-05
+Updated: 2026-07-11
 
 > **Provenance:** requirement IDs and statements ingested verbatim from the GSD-era
 > `.planning/REQUIREMENTS.md` (defined 2026-06-22, last updated 2026-06-30), archived at
@@ -349,10 +349,81 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ---
 
+## SYERP Extended — Financials (v2.0 — Phase 9)
+
+> Expanded from a coarse placeholder 2026-07-11 (`/zj:spec`) ahead of Phase 9 planning.
+> Scope decisions: D-P9-1 (full subledger auto-post GL — owner chose the deepest option over
+> document-only aging), D-P9-2 (AP = vendor bill matched to PO receipts + payments), D-P9-3
+> (GR/IR posting model for receipts and bills), D-P9-4 (AR deferred to the CRUMB milestone →
+> new SYERP-13 placeholder). IDs unchanged (append-only): the original SYERP-12 "AP/AR and
+> financial reporting" is **narrowed to AP + GL + reporting**; the AR half moves to SYERP-13.
+
+## SYERP-12: General ledger, accounts payable & financial reporting  [traces: PRD-7]  **Status: planned**
+- **Statement:** The system shall provide a **double-entry general-ledger posting engine**, an
+  **accounts-payable workflow** (vendor bills matched to PO receipts, with payments), and
+  **financial reporting** — where **inventory receipts (SYERP-11.4) and AP documents auto-post
+  balanced journal entries to the GL**, so that AP aging and the core financial statements
+  (Trial Balance, P&L, Balance Sheet) derive from **posted GL activity**, not from ad-hoc
+  document scans. Accounts receivable is **deferred to the CRUMB milestone** (SYERP-13, D-P9-4):
+  AR invoices belong downstream of sales orders, which do not yet exist.
+- **Acceptance criteria:**
+  1. **Journal & posting engine** — A journal entry has ≥2 lines; each line is a `GLAccount` +
+     a debit **or** a credit amount (`Numeric(18,6)` / `Decimal`, never float — D-11). A **posted**
+     entry must balance (Σ debits == Σ credits) or is **rejected** (HTTP 4xx). Posted entries are
+     **immutable** (append-only, mirroring the inventory ledger — corrections are **reversing
+     entries**, never edits/deletes). Each entry carries a date, memo, source reference
+     (e.g. a receipt id or bill id), and acting user.
+  2. **Derived GL balances & account register** — Each `GLAccount`'s balance is **derived** as the
+     signed sum of its posted journal lines (never a directly-mutated column, mirroring on-hand
+     derivation D-P8-4). User can view an **account register** — posted lines for one account over
+     a date range with a running balance.
+  3. **Inventory receipt auto-posts (GR/IR)** — Receiving a PO line (SYERP-11.4) now **also** posts
+     a balanced JE at the receipt cost: **Dr Inventory asset, Cr GR/IR** (goods-received-not-
+     invoiced accrual). The stock ledger (SYERP-10) remains the source of on-hand; the JE is the
+     financial mirror. Receipt posting stays **atomic** — stock txn + JE in one transaction
+     (D-P9-3; exact account codes confirmed at planning).
+  4. **Vendor bill + PO match** — User creates an AP **bill** for a vendor (`Partner.is_vendor`),
+     optionally **matching** it to one or more PO receipts (two/three-way match: bill line qty ×
+     unit cost checked against received qty/cost). Posting the bill posts **Dr GR/IR** (matched)
+     **or Dr Inventory/Expense** (unmatched), **Cr Accounts Payable**. Bill lifecycle
+     **Draft → Posted → Paid**; invalid transitions **refused server-side** (HTTP 4xx), not just
+     hidden in the UI (SYERP-11.1 FSM pattern).
+  5. **Payments** — User records a **payment** against one or more posted bills (full or partial);
+     posting a payment posts **Dr Accounts Payable, Cr Cash/Bank**. A bill's **open balance** =
+     billed − paid; a payment that would drive it **negative (overpayment) is rejected** (HTTP 4xx),
+     mirroring the over-receipt guard (D-P8-7). A bill auto-advances to `Paid` when its open balance
+     reaches zero.
+  6. **AP aging report** — Open AP balances **bucketed by age** (current / 31–60 / 61–90 / 90+)
+     from bill dates, **per vendor and total**, and the total **ties to the Accounts-Payable
+     control-account balance** in the GL (subledger ↔ control-account agreement).
+  7. **Financial statements** — From posted GL activity: **Trial Balance** (every account, Σ debits
+     == Σ credits), **Profit & Loss** (revenue/expense over a period), and **Balance Sheet**
+     (assets == liabilities + equity as of a date). Each is a read-only report derived from posted
+     journal lines; the Balance Sheet must balance.
+  8. **Audit** — Bill create/post, payment, every journal entry, and every reversal emit
+     attributable audit events (NFR-1).
+  9. **RBAC** — All endpoints gated by `syerp:<action>` permission codes; an un-permissioned API
+     call is refused regardless of UI (CORE-05 / D-P8-10 pattern).
+- **Verification:** service tests for balanced-entry enforcement + posted-entry immutability,
+  derived account balances, receipt→JE auto-post (Dr Inventory / Cr GR/IR at cost), bill PO-match +
+  AP posting, payment posting + open-balance math + overpayment rejection, AP-aging buckets, and
+  **statement tie-out** (Trial Balance nets to zero, Balance Sheet balances, AP aging total ==
+  AP control-account balance); live UI walk — receive a PO (see the auto-posted JE), enter and
+  match a vendor bill, pay it partially then fully, read AP aging and the three statements, confirm
+  audit rows. Empirical proof via live-Postgres `backend/scripts/verify_*.py` (D-P7-4 precedent
+  until the async pytest harness is repaired) + flow-level human UAT at the v2.0 milestone.
+
+---
+
 ## Future Suites (coarse placeholders — expand via /zj:spec at milestone planning)
 
-## SYERP-12: AP/AR and financial reporting  [traces: PRD-7]  **Status: planned**
-- **Statement:** The system shall support invoice management (AP/AR basics) and basic financial reporting on the GL.
+## SYERP-13: Accounts receivable  [traces: PRD-7]  **Status: planned (CRUMB milestone)**
+- **Statement:** The system shall support customer **invoices, receipts (customer payments), and
+  AR aging**, auto-posting to the GL (Dr Accounts Receivable / Cr Revenue on invoice; Dr Cash /
+  Cr AR on receipt), mirroring the SYERP-12 AP model on the sell side.
+- **Note:** Split out of the original SYERP-12 at the Phase-9 spec (D-P9-4). Deferred to the
+  **CRUMB milestone**, where invoices flow from sales orders rather than being keyed standalone;
+  expand its acceptance criteria via `/zj:spec` when that milestone nears.
 
 ## MOUSSE-01: Manufacturing execution core  [traces: PRD-7]  **Status: planned**
 - **Statement:** The system shall support work orders with status workflow, routing (operations/work centers), BOM consumption from PLUM, inventory consumption, shop-floor execution view, and work-order costing flowing to SYERP.
@@ -396,7 +467,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-4 | SYERP-01..05, PLUM-07 | — |
 | PRD-5 | PLUM-01..16 | Phase-7 **verified** 2026-07-09 (`8975eeb`): fixes `5c33ed8`/`1b8bfa1`/`37b5f97` proven live, plus blocker `7562a02` (int4 overflow bricked auto-numbering) found and fixed in the verify fix loop; PLUM-01/07/10 backends now guarded by `verify_plum_vendor_paths.py`, `verify_part_numbering.py`, `test_part_number.py`, `ImportExport.test.tsx`. PLUM-04..10 flow-level UI confirmation still deferred to v1.0 milestone UAT (`.zj/UAT-v1.0.md`, 2/12 done, D-P7-5) |
 | PRD-6 | FLAN-01 | expand at milestone planning |
-| PRD-7 | SYERP-10..12, MOUSSE-01 | SYERP-10/11 backend built & live-verified (Phase 8: migrations 0007/0008; `verify_inventory`/`verify_purchasing`/`verify_e2e_p8` scripts), UI flow UAT deferred to v2.0 milestone (D-P7-5); SYERP-12 + MOUSSE-01 still coarse |
+| PRD-7 | SYERP-10..13, MOUSSE-01 | SYERP-10/11 backend built & live-verified (Phase 8: migrations 0007/0008; `verify_inventory`/`verify_purchasing`/`verify_e2e_p8` scripts), UI flow UAT deferred to v2.0 milestone (D-P7-5); **SYERP-12 expanded 2026-07-11 (Phase 9 target — GL + AP + reporting, 9 ACs)**; SYERP-13 (AR) split out to the CRUMB milestone (D-P9-4); MOUSSE-01 still coarse (expand at Phase-10 planning) |
 | PRD-8 | CRUMB-01, GELATO-01 | coarse — expand via /zj:spec |
 | PRD-9 | CRISP-01, NFR-1 | CRISP coarse |
 | PRD-10 | NFR-3 | — |
@@ -410,8 +481,9 @@ is built & **live-verified** in Phase 8 by `verify_inventory.py` (15/15), `verif
 deferred to the v2.0 milestone UAT, D-P7-5) + 2 NFR foundations · partial 7 (PLUM-04..10 — all three
 Phase-7 runtime/cache fixes landed, **verified live and guarded** by `verify_plum_vendor_paths.py`
 (8/8) + `verify_part_numbering.py` (7/7) + `ImportExport.test.tsx`; flow-level UI confirmation
-deferred to v1.0 milestone UAT per D-P7-5) · planned 13 (PLUM-11..16, FLAN-01, SYERP-12,
-MOUSSE/CRUMB/GELATO/CRISP-01, NFR-3 — coarse placeholders until their milestones near).
+deferred to v1.0 milestone UAT per D-P7-5) · planned 14 (PLUM-11..16, FLAN-01, **SYERP-12 now
+expanded to 9 ACs for Phase 9**, SYERP-13 [AR, split to CRUMB], MOUSSE/CRUMB/GELATO/CRISP-01,
+NFR-3 — the rest coarse placeholders until their milestones near).
 
 > **Honest caveat (do not lose):** the v1.0 human-UAT is **2/12** (`.zj/UAT-v1.0.md`; checks 1 & 8
 > passed). Nothing above is marked `implemented` on the strength of a check that never ran — PLUM-04..10

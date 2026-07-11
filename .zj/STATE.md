@@ -1,13 +1,20 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-09
+Updated: 2026-07-11
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** shipped (PR #1 merged) → next is v2.0 Phase 9
+- **Step:** spec (v2.0 Phase-9 requirements set) → next is `/zj:plan 09`
 - **Last update:** 2026-07-11
-- **Next action:** `/zj:spec` to refine the v2.0 definition of done, then `/zj:plan 09` for
-  SYERP AP/AR & reporting (SYERP-12). Phase 8 already retro'd.
+- **Next action:** `/zj:plan 09` for **SYERP-12 — GL + AP + financial reporting**. The spec is
+  done (2026-07-11): SYERP-12 expanded to 9 ACs (SRD), PRD-7/8 refined, v2.0 DoD confirmed,
+  D-P9-1..5 recorded. **Expect to split Phase 9** into sub-phases at plan time (9a GL journal
+  engine + receipt auto-post → 9b AP bills/match/payments → 9c reporting) — it's the largest
+  scope option (D-P9-1). AR is out of Phase 9 (SYERP-13 → CRUMB milestone). Phase 8 already retro'd.
+- **Phase-9 spec (2026-07-11):** owner chose full subledger→GL auto-posting (D-P9-1) over
+  document-only aging; AP = vendor bill matched to PO receipts + payments (D-P9-2); GR/IR clearing
+  posting model (D-P9-3, CoA account codes to confirm at plan time); AR deferred to CRUMB (D-P9-4,
+  new SYERP-13); v2.0 DoD unchanged, MOUSSE stays required (D-P9-5).
 - **Ship record (2026-07-11):** **PR #1 MERGED** via local fast-forward
   (`feature-syerp-inventory-purchasing` → `master`, `f4e2bd3..a5ad44b`). Master now carries the
   full re-platform (Phases 1–8); `v1.0` tag (`4b6fee4`) pushed and confirmed an ancestor of

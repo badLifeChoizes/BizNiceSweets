@@ -1,5 +1,6 @@
 # PRD — BizNiceSweets
-Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` GSD artifacts, and `docs/` program roadmap — all archived; see DECISIONS.md D-ADOPT-1)
+Updated: 2026-07-11 (PRD-7/8 refined at the Phase-9 spec — GL+AP+reporting scope, AR→CRUMB; D-P9-1..4)
+Originally: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` GSD artifacts, and `docs/` program roadmap — all archived; see DECISIONS.md D-ADOPT-1)
 
 ## PRD-1: Self-hosted single-command deployment
 - **Statement:** The product shall run as a self-hosted containerized deployment that one
@@ -74,20 +75,28 @@ Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` G
 - **Status: planned**
 
 ## PRD-7: Operations — extended ERP and manufacturing execution
-- **Statement:** The product shall support operations: inventory, purchase orders, AP/AR
-  basics and financial reporting (SYERP extended), plus work orders, routing, and shop-floor
-  execution consuming PLUM BOMs (MOUSSE).
+- **Statement:** The product shall support operations: inventory, purchase orders, then a
+  **double-entry general ledger with accounts payable and financial reporting** (SYERP
+  extended — inventory receipts and vendor bills auto-post to the GL; AP aging plus Trial
+  Balance / P&L / Balance Sheet derive from posted activity), plus work orders, routing, and
+  shop-floor execution consuming PLUM BOMs (MOUSSE). Accounts receivable ships later with CRUMB
+  sales orders (see PRD-8), where its upstream invoices originate.
 - **Why:** "Can manufacture products and track inventory" — the step that turns a design
   tool into a manufacturing suite. Owner confirmed (2026-07-04) this is the next milestone
-  after v1.0 closes, per the dependency-first program roadmap.
+  after v1.0 closes, per the dependency-first program roadmap. The owner chose real books
+  (subledger→GL auto-posting) over document-only aging at the Phase-9 spec (2026-07-11, D-P9-1)
+  so the shop's actual financial position is derivable, not just its open payables.
 - **Priority:** should (next milestone)
-- **Source:** program roadmap Phase 2 (archived `docs/ROADMAP.md`); owner decision 2026-07-04
+- **Source:** program roadmap Phase 2 (archived `docs/ROADMAP.md`); owner decisions 2026-07-04
+  and 2026-07-11 (D-P9-1..4)
 - **Acceptance signal:** A work order for a released PLUM assembly consumes inventory and
-  reports cost back to SYERP.
-- **Evidence:** SYERP-10, SYERP-11 implemented (Phase 8, backend verified live); SYERP-12, MOUSSE-01 planned (see SRD).
-- **Status: partial** — inventory + purchasing shipped and verified live (v2.0 Phase 8); AP/AR
-  reporting (SYERP-12) and manufacturing execution (MOUSSE-01) still planned. Corrected at the
-  v1.0 milestone close: this entry still read `planned` after Phase 8 landed.
+  reports cost back to SYERP; and receiving a PO then billing and paying the vendor moves the
+  right amounts through inventory, GR/IR, AP, and cash, visible on the financial statements.
+- **Evidence:** SYERP-10, SYERP-11 implemented (Phase 8, backend verified live); SYERP-12
+  (GL + AP + reporting) expanded for Phase 9; SYERP-13 (AR, CRUMB), MOUSSE-01 planned (see SRD).
+- **Status: partial** — inventory + purchasing shipped and verified live (v2.0 Phase 8); GL +
+  AP + financial reporting (SYERP-12) specified and planned for Phase 9; manufacturing execution
+  (MOUSSE-01) planned for Phase 10 (closes v2.0). AR (SYERP-13) deferred to the CRUMB milestone.
 
 ## PRD-8: Customer and logistics — CRM and warehouse
 - **Statement:** The product shall support selling and shipping: leads → opportunities →
@@ -99,6 +108,9 @@ Updated: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` G
 - **Source:** program roadmap Phase 3 (archived)
 - **Acceptance signal:** An order placed in CRUMB is picked, packed, and shipped in GELATO
   against live SYERP inventory.
+- **Evidence:** CRUMB-01, GELATO-01 planned; **SYERP-13 (accounts receivable)** rides this
+  milestone — AR invoices flow from CRUMB sales orders rather than being keyed standalone
+  (split out of SYERP-12 at the Phase-9 spec, D-P9-4).
 - **Status: planned**
 
 ## PRD-9: Quality and compliance

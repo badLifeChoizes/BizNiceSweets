@@ -58,12 +58,14 @@ Full codebase detail: `.zj/codebase/MAP.md`.
 
 ## Definition of done — current milestone (v2.0 Operations)
 
-> "Can track inventory, raise purchase orders, and execute work orders that consume PLUM BOMs
-> and inventory."
+> "Can track inventory, raise purchase orders, keep real books (double-entry GL with AP +
+> financial statements), and execute work orders that consume PLUM BOMs and inventory."
 
-Carried forward from the owner's 2026-07-04 dependency-first decision (D-ADOPT-3). Phase 8
-(inventory + purchasing) is done and verified; Phase 9 (AP/AR + reporting) and Phase 10 (MOUSSE
-work orders) remain. Refine via `/zj:spec` before planning Phase 9.
+Confirmed at the Phase-9 spec (2026-07-11, D-P9-5) — all three clauses kept. Phase 8 (inventory +
+purchasing) is done and verified; **Phase 9 (GL + AP + financial reporting, SYERP-12) is now
+spec'd** — the owner chose full subledger→GL auto-posting over document-only aging (D-P9-1), AP
+with PO-receipt matching + payments (D-P9-2), and deferred AR to the CRUMB milestone (SYERP-13,
+D-P9-4). Phase 10 (MOUSSE work orders) closes the milestone. Next: `/zj:plan 09`.
 
 **Shipped milestone:** v1.0 — *"Can deploy it, log in, manage vendors/customers, and design
 parts with multi-level BOMs and cost roll-up."* Closed 2026-07-09.

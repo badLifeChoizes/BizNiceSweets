@@ -1,5 +1,5 @@
 # DECISIONS — BizNiceSweets
-Updated: 2026-07-09
+Updated: 2026-07-11
 
 Recovered decisions are marked `(recovered)` with their original source (now archived).
 Numbering is append-only.
@@ -8,7 +8,7 @@ Numbering is append-only.
 ## Index
 
 One line per decision, newest last. Entries below are append-only — regenerate this index
-at milestone close, never hand-edit it. 45 decisions.
+at milestone close, never hand-edit it. 50 decisions.
 
 - **D-1:** Business domain = hybrid open-source business suite of 7 integrated suites (SYERP, PLUM, FLAN, MOUSSE, CRUMB, GELATO, CRISP), each usable…
 - **D-2:** Manufacturing (facilities, work centers, routings) lives in MOUSSE, not PLUM — PLUM is product development; released products hand off to MOUSSE.…
@@ -55,6 +55,11 @@ at milestone close, never hand-edit it. 45 decisions.
 - **D-M1-1:** The v1.0 tag is applied at the milestone HEAD, which contains Phase 8 (v2.0) work
 - **D-M1-2:** Gaps G1 and G2 were fixed at milestone close rather than deferred (63ea954 + API image rebuild); G3 (broken live-DB pytest harness) stays deferred…
 - **D-M1-3:** The v1.0 human UAT is run in rounds; round-1 defects are fixed before the tag rather than deferred
+- **D-P9-1:** SYERP-12 GL goes to full subledger auto-posting (inventory receipts + AP docs post balanced JEs; statements derive from posted activity), not document-only aging — the largest of three options
+- **D-P9-2:** AP depth = vendor bill matched to PO receipts with payments (Draft→Posted→Paid FSM, partial payments, overpayment rejected 4xx)
+- **D-P9-3:** Posting model = GR/IR clearing (receipt Dr Inventory/Cr GR-IR; bill Dr GR-IR/Cr AP; payment Dr AP/Cr Cash) — receipt path gains an atomic JE side-effect; exact CoA account codes confirmed at /zj:plan
+- **D-P9-4:** Accounts receivable deferred to the CRUMB milestone — SYERP-12 narrowed to AP+GL+reporting, AR split to new append-only SYERP-13
+- **D-P9-5:** v2.0 definition of done unchanged — all three clauses kept, MOUSSE (Phase 10) still required to close; MOUSSE-01 expanded at Phase-10 planning
 
 ## Product & Architecture
 
@@ -288,3 +293,43 @@ at milestone close, never hand-edit it. 45 decisions.
   definition. **Reinforces the G1 lesson:** "API verified live" never transfers to the UI that
   consumes it — five of the twelve UAT checks were closable only by a human in a browser, and three
   of them exposed real bugs.
+
+## v2.0 / Phase 9 spec — SYERP-12 expansion (2026-07-11)
+
+- **D-P9-1 (owner):** **The GL goes to full subledger auto-posting, not document-only aging.**
+  Offered three depths — (A) AP/AR documents + aging with the GL left a manual chart, (B) add a
+  manual journal + statements, (C) **inventory receipts and AP documents auto-post balanced
+  journal entries to the GL, with statements derived from posted activity** — the owner chose
+  **(C)**. *Why:* the shop's real financial position (Trial Balance / P&L / Balance Sheet) should
+  be derivable from the system that already records receipts and bills, not reconstructed by hand;
+  "reporting on the GL" is empty if nothing posts to the GL. *Cost accepted:* this is the largest
+  of the three options and makes Phase 9 heavy — a general-journal posting engine **plus** AP
+  **plus** reporting. Mitigation: expect to split Phase 9 into sub-phases at `/zj:plan` (engine →
+  AP → reporting), same as MOUSSE is flagged to split.
+- **D-P9-2 (owner):** **AP depth = vendor bill matched to PO receipts, with payments.** Chosen over
+  (bill+payments no match) and (bill records + a paid flag). *Why:* Phase 8 already built PO
+  receiving; matching the bill back to the receipt closes the procure-to-pay loop and is what makes
+  three-way reconciliation and the GR/IR clearing account meaningful. Bills carry a
+  Draft→Posted→Paid FSM enforced server-side (SYERP-11.1 pattern); payments can be partial;
+  overpayment is rejected 4xx (D-P8-7 guard pattern).
+- **D-P9-3 (owner-default, confirm at planning):** **Posting model = GR/IR clearing.** A PO receipt
+  posts **Dr Inventory / Cr GR/IR**; posting the matched vendor bill posts **Dr GR/IR / Cr AP**;
+  a payment posts **Dr AP / Cr Cash**. *Why:* this is the standard three-account procure-to-pay
+  flow and keeps received-not-yet-invoiced value visible in one clearing account; it also means the
+  Phase-8 receipt path gains a JE side-effect (stock txn + JE in one atomic transaction). *Open:*
+  the exact seeded account codes (Inventory asset, GR/IR, AP control, Cash/Bank, expense fallback)
+  are a `/zj:plan` detail — the CoA seed (`coa_seed.py`) must include them. Flagged for owner
+  confirmation at planning, not locked here.
+- **D-P9-4 (owner):** **Accounts receivable is deferred to the CRUMB milestone.** The original
+  SYERP-12 ("AP/AR and financial reporting") is **narrowed to AP + GL + reporting**; AR is split
+  out to a new append-only placeholder **SYERP-13**, delivered with CRUMB. *Why:* AR invoices
+  belong downstream of sales orders, which do not exist yet — keying standalone customer invoices
+  now would be throwaway UI, and Phase 9 is already large (D-P9-1). AR still traces PRD-7 but rides
+  the PRD-8 (CRUMB) milestone where its upstream data lives.
+- **D-P9-5 (owner):** **v2.0 definition of done is unchanged — all three clauses kept.** v2.0
+  ("Operations") still requires MOUSSE work orders (Phase 10) that consume PLUM BOMs and inventory
+  to close; Phase 9 (GL+AP+reporting) is a step toward it, not the finish line. Rejected: closing
+  v2.0 at Phase 9 and moving MOUSSE to a v3.0. *Why:* "Operations" without manufacturing execution
+  is gutted; the whole dependency-first ordering (D-6) exists to reach work orders. **MOUSSE-01
+  stays a coarse placeholder** and is expanded via `/zj:spec` at Phase-10 planning — the same
+  just-in-time expansion used for SYERP-10/11 (Phase 8) and SYERP-12 (Phase 9).

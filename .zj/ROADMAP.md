@@ -1,5 +1,6 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-09 (v1.0 milestone close; history reconstructed at ZJ adoption from git + GSD artifacts archived at `archive/planning-gsd/`)
+Updated: 2026-07-11 (Phase-9 spec — SYERP-12 = GL+AP+reporting, AR→CRUMB, v2.0 DoD confirmed; D-P9-1..5)
+Prior: 2026-07-09 (v1.0 milestone close; history reconstructed at ZJ adoption from git + GSD artifacts archived at `archive/planning-gsd/`)
 
 ## v1.0 — Foundation + PLUM  [done]
 
@@ -118,8 +119,10 @@ running stack (`.zj/MILESTONE-v1.0-AUDIT.md`). All four clauses proven live.
 
 ## v2.0 — Operations (SYERP extended + MOUSSE)  [in progress]
 Owner decision 2026-07-04: dependency-first order confirmed — operations before FLAN port /
-CRM. **Definition of done (draft):** "Can track inventory, raise purchase orders, and execute
-work orders that consume PLUM BOMs and inventory." Refine via `/zj:spec` at milestone start.
+CRM. **Definition of done (confirmed 2026-07-11, D-P9-5):** "Can track inventory, raise purchase
+orders, keep real books (double-entry GL with AP + financial statements), and execute work
+orders that consume PLUM BOMs and inventory." All three clauses kept — MOUSSE (Phase 10) still
+required to close; AR ships later with CRUMB (D-P9-4).
 
 Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the BACKLOG p1 items
 (pytest live-DB harness, both lint gates, CI pipeline) and the v2.0 human UAT
@@ -140,9 +143,23 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
 - **Evidence:** `.zj/phases/08-syerp-inventory-purchasing/{PLAN,VERIFICATION,REVIEW}.md`;
   tag `zj/good-08-syerp-inventory-purchasing`.
 
-### Phase 9: SYERP Extended — AP/AR & reporting  [pending]
-- **Goal:** Invoice basics and financial reporting on the GL.
-- **Delivers:** SYERP-12.
+### Phase 9: SYERP Extended — GL, AP & financial reporting  [pending — spec'd 2026-07-11]
+- **Goal:** Real books: a double-entry GL posting engine, an accounts-payable workflow (vendor
+  bills matched to PO receipts, with payments), and financial reporting — with inventory receipts
+  and AP documents auto-posting balanced journal entries so AP aging and the Trial Balance / P&L /
+  Balance Sheet derive from posted GL activity.
+- **Delivers:** SYERP-12 (9 acceptance criteria — see SRD). **AR is not here** — SYERP-13 (AR)
+  is deferred to the CRUMB milestone (D-P9-4).
+- **Scope decisions:** D-P9-1 (full subledger auto-post, chosen over document-only aging),
+  D-P9-2 (AP = bill↔PO-receipt match + payments), D-P9-3 (GR/IR clearing posting model; CoA
+  account codes confirmed at plan time), D-P9-4 (AR → CRUMB).
+- **Likely split at `/zj:plan`:** this is the largest option the owner could have chosen
+  (D-P9-1) — expect to break it into sub-phases (9a GL journal engine + receipt auto-post →
+  9b AP bills/match/payments → 9c reporting & statements) rather than one mega-phase, mirroring
+  the MOUSSE split note. Extends Phase-8 receiving (adds an atomic JE side-effect), so re-run the
+  Phase-8 verify scripts as a regression gate.
+- **Note (owner-facing):** `coa_seed.py` must gain the posting accounts (Inventory asset, GR/IR,
+  AP control, Cash/Bank, expense fallback) — surface the exact codes for confirmation at planning.
 
 ### Phase 10: MOUSSE — manufacturing execution core  [pending]
 - **Goal:** Work orders with routing consume PLUM BOMs and SYERP inventory; costs flow back
@@ -158,6 +175,7 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
 - **FLAN port** (FLAN-01) — retire the second frozen prototype.
 - **PLUM advanced** (PLUM-11..16) — documents, ECO workflow, labor costing, cost ranges,
   distributor pricing.
-- **Customer & logistics** (CRUMB-01, GELATO-01).
+- **Customer & logistics** (CRUMB-01, GELATO-01) — **also carries SYERP-13 (accounts receivable)**,
+  split out of Phase 9 so AR invoices flow from CRUMB sales orders (D-P9-4).
 - **Quality & release** (CRISP-01, NFR-3 offline, license audit, public open-source release
   prep).
