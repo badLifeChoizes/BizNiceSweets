@@ -57,6 +57,8 @@ _STANDARD_COA: list[dict] = [
     {"code": "2120", "name": "Accrued Expenses",            "account_type": "LIABILITY", "parent_code": "2100"},
     {"code": "2130", "name": "Sales Tax Payable",           "account_type": "LIABILITY", "parent_code": "2100"},
     {"code": "2140", "name": "Payroll Liabilities",         "account_type": "LIABILITY", "parent_code": "2100"},
+    # D-P9a: GR/IR clearing account for purchase-receipt auto-post (Dr Inventory / Cr GR-IR).
+    {"code": "2150", "name": "Goods Received Not Invoiced (GR/IR)", "account_type": "LIABILITY", "parent_code": "2100"},
     {"code": "2200", "name": "Long-Term Liabilities",       "account_type": "LIABILITY", "parent_code": "2000"},
     {"code": "2210", "name": "Long-Term Debt",              "account_type": "LIABILITY", "parent_code": "2200"},
 
