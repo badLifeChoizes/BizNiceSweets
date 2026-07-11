@@ -628,7 +628,7 @@ class JournalLineRead(BaseModel):
     are fixed-point Decimals (never float — D-11); the unused side is None.
     """
 
-    id: int
+    id: str  # String(36) uuid PK (models.py) — D-P9a-1
     line_no: int
     account_id: int
     debit: Optional[Decimal] = None
@@ -648,12 +648,12 @@ class JournalEntryRead(BaseModel):
     records who posted it (audit/traceability).
     """
 
-    id: int
+    id: str  # String(36) uuid PK (models.py) — D-P9a-1
     entry_date: date
     memo: Optional[str] = None
     source_type: Optional[str] = None
     source_id: Optional[str] = None
-    reversal_of_id: Optional[int] = None
+    reversal_of_id: Optional[str] = None  # self-FK String(36) — D-P9a-1
     actor_id: str
     created_at: datetime
     lines: list[JournalLineRead] = Field(default_factory=list)
@@ -680,7 +680,7 @@ class AccountRegisterRow(BaseModel):
     """
 
     entry_date: date
-    entry_id: int
+    entry_id: str  # JournalEntry.id String(36) uuid — D-P9a-1
     memo: Optional[str] = None
     debit: Optional[Decimal] = None
     credit: Optional[Decimal] = None
