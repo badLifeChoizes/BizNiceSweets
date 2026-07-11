@@ -103,9 +103,9 @@ future scope (expanded via `/zj:spec` when their milestones near).
 ## PLUM (PLM Port — v1 Core)
 
 ## PLUM-01: Part CRUD  [traces: PRD-5]  **Status: implemented**
-- **Verified:** 63ea954 (re-stamped at the v1.0 milestone close, 2026-07-09 — `service.py` changed
-  after the 8975eeb stamp for the PLUM-06 G1 fix; part CRUD re-proven live, 201 on create and
-  numeric successor still correct past the 5→6-digit boundary; guarded by
+- **Verified:** a88431c (re-stamped 2026-07-11 — `service.py` changed again for the AVL D2 fix,
+  which does not touch the part-CRUD or numbering paths; part CRUD re-proven live after that commit,
+  201 on create and numeric successor still correct past the 5→6-digit boundary; guarded by
   `backend/scripts/verify_part_numbering.py` + `backend/tests/plum/test_part_number.py`)
 - **Statement:** User can create, view, edit, and delete parts.
 - **Evidence:** `backend/app/modules/plum/models.py`, `backend/app/modules/plum/service.py`, `backend/app/modules/plum/router.py`, migration `backend/alembic/versions/0005_plum_tables.py`; `frontend/src/routes/plum/PartsList.tsx`, `frontend/src/routes/plum/components/PartSheet.tsx`; `backend/tests/plum/test_parts.py`; human UAT 10 of 10 in Phase 5.
