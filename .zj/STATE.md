@@ -4,14 +4,15 @@ Updated: 2026-07-09
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** ship (PR open, awaiting merge)
+- **Step:** shipped (PR #1 merged) → next is v2.0 Phase 9
 - **Last update:** 2026-07-11
-- **Next action:** Merge **PR #1** (https://github.com/badLifeChoizes/BizNiceSweets/pull/1) —
-  `feature-syerp-inventory-purchasing` → `master`, a clean fast-forward (269 ahead, 0 behind).
-  **Merge with a merge-commit or "Rebase and merge" — NOT squash**, or the `v1.0` tag (at
-  `4b6fee4`, mid-history) would dangle off `master`. Branch + `v1.0` tag are pushed to origin.
-  After merge: `/zj:retro 08` if not yet run, delete the merged branch, then `/zj:spec` +
-  `/zj:plan 09` for v2.0 Phase 9.
+- **Next action:** `/zj:spec` to refine the v2.0 definition of done, then `/zj:plan 09` for
+  SYERP AP/AR & reporting (SYERP-12). Phase 8 already retro'd.
+- **Ship record (2026-07-11):** **PR #1 MERGED** via local fast-forward
+  (`feature-syerp-inventory-purchasing` → `master`, `f4e2bd3..a5ad44b`). Master now carries the
+  full re-platform (Phases 1–8); `v1.0` tag (`4b6fee4`) pushed and confirmed an ancestor of
+  `master`. FF chosen over GitHub's rebase-button so commit SHAs — and thus the tag — were
+  preserved. The 4-year-old `master`-behind problem (standing debt #4) is **resolved**.
 - **Milestone:** v1.0 — Foundation + PLUM — **CLOSED + tagged `v1.0` 2026-07-11**.
   v2.0 Operations in progress (Phase 8 done + verified + retro'd).
 - **Phase:** none active for v1.0 (Phase 7 archived to `.zj/history/v1.0/phases/`).
