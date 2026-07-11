@@ -20,5 +20,10 @@ and now the **v1.0 milestone close** (`/zj:milestone`).
 - [x] **G3** broken pytest DB harness (98 skips) — deferred by owner, BACKLOG p1 / D-P7-4 / D-M1-2
 - [x] Records: CHANGELOG (98 entries), work log, learnings roll-up, decisions index (44)
 - [x] Archive Phase 7 → `.zj/history/v1.0/phases/`; roll ROADMAP + PROJECT + STATE forward
-- [ ] Human UAT — 10 of 12 checks (`.zj/UAT-v1.0.md`) — **owner runs**
+- [x] Human UAT round 1 (owner, 2026-07-11) — found 3 UI defects; checks 3/5/6/12 passed
+- [x] **D1** flat-BOM cost footer double-count (280→110) — footer shows `bom_rollup_cost`; BomTree tests
+- [x] **D2** AVL add-vendor 500 on duplicate — 409 on active dup, reactivate on re-add; proven live; tests
+- [x] **D3** import file picker dead — drag-drop + real Choose File button; ImportExport tests
+- [x] Regression: frontend 59 passed, backend 90/100-skip, tsc clean, 5 verify scripts + AVL live PASS
+- [ ] Human UAT round 2 — re-run checks 2, 4/9, 7, 10, 11 (`.zj/UAT-v1.0.md`) — **owner runs**
 - [ ] Tag `v1.0` at HEAD (D-M1-1) — blocked on the UAT above

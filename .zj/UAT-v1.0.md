@@ -33,15 +33,24 @@ Rolled up: `P100002` = 4 × 2.50 = **10.00**; `P100003` = 2 × 10 = **20.00**;
 **Next auto part number:** highest is `P100010`, so check 12 must yield **`P100011`**.
 *Run check 12 last* — every part you create shifts this number.
 
-> **Both known blockers are cleared as of the 2026-07-09 milestone audit:**
-> - Check 3 was guaranteed to fail — the Where-Used card labelled *every* parent "Direct parent"
->   (gap **G1**, fixed `63ea954`; backend now returns `via_part_number`). Proven live.
-> - Check 7's Excel export 500'd — the API image lacked `openpyxl` (gap **G2**, fixed by rebuilding
->   `compose_api`). `/plum/export/excel` now returns 200 with a real `.xlsx`. **Rebuild the image if
->   you recreate the stack:** `podman-compose -f compose/compose.yml -f compose/compose.dev.yml build api`
+> **First-round blockers (2026-07-09 milestone audit) — cleared:**
+> - Check 3: Where-Used labelled *every* parent "Direct parent" (gap **G1**, fixed `63ea954`).
+> - Check 7 Excel: export 500'd, API image lacked `openpyxl` (gap **G2**, image rebuilt).
 >
-> Everything below is now a genuine visual/affordance check — no known defect should block any of them.
-> If a check fails, that is new information worth stopping for.
+> **Second-round defects the human UAT found on 2026-07-11 — fixed, re-run the affected checks:**
+> - **Check 2** — the flat "Total BOM Cost" footer showed **280** (summed sub-assemblies, triple-counting
+>   material). Now shows the assembly's rolled-up cost. **Expect 110.00** (gap **D1**).
+> - **Checks 4/9/10/11** — "Add Vendor" returned **500** when the vendor was already linked (an unhandled
+>   duplicate-key crash; soft-deleted links also blocked re-adding). Now: re-adding an active link gives a
+>   clean "already linked" message; re-adding a removed one reactivates it (gap **D2**, proven live).
+> - **Check 7 import** — the file picker was dead: no drag-drop handler, and "Choose File" didn't open a
+>   dialog. Both now work (gap **D3**).
+>
+> **Rebuild the image if you recreate the stack** (keeps G2 fixed):
+> `podman-compose -f compose/compose.yml -f compose/compose.dev.yml build api`. The backend D1/D2 fixes
+> are already live via the dev bind-mount + `--reload`; the frontend D1/D3 fixes are live via Vite HMR.
+>
+> If a check still fails, that is new information worth stopping for.
 
 ## Checklist
 
@@ -97,10 +106,10 @@ bundle). Log in as the admin from `.env` (`BNS_ADMIN_EMAIL` / `BNS_ADMIN_PASSWOR
 
 ---
 
-### Check 2 — Flat BOM: shared sub-assembly is ONE row (PLUM-05)
+### Check 2 — Flat BOM: shared sub-assembly is ONE row (PLUM-05) ← *D1 fixed*
 Parts → `P100004` → **BOM** card → switch to **Flat** view.
 - ✅ `P100002` appears on **exactly one row**, Total Qty **11** (not two rows of 5 and 6).
-- ✅ A **Total BOM Cost footer** renders, showing **110.00**.
+- ✅ The **Total BOM Cost footer** shows **110.0000** — *not 280* (that was the D1 double-count).
 - ✅ `P100001` shows total qty 44; `P100003` shows 3.
 
 ### Check 3 — Where-used labels (PLUM-06) ← *the G1 fix*
@@ -122,17 +131,22 @@ On `P100004` (sale 50.00, cost 110.00):
 - ✅ Both are styled **red**. *(This is the one a machine cannot see — look at the colour.)*
 - ✅ Raise Sale Price above 110 → the red styling clears.
 
-### Check 4 + Check 9 — AVL add (PLUM-07, SC1)
-Parts → any Draft part (e.g. `P100001`) → **AVL** card → **Add Vendor**.
-- ✅ The vendor picker lists `AUDIT AVL Vendor` / `Verifier Vendor`.
+### Check 4 + Check 9 — AVL add (PLUM-07, SC1) ← *D2 fixed*
+Parts → a Draft part → **AVL** card → **Add Vendor**. Use a part **without** an existing link to
+that vendor for the happy path — e.g. `P100005` (P100001/P100003 already carry audit links).
+- ✅ The vendor search lists only real vendors (`AUDIT AVL Vendor`, `Verifier Vendor`).
 - ✅ Save → **no 500, no error toast** *(check 9 — you are confirming an* absence *)*.
 - ✅ Reload the page: the link **persists**.
 - ✅ Mark it Preferred → a **Preferred badge** is visibly rendered.
+- ✅ *D2 spot-check:* add the **same** vendor again → a clean **"already linked"** message,
+  **not** a 500 / generic "Please try again".
 
-### Check 7 — Import / Export round-trip (PLUM-10) ← *the G2 fix*
+### Check 7 — Import / Export round-trip (PLUM-10) ← *G2 + D3 fixed*
 PLUM → **Import / Export**.
 - ✅ **Export JSON** downloads.
 - ✅ **Export Excel** downloads a real `.xlsx` and **does not 500** *(this was G2)*.
+- ✅ *D3:* **Choose File** opens a file dialog, **and** dragging a file onto the dashed box selects it
+  (the box highlights on drag-over). Both were dead before.
 - ✅ Re-import the JSON → preview shows **0 errors** → **Confirm** → message says
   **“No records deleted”** (import is upsert-never-delete, D-14).
 - ✅ A file >10 MB is **rejected** (10 MB guard).

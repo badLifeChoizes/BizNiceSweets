@@ -4,10 +4,11 @@ Updated: 2026-07-09
 Recovered decisions are marked `(recovered)` with their original source (now archived).
 Numbering is append-only.
 
+
 ## Index
 
 One line per decision, newest last. Entries below are append-only — regenerate this index
-at milestone close, never hand-edit it. 44 decisions.
+at milestone close, never hand-edit it. 45 decisions.
 
 - **D-1:** Business domain = hybrid open-source business suite of 7 integrated suites (SYERP, PLUM, FLAN, MOUSSE, CRUMB, GELATO, CRISP), each usable…
 - **D-2:** Manufacturing (facilities, work centers, routings) lives in MOUSSE, not PLUM — PLUM is product development; released products hand off to MOUSSE.…
@@ -53,6 +54,7 @@ at milestone close, never hand-edit it. 44 decisions.
 - **D-P8-15:** PO line qty_received is a stored accumulator on the line (POs are mutable working documents, not the immutable ledger), cross-checkable against…
 - **D-M1-1:** The v1.0 tag is applied at the milestone HEAD, which contains Phase 8 (v2.0) work
 - **D-M1-2:** Gaps G1 and G2 were fixed at milestone close rather than deferred (63ea954 + API image rebuild); G3 (broken live-DB pytest harness) stays deferred…
+- **D-M1-3:** The v1.0 human UAT is run in rounds; round-1 defects are fixed before the tag rather than deferred
 
 ## Product & Architecture
 
@@ -273,3 +275,16 @@ at milestone close, never hand-edit it. 44 decisions.
   guaranteed a UAT failure; G2 was a stale-image artifact with no code change required. G3 is
   test-infrastructure work whose absence is compensated, for now, by the `verify_*.py` live-DB
   gates and the Vitest suite — both of which do run.
+
+- **D-M1-3 (owner):** **The v1.0 human UAT is run in rounds; round-1 defects are fixed before the
+  tag rather than deferred.** Round 1 (2026-07-11) passed checks 3/5/6/12 and surfaced three UI
+  defects the backend proofs and the machine audit had both missed — D1 (flat-BOM cost footer
+  triple-counted sub-assemblies: 280 vs 110), D2 (AVL "Add Vendor" 500 on a duplicate/soft-deleted
+  link — a user-triggerable crash), D3 (import file picker entirely non-functional: no drag handler,
+  decorative Choose-File button). All three sit inside the v1.0 definition of done (BOM cost roll-up,
+  vendor links, import/export), so all three were fixed now (`a88431c`) with regression tests and
+  live proof, and the owner re-runs checks 2, 4/9, 7, 10, 11 before tagging. *Why fix not defer:* a
+  milestone that ships a user-triggerable 500 and a dead import button is not "done" against its own
+  definition. **Reinforces the G1 lesson:** "API verified live" never transfers to the UI that
+  consumes it — five of the twelve UAT checks were closable only by a human in a browser, and three
+  of them exposed real bugs.

@@ -5,9 +5,9 @@ Updated: 2026-07-09
 
 - **Project:** BizNiceSweets
 - **Step:** milestone
-- **Last update:** 2026-07-09
-- **Next action:** Run the 10 remaining human-UAT checks (`.zj/UAT-v1.0.md`) at
-  http://localhost:5173, then apply the `v1.0` tag. Nothing else blocks the close.
+- **Last update:** 2026-07-11
+- **Next action:** Owner re-runs UAT checks 2, 4/9, 7, 10, 11 (`.zj/UAT-v1.0.md`) — the three
+  round-1 defects are fixed (`a88431c`). Then apply the `v1.0` tag. Nothing else blocks the close.
 - **Milestone:** v1.0 — Foundation + PLUM — **audited, records written, tag pending human UAT**.
   v2.0 Operations in progress (Phase 8 done + verified + retro'd).
 - **Phase:** none active for v1.0 (Phase 7 archived to `.zj/history/v1.0/phases/`).
@@ -38,10 +38,12 @@ stack. All four definition-of-done clauses (deploy / log in / vendors+customers 
 
 ## What is left before the tag
 
-**The 12-check human UAT is 2/12** (`.zj/UAT-v1.0.md`). Both known blockers are cleared — check 3
-was guaranteed to fail before G1, check 7 before G2 — so every remaining check is now a genuine
-visual/affordance confirmation. A machine cannot close them: red styling (6), toast *absence*
-(9, 10), badge/one-row/footer affordances (2, 4), visible no-refresh (11).
+**Human UAT round 1 ran 2026-07-11** (owner). Passed checks 3, 5, 6, 12. Surfaced three UI
+defects — **D1** flat-BOM cost footer (280 vs 110), **D2** AVL "Add Vendor" 500 on a duplicate,
+**D3** dead import file picker — all now **fixed** (`a88431c`, D-M1-3), tested, and D2 proven live.
+**Round 2 owed:** re-run checks **2, 4/9, 7, 10, 11**. These plus the already-passed 1, 3, 5, 6, 8,
+12 close all twelve. Residue is genuine visual confirmation: red styling (6 ✓), toast absence
+(9, 10), badges/footer (2, 4), visible no-refresh (11).
 
 Stack must be up: `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`
 (rebuild `api` if the stack is recreated, or G2 returns). `alembic current` == `0008 (head)`.
