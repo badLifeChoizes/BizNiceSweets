@@ -25,6 +25,7 @@ archived vendors (Pitfall 5 from RESEARCH.md).
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, NamedTuple
@@ -823,6 +824,107 @@ def compute_new_moving_avg(
     else:
         new_avg = (qty_before * avg_before + qty_recv * unit_cost) / (qty_before + qty_recv)
     return new_avg.quantize(_COST_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+# ---------------------------------------------------------------------------
+# Journal-entry balance helpers (Phase 9a — GL posting engine, SYERP-12)
+# ---------------------------------------------------------------------------
+#
+# Double-entry invariant (D-P9a): a journal entry posts only when its debits
+# equal its credits. These helpers are PURE (no DB, no float, no FastAPI) so the
+# balance core is unit-testable in isolation; the service layer raises HTTP 422
+# on top of `_je_is_balanced`. All money is Decimal quantized to scale 6 to match
+# the Numeric(18,6) amount columns exactly (D-11) — a float sum could drift a
+# cent off a "balanced" entry and silently corrupt the ledger.
+#
+# Lines are duck-typed: each may be a mapping ({"debit": ..., "credit": ...}) or
+# any object exposing `.debit`/`.credit`. Exactly one side is set per line; the
+# other is None (or 0). Amounts are quantized to `_COST_QUANTUM` before summing.
+
+
+def _je_side(line: "object", side: str) -> Decimal:
+    """
+    Read one side (``"debit"`` or ``"credit"``) off a journal line.
+
+    Accepts both a mapping (``line["debit"]``) and an attribute-bearing object
+    (``line.debit``). A missing / ``None`` value means "not this side" and reads
+    as ``Decimal("0")``. The raw value is coerced through ``str`` before
+    ``Decimal`` so an accidental float can never seed float drift into the sum.
+    """
+    if isinstance(line, Mapping):
+        value = line.get(side)
+    else:
+        value = getattr(line, side, None)
+    if value is None:
+        return Decimal("0")
+    return Decimal(str(value)).quantize(_COST_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def _je_totals(lines: "Iterable[object]") -> tuple[Decimal, Decimal]:
+    """
+    Sum (Σdebits, Σcredits) across journal lines, quantized to scale 6 (D-11).
+
+    PURE (no DB, no float). Each line contributes its debit to the first total
+    and its credit to the second; an unset side contributes zero.
+    """
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+    for line in lines:
+        total_debit += _je_side(line, "debit")
+        total_credit += _je_side(line, "credit")
+    return (
+        total_debit.quantize(_COST_QUANTUM, rounding=ROUND_HALF_UP),
+        total_credit.quantize(_COST_QUANTUM, rounding=ROUND_HALF_UP),
+    )
+
+
+def _je_is_balanced(lines: "Iterable[object]") -> bool:
+    """
+    Return whether a journal entry is a valid, balanced double-entry (D-P9a).
+
+    Balanced means ALL of:
+      * at least two lines (a single-sided entry cannot balance),
+      * every line sets EXACTLY ONE of debit/credit (the other None/absent),
+      * every set amount is >= 0 (no negative sides — a negative debit is a
+        credit and must be expressed as one), and
+      * Σdebits == Σcredits (quantized to scale 6).
+
+    PURE (no DB, no float, no FastAPI). The service layer maps a ``False`` here
+    to HTTP 422; this helper only decides truth.
+    """
+    line_list = list(lines)
+    if len(line_list) < 2:
+        return False
+    for line in line_list:
+        debit = _je_side(line, "debit")
+        credit = _je_side(line, "credit")
+        if debit < 0 or credit < 0:
+            return False
+        # Exactly one side must be non-zero (XOR): never both, never neither.
+        if (debit != 0) == (credit != 0):
+            return False
+    total_debit, total_credit = _je_totals(line_list)
+    return total_debit == total_credit
+
+
+def _reverse_lines(lines: "Iterable[object]") -> list[dict]:
+    """
+    Reverse a set of journal lines by swapping debit <-> credit (D-P9a).
+
+    Returns new line dicts (``{"debit": ..., "credit": ...}``) — the source lines
+    are never mutated. A reversal of a balanced entry is itself balanced (the two
+    column sums merely trade places), which is the property the audit-safe void /
+    correction path relies on. Amounts are quantized to scale 6 (D-11).
+    """
+    reversed_lines: list[dict] = []
+    for line in lines:
+        reversed_lines.append(
+            {
+                "debit": _je_side(line, "credit"),
+                "credit": _je_side(line, "debit"),
+            }
+        )
+    return reversed_lines
 
 
 async def post_receipt(
