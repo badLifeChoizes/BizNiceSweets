@@ -561,3 +561,144 @@ class GLAccountRead(BaseModel):
     active: bool
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Journal entry / line schemas (Phase 9a — GL posting engine)
+# ---------------------------------------------------------------------------
+#
+# A journal entry carries its lines nested (JournalEntryCreate.lines /
+# JournalEntryRead.lines) so a single POST posts a whole balanced entry and a
+# single GET returns it complete. Balancing (SUM debits == SUM credits) and the
+# minimum-two-lines rule are enforced in the service against live account state;
+# the per-line "exactly one of debit/credit, both >= 0" rule is enforced here as
+# defense-in-depth beside the pure posting helper (D-P9-1). Money is Decimal
+# (never float — D-11).
+
+
+class JournalLineCreate(BaseModel):
+    """
+    One line of a journal-entry posting payload.
+
+    Exactly ONE of `debit` / `credit` must be set (non-None); the other side is
+    left None. Any supplied amount must be >= 0 — a negative debit/credit is a
+    sign error, not a valid posting (flip it to the other column instead). This
+    mirrors the pure posting helper's guard as defense-in-depth (D-P9-1).
+    """
+
+    account_id: int
+    debit: Optional[Decimal] = None
+    credit: Optional[Decimal] = None
+
+    @model_validator(mode="after")
+    def exactly_one_side_non_negative(self) -> "JournalLineCreate":
+        """Reject lines that set both sides, neither side, or a negative amount."""
+        if (self.debit is None) == (self.credit is None):
+            raise ValueError(
+                "A journal line must set exactly one of debit or credit "
+                "(not both, not neither)."
+            )
+        if self.debit is not None and self.debit < 0:
+            raise ValueError("debit must be >= 0.")
+        if self.credit is not None and self.credit < 0:
+            raise ValueError("credit must be >= 0.")
+        return self
+
+
+class JournalEntryCreate(BaseModel):
+    """
+    Journal-entry posting payload (POST /syerp/gl/journal-entries).
+
+    A manual entry: `entry_date` is the effective date, `memo` an optional
+    description, and `lines` the balanced set of debit/credit legs. The service
+    enforces balancing and the minimum-two-lines rule against live account
+    state; each line is validated here (JournalLineCreate). Money is Decimal.
+    """
+
+    entry_date: date
+    memo: Optional[str] = None
+    lines: list[JournalLineCreate]
+
+
+class JournalLineRead(BaseModel):
+    """
+    One journal-entry line returned to API callers.
+
+    Serialized from a JournalLine ORM instance via from_attributes=True. Amounts
+    are fixed-point Decimals (never float — D-11); the unused side is None.
+    """
+
+    id: int
+    line_no: int
+    account_id: int
+    debit: Optional[Decimal] = None
+    credit: Optional[Decimal] = None
+
+    model_config = {"from_attributes": True}
+
+
+class JournalEntryRead(BaseModel):
+    """
+    Journal entry returned to API callers, with its lines nested.
+
+    Serialized from a JournalEntry ORM instance via from_attributes=True.
+    `source_type` / `source_id` are the soft polymorphic link back to the
+    originating document (e.g. an inventory receipt auto-post); `reversal_of_id`
+    is set on the reversing entry produced by a reversal (D-P9-1). `actor_id`
+    records who posted it (audit/traceability).
+    """
+
+    id: int
+    entry_date: date
+    memo: Optional[str] = None
+    source_type: Optional[str] = None
+    source_id: Optional[str] = None
+    reversal_of_id: Optional[int] = None
+    actor_id: str
+    created_at: datetime
+    lines: list[JournalLineRead] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class ReverseRequest(BaseModel):
+    """
+    Journal-entry reversal payload (POST /syerp/gl/journal-entries/{id}/reverse).
+
+    Posts a new entry that swaps every debit/credit of the target, linked back
+    via `reversal_of_id`. `memo` optionally overrides the reversing entry's memo
+    (the service supplies a default derived from the original when omitted).
+    """
+
+    memo: Optional[str] = None
+
+
+class AccountRegisterRow(BaseModel):
+    """
+    One row of an account register — a single posting to the account in date
+    order, with the running balance after it (Decimal, never float — D-11).
+    """
+
+    entry_date: date
+    entry_id: int
+    memo: Optional[str] = None
+    debit: Optional[Decimal] = None
+    credit: Optional[Decimal] = None
+    running_balance: Decimal
+
+
+class AccountRegisterRead(BaseModel):
+    """
+    Account register for a single GL account over a period.
+
+    Carries the account meta (id/code/name), the `opening_balance` carried into
+    the period, the ordered `rows` of postings each with their running balance,
+    and the `closing_balance` after the last row. All balances are Decimal.
+    """
+
+    account_id: int
+    account_code: str
+    account_name: str
+    opening_balance: Decimal
+    closing_balance: Decimal
+    rows: list[AccountRegisterRow] = Field(default_factory=list)
