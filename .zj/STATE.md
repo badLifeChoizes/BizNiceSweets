@@ -4,11 +4,13 @@ Updated: 2026-07-09
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** milestone
+- **Step:** ship (PR open, awaiting merge)
 - **Last update:** 2026-07-11
-- **Next action:** `/zj:ship` — v1.0 is **closed and tagged** (`v1.0` at `4b6fee4`, D-M1-1). The
-  branch `feature-syerp-inventory-purchasing` (263 commits, Phases 1–8) is still unmerged and
-  `master` predates the entire re-platform; resolve that merge story next. Then `/zj:spec` +
+- **Next action:** Merge **PR #1** (https://github.com/badLifeChoizes/BizNiceSweets/pull/1) —
+  `feature-syerp-inventory-purchasing` → `master`, a clean fast-forward (269 ahead, 0 behind).
+  **Merge with a merge-commit or "Rebase and merge" — NOT squash**, or the `v1.0` tag (at
+  `4b6fee4`, mid-history) would dangle off `master`. Branch + `v1.0` tag are pushed to origin.
+  After merge: `/zj:retro 08` if not yet run, delete the merged branch, then `/zj:spec` +
   `/zj:plan 09` for v2.0 Phase 9.
 - **Milestone:** v1.0 — Foundation + PLUM — **CLOSED + tagged `v1.0` 2026-07-11**.
   v2.0 Operations in progress (Phase 8 done + verified + retro'd).
