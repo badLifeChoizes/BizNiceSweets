@@ -2246,16 +2246,20 @@ async def derive_account_balance(db: AsyncSession, account_id: int) -> Decimal:
     Derive a GL account's balance as Σdebit − Σcredit (D-P8-4 — never stored).
 
     A single aggregate scalar over all of the account's lines (no date filter),
-    mirroring the on-hand derivation pattern (func.sum ... scalar() or 0). An
-    account with no postings has no rows, so both sums are NULL and the difference
-    is NULL → coalesced to Decimal("0"). Exact fixed-point (never float — D-11).
+    mirroring the on-hand derivation pattern (func.sum ... scalar() or 0). Each
+    side is COALESCEd to zero INDEPENDENTLY: an account posted on only one side
+    (e.g. a control account that is only ever credited) has NULL for the empty
+    side, and `Σdebit − NULL` would be NULL in SQL — coalescing each sum first
+    keeps the balance correct (D-P8-4). An account with no postings coalesces to
+    0 − 0 == 0. Exact fixed-point (never float — D-11).
     """
     from app.modules.syerp.models import JournalLine
 
     result = await db.execute(
-        select(func.sum(JournalLine.debit) - func.sum(JournalLine.credit)).where(
-            JournalLine.account_id == account_id
-        )
+        select(
+            func.coalesce(func.sum(JournalLine.debit), 0)
+            - func.coalesce(func.sum(JournalLine.credit), 0)
+        ).where(JournalLine.account_id == account_id)
     )
     return result.scalar() or Decimal("0")
 
@@ -2285,7 +2289,10 @@ async def get_account_register(
     # window (D-P8-4). NULL (no prior postings) coalesces to zero.
     if date_from is not None:
         opening_stmt = (
-            select(func.sum(JournalLine.debit) - func.sum(JournalLine.credit))
+            select(
+                func.coalesce(func.sum(JournalLine.debit), 0)
+                - func.coalesce(func.sum(JournalLine.credit), 0)
+            )
             .select_from(JournalLine)
             .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
             .where(
