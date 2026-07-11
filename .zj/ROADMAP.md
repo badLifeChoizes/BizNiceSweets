@@ -16,10 +16,11 @@ running stack (`.zj/MILESTONE-v1.0-AUDIT.md`). All four clauses proven live.
   `zj doctor` 0 errors.
 - **Records:** `CHANGELOG.md` (98 entries), `.zj/logs/milestone-v1.0.md` (≈47 h over 30 sessions),
   `.zj/LEARNINGS.md` "Milestone v1.0", `.zj/DECISIONS.md` index (44 entries).
-- **Tag:** applied at branch HEAD, which also contains Phase 8 (v2.0) work — see **D-M1-1**. No
-  commit in history is a clean v1.0 tree, because Phase 8 was built on the unclosed Phase-7
-  branch (D-P8-11).
-- **Human UAT:** `.zj/UAT-v1.0.md` — the last gate before the tag is applied.
+- **Tag:** `v1.0` applied 2026-07-11 at `4b6fee4` — the tree also contains Phase 8 (v2.0) work,
+  see **D-M1-1**. No commit in history is a clean v1.0 tree, because Phase 8 was built on the
+  unclosed Phase-7 branch (D-P8-11).
+- **Human UAT:** run in two rounds (`.zj/UAT-v1.0.md`). Round 1 (2026-07-11) passed 6 checks and
+  found three UI defects (D1/D2/D3), all fixed in `a88431c` (D-M1-3) with tests + live proof.
 
 ### Phase 0: Prototypes & program planning  [done — adopted 2026-07-04]
 - **Goal:** Prove the domain logic and plan the re-platform.

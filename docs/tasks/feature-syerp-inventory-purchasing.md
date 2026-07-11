@@ -25,5 +25,5 @@ and now the **v1.0 milestone close** (`/zj:milestone`).
 - [x] **D2** AVL add-vendor 500 on duplicate — 409 on active dup, reactivate on re-add; proven live; tests
 - [x] **D3** import file picker dead — drag-drop + real Choose File button; ImportExport tests
 - [x] Regression: frontend 59 passed, backend 90/100-skip, tsc clean, 5 verify scripts + AVL live PASS
-- [ ] Human UAT round 2 — re-run checks 2, 4/9, 7, 10, 11 (`.zj/UAT-v1.0.md`) — **owner runs**
-- [ ] Tag `v1.0` at HEAD (D-M1-1) — blocked on the UAT above
+- [x] Human UAT round 2 — owner satisfied; authorized the tag 2026-07-11
+- [x] Tag `v1.0` at HEAD (D-M1-1) — applied at `4b6fee4`

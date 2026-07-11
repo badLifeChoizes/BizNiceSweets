@@ -6,9 +6,11 @@ Updated: 2026-07-09
 - **Project:** BizNiceSweets
 - **Step:** milestone
 - **Last update:** 2026-07-11
-- **Next action:** Owner re-runs UAT checks 2, 4/9, 7, 10, 11 (`.zj/UAT-v1.0.md`) — the three
-  round-1 defects are fixed (`a88431c`). Then apply the `v1.0` tag. Nothing else blocks the close.
-- **Milestone:** v1.0 — Foundation + PLUM — **audited, records written, tag pending human UAT**.
+- **Next action:** `/zj:ship` — v1.0 is **closed and tagged** (`v1.0` at `4b6fee4`, D-M1-1). The
+  branch `feature-syerp-inventory-purchasing` (263 commits, Phases 1–8) is still unmerged and
+  `master` predates the entire re-platform; resolve that merge story next. Then `/zj:spec` +
+  `/zj:plan 09` for v2.0 Phase 9.
+- **Milestone:** v1.0 — Foundation + PLUM — **CLOSED + tagged `v1.0` 2026-07-11**.
   v2.0 Operations in progress (Phase 8 done + verified + retro'd).
 - **Phase:** none active for v1.0 (Phase 7 archived to `.zj/history/v1.0/phases/`).
   Phase 8 (`.zj/phases/08-syerp-inventory-purchasing/`) belongs to v2.0 and stays active.
