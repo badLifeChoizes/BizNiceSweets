@@ -856,8 +856,11 @@ async def receive_po_line_endpoint(
     partially_received), all in one atomic transaction. Rejects with 422 when the
     PO is not approved / partially_received, when qty <= 0, or on over-receipt
     (qty_received + qty > qty_ordered) — no receipt is posted. Requires syerp:write.
-    Returns 404 if the PO, line, item, or location does not exist. Writes a
-    po.received audit log row (with qty + location detail).
+    Returns 404 if the PO, line, item, or location does not exist. receive_line
+    also auto-posts a balanced GL journal entry (Dr 1130 / Cr 2150 at receipt cost)
+    inside the same transaction (SYERP-12 AC3, D-P9a-5). Writes two audit rows after
+    the receipt commits: po.received (with qty + location detail) and
+    gl.journal_posted.
     """
     po = await receive_line(
         db,
@@ -876,6 +879,19 @@ async def receive_po_line_endpoint(
         detail=(
             f"PO {po_id} line {line_id} received: {data.qty} to location "
             f"{data.location_id} (status: {po.status})"
+        ),
+    )
+    # receive_line auto-posts a balanced GL journal entry (Dr 1130 / Cr 2150 at
+    # receipt cost) inside its own transaction (D-P9a-5); record that a GL entry
+    # was posted for this receipt. Both audit rows land after receive_line commits.
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="gl.journal_posted",
+        target_type="journal_entry",
+        detail=(
+            f"GL journal posted for PO {po_id} line {line_id} receipt "
+            f"(source_type=po_receipt, source_id={line_id})"
         ),
     )
     return po

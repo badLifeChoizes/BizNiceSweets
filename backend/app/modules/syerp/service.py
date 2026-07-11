@@ -1813,6 +1813,27 @@ def _po_rollup_status(line_qtys: "Iterable[tuple[Decimal, Decimal]]") -> str:
     return "partially_received"
 
 
+async def _gl_account_id_by_code(db: AsyncSession, code: str) -> int:
+    """
+    Resolve a GL account id by its Chart-of-Accounts `code` (e.g. '1130').
+
+    Used by the receipt auto-post to resolve the Inventory (1130) and GR/IR (2150)
+    control accounts by their stable codes. These accounts are seeded at startup
+    (coa_seed.py); a missing one is a server MISCONFIGURATION, not a client error —
+    so it raises HTTP 500 rather than 404.
+    """
+    from app.modules.syerp.models import GLAccount
+
+    result = await db.execute(select(GLAccount.id).where(GLAccount.code == code))
+    account_id = result.scalars().first()
+    if account_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"GL account {code} not seeded.",
+        )
+    return account_id
+
+
 async def receive_line(
     db: AsyncSession,
     po_id: str,
@@ -1843,6 +1864,13 @@ async def receive_line(
       - Increment line.qty_received by qty (Decision 5 accumulator).
       - Recompute the header status across ALL lines (_po_rollup_status): `received`
         when every line is fully received, else `partially_received` (AC11-5).
+      - Auto-post a balanced GL journal entry at receipt cost (Phase 9a, SYERP-12
+        AC3): Dr 1130 Inventory / Cr 2150 GR/IR for qty×unit_cost, source-linked
+        (source_type='po_receipt', source_id=line.id) via post_journal_entry with
+        commit=False. The JE rides THIS transaction's single commit alongside the
+        stock txn, the qty_received bump, and the status roll-up — a receipt can
+        never persist without its balanced GL entry, and if the JE raises nothing
+        persists.
 
     Status roll-up sets po.status DIRECTLY rather than routing through
     advance_po_status. This is deliberate: a second partial receipt while the PO is
@@ -1899,6 +1927,30 @@ async def receive_line(
         source_id=line.id,
         commit=False,
     )
+
+    # Auto-post the balanced GL journal entry for this receipt in the SAME unit of
+    # work (D-P9a-5): Dr 1130 Inventory / Cr 2150 GR/IR at receipt cost. The amount
+    # is qty×unit_cost quantized to scale 6 so the GL entry matches post_receipt's
+    # stock valuation exactly. commit=False so the entry + its lines ride the single
+    # commit below — if the JE raises (e.g. a control account is missing) the stock
+    # txn and accumulator bump roll back too (no partial persist, SYERP-12 AC3).
+    amount = (qty * line.unit_cost).quantize(_COST_QUANTUM, rounding=ROUND_HALF_UP)
+    inventory_account_id = await _gl_account_id_by_code(db, "1130")
+    grir_account_id = await _gl_account_id_by_code(db, "2150")
+    await post_journal_entry(
+        db,
+        entry_date=date.today(),
+        memo=f"PO receipt {line.id}",
+        lines=[
+            {"account_id": inventory_account_id, "debit": amount},
+            {"account_id": grir_account_id, "credit": amount},
+        ],
+        actor_id=actor_id,
+        source_type="po_receipt",
+        source_id=line.id,
+        commit=False,
+    )
+
     line.qty_received += qty
 
     # Roll the header status forward across ALL lines (autoflush surfaces the
