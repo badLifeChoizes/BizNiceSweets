@@ -20,6 +20,8 @@ import { PurchaseOrders } from '@/routes/syerp/PurchaseOrders'
 import { PurchaseOrderCreate } from '@/routes/syerp/PurchaseOrderCreate'
 import { PurchaseOrderDetail } from '@/routes/syerp/PurchaseOrderDetail'
 import { GLAccounts } from '@/routes/syerp/GLAccounts'
+import { JournalEntries } from '@/routes/syerp/JournalEntries'
+import { AccountRegister } from '@/routes/syerp/AccountRegister'
 
 // PLUM routes (Phase 5 + 6)
 import { PartsList } from '@/routes/plum/PartsList'
@@ -51,6 +53,8 @@ export function App() {
         <Route path="/syerp/purchasing/orders/new" element={<PurchaseOrderCreate />} />
         <Route path="/syerp/purchasing/orders/:id" element={<PurchaseOrderDetail />} />
         <Route path="/syerp/gl" element={<GLAccounts />} />
+        <Route path="/syerp/gl/journal" element={<JournalEntries />} />
+        <Route path="/syerp/gl/register" element={<AccountRegister />} />
 
         {/* PLUM module routes — Sidebar nav lands on /plum → redirect to parts list */}
         <Route path="/plum" element={<Navigate to="/plum/parts" replace />} />

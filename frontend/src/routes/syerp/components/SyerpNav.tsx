@@ -12,13 +12,15 @@
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 
-const TABS = [
+const TABS: Array<{ to: string; label: string; end?: boolean }> = [
   { to: '/syerp/vendors', label: 'Vendors' },
   { to: '/syerp/customers', label: 'Customers' },
   { to: '/syerp/inventory/items', label: 'Inventory Items' },
   { to: '/syerp/inventory/locations', label: 'Stock Locations' },
   { to: '/syerp/purchasing/orders', label: 'Purchase Orders' },
-  { to: '/syerp/gl', label: 'Chart of Accounts' },
+  { to: '/syerp/gl', label: 'Chart of Accounts', end: true },
+  { to: '/syerp/gl/journal', label: 'Journal' },
+  { to: '/syerp/gl/register', label: 'Account Register' },
 ]
 
 export function SyerpNav() {
@@ -28,6 +30,7 @@ export function SyerpNav() {
         <NavLink
           key={tab.to}
           to={tab.to}
+          end={tab.end}
           className={({ isActive }) =>
             cn(
               '-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors',
