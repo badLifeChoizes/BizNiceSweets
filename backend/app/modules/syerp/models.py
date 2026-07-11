@@ -14,6 +14,8 @@ Phase 8: Added InventoryItem, StockLocation and InventoryTxn models
          (SYERP inventory & purchasing — migration 0007).
          Added PurchaseOrder and PurchaseOrderLine models
          (SYERP purchasing — migration 0008).
+Phase 9a: Added JournalEntry and JournalLine models — the append-only GL
+          journal / posting engine (SYERP financials, D-P9a-1).
 
 All models inherit from Base so that Base.metadata is populated when
 app.core.models (the central aggregator) is imported by Alembic's env.py.
@@ -392,3 +394,100 @@ class PurchaseOrderLine(Base):
 
     # need_by_date: optional requested delivery date (date-only)
     need_by_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# JournalEntry — append-only general-journal header (Phase 9a, D-P9a-1)
+# ---------------------------------------------------------------------------
+
+
+class JournalEntry(Base):
+    """
+    General-journal entry header — one immutable double-entry posting.
+
+    This is an APPEND-ONLY ledger (mirrors InventoryTxn): rows are never
+    updated or deleted; account balances are derived by summing the child
+    JournalLine debits/credits. There is deliberately NO mutable status column
+    — an entry is posted on create and immutable thereafter. A correction is
+    made by posting a reversing entry (equal magnitude, opposite side), never
+    by editing or deleting the original; the reversing entry points back via
+    `reversal_of_id`.
+
+    source_type / source_id are a soft polymorphic link back to the document
+    that caused the posting (e.g. a PO receipt); no FK, so the journal stays
+    valid even if the source module is disabled — same pattern as
+    InventoryTxn.source_*.
+    """
+
+    __tablename__ = "syerp_journal_entry"
+
+    # --- Primary key — UUID string (non-enumerable ledger row) -------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Posting details ---------------------------------------------------
+    entry_date: Mapped[date] = mapped_column(Date, nullable=False)
+    memo: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # source_type / source_id: soft polymorphic link to originating document
+    # (no FK — mirrors InventoryTxn.source_*)
+    source_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+    # reversal_of_id: self-FK set on a reversing entry pointing at the original
+    # it reverses; NULL on ordinary entries (corrections are reversals — D-P9a-1)
+    reversal_of_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("syerp_journal_entry.id"), nullable=True
+    )
+
+    # --- Provenance / audit ------------------------------------------------
+    actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# JournalLine — append-only journal line (Phase 9a, D-P9a-1)
+# ---------------------------------------------------------------------------
+
+
+class JournalLine(Base):
+    """
+    Journal line — one debit or credit leg of a JournalEntry.
+
+    Append-only like its parent entry: never updated or deleted (corrections
+    are reversing entries, never edits/deletes — mirrors InventoryTxn).
+
+    Exactly one of `debit` / `credit` is non-null per line and both are >= 0.
+    The database only stores these fixed-point Numeric(18,6) amounts (never
+    float — D-11); the single-side + non-negative + balanced-entry invariants
+    are enforced in the service layer (D-P9a-1).
+    """
+
+    __tablename__ = "syerp_journal_line"
+
+    # --- Primary key — UUID string -----------------------------------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Links -------------------------------------------------------------
+    entry_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_journal_entry.id"), nullable=False, index=True
+    )
+    account_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("syerp_gl_account.id"), nullable=False, index=True
+    )
+    line_no: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # --- Amounts (D-11) — fixed-point, never float; exactly one side non-null
+    debit: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=True
+    )
+    credit: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=True
+    )
