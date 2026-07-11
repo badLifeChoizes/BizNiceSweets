@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -61,6 +61,49 @@ describe('ImportExport screen', () => {
     renderImportExport()
 
     expect(screen.getByText('Drop a JSON or Excel file here')).toBeInTheDocument()
+  })
+
+  /**
+   * Milestone-audit gap D3: the import file picker was non-functional — the
+   * dropzone advertised drag-and-drop but had no onDrop handler, and the
+   * "Choose File" button was decorative (pointer-events-none), relying on a
+   * label click-through that failed in the browser. These guard both paths.
+   */
+  describe('D3 — import file selection', () => {
+    it('selects a file dropped onto the dropzone (enables Upload and Preview)', async () => {
+      renderImportExport()
+
+      const upload = screen.getByRole('button', { name: /Upload and Preview/i })
+      expect(upload).toBeDisabled()
+
+      const dropzone = screen.getByText('Drop a JSON or Excel file here').closest('[role="button"]')!
+      const file = new File(['{"parts":[]}'], 'plum_export.json', { type: 'application/json' })
+      fireEvent.drop(dropzone, { dataTransfer: { files: [file] } })
+
+      expect(await screen.findByText('plum_export.json')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Upload and Preview/i })).toBeEnabled()
+    })
+
+    it('rejects an unsupported dropped file (Upload stays disabled)', () => {
+      renderImportExport()
+
+      const dropzone = screen.getByText('Drop a JSON or Excel file here').closest('[role="button"]')!
+      const bad = new File(['nope'], 'notes.txt', { type: 'text/plain' })
+      fireEvent.drop(dropzone, { dataTransfer: { files: [bad] } })
+
+      expect(screen.queryByText('notes.txt')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Upload and Preview/i })).toBeDisabled()
+    })
+
+    it('the Choose File button opens the hidden file input', async () => {
+      const { container } = renderImportExport()
+      const input = container.querySelector('input[type="file"]') as HTMLInputElement
+      const clickSpy = vi.spyOn(input, 'click')
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Choose File' }))
+
+      expect(clickSpy).toHaveBeenCalled()
+    })
   })
 
   it('renders the Export as JSON button', () => {

@@ -126,3 +126,75 @@ async def test_avl_link_non_vendor(
     assert avl_resp.status_code == 422, (
         f"Expected 422 for non-vendor AVL link, got {avl_resp.status_code}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Duplicate / re-add handling (milestone-audit gap D2)
+# ---------------------------------------------------------------------------
+
+
+async def test_avl_link_duplicate_is_409_not_500(
+    client: httpx.AsyncClient,
+    skip_if_no_db: None,
+) -> None:
+    """
+    Linking a (part, vendor) pair that is already actively linked returns 409,
+    never 500. The pair is unique (uq_plum_avl_link_part_vendor); before the fix
+    an unguarded insert raised IntegrityError → 500 with a generic toast for any
+    user re-adding a vendor (milestone-audit gap D2).
+    """
+    from app.modules.auth.service import create_access_token
+
+    token = create_access_token(subject="admin-user", permissions=["plum:write", "syerp:write"])
+    h = {"Authorization": f"Bearer {token}"}
+
+    vid = (await client.post(
+        "/api/v1/syerp/partners",
+        json={"name": "Dup AVL Vendor", "is_vendor": True, "is_customer": False}, headers=h,
+    )).json()["id"]
+    pid = (await client.post(
+        "/api/v1/plum/parts", json={"description": "Dup AVL part"}, headers=h,
+    )).json()["id"]
+
+    first = await client.post(f"/api/v1/plum/parts/{pid}/avl", json={"vendor_id": vid}, headers=h)
+    assert first.status_code == 201
+    dup = await client.post(f"/api/v1/plum/parts/{pid}/avl", json={"vendor_id": vid}, headers=h)
+    assert dup.status_code == 409, f"duplicate link must be 409, got {dup.status_code}: {dup.text}"
+
+
+async def test_avl_link_readd_after_remove_reactivates(
+    client: httpx.AsyncClient,
+    skip_if_no_db: None,
+) -> None:
+    """
+    remove_avl_link is a soft-delete (active=False, row retained), so the unique
+    constraint also blocks re-adding a previously removed vendor. Re-adding must
+    reactivate the existing row (201), not 500 (milestone-audit gap D2).
+    """
+    from app.modules.auth.service import create_access_token
+
+    token = create_access_token(subject="admin-user", permissions=["plum:write", "syerp:write"])
+    h = {"Authorization": f"Bearer {token}"}
+
+    vid = (await client.post(
+        "/api/v1/syerp/partners",
+        json={"name": "Readd AVL Vendor", "is_vendor": True, "is_customer": False}, headers=h,
+    )).json()["id"]
+    pid = (await client.post(
+        "/api/v1/plum/parts", json={"description": "Readd AVL part"}, headers=h,
+    )).json()["id"]
+
+    link_id = (await client.post(
+        f"/api/v1/plum/parts/{pid}/avl", json={"vendor_id": vid}, headers=h,
+    )).json()["id"]
+    assert (await client.delete(f"/api/v1/plum/parts/{pid}/avl/{link_id}", headers=h)).status_code == 204
+
+    readd = await client.post(
+        f"/api/v1/plum/parts/{pid}/avl",
+        json={"vendor_id": vid, "preferred": True, "vendor_part_number": "VP-RE"}, headers=h,
+    )
+    assert readd.status_code == 201, f"re-add after remove must reactivate (201), got {readd.status_code}"
+    links = (await client.get(f"/api/v1/plum/parts/{pid}/avl", headers=h)).json()
+    active = [link_ for link_ in links if link_["vendor_id"] == vid]
+    assert len(active) == 1, "exactly one active link after reactivation"
+    assert active[0]["preferred"] is True, "reactivation applies the new field values"

@@ -174,7 +174,7 @@ export function AvlLinkSheet({
     queryFn: () =>
       apiClient
         .get<VendorSearchResult[]>('/api/v1/syerp/partners', {
-          params: { is_vendor: true, q: debouncedVendorQuery },
+          params: { role: 'vendor', q: debouncedVendorQuery },
         })
         .then((r) => r.data),
     enabled: !!debouncedVendorQuery && debouncedVendorQuery.length >= 1,

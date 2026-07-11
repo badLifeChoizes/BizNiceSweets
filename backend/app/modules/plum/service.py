@@ -1668,16 +1668,41 @@ async def add_avl_link(
             detail="Vendor not found or not a vendor.",
         )
 
-    link = PlumAvlLink(
-        id=str(uuid.uuid4()),
-        part_id=part_id,
-        vendor_id=data.vendor_id,
-        vendor_part_number=data.vendor_part_number,
-        preferred=data.preferred,
-        notes=data.notes,
-        active=True,
+    # A (part_id, vendor_id) pair is unique. An unguarded insert of a pair that
+    # already exists raises IntegrityError → 500. Because remove_avl_link is a
+    # soft-delete (active=False, row retained), the constraint also blocks
+    # re-adding a vendor that was previously removed. Resolve both here:
+    #   - active duplicate  → 409 (already linked)
+    #   - soft-deleted row  → reactivate it with the new field values
+    existing_result = await db.execute(
+        select(PlumAvlLink).where(
+            PlumAvlLink.part_id == part_id,
+            PlumAvlLink.vendor_id == data.vendor_id,
+        )
     )
-    db.add(link)
+    existing = existing_result.scalars().first()
+    if existing is not None:
+        if existing.active:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This vendor is already linked to the part.",
+            )
+        existing.active = True
+        existing.vendor_part_number = data.vendor_part_number
+        existing.preferred = data.preferred
+        existing.notes = data.notes
+        link = existing
+    else:
+        link = PlumAvlLink(
+            id=str(uuid.uuid4()),
+            part_id=part_id,
+            vendor_id=data.vendor_id,
+            vendor_part_number=data.vendor_part_number,
+            preferred=data.preferred,
+            notes=data.notes,
+            active=True,
+        )
+        db.add(link)
     await db.commit()
     await db.refresh(link)
 

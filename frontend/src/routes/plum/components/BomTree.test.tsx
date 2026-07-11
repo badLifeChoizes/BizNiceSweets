@@ -9,7 +9,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BomTree } from '@/routes/plum/components/BomTree'
@@ -32,7 +33,12 @@ import { apiClient } from '@/api/client'
 const mockGet = vi.mocked(apiClient.get)
 
 function renderBomTree(
-  props: { partId: string; revisionId: string; isDraft: boolean } = {
+  props: {
+    partId: string
+    revisionId: string
+    isDraft: boolean
+    rollupCost?: number | string | null
+  } = {
     partId: 'p1',
     revisionId: 'r1',
     isDraft: true,
@@ -102,5 +108,53 @@ describe('BomTree component', () => {
     expect(screen.getAllByText(/2/).length).toBeGreaterThan(0)
     // tree role present
     expect(screen.getByRole('tree', { name: 'Bill of Materials' })).toBeInTheDocument()
+  })
+
+  // Milestone-audit gap D1: the flat "Total BOM Cost" footer used to sum the
+  // extended_cost of every flat row. Because the flat view includes
+  // sub-assemblies alongside their children, that double-counts nested material
+  // (110 + 110 + 60 = 280 for the audit fixture). The footer must instead show
+  // the revision's rolled-up cost (110), passed in as `rollupCost`.
+  it('flat footer shows the rolled-up cost, not the sum of the rows', async () => {
+    const flatRows = [
+      { child_part_id: 'p-leaf', part_number: 'P100001', description: 'leaf',
+        total_qty: '44', unit_of_measure: 'ea', effective_cost: '2.5', extended_cost: '110' },
+      { child_part_id: 'p-sub1', part_number: 'P100002', description: 'sub',
+        total_qty: '11', unit_of_measure: 'ea', effective_cost: '10', extended_cost: '110' },
+      { child_part_id: 'p-sub2', part_number: 'P100003', description: 'sub',
+        total_qty: '3', unit_of_measure: 'ea', effective_cost: '20', extended_cost: '60' },
+    ]
+    // First get = tree (unused here), second get = flat rows.
+    mockGet.mockResolvedValueOnce({ data: [] }).mockResolvedValueOnce({ data: flatRows })
+
+    const user = userEvent.setup()
+    renderBomTree({ partId: 'p1', revisionId: 'r1', isDraft: true, rollupCost: '110' })
+
+    await user.click(await screen.findByRole('button', { name: 'Flat' }))
+    await screen.findByText('P100001')
+
+    // The footer cell shows the roll-up (110.0000), not the naive sum (280).
+    // Scope to the footer row: 110.0000 also appears as a row's extended cost.
+    const footerRow = screen.getByText('Total BOM Cost').closest('tr')!
+    expect(within(footerRow).getByText('110.0000')).toBeInTheDocument()
+    expect(screen.queryByText('280.0000')).not.toBeInTheDocument()
+  })
+
+  it('flat footer shows an em dash when no rolled-up cost is available', async () => {
+    const flatRows = [
+      { child_part_id: 'p-leaf', part_number: 'P100001', description: 'leaf',
+        total_qty: '44', unit_of_measure: 'ea', effective_cost: '2.5', extended_cost: '110' },
+    ]
+    mockGet.mockResolvedValueOnce({ data: [] }).mockResolvedValueOnce({ data: flatRows })
+
+    const user = userEvent.setup()
+    renderBomTree({ partId: 'p1', revisionId: 'r1', isDraft: true, rollupCost: null })
+
+    await user.click(await screen.findByRole('button', { name: 'Flat' }))
+    await screen.findByText('P100001')
+    // Footer shows an em dash (no rollup), not the naive row sum.
+    const footerRow = screen.getByText('Total BOM Cost').closest('tr')!
+    expect(within(footerRow).getByText('—')).toBeInTheDocument()
+    expect(within(footerRow).queryByText('110.0000')).not.toBeInTheDocument()
   })
 })

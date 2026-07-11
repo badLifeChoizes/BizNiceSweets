@@ -106,6 +106,7 @@ export function ImportExport() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewData, setPreviewData] = useState<ImportPreviewResponse | null>(null)
   const [committedData, setCommittedData] = useState<ImportCommitResponse | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
@@ -188,11 +189,40 @@ export function ImportExport() {
 
   // ── Handlers ──
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null
+  function acceptFile(file: File | null | undefined) {
+    if (!file) return
+    const name = file.name.toLowerCase()
+    if (!name.endsWith('.json') && !name.endsWith('.xlsx')) {
+      toast.error('Unsupported file type. Choose a .json or .xlsx file.')
+      return
+    }
     setSelectedFile(file)
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    acceptFile(e.target.files?.[0])
     // Reset input value so the same file can be re-selected after clearing
     e.target.value = ''
+  }
+
+  function handleBrowseClick() {
+    fileInputRef.current?.click()
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragging(false)
+    acceptFile(e.dataTransfer.files?.[0])
   }
 
   function handleClearFile() {
@@ -300,30 +330,47 @@ export function ImportExport() {
           {importStep === 'upload' && (
             <div className="space-y-4">
               {/* Dropzone */}
-              <label className="block cursor-pointer">
-                <div className="border-2 border-dashed border-border rounded-md p-8 text-center hover:border-muted-foreground transition-colors">
-                  <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" aria-hidden="true" />
-                  <p className="text-sm text-foreground font-medium">Drop a JSON or Excel file here</p>
-                  <p className="text-xs text-muted-foreground mt-1">or</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-2 pointer-events-none"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                  >
-                    Choose File
-                  </Button>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json,.xlsx"
-                  className="sr-only"
-                  onChange={handleFileChange}
-                  aria-label="Choose a JSON or Excel file to import"
-                />
-              </label>
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={handleBrowseClick}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleBrowseClick()
+                  }
+                }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-md p-8 text-center cursor-pointer transition-colors ${
+                  isDragging ? 'border-primary bg-muted/50' : 'border-border hover:border-muted-foreground'
+                }`}
+              >
+                <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" aria-hidden="true" />
+                <p className="text-sm text-foreground font-medium">Drop a JSON or Excel file here</p>
+                <p className="text-xs text-muted-foreground mt-1">or</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleBrowseClick()
+                  }}
+                >
+                  Choose File
+                </Button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,.xlsx"
+                className="sr-only"
+                onChange={handleFileChange}
+                aria-label="Choose a JSON or Excel file to import"
+              />
               <p className="text-xs text-muted-foreground">Accepted: .json, .xlsx</p>
 
               {/* Selected file display */}

@@ -809,6 +809,7 @@ export function PartDetail() {
               partId={partId}
               revisionId={currentRevision.id}
               isDraft={isDraft}
+              rollupCost={costData?.bom_rollup_cost}
               onEdit={isDraft ? handleBomEdit : undefined}
               onRemove={isDraft ? handleBomRemove : undefined}
             />

@@ -77,6 +77,13 @@ interface BomTreeProps {
   partId: string
   revisionId: string
   isDraft: boolean
+  /**
+   * Rolled-up BOM cost of this revision (the Cost card's `bom_rollup_cost`).
+   * Shown as the flat view's "Total BOM Cost". Passed in rather than summed
+   * from the flat rows: those rows include sub-assemblies, so summing their
+   * extended costs double-counts nested material.
+   */
+  rollupCost?: number | string | null
   onEdit?: (line: BomTreeNode) => void
   onRemove?: (line: BomTreeNode) => void
 }
@@ -255,7 +262,14 @@ function BomRow({ item, depth, isDraft, expandedIds, onToggle, onEdit, onRemove 
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function BomTree({ partId, revisionId, isDraft, onEdit, onRemove }: BomTreeProps) {
+export function BomTree({
+  partId,
+  revisionId,
+  isDraft,
+  rollupCost,
+  onEdit,
+  onRemove,
+}: BomTreeProps) {
   const [viewMode, setViewMode] = useState<'tree' | 'flat'>('tree')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [initialized, setInitialized] = useState(false)
@@ -328,14 +342,19 @@ export function BomTree({ partId, revisionId, isDraft, onEdit, onRemove }: BomTr
     })
   }
 
-  // ── Compute flat BOM total ──
+  // ── Flat BOM total = the revision's rolled-up cost ──
+  // NOT a sum of the flat rows: the flat view lists sub-assemblies alongside
+  // their own children, so summing extended costs counts nested material more
+  // than once (e.g. a leaf shows up in its own row and again inside every
+  // ancestor's rolled-up cost). The authoritative figure is bom_rollup_cost.
   const flatRows = flatData ?? []
-  const totalBomCost = flatRows.reduce((sum, row) => {
-    const ec = row.extended_cost
-    if (ec === null || ec === undefined || ec === '') return sum
-    const num = typeof ec === 'string' ? parseFloat(ec) : ec
-    return isNaN(num) ? sum : sum + num
-  }, 0)
+  const totalBomCostNum =
+    rollupCost === null || rollupCost === undefined || rollupCost === ''
+      ? null
+      : typeof rollupCost === 'string'
+        ? parseFloat(rollupCost)
+        : rollupCost
+  const hasTotal = totalBomCostNum !== null && !isNaN(totalBomCostNum)
 
   // ── Render ──
   return (
@@ -456,7 +475,7 @@ export function BomTree({ partId, revisionId, isDraft, onEdit, onRemove }: BomTr
                     Total BOM Cost
                   </td>
                   <td className="px-4 py-3 font-semibold font-mono text-right text-sm text-foreground">
-                    {totalBomCost > 0 ? totalBomCost.toFixed(4) : '—'}
+                    {hasTotal ? totalBomCostNum!.toFixed(4) : '—'}
                   </td>
                 </tr>
               </tfoot>
