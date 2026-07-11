@@ -19,8 +19,10 @@
  */
 
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -30,6 +32,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { apiClient } from '@/api/client'
 import { SyerpNav } from './components/SyerpNav'
 import { JournalEntryDialog } from './components/JournalEntryDialog'
@@ -86,11 +96,22 @@ function fetchJournalEntries(): Promise<JournalEntryRead[]> {
     .then((r) => r.data)
 }
 
+// Surface the server's real reason (FastAPI string/array `detail`) over a generic message.
+function getApiErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const detail = err.response?.data?.detail
+    if (typeof detail === 'string' && detail.trim()) return detail
+  }
+  return fallback
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function JournalEntries() {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
+  // The entry a "Reverse" click is confirming against; null when the confirm is closed.
+  const [reverseTarget, setReverseTarget] = useState<JournalEntryRead | null>(null)
 
   const {
     data: entries = [],
@@ -100,6 +121,30 @@ export function JournalEntries() {
     queryKey: ['syerp', 'gl', 'journal-entries'],
     queryFn: fetchJournalEntries,
   })
+
+  // Reversal is append-only: it POSTs a new offsetting entry (reversal_of_id = the
+  // original) and never mutates or removes the original client-side — we only
+  // invalidate so the newly-created reversal is fetched into the list.
+  const reverseMutation = useMutation<JournalEntryRead, Error, string>({
+    mutationFn: (id) =>
+      apiClient
+        .post<JournalEntryRead>(`/api/v1/syerp/gl/journal-entries/${id}/reverse`, {})
+        .then((r) => r.data),
+    onSuccess: () => {
+      toast.success('Journal entry reversed.')
+      queryClient.invalidateQueries({ queryKey: ['syerp', 'gl', 'journal-entries'] })
+      setReverseTarget(null)
+    },
+    onError: (err) => {
+      toast.error(getApiErrorMessage(err, 'Failed to reverse the entry. Please try again.'))
+    },
+  })
+
+  // Ids of entries that a reversal already points at — those are already reversed,
+  // so their "Reverse" action is disabled to avoid a double reversal.
+  const reversedIds = new Set(
+    entries.map((e) => e.reversal_of_id).filter((id): id is string => id !== null),
+  )
 
   return (
     <div className="p-8 space-y-6">
@@ -146,18 +191,37 @@ export function JournalEntries() {
               <TableHead>Source</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead className="text-right">Lines</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {entries.map((entry) => (
-              <TableRow key={entry.id} className="h-12">
-                <TableCell className="font-medium">{formatDate(entry.entry_date)}</TableCell>
-                <TableCell>{entry.memo ?? '—'}</TableCell>
-                <TableCell>{entry.source_type ?? 'Manual'}</TableCell>
-                <TableCell className="text-right font-mono">{totalDebits(entry)}</TableCell>
-                <TableCell className="text-right">{entry.lines.length}</TableCell>
-              </TableRow>
-            ))}
+            {entries.map((entry) => {
+              const isReversal = entry.reversal_of_id !== null
+              const alreadyReversed = reversedIds.has(entry.id)
+              return (
+                <TableRow key={entry.id} className="h-12">
+                  <TableCell className="font-medium">{formatDate(entry.entry_date)}</TableCell>
+                  <TableCell>{entry.memo ?? '—'}</TableCell>
+                  <TableCell>{entry.source_type ?? 'Manual'}</TableCell>
+                  <TableCell className="text-right font-mono">{totalDebits(entry)}</TableCell>
+                  <TableCell className="text-right">{entry.lines.length}</TableCell>
+                  <TableCell className="text-right">
+                    {isReversal ? (
+                      <span className="text-xs text-muted-foreground">Reversal</span>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={alreadyReversed || reverseMutation.isPending}
+                        onClick={() => setReverseTarget(entry)}
+                      >
+                        {alreadyReversed ? 'Reversed' : 'Reverse'}
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       )}
@@ -169,6 +233,48 @@ export function JournalEntries() {
           queryClient.invalidateQueries({ queryKey: ['syerp', 'gl', 'journal-entries'] })
         }
       />
+
+      {/* Reverse confirmation — reversal posts a new offsetting entry; the original is
+          left untouched (audit-safe, append-only). */}
+      <Dialog
+        open={reverseTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setReverseTarget(null)
+        }}
+      >
+        <DialogContent aria-describedby="reverse-entry-description">
+          <DialogHeader>
+            <DialogTitle>Reverse journal entry</DialogTitle>
+            <DialogDescription id="reverse-entry-description">
+              This posts a new offsetting entry with swapped debits and credits. The original
+              entry is preserved for the audit trail and is not changed or deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setReverseTarget(null)}
+              disabled={reverseMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => reverseTarget && reverseMutation.mutate(reverseTarget.id)}
+              disabled={reverseMutation.isPending}
+            >
+              {reverseMutation.isPending ? (
+                <>
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                  Reversing…
+                </>
+              ) : (
+                'Reverse entry'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
