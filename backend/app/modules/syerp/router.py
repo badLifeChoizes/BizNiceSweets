@@ -32,6 +32,11 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   POST   /syerp/purchasing/orders/{po_id}/close    — close PO (syerp:write)
   POST   /syerp/purchasing/orders/{po_id}/lines/{line_id}/receive — receive line (syerp:write)
   GET    /syerp/gl/accounts            — list GL accounts (syerp:read)
+  GET    /syerp/gl/accounts/{id}/register  — account register over a period (syerp:read)
+  POST   /syerp/gl/journal-entries         — post balanced journal entry (syerp:write)
+  GET    /syerp/gl/journal-entries         — list journal entries (syerp:read)
+  GET    /syerp/gl/journal-entries/{id}    — get journal entry + lines (syerp:read)
+  POST   /syerp/gl/journal-entries/{id}/reverse — post reversing entry (syerp:write)
 
 mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
 Full paths are therefore /api/v1/syerp/partners, /api/v1/syerp/gl/accounts, etc.
@@ -62,6 +67,8 @@ Audit logging (D-10, T-04-08):
   - po.approved: on POST /purchasing/orders/{id}/approve success.
   - po.closed: on POST /purchasing/orders/{id}/close success.
   - po.received: on POST /purchasing/orders/{id}/lines/{line_id}/receive success.
+  - gl.journal_posted: on POST /gl/journal-entries success.
+  - gl.journal_reversed: on POST /gl/journal-entries/{id}/reverse success.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -70,19 +77,24 @@ Archive strategy (RESEARCH.md Pattern 4):
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from datetime import date
+
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.modules.auth.dependencies import require_permission
 from app.modules.auth.service import write_audit
 from app.modules.syerp.schemas import (
+    AccountRegisterRead,
     AdjustmentCreate,
     GLAccountRead,
     InventoryItemCreate,
     InventoryItemRead,
     InventoryItemUpdate,
     ItemOnHandRead,
+    JournalEntryCreate,
+    JournalEntryRead,
     PartnerCreate,
     PartnerRead,
     PartnerUpdate,
@@ -93,6 +105,7 @@ from app.modules.syerp.schemas import (
     PORead,
     ReceiptCreate,
     ReceiveLine,
+    ReverseRequest,
     StockLocationCreate,
     StockLocationRead,
     StockLocationUpdate,
@@ -107,21 +120,26 @@ from app.modules.syerp.service import (
     create_location,
     create_partner,
     create_po,
+    get_account_register,
     get_item,
     get_item_onhand,
+    get_journal_entry,
     get_location,
     get_partner,
     get_po,
     list_gl_accounts,
     list_item_transactions,
     list_items,
+    list_journal_entries,
     list_locations,
     list_partners,
     list_pos,
     post_adjustment,
+    post_journal_entry,
     post_receipt,
     post_transfer,
     receive_line,
+    reverse_journal_entry,
     remove_line,
     update_item,
     update_line,
@@ -880,3 +898,141 @@ async def list_gl_accounts_endpoint(
     Requires syerp:read permission. Unauthenticated → 401. Wrong perm → 403.
     """
     return await list_gl_accounts(db)
+
+
+# ---------------------------------------------------------------------------
+# GL Journal entries (Phase 9a, SYERP-12 AC1/AC8/AC9, D-P9a-3)
+# ---------------------------------------------------------------------------
+#
+# Journal entries are APPEND-ONLY: there is intentionally NO PUT/DELETE route —
+# a correction is a reversing entry (POST {id}/reverse), never an edit. Writes
+# require syerp:write, reads require syerp:read. write_audit self-commits and is
+# called only AFTER the service commit (post_/reverse_journal_entry commit=True).
+
+
+@router.post(
+    "/gl/journal-entries",
+    response_model=JournalEntryRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_journal_entry_endpoint(
+    data: JournalEntryCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> JournalEntryRead:
+    """
+    Post a balanced double-entry journal entry (AC1, D-P9a).
+
+    The entry needs at least two lines, each setting exactly one non-negative
+    debit or credit, with total debits equal to total credits — an unbalanced /
+    single-line / bad-line entry returns 422, an unknown account 404 (no partial
+    posting). Entries are immutable once posted (corrections are reversing
+    entries). Requires syerp:write. Writes a gl.journal_posted audit row.
+    """
+    entry = await post_journal_entry(
+        db,
+        entry_date=data.entry_date,
+        memo=data.memo,
+        lines=data.lines,
+        actor_id=str(current_user.id),
+    )
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="gl.journal_posted",
+        target_type="journal_entry",
+        target_id=str(entry.id),
+        detail=f"Journal entry posted: {entry.id} dated {entry.entry_date}",
+    )
+    return entry
+
+
+@router.get("/gl/journal-entries", response_model=list[JournalEntryRead])
+async def list_journal_entries_endpoint(
+    source_type: str | None = None,
+    date_from: date | None = Query(default=None, alias="from"),
+    date_to: date | None = Query(default=None, alias="to"),
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[JournalEntryRead]:
+    """
+    List journal entries (newest-first), each with its lines nested.
+
+    Query params (all optional): `source_type` restricts to auto-posted entries
+    of a given kind; `from` / `to` bound the entry_date range (inclusive).
+    Read-only: no audit row. Requires syerp:read permission.
+    """
+    return await list_journal_entries(
+        db, source_type=source_type, date_from=date_from, date_to=date_to
+    )
+
+
+@router.get("/gl/journal-entries/{entry_id}", response_model=JournalEntryRead)
+async def get_journal_entry_endpoint(
+    entry_id: str,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> JournalEntryRead:
+    """
+    Get a single journal entry (header + nested lines) by id.
+
+    Read-only: no audit row. Requires syerp:read permission. Returns 404 if the
+    entry does not exist.
+    """
+    return await get_journal_entry(db, entry_id)
+
+
+@router.post(
+    "/gl/journal-entries/{entry_id}/reverse",
+    response_model=JournalEntryRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def reverse_journal_entry_endpoint(
+    entry_id: str,
+    data: ReverseRequest,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> JournalEntryRead:
+    """
+    Reverse a journal entry by posting its mirror image (AC2, D-P9a).
+
+    Posts a NEW entry swapping every debit/credit of the target, dated today and
+    linked back via reversal_of_id. The original entry is NEVER edited or deleted
+    (immutability is the audit guarantee). Requires syerp:write. Returns 404 if
+    the target entry does not exist. Writes a gl.journal_reversed audit row.
+    """
+    entry = await reverse_journal_entry(
+        db,
+        entry_id,
+        actor_id=str(current_user.id),
+        memo=data.memo,
+    )
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="gl.journal_reversed",
+        target_type="journal_entry",
+        target_id=str(entry.id),
+        detail=f"Journal entry {entry_id} reversed by {entry.id}",
+    )
+    return entry
+
+
+@router.get("/gl/accounts/{account_id}/register", response_model=AccountRegisterRead)
+async def get_account_register_endpoint(
+    account_id: int,
+    date_from: date | None = Query(default=None, alias="from"),
+    date_to: date | None = Query(default=None, alias="to"),
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> AccountRegisterRead:
+    """
+    Return an account register for one GL account over a date range (AC1).
+
+    Carries the account meta, the opening balance carried into the period, the
+    ordered postings each with their running balance, and the closing balance.
+    Query params `from` / `to` bound the period (inclusive); an unbounded side is
+    simply not applied. Read-only: no audit row. Requires syerp:read permission.
+    Returns 404 if the account does not exist.
+    """
+    return await get_account_register(db, account_id, date_from=date_from, date_to=date_to)
