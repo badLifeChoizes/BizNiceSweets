@@ -4,7 +4,7 @@ Updated: 2026-07-11
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** plan complete (Phase 9a) → next is `/zj:build 09a`
+- **Step:** build complete (Phase 9a) → next is `/zj:verify 09a`
 - **Last update:** 2026-07-11
 - **Next action:** `/zj:build 09a` — **Phase 9a: GL posting engine + receipt auto-post**
   (`.zj/phases/09a-gl-posting-engine/PLAN.md`, 13 tasks, status: ready). Covers SYERP-12
