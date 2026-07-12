@@ -702,3 +702,208 @@ class AccountRegisterRead(BaseModel):
     opening_balance: Decimal
     closing_balance: Decimal
     rows: list[AccountRegisterRow] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Accounts-payable schemas (Phase 9b — AP bills, PO match, payments; SYERP-12)
+# ---------------------------------------------------------------------------
+#
+# A bill carries its lines nested (BillCreate.lines / BillRead.lines) so a single
+# POST records a whole vendor invoice and a single GET returns it complete. A bill
+# line is one of exactly two shapes — a `matched` line (drawing a costed quantity
+# off an unbilled PO receipt) or a free-text `expense` line (a GL account + amount)
+# — the one-shape rule is enforced on BillLineCreate as defense-in-depth beside the
+# service. `total` / `open_balance` on BillRead and `amount` on PaymentRead are
+# DERIVED roll-ups the service computes (open_balance = total - allocations; a
+# payment's amount = SUM of its allocations); they are plain fields here, filled by
+# the service rather than validated from the client. Money is Decimal (never float
+# — D-11).
+
+
+class UnbilledReceiptRead(BaseModel):
+    """
+    One unbilled PO receipt available to match on a bill (matched-line picker).
+
+    A PO line that has been received but not yet fully billed: `unbilled_qty` is
+    the still-billable quantity at the line's `unit_cost`. Quantities/costs are
+    fixed-point Decimals (never float — D-11).
+    """
+
+    po_line_id: str
+    po_number: str
+    item_id: str
+    unbilled_qty: Decimal
+    unit_cost: Decimal
+
+
+class BillLineCreate(BaseModel):
+    """
+    One line of a bill-creation payload — exactly one of two shapes.
+
+    A `matched` line draws `matched_qty` off an unbilled PO receipt (`po_line_id`);
+    its amount is derived by the service from the receipt's unit cost, so no
+    `account_id`/`amount` is supplied. An `expense` line is free-text against a GL
+    `account_id` for an explicit `amount` (> 0), with no `po_line_id`. Setting both
+    `po_line_id` and `account_id`, or an unknown `line_type`, is rejected here as
+    defense-in-depth beside the service. Money is Decimal (never float — D-11).
+    """
+
+    line_type: str  # 'matched' | 'expense'
+    po_line_id: Optional[str] = None
+    matched_qty: Optional[Decimal] = None
+    account_id: Optional[int] = None
+    amount: Optional[Decimal] = None
+
+    @model_validator(mode="after")
+    def exactly_one_line_shape(self) -> "BillLineCreate":
+        """Reject any line that is not a clean 'matched' or 'expense' shape."""
+        if self.po_line_id is not None and self.account_id is not None:
+            raise ValueError(
+                "A bill line cannot set both po_line_id and account_id — a line is "
+                "either a matched PO receipt or a free-text expense, not both."
+            )
+        if self.line_type == "matched":
+            if self.po_line_id is None or self.matched_qty is None:
+                raise ValueError(
+                    "A matched bill line must set po_line_id and matched_qty."
+                )
+            if self.account_id is not None:
+                raise ValueError("A matched bill line must not set account_id.")
+        elif self.line_type == "expense":
+            if self.account_id is None:
+                raise ValueError("An expense bill line must set account_id.")
+            if self.amount is None or self.amount <= 0:
+                raise ValueError("An expense bill line must set amount > 0.")
+            if self.po_line_id is not None:
+                raise ValueError("An expense bill line must not set po_line_id.")
+        else:
+            raise ValueError("line_type must be 'matched' or 'expense'.")
+        return self
+
+
+class BillCreate(BaseModel):
+    """
+    Bill (vendor invoice) creation payload (POST /syerp/ap/bills).
+
+    `vendor_id` MUST reference an existing Partner with is_vendor=True (enforced in
+    the service). `vendor_invoice_ref` is the supplier's own invoice number (free
+    text, optional). `lines` is the non-empty set of matched/expense legs; the
+    service derives matched-line amounts from PO receipts and rolls up the total.
+    `bill_number` is server-generated, never client-supplied.
+    """
+
+    vendor_id: str = Field(..., max_length=36)
+    vendor_invoice_ref: Optional[str] = None
+    lines: list[BillLineCreate] = Field(..., min_length=1)
+
+
+class BillLineRead(BaseModel):
+    """
+    One bill line returned to API callers.
+
+    Serialized from a BillLine ORM instance via from_attributes=True. A `matched`
+    line carries po_line_id/matched_qty/unit_cost; an `expense` line carries
+    account_id. `amount` is the line's booked value either way — a matched line's
+    matched_qty * unit_cost, an expense line's explicit amount. Money is Decimal.
+    """
+
+    id: str
+    line_no: int
+    line_type: str
+    po_line_id: Optional[str] = None
+    matched_qty: Optional[Decimal] = None
+    account_id: Optional[int] = None
+    unit_cost: Optional[Decimal] = None
+    amount: Decimal
+
+    model_config = {"from_attributes": True}
+
+
+class BillRead(BaseModel):
+    """
+    Bill returned to API callers, with its lines nested.
+
+    `total` and `open_balance` are DERIVED roll-ups the service computes from the
+    lines and allocations (open_balance = total - SUM allocations), not stored
+    fields — the service constructs this model rather than serializing an ORM
+    instance for those two, so they are plain Decimals here. `status` walks
+    draft | posted | partially_paid | paid; `posted_at` is NULL until posted.
+    Money is Decimal (never float — D-11).
+    """
+
+    id: str
+    bill_number: str
+    vendor_id: str
+    vendor_invoice_ref: Optional[str] = None
+    status: str
+    memo: Optional[str] = None
+    posted_at: Optional[datetime] = None
+    total: Decimal = Decimal("0")
+    open_balance: Decimal = Decimal("0")
+    lines: list[BillLineRead] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PaymentAllocationCreate(BaseModel):
+    """
+    One allocation of a payment to a specific bill (payment-creation payload).
+
+    Applies `amount` (> 0) against the open balance of `bill_id`; the service
+    rejects over-application. Money is Decimal (never float — D-11).
+    """
+
+    bill_id: str
+    amount: Decimal = Field(..., gt=0)
+
+
+class PaymentCreate(BaseModel):
+    """
+    Payment creation payload (POST /syerp/ap/payments).
+
+    Records a cash disbursement from `cash_account_id` on `payment_date`, split
+    across one or more bills via `allocations`. The payment's amount is NOT
+    client-supplied — the service sums the allocations — so it is absent here.
+    `reference` is the check/transfer reference (free text, optional). Money is
+    Decimal (never float — D-11).
+    """
+
+    payment_date: date
+    cash_account_id: int
+    reference: Optional[str] = None
+    allocations: list[PaymentAllocationCreate] = Field(..., min_length=1)
+
+
+class PaymentAllocationRead(BaseModel):
+    """
+    One payment allocation returned to API callers.
+
+    Serialized from a PaymentAllocation ORM instance via from_attributes=True.
+    `amount` is the value applied to `bill_id` (Decimal, never float — D-11).
+    """
+
+    bill_id: str
+    amount: Decimal
+
+    model_config = {"from_attributes": True}
+
+
+class PaymentRead(BaseModel):
+    """
+    Payment returned to API callers, with its allocations nested.
+
+    `amount` is the DERIVED total the service sums from the allocations (the client
+    never supplies it), so this model is service-constructed rather than a plain ORM
+    serialization for that field. Money is Decimal (never float — D-11).
+    """
+
+    id: str
+    payment_date: date
+    cash_account_id: int
+    amount: Decimal
+    reference: Optional[str] = None
+    allocations: list[PaymentAllocationRead] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
