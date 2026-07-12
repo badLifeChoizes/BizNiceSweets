@@ -1,5 +1,6 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-11 (Phase 9a done + retro'd → next `/zj:plan 09b`; learnings in LEARNINGS.md "Phase 09a")
+Updated: 2026-07-12 (Phase 9b done + retro'd → next `/zj:plan 09c`; learnings in LEARNINGS.md "Phase 09b")
+Prior: 2026-07-11 (Phase 9a done + retro'd → next `/zj:plan 09b`; learnings in LEARNINGS.md "Phase 09a")
 Prior: 2026-07-11 (Phase-9 spec — SYERP-12 = GL+AP+reporting, AR→CRUMB, v2.0 DoD confirmed; D-P9-1..5)
 Prior: 2026-07-09 (v1.0 milestone close; history reconstructed at ZJ adoption from git + GSD artifacts archived at `archive/planning-gsd/`)
 
@@ -179,7 +180,7 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   the majors the green live-verify missed. Deferrals homed to BACKLOG (alembic drift, reverse-UI Vitest,
   entry_date UTC, MAP refresh). **Next: `/zj:plan 09b`.**
 
-#### Phase 9b: AP bills, PO match & payments  [verified 2026-07-12 — tag `zj/good-09b-ap-bills-match-payments`]
+#### Phase 9b: AP bills, PO match & payments  [done — verified 2026-07-12, tag `zj/good-09b-ap-bills-match-payments`, retro'd]
 - **Delivers:** SYERP-12 **AC4** (vendor bill + PO-receipt match, Dr GR/IR-or-Expense / Cr AP,
   Draft→Posted→Paid FSM), **AC5** (payments Dr AP / Cr Cash-or-Bank, partial, overpayment 4xx),
   plus AC8/AC9 (audit + RBAC) for that surface.
@@ -203,8 +204,20 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   Payment + PaymentAllocation, 1→N bills (D-P9b-6); `/syerp/ap/…` paths (D-P9b-7). GR/IR-clears-to-
   zero is the accounting crux, asserted in `verify_ap.py`; SC6 audit+RBAC proven by HTTP-level
   `verify_ap_api.py` (Phase-09a learning applied).
+- **Retro 2026-07-12** (`/zj:retro 09b`): learnings in `.zj/LEARNINGS.md` "Phase 09b" — (1) a
+  sequential verify script is structurally blind to read-then-write races (the reviewer caught the
+  major again, 4th time) → any read-check-write guarding a hard invariant needs a row lock/constraint
+  **and** an `asyncio.gather` two-concurrent-request verify scenario; (2) a read-check-write race is
+  deferrable only if its breach self-heals — a double-billed receipt / overpaid bill corrupts a
+  ledger invariant permanently, so it's a major even single-shop (unlike the deferred inventory-ledger
+  drift); (3) the clearing-account invariant proves best as a pre/post derived-balance *equality*
+  (snapshot 2150, mutate, assert it returns); (4) planning the HTTP-level verify from the start (09a
+  rule) removed the router-gap before it opened — now settled practice. Deferrals homed: 2 minor AP
+  correctness edge-cases (GR/IR sub-micro residue, zero-qty matched line) → BACKLOG p2; stale AP FE
+  types + `partially_paid` comment → BACKLOG p3; FOR UPDATE template cross-referenced into the
+  inventory-ledger race item. **Next: `/zj:plan 09c`.**
 
-#### Phase 9c: AP aging + financial statements  [pending — plan after 9b]
+#### Phase 9c: AP aging + financial statements  [pending — plan after 9b; next]
 - **Delivers:** SYERP-12 **AC6** (AP aging buckets, ties to AP control balance), **AC7** (Trial
   Balance, P&L, Balance Sheet from posted GL activity).
 

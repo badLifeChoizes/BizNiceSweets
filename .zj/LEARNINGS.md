@@ -3,6 +3,61 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the bottom.
 
+## Phase 09b — AP bills, PO match & payments (verified 2026-07-12)
+
+### Patterns that worked (repeat these)
+- **The clearing-account invariant is best proven as a pre/post derived-balance *equality*, not an
+  absolute.** The GR/IR-clears-to-zero crux held Decimal-exact because `verify_ap.py` (e) captured
+  the 2150 balance *before* the receipt and asserted it returned to that exact value after
+  receive→post_bill (−450.000000 → −450.000000), instead of asserting "== 0" (2150 carries balance
+  from other unbilled receipts, so an absolute-zero assert would be both wrong and untestable on a
+  shared account). What makes the equality hold: `post_bill` **ignores the user's `unit_cost` and
+  books at the PO line's `unit_cost`**, and forces `matched_qty == full live unbilled_qty` — so a
+  single bill's Dr GR/IR is arithmetically identical to the receipt's Cr GR/IR. Reuse the "snapshot
+  a control balance, mutate, assert it returns" shape for any clearing/suspense account.
+- **HTTP-level verify planned from the start (the 09a rule) paid off immediately.** `verify_ap_api.py`
+  existed in the plan (Task 12) as a first-class gate, not a fix-loop afterthought, and proved the
+  three audit rows + full 403/401/200 RBAC that `verify_ap.py` structurally cannot reach. Second
+  consecutive phase where planning the router-level script up front removed the 09a-style gap before
+  it opened. This is now settled practice — keep it for 9c.
+
+### Surprises (assumptions that were wrong → corrected truth)
+- **A sequential verify script is structurally blind to read-then-write races — the reviewer caught
+  the major again (4th time: 7, 9a, and now the concurrency class).** Both guards this phase exist
+  is to prevent — double-billing a receipt (GR/IR never clears) and overpaying a bill (AP negative)
+  — were implemented as read-check-write with **no row lock**, and a fully green `verify_ap.py`
+  (24 sequential scenarios) could never surface it because two concurrent transactions is not a
+  scenario a sequential driver *can* express. Fix: `SELECT … FOR UPDATE` on the contended PO-line /
+  bill rows, acquired up-front in sorted-id order (deadlock-safe), so the second txn blocks and
+  re-reads the true billed/paid sum. **The durable rule: any read-check-write guarding a hard
+  invariant needs (1) a row lock or DB constraint, AND (2) a `asyncio.gather` two-concurrent-request
+  verify scenario that asserts exactly one succeeds and the other 422s.** A sequential PASS proves
+  the guard's arithmetic, never its concurrency. Scenarios (j)/(k) are now that template.
+- **This concurrency class was *not* deferrable, unlike the identical inventory-ledger races (BACKLOG
+  p2, accepted-risk for single-shop).** The distinction that matters: the inventory moving-average
+  drift *self-heals on the next receipt*, but a double-billed receipt leaves GR/IR permanently
+  non-zero and an overpaid bill leaves AP permanently negative — the phase's own crux, breached
+  irreversibly. **Rule for triage: a read-check-write race is deferrable only if its breach
+  self-corrects; if it corrupts a ledger invariant permanently, it's a major even single-shop.**
+  The `create_bill`/`record_payment` FOR UPDATE code is now the in-repo template for when the
+  inventory-ledger locking finally lands (MOUSSE / first multi-writer deploy).
+
+### Cost sinks (time planning didn't predict)
+- **Same two recurring taxes, no new ones:** in-container verify still needs `PYTHONPATH=/app`
+  (5th DB-touching phase paying it — the "bake it into a wrapper" fix still unwritten), and neither
+  lint gate ran (5th consecutive phase, BACKLOG p1). Noted only as continued evidence both p1 items
+  are real; not re-litigated.
+
+### Process notes
+- **Two service-scope gaps surfaced only at the router/verify layer, both fixed same-phase without
+  a deviation from plan intent:** `record_payment` (T7) shipped without the `list_payments` read its
+  `GET /ap/payments` route (T10) needed, and `create_bill` (T5) validated each matched line's
+  exact-match independently so two matched lines against the *same* `po_line_id` in one payload could
+  jointly over-bill (a same-payload cousin of the concurrency race) — fixed by rejecting duplicate
+  `po_line_id` within a bill. **Takeaway:** when planning a service function, enumerate its *reads*
+  the router will need (not just the mutation) and the *within-payload* duplicate-key cases, not only
+  the cross-request ones.
+
 ## Phase 09a — GL posting engine + receipt auto-post (verified 2026-07-11)
 
 ### Patterns that worked (repeat these)

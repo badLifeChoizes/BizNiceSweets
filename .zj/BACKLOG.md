@@ -1,5 +1,7 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-04 (seeded at adoption from the v1.0 milestone audit, codebase map, and the
+Updated: 2026-07-12 (Phase 9b retro — 2 minor AP correctness edge-cases → p2, stale AP FE
+types → p3, FOR UPDATE template cross-referenced into the inventory-ledger race item)
+Prior: 2026-07-04 (seeded at adoption from the v1.0 milestone audit, codebase map, and the
 kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-ADOPT-5)
 
 ## p1 — quality/infra debt that already bit once
@@ -77,7 +79,9 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   next receipt) but the two hard invariants this phase guarantees — `qty_received ≤ qty_ordered`
   and per-location on-hand `≥ 0` — **can be breached**. Accepted for single-shop v2.0. Revisit
   when MOUSSE (Phase 10) also writes this ledger, or the first multi-writer deployment — add
-  `SELECT … FOR UPDATE` / serialized posting then.
+  `SELECT … FOR UPDATE` / serialized posting then. **Template now exists (Phase 9b):**
+  `create_bill` / `record_payment` in `syerp/service.py` lock the contended rows up-front in
+  sorted-id order (deadlock-safe) before the guard read — copy that shape when locking this ledger.
 - [ ] **Alembic autogenerate never exits clean** (Phase 9a verify, 2026-07-11) — `alembic check`
   reports spurious drift on **7 pre-existing unnamed `unique=True` constraints** (plum_part.part_number,
   uq_plum_part_one_released, syerp_gl_account/inventory_item/partner.code, purchase_order.po_number,
@@ -92,12 +96,34 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   reversal incl. the 409 double-reversal guard is covered by `verify_gl.py`. Add a Vitest case
   mirroring the post-flow test: confirm dialog → `POST {id}/reverse` → toast + query invalidate.
   Fold into the 9b/9c frontend wave.
+- [ ] **AP GR/IR sub-micro residue on multi-lot fractional receipts** (Phase 9b review #2, minor
+  correctness) — `create_bill` books the matched leg as ONE combined `matched_qty × unit_cost`
+  (`syerp/service.py:3163`), while `receive_line` booked each receipt's `Cr GR/IR` as a
+  separately-`quantize`d product (quantum `0.000001`, `:1951`). With a fractional qty received
+  across multiple lots the two need not agree at the 6th decimal, so GR/IR is left holding
+  ~`n_lots × 0.5e-6` rather than exactly zero — financially trivial but a real divergence from the
+  "nets to zero exactly" invariant. `verify_ap.py` (e) uses a single fully-received line and cannot
+  surface it. Fix: derive the matched amount from the Σ of the *booked* receipt amounts for that
+  `po_line_id` (or quantize identically per receipt). Fold into 9c if the crux is revisited.
+- [ ] **AP zero-quantity matched line → permanently unpostable draft** (Phase 9b review #3, minor)
+  — for a fully-billed/never-received PO line (`unbilled_qty == 0`) a hand-crafted
+  `{line_type:'matched', matched_qty:0}` passes `_is_exact_match(0 == 0)` and persists an `amount=0`
+  line; `post_bill` then emits an all-zero JE line that `_je_is_balanced` rejects, so the bill 422s
+  forever and is stuck in `draft`. No money bug (nothing posts) and the UI never generates it (the
+  picker filters `unbilled_qty > 0`), but the API accepts it. Fix: reject `matched_qty <= 0` in
+  `BillLineCreate` / `create_bill`.
 - [ ] **Integration specs** (kept from chore-architecture-planning): PLUM↔MOUSSE,
   PLUM↔SYERP, FLAN↔SYERP, shared vendor/document infrastructure.
 - [ ] **Suite documentation sets** (kept): SYERP, CRUMB, MOUSSE, CRISP, GELATO under
   `docs/features/{suite}/` per `_templates/`.
 - [ ] **Remove dead `frontend/src/components/ProtectedRoute.tsx`** — replaced by AppShell;
   only its own test references it.
+- [ ] **Stale AP frontend types/comments** (Phase 9b Noticed) — `Bills.tsx` `BillLineRead` declares
+  a non-existent `quantity` field and omits `line_no`/`matched_qty` (harmless today: the list
+  renders no line rows; `BillDetail.tsx` defines a correct local type — latent trap if the list type
+  is reused). Separately, an AP schema comment mentions a `partially_paid` status that the FSM never
+  uses (draft→posted→paid only; a partial payment leaves the bill `posted`). Both cosmetic; fix when
+  next touching the AP screens/schemas.
 - [ ] **Dependency license audit** (NFR-2) — required before public open-source release.
 
 ## p3 — hygiene

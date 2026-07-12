@@ -1,14 +1,26 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-12 (Phase 9b **VERIFIED + tagged `zj/good-09b-ap-bills-match-payments`** — next `/zj:retro 09b`)
+Updated: 2026-07-12 (Phase 9b **VERIFIED + retro'd + tagged `zj/good-09b-ap-bills-match-payments`** — next `/zj:plan 09c`)
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** verify 09b **complete (PASS)** → next is `/zj:retro 09b` (then `/zj:plan 09c`).
-- **Next action:** `/zj:retro 09b` — extract the learning worth keeping (the review again caught a
-  major the green sequential live-verify missed: a concurrent double-bill/overpayment race — the
-  09a learning recurs, now "concurrency guards need FOR UPDATE + a gather-based verify scenario"),
-  update the roadmap, set up Phase 9c (AP aging + financial statements, AC6/AC7).
+- **Step:** retro 09b **complete** → next is `/zj:plan 09c` (AP aging + financial statements, AC6/AC7).
+- **Next action:** `/zj:plan 09c` — plan the last Phase-9 sub-phase: SYERP-12 **AC6** (AP aging
+  buckets tying to the AP control balance) + **AC7** (Trial Balance, P&L, Balance Sheet derived from
+  posted GL activity). Carry the 09a/09b patterns: coalesce-each-side on every derived balance, an
+  HTTP-level `verify_*_api.py` planned from the start, and — for any write path that guards a ledger
+  invariant — a row lock + a `gather`-based concurrent verify scenario (09b learning). 9c is mostly
+  read/reporting, so the concurrency surface is small, but AP-aging must reconcile to the same
+  `coalesce(sum billed) − coalesce(sum paid)` the subledger uses.
+- **Retro 09b (2026-07-12) — complete.** Learnings → `.zj/LEARNINGS.md` "Phase 09b": (1) sequential
+  verify is structurally blind to read-then-write races (reviewer caught the major a 4th time) → row
+  lock/constraint **plus** an `asyncio.gather` two-request scenario for any invariant guard; (2) a
+  read-check-write race is deferrable only if its breach self-heals — 9b's double-bill/overpay
+  corrupts a ledger invariant permanently, so major even single-shop; (3) clearing-account invariant
+  proves as a pre/post derived-balance equality; (4) HTTP-verify-from-the-start (09a rule) is now
+  settled. Deferrals homed: 2 minor AP correctness edge-cases → BACKLOG p2, stale AP FE types → p3,
+  FOR UPDATE template cross-referenced into the inventory-ledger race item. Roadmap 9b marked
+  `[done]`; ROADMAP/BACKLOG/LEARNINGS updated. Offer: `/zj:log phase 09b` files the formal work log.
 - **Verify 09b (2026-07-12) — Verdict PASS + tagged `zj/good-09b-ap-bills-match-payments`.** Goal-backward + code
   review on `feature-syerp-ap-bills`. All six SCs proven live: `test_ap.py` 14, **`verify_ap.py`
   24/24** (GR/IR-clears-to-zero crux Decimal-exact: 2150 −550 pre-receipt → −550 post-bill; + two
