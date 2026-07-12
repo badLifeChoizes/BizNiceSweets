@@ -179,10 +179,20 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   the majors the green live-verify missed. Deferrals homed to BACKLOG (alembic drift, reverse-UI Vitest,
   entry_date UTC, MAP refresh). **Next: `/zj:plan 09b`.**
 
-#### Phase 9b: AP bills, PO match & payments  [pending — plan after 9a]
+#### Phase 9b: AP bills, PO match & payments  [planned 2026-07-11 — PLAN.md ready, next `/zj:build 09b`]
 - **Delivers:** SYERP-12 **AC4** (vendor bill + PO-receipt match, Dr GR/IR-or-Expense / Cr AP,
-  Draft→Posted→Paid FSM), **AC5** (payments Dr AP / Cr Cash, partial, overpayment 4xx). Plan
-  resolves: unmatched-bill line account selection, payment cash/bank account choice.
+  Draft→Posted→Paid FSM), **AC5** (payments Dr AP / Cr Cash-or-Bank, partial, overpayment 4xx),
+  plus AC8/AC9 (audit + RBAC) for that surface.
+- **Plan:** `.zj/phases/09b-ap-bills-match-payments/PLAN.md` — 16 tasks (models→migration→seed→
+  3 service→schemas→2 router→`verify_ap.py`+`verify_ap_api.py`→regression→3 frontend), branch
+  `feature-syerp-ap-bills` off the 09a tip (D-P9b-8).
+- **Decisions resolved at plan (D-P9b-1..8):** receipt-driven bill creation, PO-line-grain match
+  (D-P9b-1); **exact match** → GR/IR clears to zero, variance 4xx, no PPV account (D-P9b-2); non-PO
+  expense lines, user-chosen account (D-P9b-3); selectable cash/bank account, seed 1111 Bank –
+  Checking (D-P9b-4); BILL-#### + Draft→Posted→Paid FSM + auto-Paid + overpayment 4xx (D-P9b-5);
+  Payment + PaymentAllocation, 1→N bills (D-P9b-6); `/syerp/ap/…` paths (D-P9b-7). GR/IR-clears-to-
+  zero is the accounting crux, asserted in `verify_ap.py`; SC6 audit+RBAC proven by HTTP-level
+  `verify_ap_api.py` (Phase-09a learning applied).
 
 #### Phase 9c: AP aging + financial statements  [pending — plan after 9b]
 - **Delivers:** SYERP-12 **AC6** (AP aging buckets, ties to AP control balance), **AC7** (Trial

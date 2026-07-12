@@ -1,12 +1,27 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-11 (Phase 9a **retro'd** — learnings kept, roadmap trued up, deferrals homed; next `/zj:plan 09b`)
+Updated: 2026-07-11 (Phase 9b **planned** — PLAN.md ready, 16 tasks, D-P9b-1..8 resolved; next `/zj:build 09b`)
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** retro 09a **done** → next is `/zj:plan 09b`
+- **Step:** plan 09b **done** → next is `/zj:build 09b`
 - **Last update:** 2026-07-11
-- **Next action:** `/zj:plan 09b` — plan AP bills / PO-receipt match / payments (SYERP-12 AC4/AC5).
+- **Next action:** `/zj:build 09b` — build AP bills / PO-receipt match / payments (SYERP-12 AC4/AC5/AC8/AC9).
+  **Plan ready:** `.zj/phases/09b-ap-bills-match-payments/PLAN.md` — 16 tasks, layered
+  models→migration→seed→3 service→schemas→2 router→2 verify scripts→regression→3 frontend.
+  **First action of the build: cut a fresh branch `feature-syerp-ap-bills` off the current
+  `feature-syerp-gl-posting-engine` HEAD (the verified 09a tip, tag `zj/good-09a-gl-posting-engine`)**
+  — D-P9b-8. Owner-resolved decisions at plan (D-P9b-1..8): receipt-driven bill creation matched at
+  PO-line grain (D-P9b-1); **exact match required** so Dr GR/IR 2150 == Cr AP 2110 and GR/IR clears
+  to zero — variance rejected 4xx, no PPV account (D-P9b-2); non-PO expense lines with user-chosen
+  EXPENSE/ASSET account (D-P9b-3); payments credit a **selectable cash/bank account** defaulting to
+  1110, seed new **1111 Bank – Checking** (D-P9b-4); BILL-#### numbering + Draft→Posted→Paid
+  `BILL_TRANSITIONS` FSM + auto-Paid + overpayment 4xx (D-P9b-5); Payment header + PaymentAllocation
+  (1 payment → N bills, D-P9b-6); `/syerp/ap/…` paths (D-P9b-7). Crux baked into `verify_ap.py` (e):
+  GR/IR balance returns to its pre-receipt value after receive→post_bill. SC6 (audit+RBAC) proven by
+  a **first-class HTTP verify** `verify_ap_api.py` (the Phase-09a learning: router behavior needs an
+  HTTP-level script, planned from the start).
+- **Prior next action (done):** `/zj:plan 09b` — planned 2026-07-11.
   **Phase 9a is verified, tagged `zj/good-09a-gl-posting-engine`, and retro'd.** It delivered
   SYERP-12 **AC1/AC2/AC3 + AC8/AC9**: double-entry JournalEntry/JournalLine (append-only, reversal
   via self-FK), derived balances + account register, the manual general-journal UI, and the crux —

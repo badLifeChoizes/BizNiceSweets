@@ -65,6 +65,14 @@ at milestone close, never hand-edit it. 55 decisions.
 - **D-P9a-3:** GL endpoint paths = /syerp/gl/journal-entries[/{id}][/reverse] + /syerp/gl/accounts/{id}/register?from=&to=
 - **D-P9a-4:** JE reversal swaps debit⇄credit, sets reversal_of_id, dated today (current period), optional memo — not a same-period reversal
 - **D-P9a-5:** Receipt auto-post writes both po.received and gl.journal_posted audit rows so the GR/IR JE is attributable (AC8)
+- **D-P9b-1:** Bill creation is receipt-driven — pick a vendor, system lists that vendor's unbilled received PO-line qty; user selects lines to bill (match at PO-line grain: unbilled qty = qty_received − Σ already-billed)
+- **D-P9b-2:** Matched bill lines require exact match (billed = received qty × PO unit cost) so Dr GR/IR 2150 == Cr AP 2110 and GR/IR clears to zero; any variance is rejected 4xx (no PPV account in 9b)
+- **D-P9b-3:** Bills also support non-PO lines (freight/services/direct expense) with a user-chosen EXPENSE/ASSET account per line, posting Dr <account> / Cr AP 2110
+- **D-P9b-4:** Payments credit a selectable cash/bank asset account (default 1110 Cash); seed a second 1111 Bank – Checking so the choice is real; posting Dr AP 2110 / Cr <chosen>
+- **D-P9b-5:** Bills auto-number BILL-#### (mirror _next_po_number) and capture the vendor's invoice reference; Draft→Posted→Paid FSM enforced server-side (PO_TRANSITIONS pattern); overpayment rejected 4xx (D-P8-7 guard)
+- **D-P9b-6:** Payments modelled as Payment header + PaymentAllocation (one payment settles N bills); Payment.amount == Σ allocations; per-bill open balance = total − Σ allocation.amount
+- **D-P9b-7:** AP endpoint paths = /syerp/ap/bills[/{id}][/post], /syerp/ap/unbilled-receipts?vendor_id=, /syerp/ap/payments (mirrors /syerp/gl/… of D-P9a-3)
+- **D-P9b-8:** Phase 9b branches fresh `feature-syerp-ap-bills` off the verified 09a tip (tag zj/good-09a-gl-posting-engine), not continuing the 9a branch — each sub-phase its own branch/PR
 
 ## Product & Architecture
 
@@ -335,6 +343,54 @@ auto-post-only), and UI is folded into the plan with no separate DESIGN.md (D-P8
   `gl.journal_posted`** audit rows (after `receive_line` commits), so the auto-posted GR/IR JE is
   attributable per AC8 — chosen over folding the JE id into the `po.received` detail (less
   discoverable).
+
+## Phase 9b plan — AP bills, PO match & payments (2026-07-11, SYERP-12 AC4/AC5)
+
+- **D-P9b-1 (owner):** **Bill creation is receipt-driven.** The user picks a vendor; the system
+  lists that vendor's PO lines with **unbilled received quantity** (`qty_received − Σ already-billed
+  qty`, matched at PO-line grain) and the user selects which to bill. Chosen over free-form keyed
+  lines with an optional match picker. *Why:* least keying, hardest to mis-key, and matches the
+  procure-to-pay loop D-P9-2 built PO receiving for. Matched bill lines are the GR/IR clearing legs.
+- **D-P9b-2 (owner):** **Matched bill lines require an exact match** — a matched line bills exactly
+  the unbilled received qty × the PO line's unit cost, so the posting is **Dr GR/IR 2150 == Cr AP
+  2110** and GR/IR clears to zero. A billed amount/qty that diverges from the received value is
+  **rejected 4xx**. Chosen over allowing price/qty variance to a new Purchase Price Variance account.
+  *Why:* simplest correct MVP that keeps GR/IR exactly clearing with no new account; real invoice
+  discrepancies are keyed as a separate non-PO expense/adjustment line (D-P9b-3). Revisit (add a PPV
+  account + 3-line variance posting) if the shop hits routine price variances.
+- **D-P9b-3 (owner):** **Bills also carry non-PO lines** (freight, services, direct expenses not
+  tied to a receipt), each with a **user-chosen GL account** (any EXPENSE or ASSET), posting
+  **Dr <chosen account> / Cr AP 2110**. Chosen over PO-match-only. *Why:* real vendor invoices mix
+  received goods with freight/fees on one document; this realizes AC4's "Dr Inventory/Expense
+  (unmatched)" branch. A bill is therefore matched lines (Dr GR/IR) + non-PO lines (Dr chosen), all
+  Cr AP for the total.
+- **D-P9b-4 (owner):** **Payments credit a selectable cash/bank asset account**, chosen from the
+  ASSET accounts under Current Assets 1100, **defaulting to 1110 Cash**; a new **1111 Bank –
+  Checking** is seeded so the choice is real. Posting is **Dr AP 2110 / Cr <chosen>**. Chosen over
+  hardcoding 1110. *Why:* a shop pays from cash and from a bank account and the books should show
+  which; the picker is cheap given the register/statements (9c) will report per-account.
+- **D-P9b-5 (owner-default, confirm if wrong):** Bills **auto-number `BILL-####`** (mirroring the
+  `_next_po_number` numeric-safe generator) and capture the vendor's **invoice reference** as a
+  free-text field; the **Draft→Posted→Paid FSM is enforced server-side** via a `BILL_TRANSITIONS`
+  mapping (PO_TRANSITIONS pattern — invalid transitions 4xx, not just hidden in the UI); a bill
+  **auto-advances to Paid** when its open balance (billed − paid) reaches zero, and a payment that
+  would drive it **negative is rejected 4xx** (D-P8-7 over-receipt guard pattern).
+- **D-P9b-6 (architect call, adopted):** **Payments = `Payment` header + `PaymentAllocation` rows**
+  (one payment settles N bills). `Payment.amount` must equal `Σ` its allocations; a bill's open
+  balance derives as `total − coalesce(Σ allocation.amount, 0)`. *Why:* AC5 says "against one or
+  more posted bills" — a real cheque/transfer clears several vendor invoices at once, and the
+  allocation grain is exactly what the open-balance and overpayment guard need. A flat
+  1-payment→1-bill column would force N payments per cheque and re-model later.
+- **D-P9b-7 (architect call, adopted):** **AP endpoint paths** = `POST/GET /syerp/ap/bills`,
+  `GET /syerp/ap/bills/{id}`, `POST /syerp/ap/bills/{id}/post`,
+  `GET /syerp/ap/unbilled-receipts?vendor_id=`, `POST/GET /syerp/ap/payments` — mirroring the
+  `/syerp/gl/…` shape of D-P9a-3.
+- **D-P9b-8 (owner, 2026-07-11):** **Phase 9b branches fresh `feature-syerp-ap-bills` off the
+  verified 09a tip** (current `feature-syerp-gl-posting-engine` HEAD, tagged
+  `zj/good-09a-gl-posting-engine`), rather than continuing on the 9a branch. *Why:* 9b stacks
+  cleanly on 9a's commits, each Phase-9 sub-phase keeps its own branch for a separate ship/PR, and
+  the 9a branch stays closed at its tag — matching the "branch off the working tip" discipline
+  (D-P8-11). Chosen over entangling two phases' history on one branch.
 
 ## v2.0 / Phase 9 spec — SYERP-12 expansion (2026-07-11)
 
