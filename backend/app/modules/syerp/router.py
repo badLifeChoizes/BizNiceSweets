@@ -1133,6 +1133,7 @@ async def create_bill_endpoint(
         db,
         vendor_id=data.vendor_id,
         vendor_invoice_ref=data.vendor_invoice_ref,
+        bill_date=data.bill_date,
         lines=data.lines,
         actor_id=str(current_user.id),
     )

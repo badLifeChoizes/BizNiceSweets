@@ -2678,6 +2678,7 @@ async def create_bill(
     *,
     vendor_id: str,
     vendor_invoice_ref: str | None,
+    bill_date: date | None = None,
     lines: "Iterable[BillLineCreate]",
     actor_id: str,
 ) -> "BillRead":
@@ -2832,6 +2833,9 @@ async def create_bill(
         bill_number=bill_number,
         vendor_id=vendor_id,
         vendor_invoice_ref=vendor_invoice_ref,
+        # bill_date defaults to today when the caller omits it, keeping existing
+        # 09b callers/tests working (D-P9c-1).
+        bill_date=bill_date or date.today(),
         status="draft",
         actor_id=actor_id,
     )
@@ -2942,6 +2946,7 @@ def _bill_to_read(
         bill_number=bill.bill_number,
         vendor_id=bill.vendor_id,
         vendor_invoice_ref=bill.vendor_invoice_ref,
+        bill_date=bill.bill_date,
         status=bill.status,
         memo=bill.memo,
         posted_at=bill.posted_at,
@@ -3108,9 +3113,12 @@ async def post_bill(db: AsyncSession, bill_id: str, actor_id: str) -> "BillRead"
 
     # commit=False: the JE rides THIS transaction's single commit alongside the status
     # flip below — no partial post (Risk #3).
+    # Age the JE by the bill's invoice date, not today's, so the 2110 control
+    # account's entry_date-aged balance ties out to the AP subledger's bill_date
+    # aging (the SC2 tie-out crux, D-P9c-1).
     await post_journal_entry(
         db,
-        entry_date=date.today(),
+        entry_date=bill.bill_date,
         memo=f"AP bill {bill.bill_number}",
         lines=je_lines,
         actor_id=actor_id,

@@ -794,6 +794,9 @@ class BillCreate(BaseModel):
 
     vendor_id: str = Field(..., max_length=36)
     vendor_invoice_ref: Optional[str] = None
+    # bill_date: the vendor's invoice date AP aging buckets from; defaults to
+    # today server-side when omitted (D-P9c-1).
+    bill_date: Optional[date] = None
     lines: list[BillLineCreate] = Field(..., min_length=1)
 
 
@@ -835,6 +838,7 @@ class BillRead(BaseModel):
     bill_number: str
     vendor_id: str
     vendor_invoice_ref: Optional[str] = None
+    bill_date: date
     status: str
     memo: Optional[str] = None
     posted_at: Optional[datetime] = None
