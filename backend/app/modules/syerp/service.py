@@ -2714,9 +2714,23 @@ async def create_bill(
         )
 
     # Validate every line first, collecting pure values (no partial posting).
+    # A single bill must claim each unbilled receipt line AT MOST ONCE: two matched
+    # lines against the same po_line_id would each pass the DB-live exact-match check
+    # independently and jointly over-bill the receipt, breaking the exact three-way
+    # match / GR-IR-clears-to-zero invariant (D-P9b-1/2). Reject on the first dup.
+    seen_po_line_ids: set[str] = set()
     prepared: list[_PreparedBillLine] = []
     for data in lines:
         if data.line_type == "matched":
+            if data.po_line_id in seen_po_line_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"PO line {data.po_line_id} is matched more than once on this "
+                        f"bill; a bill may claim each receipt line at most once."
+                    ),
+                )
+            seen_po_line_ids.add(data.po_line_id)
             po_result = await db.execute(
                 select(PurchaseOrderLine).where(PurchaseOrderLine.id == data.po_line_id)
             )
