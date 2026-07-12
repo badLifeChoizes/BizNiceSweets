@@ -1,17 +1,25 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-11 (Phase 9a verified + tagged `zj/good-09a-gl-posting-engine`; fix-loop artifacts committed through `593cf58`)
+Updated: 2026-07-11 (Phase 9a **retro'd** — learnings kept, roadmap trued up, deferrals homed; next `/zj:plan 09b`)
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** Phase 9a **VERIFIED (PASS)** → next is `/zj:retro 09a` (lessons worth keeping), then `/zj:plan 09b`
+- **Step:** retro 09a **done** → next is `/zj:plan 09b`
 - **Last update:** 2026-07-11
-- **Next action:** `/zj:retro 09a` — Phase 9a passed `/zj:verify` after a fix loop worth capturing,
-  then `/zj:plan 09b`. **Phase 9a is verified and tagged `zj/good-09a-gl-posting-engine`.** It
-  delivered SYERP-12 **AC1/AC2/AC3 + AC8/AC9**: double-entry JournalEntry/JournalLine (append-only,
-  reversal via self-FK), derived balances + account register, the manual general-journal UI, and the
-  crux — PO `receive_line` atomically posts a balanced **Dr 1130 / Cr 2150** JE at receipt cost
-  (seeded GR/IR 2150). Branch `feature-syerp-gl-posting-engine` off `master` (D-P9a-2).
+- **Next action:** `/zj:plan 09b` — plan AP bills / PO-receipt match / payments (SYERP-12 AC4/AC5).
+  **Phase 9a is verified, tagged `zj/good-09a-gl-posting-engine`, and retro'd.** It delivered
+  SYERP-12 **AC1/AC2/AC3 + AC8/AC9**: double-entry JournalEntry/JournalLine (append-only, reversal
+  via self-FK), derived balances + account register, the manual general-journal UI, and the crux —
+  PO `receive_line` atomically posts a balanced **Dr 1130 / Cr 2150** JE at receipt cost (seeded
+  GR/IR 2150). Branch `feature-syerp-gl-posting-engine` off `master` (D-P9a-2).
+  - **Retro (2026-07-11) — learnings kept** (`.zj/LEARNINGS.md` "Phase 09a"): (1) service-level
+    verify scripts can't prove router behavior (audit/RBAC) — `verify_gl_api.py` over live HTTP was
+    needed; **plan an HTTP-level verify from the start in 9b/9c**; (2) a new atomic side-effect
+    narrowed a legal input domain (the zero-cost receipt regression); (3) SQL `SUM` NULL-propagates
+    on single-sided derived balances → **coalesce each side** (AP-control/cash in 9b/9c derive the
+    same way); (4) the review again caught the majors the green live-verify missed. Deferrals homed
+    to BACKLOG: alembic autogenerate drift (7 unnamed constraints + `server_default` now()), FE
+    reverse-action Vitest, receipt `entry_date` UTC, MAP fuller refresh.
   - **Verify fix-loop (2026-07-11):** two majors fixed — **M1** a zero-cost PO receipt (`unit_cost=0`)
     self-rejected the all-zero JE and rolled back the whole receipt (Phase-8 regression) → now skips
     the GL post; **M2** no double-reversal guard let the derived control account diverge from
@@ -19,8 +27,6 @@ Updated: 2026-07-11 (Phase 9a verified + tagged `zj/good-09a-gl-posting-engine`;
     criteria-become-tests landed: `verify_gl.py` grew the atomicity-rollback / zero-cost / double-
     reversal scenarios (**28/28**) and a **new `verify_gl_api.py`** pins the audit rows + 403/401
     RBAC over live HTTP (**9/9**). Phase-8 regression unchanged, `test_gl_journal.py` 13, FE 64/64.
-    Minors deferred → PLAN.md `## Noticed` (FE reverse-action Vitest, server_default drift,
-    entry_date UTC, MAP full refresh, no DESIGN.md).
   - **Phase 9 split (D-P9a-1..5):** 9a done → `/zj:plan 09b` (AP bills/match/payments, AC4/AC5) →
     `/zj:plan 09c` (AP aging + statements, AC6/AC7). AR stays out (SYERP-13 → CRUMB, D-P9-4).
 - **Phase-9 spec (2026-07-11):** owner chose full subledger→GL auto-posting (D-P9-1) over

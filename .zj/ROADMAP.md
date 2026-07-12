@@ -1,5 +1,6 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-11 (Phase-9 spec — SYERP-12 = GL+AP+reporting, AR→CRUMB, v2.0 DoD confirmed; D-P9-1..5)
+Updated: 2026-07-11 (Phase 9a done + retro'd → next `/zj:plan 09b`; learnings in LEARNINGS.md "Phase 09a")
+Prior: 2026-07-11 (Phase-9 spec — SYERP-12 = GL+AP+reporting, AR→CRUMB, v2.0 DoD confirmed; D-P9-1..5)
 Prior: 2026-07-09 (v1.0 milestone close; history reconstructed at ZJ adoption from git + GSD artifacts archived at `archive/planning-gsd/`)
 
 ## v1.0 — Foundation + PLUM  [done]
@@ -156,7 +157,7 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
 - **Split confirmed at `/zj:plan 09` (D-P9a-1..5):** broken into three ZJ sub-phases rather than one
   mega-phase, each planned/built/verified independently:
 
-#### Phase 9a: GL posting engine + receipt auto-post  [verified 2026-07-11 — tag `zj/good-09a-gl-posting-engine`]
+#### Phase 9a: GL posting engine + receipt auto-post  [done — verified 2026-07-11, tag `zj/good-09a-gl-posting-engine`, retro'd]
 - **Goal:** A double-entry GL posting engine — balanced, immutable, reversible journal entries with
   derived account balances and an account register — plus a manual general-journal UI, and PO
   receipts auto-post a balanced GR/IR journal entry atomically with the stock ledger.
@@ -171,7 +172,12 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   (M1 zero-cost receipt regression, M2 double-reversal guard) + the 2 mandated criteria-become-tests
   (SC3 atomicity rollback, SC5 audit+RBAC). Live proof: `verify_gl.py` 28/28, new `verify_gl_api.py`
   9/9, Phase-8 regression unchanged, `test_gl_journal.py` 13, FE 64/64. Minors logged in PLAN `## Noticed`.
-  Next: `/zj:plan 09b`.
+- **Retro 2026-07-11** (`/zj:retro 09a`): learnings in `.zj/LEARNINGS.md` "Phase 09a" — service-level
+  verify scripts can't prove router behavior (audit/RBAC) → HTTP-level verify needed, plan it from the
+  start in 9b/9c; a new atomic side-effect narrowed a legal input domain (zero-cost receipt regression);
+  SQL `SUM` NULL-propagates on single-sided derived balances → coalesce each side; review again caught
+  the majors the green live-verify missed. Deferrals homed to BACKLOG (alembic drift, reverse-UI Vitest,
+  entry_date UTC, MAP refresh). **Next: `/zj:plan 09b`.**
 
 #### Phase 9b: AP bills, PO match & payments  [pending — plan after 9a]
 - **Delivers:** SYERP-12 **AC4** (vendor bill + PO-receipt match, Dr GR/IR-or-Expense / Cr AP,

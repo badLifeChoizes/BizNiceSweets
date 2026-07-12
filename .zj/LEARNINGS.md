@@ -3,6 +3,64 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the bottom.
 
+## Phase 09a — GL posting engine + receipt auto-post (verified 2026-07-11)
+
+### Patterns that worked (repeat these)
+- **Service-level verify scripts structurally cannot prove router-level behavior.** `verify_gl.py`
+  drove the service functions directly, so `write_audit` and `require_permission` — both of which
+  live in the **router**, not the service — were never exercised. SC5 (audit rows + 403 RBAC) read
+  green while having *zero* automated proof; it was provable only by hand in the verify session
+  (gap G2). Fix was a second script, `verify_gl_api.py`, that POSTs/reverses/receives over live
+  HTTP and asserts the `audit_log` rows + 401/403 on every endpoint. **Rule for 9b/9c and every
+  future phase: any criterion whose behavior lives in the router — audit writes, RBAC gating,
+  HTTP status mapping — needs an HTTP-level verify script, planned from the start, not a
+  service-level one.** A service-driven script proves domain logic and silently skips the whole
+  router surface.
+- **The fix-loop "every mandated criterion becomes an executable test" rule held again.** The two
+  verifier-mandated gaps became durable guards: G1 (atomicity rollback) → `verify_gl.py` scenario
+  (f) forces the JE to fail mid-`receive_line` and asserts *both* the stock txn and the JE roll
+  back; G2 → the new `verify_gl_api.py`. This is the third phase (7, 8, 9a) where turning the gap
+  into a red/green script is what closed it.
+
+### Surprises (assumptions that were wrong → corrected truth)
+- **Adding a mandatory atomic side-effect to an existing flow narrowed the inputs it accepts — a
+  regression even though the atomicity was correct.** Wiring the balanced-JE post into Phase-8's
+  `receive_line` meant an all-zero JE (from a schema-legal `unit_cost=0` — samples, consignment,
+  warranty replacements) hit the balance validator, failed the XOR/≥2-line check → 422, and rolled
+  back the *entire valid receipt*. The unit-of-work was sound; the new coupling shrank the accepted
+  input domain vs. Phase 8, where that same receipt succeeded. Fix: skip the GL post when
+  `amount == 0`. **Rule:** when you thread a new required side-effect through an existing
+  transaction, enumerate the original flow's legal inputs the side-effect might now reject (here:
+  zero-value) — the atomicity being correct does not mean the flow still accepts what it used to.
+- **SQL `SUM` NULL-propagates on single-sided derived balances.** `func.sum(debit) - func.sum(credit)`
+  returns `NULL` (→ 0) whenever *either* side has no rows — i.e. any single-sided or control account
+  (all-debit, or a credit-only account like GR/IR 2150). A $60 debit account reported $0; the
+  receipt's GR/IR movement read as 0. Fix: `coalesce(sum(debit),0) - coalesce(sum(credit),0)` per
+  side (empty account still 0−0=0). This is exactly the defect class the broken DB-pytest (D-P7-4)
+  would mask, and it's the live proof that caught it. **9b/9c derive AP-control and cash balances
+  the same way — coalesce each side independently from the first draft.**
+- **The reviewer again found the majors the green live-verify missed — via domain reasoning, not
+  the exercised path** (Phase 7 lesson, confirmed a second time). Both majors were invisible to a
+  passing `verify_gl.py`: the zero-cost regression above, and a missing double-reversal guard —
+  nothing stopped reversing an already-reversed entry, so a second accountant's reverse re-applied
+  the original and the derived control account silently diverged from on-hand inventory (now a 409).
+  **Keep running review *and* live-verify; a green empirical drive is never a substitute for domain
+  reasoning over the input domain.**
+
+### Cost sinks (time planning didn't predict)
+- **The in-container verify scripts need `PYTHONPATH=/app`** — the plan's bare
+  `python scripts/verify_gl.py` fails `ModuleNotFoundError: app` inside `compose_api_1`. Same class
+  as Phase 8's `.env`-substitution / throwaway-container gotchas. The "bake the verify HOW-TO into a
+  wrapper" fix from Phase 8 still doesn't exist; every DB-touching phase keeps paying the tax.
+- **Neither lint gate ran — a fourth consecutive phase** (already homed to BACKLOG p1). Noted only
+  as further evidence the p1 item is real; not re-litigated here.
+
+### Process notes
+- **No DESIGN.md for a frontend-bearing phase (G5) — accepted** because tasks 11–13 carried explicit
+  per-task acceptance criteria in PLAN.md. Fine for a phase reusing an established design system
+  (`GLAccounts.tsx` layout, `ReceiveLineDialog` form pattern); flag if a future frontend phase
+  introduces genuinely new UX rather than restyling existing patterns.
+
 ## Phase 08 — SYERP inventory & purchasing (verified 2026-07-08)
 
 ### Patterns that worked (repeat these)
