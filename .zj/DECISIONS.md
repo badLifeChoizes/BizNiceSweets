@@ -73,6 +73,9 @@ at milestone close, never hand-edit it. 55 decisions.
 - **D-P9b-6:** Payments modelled as Payment header + PaymentAllocation (one payment settles N bills); Payment.amount == Σ allocations; per-bill open balance = total − Σ allocation.amount
 - **D-P9b-7:** AP endpoint paths = /syerp/ap/bills[/{id}][/post], /syerp/ap/unbilled-receipts?vendor_id=, /syerp/ap/payments (mirrors /syerp/gl/… of D-P9a-3)
 - **D-P9b-8:** Phase 9b branches fresh `feature-syerp-ap-bills` off the verified 09a tip (tag zj/good-09a-gl-posting-engine), not continuing the 9a branch — each sub-phase its own branch/PR
+- **D-P9c-1:** Add a real `Bill.bill_date` (Date, NOT NULL) via migration 0011 (add-nullable → backfill `created_at::date` → alter NOT NULL); `create_bill` accepts it (defaults to today), and the bill's posted JE `entry_date` is set from `bill.bill_date` so the AP subledger (aged by bill_date) and the 2110 control account (aged by entry_date) reconcile — AP aging buckets from bill_date
+- **D-P9c-2:** Reports UI = one **Financial Reports** SYERP nav item (tabbed Trial Balance / P&L / Balance Sheet sharing date controls) + **AP Aging** as its own nav item near Bills
+- **D-P9c-3:** Phase 9c branches fresh `feature-syerp-financial-reports` off the verified 09b tip (tag zj/good-09b-ap-bills-match-payments), per the per-sub-phase branch precedent (D-P9a-2/D-P9b-8)
 
 ## Product & Architecture
 
@@ -431,3 +434,30 @@ auto-post-only), and UI is folded into the plan with no separate DESIGN.md (D-P8
   is gutted; the whole dependency-first ordering (D-6) exists to reach work orders. **MOUSSE-01
   stays a coarse placeholder** and is expanded via `/zj:spec` at Phase-10 planning — the same
   just-in-time expansion used for SYERP-10/11 (Phase 8) and SYERP-12 (Phase 9).
+
+### Phase 9c (AP aging + financial statements — planned 2026-07-12)
+
+- **D-P9c-1 (owner):** **Add a real `Bill.bill_date`.** The 09b `Bill` model carries only
+  `created_at` (system entry timestamp) and `posted_at`; AC6 ages open bills "from bill dates."
+  Add `bill_date` (SQLAlchemy `Date`, NOT NULL) via **migration 0011** — add nullable → backfill
+  existing rows `created_at::date` (server-side) → alter NOT NULL, so the NOT-NULL add is safe on a
+  populated table. `create_bill` accepts `bill_date` (defaults to `date.today()` when omitted, so
+  existing 09b callers/tests are unchanged), and the create dialog gains an optional bill-date
+  field. **Crucially, `post_bill` sets the bill's JE `entry_date` from `bill.bill_date`** (was
+  `date.today()`), so the AP subledger (aged by `bill_date`) and the 2110 Accounts-Payable control
+  account (aged by `entry_date`) share one date basis and the AC6 tie-out (aging grand total ==
+  derived 2110 balance) holds exactly. *Why over reusing `created_at`:* a bill entered late for an
+  old invoice would otherwise age in the wrong bucket; the medical-device audit posture wants the
+  true invoice date, and the column is cheap now vs. retrofitting later. *Rejected:* bucket by
+  `created_at::date` (no schema change) — conflates entry date with invoice date.
+- **D-P9c-2 (owner):** **Financial reports UI = one tabbed page + a separate AP Aging item.** A
+  single **Financial Reports** SYERP nav item hosts Trial Balance / P&L / Balance Sheet as
+  tabs/sub-sections sharing date controls; **AP Aging** is its own nav item placed near Bills.
+  *Why:* the three GL statements share date-range controls and read the same posted-activity
+  surface, so they group naturally; AP aging is a subledger view that belongs beside Bills.
+  *Rejected:* four separate nav items (flatter but a longer SYERP sidebar).
+- **D-P9c-3 (manager, precedent-driven):** **Phase 9c branches fresh `feature-syerp-financial-
+  reports`** off the verified 09b tip (tag `zj/good-09b-ap-bills-match-payments`), not continuing
+  `feature-syerp-ap-bills`. *Why:* mirrors the per-sub-phase branching of D-P9a-2 / D-P9b-8 and
+  keeps the branch name descriptive of the reports work (the 09b branch name describes AP bills).
+  All of Phase 9 remains unmerged and stacks on the same line; the tag is the 09b rollback point.

@@ -1,17 +1,28 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-12 (Phase 9b **VERIFIED + retro'd + tagged `zj/good-09b-ap-bills-match-payments`** — next `/zj:plan 09c`)
+Updated: 2026-07-12 (Phase 9c **PLANNED** — 15-task PLAN.md ready → next `/zj:build 09c`)
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** retro 09b **complete** → next is `/zj:plan 09c` (AP aging + financial statements, AC6/AC7).
-- **Next action:** `/zj:plan 09c` — plan the last Phase-9 sub-phase: SYERP-12 **AC6** (AP aging
-  buckets tying to the AP control balance) + **AC7** (Trial Balance, P&L, Balance Sheet derived from
-  posted GL activity). Carry the 09a/09b patterns: coalesce-each-side on every derived balance, an
-  HTTP-level `verify_*_api.py` planned from the start, and — for any write path that guards a ledger
-  invariant — a row lock + a `gather`-based concurrent verify scenario (09b learning). 9c is mostly
-  read/reporting, so the concurrency surface is small, but AP-aging must reconcile to the same
-  `coalesce(sum billed) − coalesce(sum paid)` the subledger uses.
+- **Step:** plan 09c **complete** → next is `/zj:build 09c` (AP aging + financial statements, AC6/AC7).
+- **Next action:** `/zj:build 09c` — build the last Phase-9 sub-phase from
+  `.zj/phases/09c-ap-aging-financial-statements/PLAN.md` (**15 tasks**, layered: model → migration
+  0011 → bill_date write-path wiring → report schemas → 4 service fns (aging / trial balance / P&L /
+  balance sheet) → 4 router endpoints → `verify_reports.py` → `verify_reports_api.py` → regression →
+  3 frontend). **First build action: cut a fresh branch `feature-syerp-financial-reports` off the
+  current 09b tip (tag `zj/good-09b-ap-bills-match-payments`)** — D-P9c-3. Owner decisions at plan
+  (D-P9c-1..3): add a real `Bill.bill_date` (Date NOT NULL, migration 0011 with `created_at::date`
+  backfill), defaulting to today at create, **and set the posted bill's JE `entry_date` from
+  `bill.bill_date`** so the AP subledger and the 2110 control account share one date basis (the AC6
+  tie-out crux) — D-P9c-1; Reports UI = one tabbed **Financial Reports** page + a separate **AP
+  Aging** nav item — D-P9c-2. Patterns carried from 09a/09b: coalesce-each-side on every derived
+  balance, statement/aging balances filter posted activity by `entry_date` (join JournalLine→
+  JournalEntry, the `get_account_register` pattern), HTTP-level `verify_reports_api.py` planned from
+  the start for RBAC. **The SC2 crux** — aging grand total == derived 2110 balance — is proven as a
+  pre/post derived-balance *equality* in `verify_reports.py` (b) (draft bills excluded; payments
+  aged by `payment_date`). 9c is read-only except the additive `bill_date` column (guards no
+  invariant), so no new row-lock/concurrency scenarios. Reuse `derive_account_balance` (service.py:
+  2322); all report code lands cohesively in `syerp/service.py` (do NOT split — that's Phase 10).
 - **Retro 09b (2026-07-12) — complete.** Learnings → `.zj/LEARNINGS.md` "Phase 09b": (1) sequential
   verify is structurally blind to read-then-write races (reviewer caught the major a 4th time) → row
   lock/constraint **plus** an `asyncio.gather` two-request scenario for any invariant guard; (2) a
