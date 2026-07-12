@@ -2713,6 +2713,27 @@ async def create_bill(
             detail=f"Partner {vendor_id} is not a vendor (is_vendor must be True).",
         )
 
+    line_list = list(lines)
+
+    # Serialize concurrent bills that match the SAME receipt line (REVIEW P9b-#1).
+    # The exact-match guard below is read-then-write: under READ COMMITTED two
+    # simultaneous create_bill transactions for one po_line_id would each read
+    # already_billed == 0, both pass _is_exact_match, and both commit — billing the
+    # receipt twice so Dr GR/IR overshoots the receipt's Cr and 2150 never clears
+    # (the exact defect this phase exists to prevent). Lock each matched PO-line row
+    # FOR UPDATE up-front, in sorted id order (deadlock-safe), so the second txn
+    # blocks until the first commits and then re-reads the true billed sum. The
+    # lock is held until this function's single db.commit().
+    matched_po_line_ids = sorted(
+        {d.po_line_id for d in line_list if d.line_type == "matched"}
+    )
+    for locked_id in matched_po_line_ids:
+        await db.execute(
+            select(PurchaseOrderLine.id)
+            .where(PurchaseOrderLine.id == locked_id)
+            .with_for_update()
+        )
+
     # Validate every line first, collecting pure values (no partial posting).
     # A single bill must claim each unbilled receipt line AT MOST ONCE: two matched
     # lines against the same po_line_id would each pass the DB-live exact-match check
@@ -2720,7 +2741,7 @@ async def create_bill(
     # match / GR-IR-clears-to-zero invariant (D-P9b-1/2). Reject on the first dup.
     seen_po_line_ids: set[str] = set()
     prepared: list[_PreparedBillLine] = []
-    for data in lines:
+    for data in line_list:
         if data.line_type == "matched":
             if data.po_line_id in seen_po_line_ids:
                 raise HTTPException(
@@ -2848,15 +2869,23 @@ async def create_bill(
     return await get_bill(db, bill.id)
 
 
-async def _get_bill_row(db: AsyncSession, bill_id: str) -> "Bill":
+async def _get_bill_row(
+    db: AsyncSession, bill_id: str, *, for_update: bool = False
+) -> "Bill":
     """
     Load a Bill ORM row by id (internal helper).
 
     Raises HTTP 404 if no bill with the given id exists (mirrors _get_po_row).
+    When ``for_update`` is True the row is locked FOR UPDATE for the rest of the
+    transaction — record_payment uses this to serialize concurrent payments against
+    the same bill so its open-balance read cannot race (REVIEW P9b-#1).
     """
     from app.modules.syerp.models import Bill
 
-    result = await db.execute(select(Bill).where(Bill.id == bill_id))
+    stmt = select(Bill).where(Bill.id == bill_id)
+    if for_update:
+        stmt = stmt.with_for_update()
+    result = await db.execute(stmt)
     bill = result.scalars().first()
     if bill is None:
         raise HTTPException(
@@ -3175,6 +3204,16 @@ async def record_payment(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Payment total (sum of allocations) must be greater than zero.",
         )
+
+    # Serialize concurrent payments against the same bill (REVIEW P9b-#1). The
+    # overpayment guard below is read-then-write: under READ COMMITTED two
+    # simultaneous payments would each read the full open_balance, each allocate it,
+    # and both commit — paying the bill twice and driving AP negative. Lock each
+    # target bill row FOR UPDATE up-front, in sorted id order (deadlock-safe), so a
+    # second payment blocks until the first commits and then re-reads the true paid
+    # sum. Locks are held until this function's single db.commit().
+    for locked_bill_id in sorted({alloc.bill_id for alloc in alloc_list}):
+        await _get_bill_row(db, locked_bill_id, for_update=True)
 
     # Guard 3: resolve/validate each bill and reject overpayment BEFORE any write.
     # open_balance is derived exactly as Task 5: total billed - coalesced prior paid

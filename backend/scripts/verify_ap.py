@@ -47,6 +47,13 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
   (h) the seeded 1111 Bank - Checking account exists and is ASSET (D-P9b-4).
   (i) paying one bill via 1110 and another via 1111 posts each credit to the chosen
       cash account (the JE credit line hits the selected account id).
+  (j) CONCURRENCY (REVIEW P9b-#1): two simultaneous create_bill calls matching the
+      SAME receipt line — exactly one succeeds, the other is refused 422, and the
+      receipt is billed exactly once (FOR UPDATE on the PO-line row defeats the
+      double-bill race that would leave 2150 GR/IR uncleared).
+  (k) CONCURRENCY (REVIEW P9b-#1): two simultaneous payments against ONE posted bill
+      — exactly one settles it (-> 'paid'), the other is refused 422, the bill is
+      paid exactly once (FOR UPDATE on the bill row defeats the overpayment race).
 
 The script uses uniquely-named throwaway data (a vendor, an item, a location, a
 family of POs, bills, and payments) and reuses the seeded GL accounts (1110, 1111,
@@ -686,6 +693,103 @@ async def run() -> None:
             "selected account id)",
             i2_bank is not None and i2_bank.credit == Decimal("15"),
             f"i2_bank={(i2_bank.credit if i2_bank else None)!r}",
+        )
+
+        # -------------------------------------------------------------------
+        # (j) CONCURRENCY — two SIMULTANEOUS create_bill calls matching the SAME
+        #     receipt line must NOT both succeed (REVIEW P9b-#1). The FOR UPDATE lock
+        #     on the PO-line row serializes them: exactly one bills the receipt, the
+        #     other blocks, re-reads the now-billed qty, and is refused 422. Without
+        #     the lock both would read already_billed==0 under READ COMMITTED,
+        #     double-bill the receipt, and 2150 GR/IR would never clear — the exact
+        #     defect this phase exists to prevent.
+        # -------------------------------------------------------------------
+        po_j, line_j = await build_received_line(Decimal("4"), Decimal("5"))  # unbilled 4
+
+        async def race_create_bill():
+            async with session_factory() as s:
+                return await create_bill(
+                    s,
+                    vendor_id=vendor_id,
+                    vendor_invoice_ref=f"INV-{unique}-race-{uuid.uuid4().hex[:6]}",
+                    lines=[
+                        BillLineCreate(
+                            line_type="matched", po_line_id=line_j, matched_qty=Decimal("4")
+                        )
+                    ],
+                    actor_id=actor_id,
+                )
+
+        results_j = await asyncio.gather(
+            race_create_bill(), race_create_bill(), return_exceptions=True
+        )
+        j_bills = [r for r in results_j if not isinstance(r, Exception)]
+        j_422 = [r for r in results_j if isinstance(r, HTTPException) and r.status_code == 422]
+        for b in j_bills:
+            created_bill_ids.append(b.id)
+        async with session_factory() as session:
+            j_billed = (
+                await session.execute(
+                    select(func.coalesce(func.sum(BillLine.matched_qty), 0))
+                    .join(Bill, Bill.id == BillLine.bill_id)
+                    .where(BillLine.po_line_id == line_j, Bill.status != "cancelled")
+                )
+            ).scalar()
+        check(
+            "concurrent create_bill on ONE receipt line: exactly one succeeds, the "
+            "other refused 422, receipt billed exactly once (no double-bill race)",
+            len(j_bills) == 1 and len(j_422) == 1 and Decimal(j_billed) == Decimal("4"),
+            f"succeeded={len(j_bills)} rejected422={len(j_422)} billed_qty={j_billed!r} "
+            f"raw={[type(r).__name__ for r in results_j]}",
+        )
+
+        # -------------------------------------------------------------------
+        # (k) CONCURRENCY — two SIMULTANEOUS payments against ONE posted bill must
+        #     not both settle it (REVIEW P9b-#1). The FOR UPDATE lock on the bill row
+        #     serializes them: one pays it in full (bill -> paid), the other blocks,
+        #     re-reads the zeroed open balance, and is refused 422 overpayment.
+        # -------------------------------------------------------------------
+        po_k, line_k = await build_received_line(Decimal("2"), Decimal("5"))  # total 10
+        bill_k = await make_matched_bill(line_k, Decimal("2"))
+        await post(bill_k.id)
+
+        async def race_pay():
+            async with session_factory() as s:
+                return await record_payment(
+                    s,
+                    payment_date=date.today(),
+                    cash_account_id=cash_id,
+                    reference=f"CHK-{unique}-race-{uuid.uuid4().hex[:6]}",
+                    allocations=[
+                        PaymentAllocationCreate(bill_id=bill_k.id, amount=Decimal("10"))
+                    ],
+                    actor_id=actor_id,
+                )
+
+        results_k = await asyncio.gather(race_pay(), race_pay(), return_exceptions=True)
+        k_pays = [r for r in results_k if not isinstance(r, Exception)]
+        k_422 = [r for r in results_k if isinstance(r, HTTPException) and r.status_code == 422]
+        for p in k_pays:
+            created_payment_ids.append(p.id)
+        async with session_factory() as session:
+            bill_k_after = await get_bill(session, bill_k.id)
+            k_paid = (
+                await session.execute(
+                    select(func.coalesce(func.sum(PaymentAllocation.amount), 0)).where(
+                        PaymentAllocation.bill_id == bill_k.id
+                    )
+                )
+            ).scalar()
+        check(
+            "concurrent payments on ONE bill: exactly one settles it (-> 'paid'), the "
+            "other refused 422, bill paid exactly once (no overpayment race)",
+            len(k_pays) == 1
+            and len(k_422) == 1
+            and bill_k_after.status == "paid"
+            and bill_k_after.open_balance == Decimal("0")
+            and Decimal(k_paid) == Decimal("10"),
+            f"settled={len(k_pays)} rejected422={len(k_422)} status={bill_k_after.status!r} "
+            f"open={bill_k_after.open_balance!r} total_paid={k_paid!r}",
         )
 
     finally:
