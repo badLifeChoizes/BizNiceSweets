@@ -9,7 +9,7 @@ Branch base: `feature-syerp-gl-posting-engine` HEAD (verified 09a tip, tag `zj/g
 - [ ] 4. Seed 1111 Bank – Checking (coa_seed.py)
 - [x] 5. Service: unbilled-receipts query + create/edit bill (service.py)
 - [x] 6. Service: post_bill → balanced JE + Draft→Posted (service.py)
-- [ ] 7. Service: record_payment → JE + allocations + overpay guard (service.py)
+- [x] 7. Service: record_payment → JE + allocations + overpay guard (service.py)
 - [ ] 8. AP Pydantic schemas (schemas.py)
 - [ ] 9. Router: bill endpoints + RBAC + audit (router.py)
 - [ ] 10. Router: payment endpoint + RBAC + audit (router.py)

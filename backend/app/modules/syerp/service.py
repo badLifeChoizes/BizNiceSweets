@@ -3095,3 +3095,188 @@ async def post_bill(db: AsyncSession, bill_id: str, actor_id: str) -> "BillRead"
 
     await db.commit()
     return await get_bill(db, bill.id)
+
+
+async def record_payment(
+    db: AsyncSession,
+    *,
+    payment_date: date,
+    cash_account_id: int,
+    reference: str | None,
+    allocations: "Iterable[object]",
+    actor_id: str,
+) -> "PaymentRead":
+    """
+    Record a cash payment against one or more posted AP bills (SYERP-12 AC5, SC4).
+
+    `allocations` is the PaymentCreate payload's list of (bill_id, amount) items —
+    each a PaymentAllocationCreate (or any object exposing `.bill_id` / `.amount`).
+    The whole disbursement is ONE atomic unit of work: a single ``db.commit`` at the
+    very end, so every guard below rejects (422/404) with NOTHING persisted, and a
+    successful payment lands its header, allocations, the balanced GL entry, and any
+    auto-Paid transition together — never partially (Risk #3).
+
+    Guard order — each rejection mutates nothing:
+      1. `cash_account_id` must resolve to a GL account of type ASSET (422 else) —
+         the funds leave a cash/bank asset (default 1110; 1111 is ASSET too).
+      2. Σ allocation amounts must be > 0, and every individual amount > 0 (422 else).
+      3. For each allocation the bill must exist (404) and be 'posted' (422 for a
+         'draft' or 'paid' bill). The bill's LIVE open_balance is derived exactly as
+         Task 5 does — total billed (Σ line.amount, folded from Decimal("0")) minus
+         the coalesced Σ of PRIOR PaymentAllocation.amount (_bill_paid_amount, D-P8-4)
+         — each side coalesced independently so a NULL never propagates. Overpayment
+         is rejected via the pure _is_overpayment (pay > open_balance; the == boundary
+         fully pays, D-P8-7). When the SAME bill appears in several allocations of this
+         one payment they must not JOINTLY overpay: the claimed amount is accumulated
+         per bill_id and the running total checked against the live open_balance.
+
+    On success, in that single transaction:
+      - persist a Payment header (amount = Σ allocations) + one PaymentAllocation row
+        per allocation;
+      - post ONE balanced JE (commit=False): Dr 2110 Accounts Payable / Cr the cash
+        account, for the payment total — the funds leave cash, the liability drops;
+      - for each touched bill, re-derive open_balance INCLUDING the just-added
+        allocations; when it hits EXACTLY zero, advance the bill 'posted' -> 'paid'
+        via advance_bill_status (auto-Paid, D-P9b-5). A partial payment leaves the
+        bill 'posted' with a reduced open_balance.
+
+    Audit (payment.recorded) is the ROUTER's job — this service NEVER writes audit and
+    takes exactly one commit. Returns the payment as a PaymentRead (constructed
+    explicitly; allocations loaded via an ordered SELECT — no ORM relationship).
+    """
+    from app.modules.syerp.models import Payment, PaymentAllocation
+    from app.modules.syerp.schemas import PaymentAllocationRead, PaymentRead
+
+    alloc_list = list(allocations)
+
+    # Guard 1: the cash side must be an ASSET account (422 otherwise).
+    cash_account = await _require_gl_account(db, cash_account_id)  # 404 if unknown.
+    if cash_account.account_type != "ASSET":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"GL account {cash_account.code} is {cash_account.account_type}; a "
+                f"payment must draw on an ASSET (cash/bank) account."
+            ),
+        )
+
+    # Guard 2: a payment is cash OUT — the total and every leg must be positive.
+    total = Decimal("0")
+    for alloc in alloc_list:
+        amount = Decimal(str(alloc.amount))
+        if amount <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Each payment allocation amount must be greater than zero.",
+            )
+        total += amount
+    if total <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Payment total (sum of allocations) must be greater than zero.",
+        )
+
+    # Guard 3: resolve/validate each bill and reject overpayment BEFORE any write.
+    # open_balance is derived exactly as Task 5: total billed - coalesced prior paid
+    # (each side coalesced). Same-bill allocations accumulate so they cannot jointly
+    # overpay a single open balance.
+    bill_rows: dict[str, "Bill"] = {}
+    bill_total_by_id: dict[str, Decimal] = {}
+    open_balance_by_id: dict[str, Decimal] = {}
+    claimed_by_id: dict[str, Decimal] = {}
+    for alloc in alloc_list:
+        bill_id = alloc.bill_id
+        amount = Decimal(str(alloc.amount))
+        if bill_id not in bill_rows:
+            bill = await _get_bill_row(db, bill_id)  # 404 if the bill is unknown.
+            if bill.status != "posted":
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"Cannot pay bill {bill.bill_number}: it is '{bill.status}', "
+                        f"only a 'posted' bill can be paid."
+                    ),
+                )
+            lines = await _load_bill_lines(db, bill_id)
+            bill_total = sum((line.amount for line in lines), Decimal("0"))
+            paid = await _bill_paid_amount(db, bill_id)
+            bill_rows[bill_id] = bill
+            bill_total_by_id[bill_id] = bill_total
+            open_balance_by_id[bill_id] = bill_total - paid
+            claimed_by_id[bill_id] = Decimal("0")
+        claimed_by_id[bill_id] += amount
+        if _is_overpayment(open_balance_by_id[bill_id], claimed_by_id[bill_id]):
+            bill = bill_rows[bill_id]
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Payment of {claimed_by_id[bill_id]} overpays bill "
+                    f"{bill.bill_number} (open balance {open_balance_by_id[bill_id]})."
+                ),
+            )
+
+    # Persist the payment header first so its id is available for the allocations'
+    # FK, the JE source link, and the read-back.
+    payment = Payment(
+        payment_date=payment_date,
+        cash_account_id=cash_account_id,
+        amount=total,
+        reference=reference,
+        actor_id=actor_id,
+    )
+    db.add(payment)
+    await db.flush()  # materialize payment.id.
+
+    for alloc in alloc_list:
+        db.add(
+            PaymentAllocation(
+                payment_id=payment.id,
+                bill_id=alloc.bill_id,
+                amount=Decimal(str(alloc.amount)),
+            )
+        )
+
+    # One balanced JE (commit=False): Dr 2110 AP / Cr the cash account for the total —
+    # rides THIS transaction's single commit alongside the allocations and any auto-Paid
+    # flip, so a payment can never persist without its balanced GL entry (Risk #3).
+    ap_account_id = await _gl_account_id_by_code(db, "2110")
+    await post_journal_entry(
+        db,
+        entry_date=payment_date,
+        memo=f"AP payment {payment.id}",
+        lines=[
+            {"account_id": ap_account_id, "debit": total, "credit": 0},
+            {"account_id": cash_account_id, "debit": 0, "credit": total},
+        ],
+        actor_id=actor_id,
+        source_type="ap_payment",
+        source_id=payment.id,
+        commit=False,
+    )
+
+    # Re-derive each touched bill's open_balance INCLUDING the just-added allocations
+    # (autoflushed above); a bill settled to EXACTLY zero flips 'posted' -> 'paid'
+    # (auto-Paid, D-P9b-5). A partial payment leaves it 'posted'.
+    for bill_id in bill_rows:
+        paid = await _bill_paid_amount(db, bill_id)
+        if bill_total_by_id[bill_id] - paid == 0:
+            await advance_bill_status(db, bill_id, "paid", actor_id)
+
+    await db.commit()
+
+    # Read the allocations back in a stable order (no ORM relationship — Pitfall 2).
+    alloc_result = await db.execute(
+        select(PaymentAllocation)
+        .where(PaymentAllocation.payment_id == payment.id)
+        .order_by(PaymentAllocation.id)
+    )
+    saved_allocations = list(alloc_result.scalars().all())
+    return PaymentRead(
+        id=payment.id,
+        payment_date=payment.payment_date,
+        cash_account_id=payment.cash_account_id,
+        amount=payment.amount,
+        reference=payment.reference,
+        allocations=[PaymentAllocationRead.model_validate(a) for a in saved_allocations],
+        created_at=payment.created_at,
+    )
