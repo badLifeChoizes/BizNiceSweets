@@ -163,6 +163,29 @@ Prior decisions honored: D-11 (Decimal money), D-10 (idempotent startup seeds), 
   criterion is "no *new* journal operations detected," which 0009 satisfies. Logged for
   backlog (naming convention on `Base.metadata`).
 
+## Noticed
+<!-- Minor items logged during /zj:verify 09a (owner chose the "Recommended set"; these were
+     deferred rather than fixed in the loop). Majors M1/M2 + mandated tests M3/M4 + m5/docs were
+     fixed — see VERIFICATION.md "Fix-loop resolution". -->
+- **Reverse-from-UI has no Vitest (G3/m6).** The "Reverse" action in `JournalEntries.tsx` (added
+  in `c2bde3d`) is exercised only by hand. Add a Vitest case mirroring the post-flow test: confirm
+  dialog → `POST {id}/reverse` → toast + query invalidate. Backend reversal (incl. the new 409
+  double-reversal guard) is covered by `verify_gl.py` (h); this is the UI half only.
+- **Migration `server_default=now()` autogenerate drift (cosmetic).** `0009` sets
+  `server_default=sa.text("now()")` on `created_at` while the model uses a Python-side `default=`
+  only, so `alembic revision --autogenerate` will report drift on the next run. Functionally fine
+  (arguably better). Align model and migration if/when autogenerate cleanliness is pursued (relates
+  to the pre-existing 7-constraint drift already noted in `## Deviations`).
+- **Receipt `entry_date` uses server-local `date.today()` while `created_at` is UTC.** Near
+  midnight a receipt and its auto-posted JE can land on different calendar days, splitting them
+  across register periods. Acceptable for a single-timezone self-host; switch to
+  `datetime.now(timezone.utc).date()` if UTC-consistent periods are ever required.
+- **`.zj/codebase/MAP.md` is stale since Phase 8** (it predated 0007/0008 too, not just 0009). The
+  migration list was corrected in this verify loop; a fuller refresh (GL endpoints, journal tables,
+  the syerp service surface) is owed via `/zj:docs`.
+- **No DESIGN.md for this frontend-bearing phase (G5).** Accepted — tasks 11–13 carried explicit
+  acceptance criteria in this PLAN. Noted for process.
+
 ## Out of scope
 - All AP work (vendor bills, 3-way match, payments) — Phase 9b.
 - AP aging + financial statements (Trial Balance, P&L, Balance Sheet) — Phase 9c.

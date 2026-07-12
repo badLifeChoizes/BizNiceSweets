@@ -358,7 +358,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 > new SYERP-13 placeholder). IDs unchanged (append-only): the original SYERP-12 "AP/AR and
 > financial reporting" is **narrowed to AP + GL + reporting**; the AR half moves to SYERP-13.
 
-## SYERP-12: General ledger, accounts payable & financial reporting  [traces: PRD-7]  **Status: planned**
+## SYERP-12: General ledger, accounts payable & financial reporting  [traces: PRD-7]  **Status: in progress (AC1/2/3/8/9 verified Phase 9a; AC4–7 pending 9b/9c)**
 - **Statement:** The system shall provide a **double-entry general-ledger posting engine**, an
   **accounts-payable workflow** (vendor bills matched to PO receipts, with payments), and
   **financial reporting** — where **inventory receipts (SYERP-11.4) and AP documents auto-post
@@ -412,6 +412,18 @@ future scope (expanded via `/zj:spec` when their milestones near).
   match a vendor bill, pay it partially then fully, read AP aging and the three statements, confirm
   audit rows. Empirical proof via live-Postgres `backend/scripts/verify_*.py` (D-P7-4 precedent
   until the async pytest harness is repaired) + flow-level human UAT at the v2.0 milestone.
+- **Phase 9a evidence (AC1/2/3/8/9 — GL posting engine):** double-entry `JournalEntry`/`JournalLine`
+  (append-only, reversal via self-FK), derived balances + account register, and the PO-receipt
+  auto-post (Dr 1130 Inventory / Cr 2150 GR/IR, atomic with the stock receipt) built in the `syerp`
+  module (migration `0009_syerp_gl_journal.py`). Backend live-verified: **`verify_gl.py` 28/28
+  PASS** (balanced-only posting + 422 reject, reversal immutability, derived balances incl. the
+  single-sided coalesce fix, atomic receipt→JE, the atomicity-rollback negative path, zero-cost
+  receipt, and the double-reversal 409 guard) and **`verify_gl_api.py` 9/9 PASS** (gl.journal_posted
+  / gl.journal_reversed audit rows + syerp:read/write 403 & 401 over live HTTP); pure helpers
+  `tests/syerp/test_gl_journal.py` (13); FE `JournalEntries.test.tsx` / `AccountRegister.test.tsx`.
+  Phase-9a verify fix-loop closed two majors (M1 zero-cost receipt regression, M2 missing
+  double-reversal guard) + m5 traceable receipt audit. **AC4–7 (AP bills/3-way match/payments,
+  AP aging, financial statements) are NOT yet built — Phase 9b/9c.**
 
 ---
 
