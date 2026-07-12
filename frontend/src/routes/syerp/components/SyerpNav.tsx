@@ -22,6 +22,8 @@ const TABS: Array<{ to: string; label: string; end?: boolean }> = [
   { to: '/syerp/gl/journal', label: 'Journal' },
   { to: '/syerp/gl/register', label: 'Account Register' },
   { to: '/syerp/ap/bills', label: 'Bills' },
+  { to: '/syerp/ap/aging', label: 'AP Aging' },
+  { to: '/syerp/reports', label: 'Financial Reports' },
 ]
 
 export function SyerpNav() {

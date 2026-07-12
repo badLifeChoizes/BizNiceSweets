@@ -147,6 +147,10 @@ describe('Bills screen', () => {
     // (2) Open the dialog and select a vendor → unbilled receipts load.
     await user.click(screen.getByRole('button', { name: 'New bill' }))
     await screen.findByRole('heading', { name: 'New Bill' })
+
+    // The optional bill-date field renders, defaulted to today (server aging basis).
+    expect(screen.getByLabelText('Bill date')).toBeInTheDocument()
+
     await selectOption(user, 'Vendor', 'Acme Metals')
 
     // Unbilled receipt line for the vendor appears with a "bill this line" checkbox.
@@ -171,6 +175,7 @@ describe('Bills screen', () => {
       expect(mockPost).toHaveBeenCalledWith('/api/v1/syerp/ap/bills', {
         vendor_id: 'v1',
         vendor_invoice_ref: 'INV-9',
+        bill_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         lines: [
           { line_type: 'matched', po_line_id: 'pol1', matched_qty: '6' },
           { line_type: 'expense', account_id: 500, amount: '25.00' },

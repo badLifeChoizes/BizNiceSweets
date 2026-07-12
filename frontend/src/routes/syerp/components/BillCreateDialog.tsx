@@ -127,6 +127,15 @@ function getApiErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
+// Today as YYYY-MM-DD in the local timezone (the <input type="date"> value format).
+// The server defaults bill_date to today when omitted, so this default keeps the
+// posted date matching what the user sees unless they pick another date.
+function todayISO(): string {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
+}
+
 // A money string parsed to integer cents for a decimal-safe ">0" test. Blank /
 // non-numeric → 0.
 function toCents(value: string): number {
@@ -152,6 +161,7 @@ type BillLinePayload = MatchedLinePayload | ExpenseLinePayload
 interface BillCreatePayload {
   vendor_id: string
   vendor_invoice_ref?: string
+  bill_date?: string
   lines: BillLinePayload[]
 }
 
@@ -179,6 +189,9 @@ export function BillCreateDialog({ open, onOpenChange, onSuccess }: BillCreateDi
   // ── Form state ──
   const [vendorId, setVendorId] = useState('')
   const [vendorInvoiceRef, setVendorInvoiceRef] = useState('')
+  // Optional bill date (the vendor's invoice date AP aging buckets from). Defaults to
+  // today; the server also defaults to today when omitted.
+  const [billDate, setBillDate] = useState(todayISO)
   // po_line_ids of the unbilled receipts the user has checked to bill.
   const [checkedLines, setCheckedLines] = useState<Set<string>>(new Set())
   const keyCounter = useRef(0)
@@ -200,6 +213,7 @@ export function BillCreateDialog({ open, onOpenChange, onSuccess }: BillCreateDi
     if (!open) return
     setVendorId('')
     setVendorInvoiceRef('')
+    setBillDate(todayISO())
     setCheckedLines(new Set())
     setExpenseLines([])
   }, [open])
@@ -274,6 +288,7 @@ export function BillCreateDialog({ open, onOpenChange, onSuccess }: BillCreateDi
     const payload: BillCreatePayload = {
       vendor_id: vendorId,
       ...(vendorInvoiceRef.trim() ? { vendor_invoice_ref: vendorInvoiceRef.trim() } : {}),
+      ...(billDate ? { bill_date: billDate } : {}),
       lines: [...matchedLines, ...expensePayload],
     }
     createMutation.mutate(payload)
@@ -316,6 +331,16 @@ export function BillCreateDialog({ open, onOpenChange, onSuccess }: BillCreateDi
                 value={vendorInvoiceRef}
                 onChange={(e) => setVendorInvoiceRef(e.target.value)}
                 placeholder="Optional"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bill-date">Bill date</Label>
+              <Input
+                id="bill-date"
+                type="date"
+                aria-label="Bill date"
+                value={billDate}
+                onChange={(e) => setBillDate(e.target.value)}
               />
             </div>
           </div>
