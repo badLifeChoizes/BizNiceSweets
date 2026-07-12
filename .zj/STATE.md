@@ -1,5 +1,5 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-11
+Updated: 2026-07-11 (Phase 9a verified + tagged `zj/good-09a-gl-posting-engine`; fix-loop artifacts committed through `593cf58`)
 
 ## Position
 
