@@ -3280,3 +3280,51 @@ async def record_payment(
         allocations=[PaymentAllocationRead.model_validate(a) for a in saved_allocations],
         created_at=payment.created_at,
     )
+
+
+async def list_payments(db: AsyncSession) -> "list[PaymentRead]":
+    """
+    List all recorded cash payments (SYERP-12 AC5), each with its allocations nested.
+
+    Payments are an append-only ledger (D-P9b-5); rows are returned in creation order
+    (created_at, then id as a stable tie-break). For each payment the allocations are
+    loaded in the SAME stable order record_payment reads them back (PaymentAllocation.id,
+    no ORM relationship — Pitfall 2) and grouped in memory over all payment ids (no
+    per-payment N+1). Each PaymentRead is constructed explicitly, money as Decimal (D-11).
+    """
+    from app.modules.syerp.models import Payment, PaymentAllocation
+    from app.modules.syerp.schemas import PaymentAllocationRead, PaymentRead
+
+    result = await db.execute(select(Payment).order_by(Payment.created_at, Payment.id))
+    payments = list(result.scalars().all())
+    if not payments:
+        return []
+
+    payment_ids = [payment.id for payment in payments]
+
+    alloc_result = await db.execute(
+        select(PaymentAllocation)
+        .where(PaymentAllocation.payment_id.in_(payment_ids))
+        .order_by(PaymentAllocation.id)
+    )
+    allocations_by_payment: dict[str, list[PaymentAllocation]] = {
+        payment_id: [] for payment_id in payment_ids
+    }
+    for allocation in alloc_result.scalars().all():
+        allocations_by_payment[allocation.payment_id].append(allocation)
+
+    return [
+        PaymentRead(
+            id=payment.id,
+            payment_date=payment.payment_date,
+            cash_account_id=payment.cash_account_id,
+            amount=payment.amount,
+            reference=payment.reference,
+            allocations=[
+                PaymentAllocationRead.model_validate(a)
+                for a in allocations_by_payment[payment.id]
+            ],
+            created_at=payment.created_at,
+        )
+        for payment in payments
+    ]
