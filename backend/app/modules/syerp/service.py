@@ -51,6 +51,8 @@ if TYPE_CHECKING:
     )
     from app.modules.syerp.schemas import (
         AccountRegisterRead,
+        ApAgingReport,
+        BalanceSheetReport,
         BillLineCreate,
         BillRead,
         InventoryItemCreate,
@@ -64,9 +66,11 @@ if TYPE_CHECKING:
         POLineRead,
         POLineUpdate,
         PORead,
+        ProfitLossReport,
         StockLocationCreate,
         StockLocationUpdate,
         TransactionRead,
+        TrialBalanceReport,
         UnbilledReceiptRead,
     )
 
@@ -3375,3 +3379,186 @@ async def list_payments(db: AsyncSession) -> "list[PaymentRead]":
         )
         for payment in payments
     ]
+
+
+# ===== Phase 9c reports =====
+#
+# Read-only derived reporting layer (SYERP-13): the AP aging schedule plus the
+# three financial statements (trial balance, P&L, balance sheet). Every figure is
+# derived on demand from the append-only journal / AP subledger — nothing is stored.
+#
+# Two rules recur across all four (get them right — they are the flagged risks):
+#   1. DATE-FILTERED balances. Unlike derive_account_balance (whole-ledger, no date),
+#      a report balance is bounded by JournalEntry.entry_date over the report window.
+#      Each side is COALESCEd to 0 INDEPENDENTLY (func.coalesce(func.sum(debit), 0)
+#      and the same for credit) — Σdr − NULL is NULL in SQL, the recurring 09a
+#      NULL-propagation bug (D-P8-4). The join is JournalLine ⋈ JournalEntry on
+#      JournalLine.entry_id == JournalEntry.id (the same pattern as
+#      get_account_register).
+#   2. SIGN normalisation so every magnitude presents positive: debit-normal types
+#      (ASSET, EXPENSE) as Σdr − Σcr; credit-normal types (LIABILITY, EQUITY,
+#      REVENUE) as Σcr − Σdr.
+# Money is exact Decimal throughout (never float — D-11).
+
+
+async def ap_aging_report(db: AsyncSession, as_of: date | None = None) -> "ApAgingReport":
+    """
+    Accounts-payable aging schedule as of a date, tied out to the 2110 control (AC6).
+
+    For every bill that is POSTED to 2110 (status in ('posted','paid') and
+    bill_date <= as_of) the still-open balance is bill-line total −
+    Σ PaymentAllocation.amount for payments dated on/before as_of, each side coalesced
+    independently (D-P8-4). DRAFT bills are excluded — a draft is not posted to 2110,
+    so including it would break the tie-out (the divergence guard, D-P9c-1). Bills
+    with a non-positive open balance are dropped. Each remaining balance is bucketed
+    by age = (as_of − bill_date).days — current 0–30, d31_60 31–60, d61_90 61–90,
+    d90_plus 90+ — and rolled up per vendor and into a grand total.
+
+    control_balance is the date-filtered 2110 derived balance (Σdebit − Σcredit over
+    JournalLine ⋈ JournalEntry where entry_date <= as_of), NEGATED: 2110 is
+    credit-normal so the raw figure is negative, and negating presents the positive
+    outstanding payable. in_balance is True when the aging grand total equals that
+    control to the cent — the AP subledger vs. GL tie-out (D-P9c-1). Exact Decimal.
+    """
+    from app.modules.syerp.models import (
+        Bill,
+        BillLine,
+        JournalEntry,
+        JournalLine,
+        Partner,
+        Payment,
+        PaymentAllocation,
+    )
+    from app.modules.syerp.schemas import ApAgingBucketRow, ApAgingReport, ApAgingTotals
+
+    if as_of is None:
+        as_of = date.today()
+
+    # Bills posted to 2110 and dated on/before as_of — DRAFT bills are NOT posted
+    # to 2110 and MUST be excluded (D-P9c-1 divergence guard).
+    bills_result = await db.execute(
+        select(Bill.id, Bill.vendor_id, Bill.bill_date).where(
+            Bill.status.in_(("posted", "paid")),
+            Bill.bill_date <= as_of,
+        )
+    )
+    bills = list(bills_result.all())
+    if not bills:
+        bill_meta: dict[str, tuple[str, date]] = {}
+        bill_ids: list[str] = []
+    else:
+        bill_meta = {bid: (vid, bdate) for bid, vid, bdate in bills}
+        bill_ids = list(bill_meta.keys())
+
+    # Bill-line totals per bill (Σ line.amount), coalesced to 0 (D-P8-4).
+    totals_by_bill: dict[str, Decimal] = {bid: Decimal("0") for bid in bill_ids}
+    if bill_ids:
+        totals_result = await db.execute(
+            select(BillLine.bill_id, func.coalesce(func.sum(BillLine.amount), 0))
+            .where(BillLine.bill_id.in_(bill_ids))
+            .group_by(BillLine.bill_id)
+        )
+        for bid, amount in totals_result.all():
+            totals_by_bill[bid] = Decimal(amount)
+
+    # Allocated (paid) per bill, filtered to payments dated on/before as_of — join
+    # PaymentAllocation → Payment for the payment_date bound (each side coalesced).
+    paid_by_bill: dict[str, Decimal] = {bid: Decimal("0") for bid in bill_ids}
+    if bill_ids:
+        paid_result = await db.execute(
+            select(
+                PaymentAllocation.bill_id,
+                func.coalesce(func.sum(PaymentAllocation.amount), 0),
+            )
+            .select_from(PaymentAllocation)
+            .join(Payment, PaymentAllocation.payment_id == Payment.id)
+            .where(
+                PaymentAllocation.bill_id.in_(bill_ids),
+                Payment.payment_date <= as_of,
+            )
+            .group_by(PaymentAllocation.bill_id)
+        )
+        for bid, amount in paid_result.all():
+            paid_by_bill[bid] = Decimal(amount)
+
+    # Bucket each open balance per vendor. buckets[vendor_id] = [cur, 31, 61, 90+].
+    buckets: dict[str, list[Decimal]] = {}
+    for bid in bill_ids:
+        vendor_id, bill_date_ = bill_meta[bid]
+        open_balance = totals_by_bill[bid] - paid_by_bill[bid]
+        if open_balance <= 0:
+            continue
+        age = (as_of - bill_date_).days
+        if age <= 30:
+            idx = 0
+        elif age <= 60:
+            idx = 1
+        elif age <= 90:
+            idx = 2
+        else:
+            idx = 3
+        row = buckets.setdefault(vendor_id, [Decimal("0")] * 4)
+        row[idx] += open_balance
+
+    # Resolve vendor names for the vendors that have an open payable.
+    names_by_vendor: dict[str, str] = {}
+    if buckets:
+        names_result = await db.execute(
+            select(Partner.id, Partner.name).where(Partner.id.in_(list(buckets.keys())))
+        )
+        names_by_vendor = {vid: name for vid, name in names_result.all()}
+
+    vendors: list[ApAgingBucketRow] = []
+    grand = [Decimal("0")] * 4
+    for vendor_id, row in buckets.items():
+        vendor_total = row[0] + row[1] + row[2] + row[3]
+        vendors.append(
+            ApAgingBucketRow(
+                vendor_id=vendor_id,
+                vendor_name=names_by_vendor.get(vendor_id, ""),
+                current=row[0],
+                d31_60=row[1],
+                d61_90=row[2],
+                d90_plus=row[3],
+                total=vendor_total,
+            )
+        )
+        for i in range(4):
+            grand[i] += row[i]
+    vendors.sort(key=lambda v: v.vendor_name)
+
+    grand_total_amt = grand[0] + grand[1] + grand[2] + grand[3]
+    grand_total = ApAgingTotals(
+        current=grand[0],
+        d31_60=grand[1],
+        d61_90=grand[2],
+        d90_plus=grand[3],
+        total=grand_total_amt,
+    )
+
+    # control_balance = date-filtered 2110 derived balance, NEGATED (2110 is
+    # credit-normal → raw Σdr−Σcr is negative → negate to the positive payable).
+    ap_account_id = await _gl_account_id_by_code(db, "2110")
+    control_raw = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(JournalLine.debit), 0)
+                - func.coalesce(func.sum(JournalLine.credit), 0)
+            )
+            .select_from(JournalLine)
+            .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+            .where(
+                JournalLine.account_id == ap_account_id,
+                JournalEntry.entry_date <= as_of,
+            )
+        )
+    ).scalar() or Decimal("0")
+    control_balance = -Decimal(control_raw)
+
+    return ApAgingReport(
+        as_of=as_of,
+        vendors=vendors,
+        grand_total=grand_total,
+        control_balance=control_balance,
+        in_balance=(grand_total_amt == control_balance),
+    )
