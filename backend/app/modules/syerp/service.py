@@ -2986,3 +2986,112 @@ async def list_bills(
         _bill_to_read(bill, lines_by_bill[bill.id], paid_by_bill.get(bill.id, Decimal("0")))
         for bill in bills
     ]
+
+
+async def advance_bill_status(
+    db: AsyncSession, bill_id: str, target: str, actor_id: str
+) -> "BillRead":
+    """
+    Advance an AP bill through the FSM (Phase 9b, SYERP-12 AC4/5).
+
+    Validates:
+      - Bill exists (404 if not).
+      - target is an allowed successor of the current status per BILL_TRANSITIONS
+        (draft -> posted -> paid, paid terminal) — 422 if not (D-P9b-5).
+
+    Sets bill.status = target and flushes (NOT commits): the caller owns the single
+    commit so the transition can ride the same unit of work as its side effects —
+    post_bill stamps posted_at + posts the JE around it, and the payment path (Task 7)
+    rolls a bill to 'paid' inside the payment's own transaction. Mirrors
+    advance_po_status' structure but flushes rather than committing. Returns the
+    updated bill as a BillRead (header + nested lines).
+    """
+    bill = await _get_bill_row(db, bill_id)
+
+    if not _bill_transition_allowed(bill.status, target):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Cannot transition bill from '{bill.status}' to '{target}'. "
+                f"Allowed transitions: {sorted(BILL_TRANSITIONS.get(bill.status, set()))}"
+            ),
+        )
+
+    bill.status = target
+    await db.flush()
+
+    return await get_bill(db, bill_id)
+
+
+async def post_bill(db: AsyncSession, bill_id: str, actor_id: str) -> "BillRead":
+    """
+    Post a draft AP bill to the GL, flipping it draft -> posted (SYERP-12 AC4, SC3).
+
+    Loads the bill (404 if missing) and rejects a non-draft bill with 422 via the
+    BILL_TRANSITIONS FSM guard (a posted/paid bill cannot be re-posted, D-P9b-5).
+    Builds ONE balanced journal entry from the bill's lines and posts it through
+    post_journal_entry with commit=False, then stamps status='posted' + posted_at
+    and takes the SINGLE commit — the JE, the status flip, and the timestamp share
+    one atomic transaction (Risk #3): a bill can never flip to Posted without its
+    balanced GL entry, and if the JE raises nothing persists.
+
+    The journal entry (all debits, one credit — the vendor payable):
+      - each MATCHED line: Dr 2150 GR/IR (clears the receipt's GR/IR accrual),
+      - each EXPENSE line: Dr the line's own EXPENSE/ASSET account,
+      - ONE Cr 2110 Accounts Payable for the whole bill total (Σ line.amount).
+
+    GR/IR INVARIANT (D-P9b-2/5): a matched line only exists on an EXACT three-way
+    match (matched_qty == unbilled_qty AND unit_cost == PO unit_cost — create_bill),
+    so its Dr to GR/IR (matched_qty × unit_cost) exactly equals the original Cr to
+    GR/IR that receive_line posted for that receipt (qty × unit_cost). Posting the
+    bill therefore clears GR/IR (2150) back to its pre-receipt balance, leaving the
+    liability on AP (2110) — the accrual is neither stranded nor double-counted.
+
+    Returns the posted bill as a BillRead. Audit (bill.posted) is the router's job;
+    this service NEVER writes audit and takes exactly one commit (atomicity).
+    """
+    bill = await _get_bill_row(db, bill_id)
+
+    # FSM guard: only a draft bill may be posted (422 otherwise, D-P9b-5).
+    if not _bill_transition_allowed(bill.status, "posted"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Cannot post bill {bill.bill_number}: it is '{bill.status}', "
+                f"only a 'draft' bill can be posted."
+            ),
+        )
+
+    lines = await _load_bill_lines(db, bill_id)
+
+    grir_account_id = await _gl_account_id_by_code(db, "2150")
+    ap_account_id = await _gl_account_id_by_code(db, "2110")
+
+    bill_total = sum((line.amount for line in lines), Decimal("0"))
+
+    # One balanced JE: every bill line debits (GR/IR for matched, its own account for
+    # expense), one credit lands the whole total on Accounts Payable.
+    je_lines: list[dict[str, object]] = []
+    for line in lines:
+        debit_account_id = grir_account_id if line.line_type == "matched" else line.account_id
+        je_lines.append({"account_id": debit_account_id, "debit": line.amount, "credit": 0})
+    je_lines.append({"account_id": ap_account_id, "debit": 0, "credit": bill_total})
+
+    # commit=False: the JE rides THIS transaction's single commit alongside the status
+    # flip below — no partial post (Risk #3).
+    await post_journal_entry(
+        db,
+        entry_date=date.today(),
+        memo=f"AP bill {bill.bill_number}",
+        lines=je_lines,
+        actor_id=actor_id,
+        source_type="ap_bill",
+        source_id=bill.id,
+        commit=False,
+    )
+
+    bill.status = "posted"
+    bill.posted_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    return await get_bill(db, bill.id)
