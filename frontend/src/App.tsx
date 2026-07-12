@@ -22,6 +22,8 @@ import { PurchaseOrderDetail } from '@/routes/syerp/PurchaseOrderDetail'
 import { GLAccounts } from '@/routes/syerp/GLAccounts'
 import { JournalEntries } from '@/routes/syerp/JournalEntries'
 import { AccountRegister } from '@/routes/syerp/AccountRegister'
+import { Bills } from '@/routes/syerp/Bills'
+import { BillDetail } from '@/routes/syerp/BillDetail'
 
 // PLUM routes (Phase 5 + 6)
 import { PartsList } from '@/routes/plum/PartsList'
@@ -55,6 +57,9 @@ export function App() {
         <Route path="/syerp/gl" element={<GLAccounts />} />
         <Route path="/syerp/gl/journal" element={<JournalEntries />} />
         <Route path="/syerp/gl/register" element={<AccountRegister />} />
+        {/* Keep the static list route BEFORE the `/:id` detail route. */}
+        <Route path="/syerp/ap/bills" element={<Bills />} />
+        <Route path="/syerp/ap/bills/:id" element={<BillDetail />} />
 
         {/* PLUM module routes — Sidebar nav lands on /plum → redirect to parts list */}
         <Route path="/plum" element={<Navigate to="/plum/parts" replace />} />
