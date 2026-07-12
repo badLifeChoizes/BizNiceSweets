@@ -42,6 +42,8 @@ _STANDARD_COA: list[dict] = [
     {"code": "1000", "name": "Assets",                      "account_type": "ASSET",     "parent_code": None},
     {"code": "1100", "name": "Current Assets",              "account_type": "ASSET",     "parent_code": "1000"},
     {"code": "1110", "name": "Cash and Cash Equivalents",   "account_type": "ASSET",     "parent_code": "1100"},
+    # D-P9b-4: dedicated bank/checking account for AP payment auto-post (Dr AP / Cr Bank).
+    {"code": "1111", "name": "Bank – Checking",             "account_type": "ASSET",     "parent_code": "1100"},
     {"code": "1120", "name": "Accounts Receivable",         "account_type": "ASSET",     "parent_code": "1100"},
     {"code": "1130", "name": "Inventory",                   "account_type": "ASSET",     "parent_code": "1100"},
     {"code": "1140", "name": "Work in Process",             "account_type": "ASSET",     "parent_code": "1100"},
