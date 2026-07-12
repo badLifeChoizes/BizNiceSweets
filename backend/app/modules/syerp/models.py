@@ -16,6 +16,9 @@ Phase 8: Added InventoryItem, StockLocation and InventoryTxn models
          (SYERP purchasing — migration 0008).
 Phase 9a: Added JournalEntry and JournalLine models — the append-only GL
           journal / posting engine (SYERP financials, D-P9a-1).
+Phase 9b: Added Bill, BillLine, Payment and PaymentAllocation models —
+          accounts-payable vendor bills, PO matching and payments
+          (SYERP financials, D-P9b-1/4/5/6).
 
 All models inherit from Base so that Base.metadata is populated when
 app.core.models (the central aggregator) is imported by Alembic's env.py.
@@ -491,3 +494,198 @@ class JournalLine(Base):
     credit: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=18, scale=6), nullable=True
     )
+
+
+# ---------------------------------------------------------------------------
+# Bill — accounts-payable vendor bill header (Phase 9b, D-P9b-1)
+# ---------------------------------------------------------------------------
+
+
+class Bill(Base):
+    """
+    Accounts-payable vendor bill header — a vendor's demand for payment.
+
+    Unlike JournalEntry/JournalLine (append-only ledger rows), a Bill is an
+    FSM *document*, not a ledger row: it carries a MUTABLE `status` that walks
+    a controlled lifecycle (mirrors PurchaseOrder.status, NOT JournalEntry's
+    deliberate immutability). Posting the bill to the GL is a separate,
+    append-only act (a JournalEntry) — the bill itself is a working document
+    whose status advances as it is posted and paid (D-P9b-1).
+
+    vendor_id is an FK into syerp_partner.id (the vendor being paid).
+    Money amounts live on the child BillLine rows as fixed-point Numeric(18,6)
+    (never float — D-11).
+    """
+
+    __tablename__ = "syerp_bill"
+
+    # --- Primary key — UUID string (mirrors syerp_purchase_order.id) --------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Identity ----------------------------------------------------------
+    bill_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False, index=True)
+    # vendor_id: FK into syerp_partner.id (the vendor being paid)
+    vendor_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_partner.id"), nullable=False, index=True
+    )
+    # vendor_invoice_ref: the vendor's own invoice number (free text)
+    vendor_invoice_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # status: MUTABLE FSM column (mirrors PurchaseOrder.status) — draft | posted
+    # | paid ... walked forward by the service layer; NOT immutable (D-P9b-1)
+    status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
+    memo: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # posted_at: set when the bill is posted to the GL; NULL until posted
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # --- Provenance / audit ------------------------------------------------
+    actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# BillLine — accounts-payable vendor bill line (Phase 9b, D-P9b-4)
+# ---------------------------------------------------------------------------
+
+
+class BillLine(Base):
+    """
+    Bill line — one charge on a Bill.
+
+    Append-only like the journal lines: rows are never updated or deleted;
+    corrections are made by amending the bill before posting or by a
+    compensating entry after (mirrors JournalLine).
+
+    line_type distinguishes a `matched` line (linked to a PurchaseOrderLine via
+    po_line_id, carrying a matched_qty — three-way PO match, D-P9b-4) from an
+    `expense` line (coded directly to a GL account via account_id). Money
+    amounts are fixed-point Numeric(18,6) (never float — D-11); the
+    match/expense invariants are enforced in the service layer.
+    """
+
+    __tablename__ = "syerp_bill_line"
+
+    # --- Primary key — UUID string -----------------------------------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Links -------------------------------------------------------------
+    bill_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_bill.id"), nullable=False, index=True
+    )
+    line_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    # line_type: matched | expense
+    line_type: Mapped[str] = mapped_column(String(10), nullable=False)
+
+    # --- Matched-line fields (line_type == 'matched', D-P9b-4) --------------
+    # po_line_id: FK into the PO line being matched; NULL on expense lines
+    po_line_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("syerp_purchase_order_line.id"), nullable=True
+    )
+    matched_qty: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=True
+    )
+
+    # --- Expense-line fields (line_type == 'expense') ----------------------
+    # account_id: FK into the GL account the expense is coded to; NULL on matched
+    account_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("syerp_gl_account.id"), nullable=True
+    )
+    unit_cost: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=True
+    )
+
+    # --- Amount (D-11) — fixed-point, never float --------------------------
+    amount: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Payment — accounts-payable cash payment (Phase 9b, D-P9b-5)
+# ---------------------------------------------------------------------------
+
+
+class Payment(Base):
+    """
+    Payment — one immutable cash disbursement against vendor bills.
+
+    APPEND-ONLY (mirrors JournalEntry): rows are never updated or deleted; a
+    mistaken payment is corrected by a compensating payment / reversing entry,
+    never by editing or deleting the original (D-P9b-5). The cash leaves a
+    single cash_account_id (an FK into syerp_gl_account.id); the amount is
+    apportioned across bills by the child PaymentAllocation rows.
+
+    Money is fixed-point Numeric(18,6) (never float — D-11).
+    """
+
+    __tablename__ = "syerp_payment"
+
+    # --- Primary key — UUID string (non-enumerable ledger row) -------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Payment details ---------------------------------------------------
+    payment_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # cash_account_id: FK into the GL cash account the funds leave
+    cash_account_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("syerp_gl_account.id"), nullable=False
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
+    reference: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # --- Provenance / audit ------------------------------------------------
+    actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# PaymentAllocation — payment-to-bill apportionment (Phase 9b, D-P9b-6)
+# ---------------------------------------------------------------------------
+
+
+class PaymentAllocation(Base):
+    """
+    Payment allocation — one immutable apportionment of a Payment to a Bill.
+
+    APPEND-ONLY (mirrors JournalLine): rows are never updated or deleted. A
+    single Payment may settle several bills, and a single Bill may be settled
+    over several payments; each (payment, bill) apportionment is one row here
+    (D-P9b-6). The sum of a payment's allocations equals the payment amount and
+    a bill is fully paid when its allocations equal its total — invariants
+    enforced in the service layer.
+
+    Money is fixed-point Numeric(18,6) (never float — D-11).
+    """
+
+    __tablename__ = "syerp_payment_allocation"
+
+    # --- Primary key — UUID string -----------------------------------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Links -------------------------------------------------------------
+    payment_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_payment.id"), nullable=False, index=True
+    )
+    bill_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_bill.id"), nullable=False, index=True
+    )
+
+    # --- Amount (D-11) — fixed-point, never float --------------------------
+    amount: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
