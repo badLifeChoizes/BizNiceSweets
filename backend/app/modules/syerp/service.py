@@ -38,6 +38,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from app.modules.syerp.models import (
+        Bill,
+        BillLine,
         GLAccount,
         InventoryItem,
         JournalEntry,
@@ -49,6 +51,8 @@ if TYPE_CHECKING:
     )
     from app.modules.syerp.schemas import (
         AccountRegisterRead,
+        BillLineCreate,
+        BillRead,
         InventoryItemCreate,
         InventoryItemUpdate,
         ItemOnHandRead,
@@ -63,6 +67,7 @@ if TYPE_CHECKING:
         StockLocationCreate,
         StockLocationUpdate,
         TransactionRead,
+        UnbilledReceiptRead,
     )
 
 
@@ -2531,3 +2536,439 @@ def _bill_transition_allowed(current: str, target: str) -> bool:
     here (D-P9b-5), mirroring PO_TRANSITIONS.
     """
     return target in BILL_TRANSITIONS.get(current, set())
+
+
+# ---------------------------------------------------------------------------
+# Accounts-payable bill CRUD + three-way match (Phase 9b, SYERP-12 AC4/5)
+# ---------------------------------------------------------------------------
+#
+# BillRead nests its lines and carries two DERIVED roll-ups (total, open_balance)
+# that are computed here, not stored — so the service constructs BillRead/
+# BillLineRead explicitly rather than serializing the ORM row for those fields.
+# Lines and payment allocations are assembled via ordered/grouped SELECTs (the
+# models declare NO ORM relationships, to avoid MissingGreenlet in the async
+# context — RESEARCH.md Pitfall 2). Every sum coalesces EACH side independently
+# (func.coalesce(func.sum(...), 0)) so a NULL sum on a not-yet-billed / not-yet-
+# paid row degrades to 0, never NULL — the Phase-9a NULL-propagation defect
+# (D-P8-4).
+
+
+async def generate_bill_number(db: AsyncSession) -> str:
+    """
+    Generate the next bill number in the BILL-#### series (Phase 9b, D-P9b-1).
+
+    Finds the current highest *numeric* suffix among strictly-numeric BILL-series
+    numbers (matching ``^BILL-[0-9]+$``) by casting the digits after "BILL-" to an
+    integer and ordering numerically, then delegates the increment to the pure
+    _next_bill_number helper. Returns "BILL-0001" when no BILL-series numbers exist.
+
+    Mirrors generate_po_number: the regex filter MUST precede the cast (a bare cast
+    over ``LIKE 'BILL-%'`` would throw on any non-numeric number), and
+    ``func.substring(bill_number, 6)`` skips the 5-character "BILL-" prefix
+    (Postgres substring is 1-indexed, so position 6 is the first digit). The DB
+    unique constraint on syerp_bill.bill_number is the authoritative guard; this is
+    a best-effort generator and the caller retries once on IntegrityError.
+    """
+    from app.modules.syerp.models import Bill
+
+    result = await db.execute(
+        select(Bill.bill_number)
+        .where(Bill.bill_number.op("~")(r"^BILL-[0-9]+$"))
+        .order_by(cast(func.substring(Bill.bill_number, 6), Integer).desc())
+        .limit(1)
+    )
+    max_number: str | None = result.scalar()
+
+    return _next_bill_number([max_number] if max_number is not None else [])
+
+
+async def _already_billed_qty(db: AsyncSession, po_line_id: str) -> Decimal:
+    """
+    Return the quantity of a PO line already drawn onto (non-cancelled) bills.
+
+    Sums BillLine.matched_qty across EVERY matched line for `po_line_id` on any
+    bill that is not cancelled — draft AND posted both count, so two open drafts
+    cannot double-bill the same receipt. The sum coalesces to 0 (D-P8-4): a PO
+    line with no bill lines yet yields Decimal("0"), never NULL.
+    """
+    from app.modules.syerp.models import Bill, BillLine
+
+    result = await db.execute(
+        select(func.coalesce(func.sum(BillLine.matched_qty), 0))
+        .select_from(BillLine)
+        .join(Bill, Bill.id == BillLine.bill_id)
+        .where(BillLine.po_line_id == po_line_id, Bill.status != "cancelled")
+    )
+    return Decimal(result.scalar() or 0)
+
+
+async def list_unbilled_receipts(
+    db: AsyncSession, vendor_id: str
+) -> "list[UnbilledReceiptRead]":
+    """
+    List a vendor's received-but-not-fully-billed PO lines (SC1 — matched picker).
+
+    For every PO line of `vendor_id`'s purchase orders with qty_received > 0,
+    computes `unbilled_qty = qty_received - Σ BillLine.matched_qty` where the sum
+    spans ALL non-cancelled bills (draft + posted) so an open draft already
+    consumes the receipt. Each side of the subtraction is coalesced independently
+    — the grouped SUM uses func.coalesce(..., 0) and a PO line with no bill lines
+    at all falls back to Decimal("0") — so a not-yet-billed line never yields a
+    NULL unbilled quantity (D-P8-4). Only lines with unbilled_qty > 0 are returned,
+    carrying po_line_id, po_number, item_id, unbilled_qty, and the PO line unit_cost.
+    """
+    from app.modules.syerp.models import Bill, BillLine, PurchaseOrder, PurchaseOrderLine
+    from app.modules.syerp.schemas import UnbilledReceiptRead
+
+    result = await db.execute(
+        select(PurchaseOrderLine, PurchaseOrder.po_number)
+        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderLine.po_id)
+        .where(
+            PurchaseOrder.vendor_id == vendor_id,
+            PurchaseOrderLine.qty_received > 0,
+        )
+        .order_by(PurchaseOrder.po_number, PurchaseOrderLine.line_no)
+    )
+    rows = result.all()
+    if not rows:
+        return []
+
+    line_ids = [line.id for line, _ in rows]
+    billed_result = await db.execute(
+        select(
+            BillLine.po_line_id,
+            func.coalesce(func.sum(BillLine.matched_qty), 0),
+        )
+        .join(Bill, Bill.id == BillLine.bill_id)
+        .where(BillLine.po_line_id.in_(line_ids), Bill.status != "cancelled")
+        .group_by(BillLine.po_line_id)
+    )
+    billed_by_line = {po_line_id: Decimal(qty) for po_line_id, qty in billed_result.all()}
+
+    unbilled: list[UnbilledReceiptRead] = []
+    for line, po_number in rows:
+        already = billed_by_line.get(line.id, Decimal("0"))
+        remaining = _unbilled_qty(line.qty_received, already)
+        if remaining > 0:
+            unbilled.append(
+                UnbilledReceiptRead(
+                    po_line_id=line.id,
+                    po_number=po_number,
+                    item_id=line.item_id,
+                    unbilled_qty=remaining,
+                    unit_cost=line.unit_cost,
+                )
+            )
+    return unbilled
+
+
+class _PreparedBillLine(NamedTuple):
+    """A validated bill line ready to persist (pure values — survives rollback)."""
+
+    line_type: str
+    po_line_id: str | None
+    matched_qty: Decimal | None
+    account_id: int | None
+    unit_cost: Decimal | None
+    amount: Decimal
+
+
+async def create_bill(
+    db: AsyncSession,
+    *,
+    vendor_id: str,
+    vendor_invoice_ref: str | None,
+    lines: "Iterable[BillLineCreate]",
+    actor_id: str,
+) -> "BillRead":
+    """
+    Create a draft vendor bill with three-way PO match validation (SC2, D-P9b-1/2/3).
+
+    Vendor gate (mirrors create_po): `vendor_id` must reference an existing Partner
+    with is_vendor==True, else 422. Every line is validated BEFORE any write (no
+    partial bill):
+      - matched (line_type == 'matched'): the PO line is loaded (404 if it does not
+        exist), its unbilled quantity is recomputed LIVE against all non-cancelled
+        bills, and the line is accepted only on an EXACT three-way match —
+        _is_exact_match(matched_qty, po unit_cost, unbilled_qty, po unit_cost); any
+        quantity variance is rejected with 422 (D-P9b-2). The matched line always
+        books at the PO line's own unit_cost, amount = matched_qty * unit_cost.
+      - expense (line_type == 'expense'): the account is resolved (404 if unknown)
+        and must be an EXPENSE or ASSET account (else 422, D-P9b-3) with amount > 0
+        (else 422); it books at the supplied amount.
+    The bill is then assigned a server-generated BILL-#### number (retried once on a
+    unique-constraint collision, mirroring create_po), status 'draft', and its lines
+    are persisted in input order (line_no from 1) in ONE commit. Returned via get_bill.
+    """
+    import sqlalchemy.exc
+
+    from app.modules.syerp.models import Bill, BillLine, GLAccount, Partner, PurchaseOrderLine
+
+    # Vendor gate (D-P9b-1) — the partner must exist AND be a vendor (mirror create_po).
+    result = await db.execute(select(Partner).where(Partner.id == vendor_id))
+    vendor = result.scalars().first()
+    if vendor is None or not vendor.is_vendor:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Partner {vendor_id} is not a vendor (is_vendor must be True).",
+        )
+
+    # Validate every line first, collecting pure values (no partial posting).
+    prepared: list[_PreparedBillLine] = []
+    for data in lines:
+        if data.line_type == "matched":
+            po_result = await db.execute(
+                select(PurchaseOrderLine).where(PurchaseOrderLine.id == data.po_line_id)
+            )
+            po_line = po_result.scalars().first()
+            if po_line is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Purchase order line {data.po_line_id} not found.",
+                )
+            # Recompute the still-billable quantity LIVE, then require an EXACT
+            # three-way match — the matched line books at the PO unit_cost, so the
+            # cost leg is exact by construction and the quantity must match to the
+            # cent; any variance drops to manual review (D-P9b-2).
+            unbilled = _unbilled_qty(
+                po_line.qty_received, await _already_billed_qty(db, po_line.id)
+            )
+            if not _is_exact_match(
+                data.matched_qty, po_line.unit_cost, unbilled, po_line.unit_cost
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"Matched quantity {data.matched_qty} does not exactly match "
+                        f"the unbilled quantity {unbilled} for PO line {po_line.id}."
+                    ),
+                )
+            prepared.append(
+                _PreparedBillLine(
+                    line_type="matched",
+                    po_line_id=po_line.id,
+                    matched_qty=data.matched_qty,
+                    account_id=None,
+                    unit_cost=po_line.unit_cost,
+                    amount=data.matched_qty * po_line.unit_cost,
+                )
+            )
+        else:  # expense — schema guarantees line_type == 'expense' here
+            acct_result = await db.execute(
+                select(GLAccount).where(GLAccount.id == data.account_id)
+            )
+            account = acct_result.scalars().first()
+            if account is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"GL account {data.account_id} not found.",
+                )
+            # Expense lines may only be coded to an EXPENSE or ASSET account
+            # (a bill records a cost or a capitalised asset — never a revenue,
+            # liability, or equity leg from the vendor side, D-P9b-3).
+            if account.account_type not in {"EXPENSE", "ASSET"}:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"GL account {account.code} is {account.account_type}; expense "
+                        f"bill lines must code to an EXPENSE or ASSET account."
+                    ),
+                )
+            if data.amount is None or data.amount <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="An expense bill line must have amount > 0.",
+                )
+            prepared.append(
+                _PreparedBillLine(
+                    line_type="expense",
+                    po_line_id=None,
+                    matched_qty=None,
+                    account_id=account.id,
+                    unit_cost=None,
+                    amount=data.amount,
+                )
+            )
+
+    # Persist header (retry once on an auto-generated number collision, mirroring
+    # create_po) then its lines, in one commit.
+    bill_number = await generate_bill_number(db)
+    bill = Bill(
+        bill_number=bill_number,
+        vendor_id=vendor_id,
+        vendor_invoice_ref=vendor_invoice_ref,
+        status="draft",
+        actor_id=actor_id,
+    )
+    db.add(bill)
+    try:
+        await db.flush()
+    except sqlalchemy.exc.IntegrityError:
+        await db.rollback()
+        bill_number = await generate_bill_number(db)
+        bill = Bill(
+            bill_number=bill_number,
+            vendor_id=vendor_id,
+            vendor_invoice_ref=vendor_invoice_ref,
+            status="draft",
+            actor_id=actor_id,
+        )
+        db.add(bill)
+        await db.flush()
+
+    for line_no, p in enumerate(prepared, start=1):
+        db.add(
+            BillLine(
+                bill_id=bill.id,
+                line_no=line_no,
+                line_type=p.line_type,
+                po_line_id=p.po_line_id,
+                matched_qty=p.matched_qty,
+                account_id=p.account_id,
+                unit_cost=p.unit_cost,
+                amount=p.amount,
+            )
+        )
+
+    await db.commit()
+    return await get_bill(db, bill.id)
+
+
+async def _get_bill_row(db: AsyncSession, bill_id: str) -> "Bill":
+    """
+    Load a Bill ORM row by id (internal helper).
+
+    Raises HTTP 404 if no bill with the given id exists (mirrors _get_po_row).
+    """
+    from app.modules.syerp.models import Bill
+
+    result = await db.execute(select(Bill).where(Bill.id == bill_id))
+    bill = result.scalars().first()
+    if bill is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Bill {bill_id} not found.",
+        )
+    return bill
+
+
+async def _load_bill_lines(db: AsyncSession, bill_id: str) -> "list[BillLine]":
+    """Return a bill's lines ordered by line_no (no ORM relationship — Pitfall 2)."""
+    from app.modules.syerp.models import BillLine
+
+    result = await db.execute(
+        select(BillLine).where(BillLine.bill_id == bill_id).order_by(BillLine.line_no)
+    )
+    return list(result.scalars().all())
+
+
+async def _bill_paid_amount(db: AsyncSession, bill_id: str) -> Decimal:
+    """
+    Return the total allocated (paid) against a bill.
+
+    Sums PaymentAllocation.amount for `bill_id`, coalescing to 0 (D-P8-4): a bill
+    with no allocations yet yields Decimal("0"), never NULL.
+    """
+    from app.modules.syerp.models import PaymentAllocation
+
+    result = await db.execute(
+        select(func.coalesce(func.sum(PaymentAllocation.amount), 0)).where(
+            PaymentAllocation.bill_id == bill_id
+        )
+    )
+    return Decimal(result.scalar() or 0)
+
+
+def _bill_to_read(
+    bill: "Bill", lines: "Iterable[BillLine]", paid: Decimal
+) -> "BillRead":
+    """
+    Assemble a BillRead from a Bill ORM row, its lines, and its allocated total.
+
+    total and open_balance are DERIVED, not stored: total = Σ line.amount (an empty
+    line set folds to Decimal("0")), open_balance = total - paid. Each side is
+    coalesced independently (D-P8-4), so the model is CONSTRUCTED explicitly rather
+    than validated from_attributes for those two fields.
+    """
+    from app.modules.syerp.schemas import BillLineRead, BillRead
+
+    lines = list(lines)
+    total = sum((line.amount for line in lines), Decimal("0"))
+    return BillRead(
+        id=bill.id,
+        bill_number=bill.bill_number,
+        vendor_id=bill.vendor_id,
+        vendor_invoice_ref=bill.vendor_invoice_ref,
+        status=bill.status,
+        memo=bill.memo,
+        posted_at=bill.posted_at,
+        total=total,
+        open_balance=total - paid,
+        lines=[BillLineRead.model_validate(line) for line in lines],
+        created_at=bill.created_at,
+    )
+
+
+async def get_bill(db: AsyncSession, bill_id: str) -> "BillRead":
+    """
+    Load a bill (header + nested lines + derived roll-ups) by id.
+
+    Raises HTTP 404 if no bill with the given id exists (mirrors get_po).
+    """
+    bill = await _get_bill_row(db, bill_id)
+    lines = await _load_bill_lines(db, bill_id)
+    paid = await _bill_paid_amount(db, bill_id)
+    return _bill_to_read(bill, lines, paid)
+
+
+async def list_bills(
+    db: AsyncSession,
+    vendor_id: str | None = None,
+    status: str | None = None,
+) -> "list[BillRead]":
+    """
+    List bills (newest-first), optionally filtered by vendor and/or status.
+
+    Each bill is returned as a BillRead with its lines nested and its derived
+    total/open_balance rolled up. Lines and payment allocations are fetched in one
+    query each over all returned bill ids and grouped in memory (no per-bill N+1);
+    the allocation sum coalesces to 0 for unpaid bills (D-P8-4). Ordered by
+    created_at DESC, then bill_number DESC for a stable tie-break (mirrors list_pos).
+    """
+    from app.modules.syerp.models import Bill, BillLine, PaymentAllocation
+
+    stmt = select(Bill)
+    if vendor_id is not None:
+        stmt = stmt.where(Bill.vendor_id == vendor_id)
+    if status is not None:
+        stmt = stmt.where(Bill.status == status)
+    stmt = stmt.order_by(Bill.created_at.desc(), Bill.bill_number.desc())
+
+    result = await db.execute(stmt)
+    bills = list(result.scalars().all())
+    if not bills:
+        return []
+
+    bill_ids = [bill.id for bill in bills]
+
+    lines_result = await db.execute(
+        select(BillLine).where(BillLine.bill_id.in_(bill_ids)).order_by(BillLine.line_no)
+    )
+    lines_by_bill: dict[str, list[BillLine]] = {bill_id: [] for bill_id in bill_ids}
+    for line in lines_result.scalars().all():
+        lines_by_bill[line.bill_id].append(line)
+
+    paid_result = await db.execute(
+        select(
+            PaymentAllocation.bill_id,
+            func.coalesce(func.sum(PaymentAllocation.amount), 0),
+        )
+        .where(PaymentAllocation.bill_id.in_(bill_ids))
+        .group_by(PaymentAllocation.bill_id)
+    )
+    paid_by_bill = {bill_id: Decimal(amount) for bill_id, amount in paid_result.all()}
+
+    return [
+        _bill_to_read(bill, lines_by_bill[bill.id], paid_by_bill.get(bill.id, Decimal("0")))
+        for bill in bills
+    ]

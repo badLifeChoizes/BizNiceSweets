@@ -7,7 +7,7 @@ Branch base: `feature-syerp-gl-posting-engine` HEAD (verified 09a tip, tag `zj/g
 - [ ] 2. Bill/BillLine/Payment/PaymentAllocation models (models.py)
 - [ ] 3. Migration 0010_syerp_ap_bills (alembic)
 - [ ] 4. Seed 1111 Bank – Checking (coa_seed.py)
-- [ ] 5. Service: unbilled-receipts query + create/edit bill (service.py)
+- [x] 5. Service: unbilled-receipts query + create/edit bill (service.py)
 - [ ] 6. Service: post_bill → balanced JE + Draft→Posted (service.py)
 - [ ] 7. Service: record_payment → JE + allocations + overpay guard (service.py)
 - [ ] 8. AP Pydantic schemas (schemas.py)
