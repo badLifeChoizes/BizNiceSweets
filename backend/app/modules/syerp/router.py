@@ -37,6 +37,11 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   GET    /syerp/gl/journal-entries         — list journal entries (syerp:read)
   GET    /syerp/gl/journal-entries/{id}    — get journal entry + lines (syerp:read)
   POST   /syerp/gl/journal-entries/{id}/reverse — post reversing entry (syerp:write)
+  GET    /syerp/ap/unbilled-receipts?vendor_id=  — unbilled PO receipts (syerp:read)
+  POST   /syerp/ap/bills               — create draft bill (syerp:write)
+  GET    /syerp/ap/bills               — list bills (+?vendor_id=&status=) (syerp:read)
+  GET    /syerp/ap/bills/{bill_id}     — get bill + lines (syerp:read)
+  POST   /syerp/ap/bills/{bill_id}/post — post bill, auto-book AP journal (syerp:write)
 
 mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
 Full paths are therefore /api/v1/syerp/partners, /api/v1/syerp/gl/accounts, etc.
@@ -69,6 +74,8 @@ Audit logging (D-10, T-04-08):
   - po.received: on POST /purchasing/orders/{id}/lines/{line_id}/receive success.
   - gl.journal_posted: on POST /gl/journal-entries success.
   - gl.journal_reversed: on POST /gl/journal-entries/{id}/reverse success.
+  - bill.created: on POST /ap/bills success.
+  - bill.posted: on POST /ap/bills/{id}/post success.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -88,6 +95,8 @@ from app.modules.auth.service import write_audit
 from app.modules.syerp.schemas import (
     AccountRegisterRead,
     AdjustmentCreate,
+    BillCreate,
+    BillRead,
     GLAccountRead,
     InventoryItemCreate,
     InventoryItemRead,
@@ -111,22 +120,26 @@ from app.modules.syerp.schemas import (
     StockLocationUpdate,
     TransactionRead,
     TransferCreate,
+    UnbilledReceiptRead,
 )
 from app.modules.syerp.service import (
     add_line,
     advance_po_status,
     archive_partner,
+    create_bill,
     create_item,
     create_location,
     create_partner,
     create_po,
     get_account_register,
+    get_bill,
     get_item,
     get_item_onhand,
     get_journal_entry,
     get_location,
     get_partner,
     get_po,
+    list_bills,
     list_gl_accounts,
     list_item_transactions,
     list_items,
@@ -135,7 +148,9 @@ from app.modules.syerp.service import (
     list_locations,
     list_partners,
     list_pos,
+    list_unbilled_receipts,
     post_adjustment,
+    post_bill,
     post_journal_entry,
     post_receipt,
     post_transfer,
@@ -1061,3 +1076,124 @@ async def get_account_register_endpoint(
     Returns 404 if the account does not exist.
     """
     return await get_account_register(db, account_id, date_from=date_from, date_to=date_to)
+
+
+# ---------------------------------------------------------------------------
+# AP Bills (Phase 9b, SYERP-12 AC4/AC8/AC9, D-P9b-7)
+# ---------------------------------------------------------------------------
+#
+# Bills are draft-then-post: create builds a draft with three-way PO match, post
+# freezes it and auto-books the AP journal. There is intentionally NO PUT/DELETE
+# route that mutates a posted bill's ledger effect (a correction is a reversing
+# flow, never an edit). Writes require syerp:write, reads require syerp:read.
+# write_audit self-commits and is called only AFTER the service commit — the
+# atomicity requirement (create_bill / post_bill commit=True).
+
+
+@router.get("/ap/unbilled-receipts", response_model=list[UnbilledReceiptRead])
+async def list_unbilled_receipts_endpoint(
+    vendor_id: str,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[UnbilledReceiptRead]:
+    """
+    List a vendor's received-but-not-fully-billed PO lines (SC1, the matched picker).
+
+    For every PO line of `vendor_id`'s purchase orders with qty_received > 0,
+    returns the still-billable quantity at the line's unit cost (received minus what
+    non-cancelled bills already consume). Read-only: no audit row. Requires
+    syerp:read permission.
+    """
+    return await list_unbilled_receipts(db, vendor_id)
+
+
+@router.post("/ap/bills", response_model=BillRead, status_code=status.HTTP_201_CREATED)
+async def create_bill_endpoint(
+    data: BillCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> BillRead:
+    """
+    Create a draft vendor bill with three-way PO match validation (SC2, AC4).
+
+    Every line is validated before any write (no partial bill): a matched line is
+    accepted only on an exact three-way match against a live-recomputed unbilled PO
+    receipt (any variance → 422); an expense line books against an EXPENSE/ASSET GL
+    account for amount > 0 (else 422). Unknown vendor / PO line / account → 404. The
+    bill is assigned a server-generated BILL-#### number in status 'draft'. Requires
+    syerp:write. Writes a bill.created audit row after the create commits.
+    """
+    bill = await create_bill(
+        db,
+        vendor_id=data.vendor_id,
+        vendor_invoice_ref=data.vendor_invoice_ref,
+        lines=data.lines,
+        actor_id=str(current_user.id),
+    )
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="bill.created",
+        target_type="bill",
+        target_id=str(bill.id),
+        detail=f"Bill created: {bill.bill_number} for vendor {bill.vendor_id}",
+    )
+    return bill
+
+
+@router.get("/ap/bills", response_model=list[BillRead])
+async def list_bills_endpoint(
+    vendor_id: str | None = None,
+    status: str | None = None,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[BillRead]:
+    """
+    List bills (newest-first), each with its lines nested and roll-ups derived.
+
+    Query params (all optional): `vendor_id` restricts to one vendor; `status`
+    restricts to one status (draft | posted | partially_paid | paid). Read-only:
+    no audit row. Requires syerp:read permission.
+    """
+    return await list_bills(db, vendor_id=vendor_id, status=status)
+
+
+@router.get("/ap/bills/{bill_id}", response_model=BillRead)
+async def get_bill_endpoint(
+    bill_id: str,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> BillRead:
+    """
+    Get a single bill (header + nested lines + derived roll-ups) by id.
+
+    Read-only: no audit row. Requires syerp:read permission. Returns 404 if the
+    bill does not exist.
+    """
+    return await get_bill(db, bill_id)
+
+
+@router.post("/ap/bills/{bill_id}/post", response_model=BillRead)
+async def post_bill_endpoint(
+    bill_id: str,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> BillRead:
+    """
+    Post a draft bill, freezing it and auto-booking the AP journal (AC4).
+
+    Transitions the bill draft → posted and posts a balanced GL journal entry for
+    its total in one atomic transaction. Rejects a non-draft bill with 422; returns
+    404 if the bill does not exist. Requires syerp:write. Writes a bill.posted audit
+    row after the post commits.
+    """
+    bill = await post_bill(db, bill_id, str(current_user.id))
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="bill.posted",
+        target_type="bill",
+        target_id=str(bill_id),
+        detail=f"Bill posted: {bill.bill_number} (status: {bill.status})",
+    )
+    return bill
