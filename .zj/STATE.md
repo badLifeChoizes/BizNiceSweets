@@ -1,28 +1,39 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-12 (Phase 9c **PLANNED** — 15-task PLAN.md ready → next `/zj:build 09c`)
+Updated: 2026-07-12 (Phase 9c **BUILD COMPLETE** — all 15 tasks on `feature-syerp-financial-reports` → next `/zj:verify 09c`)
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** plan 09c **complete** → next is `/zj:build 09c` (AP aging + financial statements, AC6/AC7).
-- **Next action:** `/zj:build 09c` — build the last Phase-9 sub-phase from
-  `.zj/phases/09c-ap-aging-financial-statements/PLAN.md` (**15 tasks**, layered: model → migration
-  0011 → bill_date write-path wiring → report schemas → 4 service fns (aging / trial balance / P&L /
-  balance sheet) → 4 router endpoints → `verify_reports.py` → `verify_reports_api.py` → regression →
-  3 frontend). **First build action: cut a fresh branch `feature-syerp-financial-reports` off the
-  current 09b tip (tag `zj/good-09b-ap-bills-match-payments`)** — D-P9c-3. Owner decisions at plan
-  (D-P9c-1..3): add a real `Bill.bill_date` (Date NOT NULL, migration 0011 with `created_at::date`
-  backfill), defaulting to today at create, **and set the posted bill's JE `entry_date` from
-  `bill.bill_date`** so the AP subledger and the 2110 control account share one date basis (the AC6
-  tie-out crux) — D-P9c-1; Reports UI = one tabbed **Financial Reports** page + a separate **AP
-  Aging** nav item — D-P9c-2. Patterns carried from 09a/09b: coalesce-each-side on every derived
-  balance, statement/aging balances filter posted activity by `entry_date` (join JournalLine→
-  JournalEntry, the `get_account_register` pattern), HTTP-level `verify_reports_api.py` planned from
-  the start for RBAC. **The SC2 crux** — aging grand total == derived 2110 balance — is proven as a
-  pre/post derived-balance *equality* in `verify_reports.py` (b) (draft bills excluded; payments
-  aged by `payment_date`). 9c is read-only except the additive `bill_date` column (guards no
-  invariant), so no new row-lock/concurrency scenarios. Reuse `derive_account_balance` (service.py:
-  2322); all report code lands cohesively in `syerp/service.py` (do NOT split — that's Phase 10).
+- **Step:** build 09c **complete** on branch `feature-syerp-financial-reports` (AP aging + financial
+  statements, SYERP-12 AC6/AC7). **All 15 PLAN tasks ticked, atomic commits.**
+- **Next action:** `/zj:verify 09c` — verify AP aging (per-vendor + grand-total buckets from the new
+  `Bill.bill_date`, tied to the derived 2110 control) and the three financial statements (Trial Balance,
+  P&L, Balance Sheet), all read-only from posted GL filtered by `entry_date`, `syerp:read`-gated.
+- **Build 09c (2026-07-12) — 15/15 tasks, on `feature-syerp-financial-reports`** (cut at the 09b HEAD
+  `81c2256`; `tag..HEAD` was docs-only so it carries the verified-09b code + planning docs — Deviations).
+  Backend: `Bill.bill_date` col (`f6b9635`), migration `0011` NOT NULL + `created_at::date` backfill
+  (`cab8531`), bill_date wired through `BillCreate`/`create_bill` + `post_bill` JE `entry_date=bill.bill_date`
+  (`729ec00`, the tie-out date-basis), report schemas (`69e4724`), `ap_aging_report`+2110 tie-out
+  (`c24c9f6`), `trial_balance` (`7aecf7c`), `profit_loss` (`1d38ddb`), `balance_sheet` w/ computed 3130
+  net income (`6f79047`), 4 read-only report endpoints + `syerp:read` (`a9cae54`). Verify:
+  **`verify_reports.py` 17/17 PASS ×2** (`9ae4345`) — **tie-out crux `grand_total==control_balance`
+  Decimal-exact (1000.000000), incl. partial-payment + draft-exclusion divergence guard; TB nets zero +
+  rollup parents absent; P&L in/out-of-period; BS balances with the computed net-income line**;
+  **`verify_reports_api.py` PASS ×2** (`fdb0831`) — 200/401/403 across all 4 endpoints + 422 missing-bound,
+  read-only ⇒ no mutation audit. Frontend: AP Aging screen (`c6b47d3`, 4 tests), Financial Reports tabbed
+  page (`8994f5c`, 3 tests — Button toggle group, no shadcn tabs primitive), routes+nav+optional bill-date
+  field on the create dialog (`48c8453`). **Suites:** backend pytest **117 passed / 100 skipped** (D-P7-4,
+  unchanged); regression `verify_ap` 23 / `verify_gl` 28 / `verify_purchasing` 18 / `verify_inventory` 15 /
+  `verify_e2e_p8` 18 all exit 0 unchanged; frontend **79/79** (24 files). Lint gates still non-functional
+  (BACKLOG p1). **Deviations** (PLAN `## Deviations`): branch cut at HEAD not the tag (docs-only delta);
+  T3 router call-site threaded `bill_date`; T2/T3/T15 commit subjects trimmed to the ≤72-char guard; T10
+  used expense-line bills (Dr ASSET 1150 / Cr 2110) not the PO→receive path and isolates P&L accounts —
+  tie-out still real via `post_bill`. **Noticed** (PLAN `## Noticed`): stale `BillRead` FSM docstring
+  (`partially_paid`); `balance_sheet` appends the computed 3130 line unconditionally (double-counts IF a
+  future phase posts closing entries into 3130); exotic backdated-payment (payment_date<bill_date) tie-out
+  edge. **Owner note:** `docs/tasks/{branch}.md` not created for this branch — ZJ PLAN.md is the checklist.
+  Original plan crux/patterns recap: coalesce-each-side, `entry_date` filter via the `get_account_register`
+  join, HTTP-verify-from-the-start, `service.py` kept cohesive (split deferred to Phase 10).
 - **Retro 09b (2026-07-12) — complete.** Learnings → `.zj/LEARNINGS.md` "Phase 09b": (1) sequential
   verify is structurally blind to read-then-write races (reviewer caught the major a 4th time) → row
   lock/constraint **plus** an `asyncio.gather` two-request scenario for any invariant guard; (2) a
