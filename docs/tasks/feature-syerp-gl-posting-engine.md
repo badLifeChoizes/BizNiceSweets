@@ -17,3 +17,12 @@ frontend full suite 64/64; `tsc -b` clean. Next: `/zj:verify 09a`.
 - [x] 11. Frontend: manual Journal Entry list + post dialog (SC4, AC1) (`38d65b1`, 3 tests)
 - [x] 12. Frontend: reverse action + Account Register screen (SC4, SC2) (`c2bde3d`, 2 tests)
 - [x] 13. Frontend: register routes in App.tsx + SyerpNav tabs (SC4) (`706432c`, full suite 64/64)
+
+## Verify (/zj:verify 09a — 2026-07-11, PASS, tag `zj/good-09a-gl-posting-engine`)
+- [x] V1. Fix M1 — zero-cost PO receipt no longer self-rejects (`c905a6b`)
+- [x] V2. Fix M2 — double-reversal refused 409 (`c905a6b`)
+- [x] V3. Fix m5 — receipt gl.journal_posted audit row targets the entry (`c905a6b`)
+- [x] V4. Test M3/G1 — verify_gl.py atomicity-rollback + zero-cost + double-reversal (`963ed0a`, 28/28)
+- [x] V5. Test M4/G2 — new verify_gl_api.py: audit rows + 403/401 RBAC over live HTTP (`963ed0a`, 9/9)
+- [x] V6. Docs m7/G4 — SYERP-12 in requirements-progress + SRD evidence + MAP 0009 (`8156157`)
+- [x] V7. Re-verify all gates green; ROADMAP [verified] + STATE → retro (`8156157`, `70aef9b`)
