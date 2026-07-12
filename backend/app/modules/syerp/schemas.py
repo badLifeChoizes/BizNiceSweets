@@ -911,3 +911,159 @@ class PaymentRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Financial report schemas (Phase 9c — AP aging + financial statements)
+# ---------------------------------------------------------------------------
+#
+# These are read-only, service-CONSTRUCTED report models (not ORM serializations):
+# the service derives every figure from the append-only journal / AP subledger and
+# assembles the model. Money is Decimal throughout (never float — D-11). Report
+# balances are date-filtered on JournalEntry.entry_date (the report window), NOT the
+# whole-ledger derive_account_balance; sign is normalised so every magnitude presents
+# positive (debit-normal ASSET/EXPENSE as Σdr−Σcr, credit-normal LIABILITY/EQUITY/
+# REVENUE as Σcr−Σdr). AP aging ties out to the 2110 Accounts-Payable control (AC6);
+# TB/P&L/Balance-Sheet are the AC7 statements.
+
+
+class ApAgingTotals(BaseModel):
+    """
+    The five AP-aging bucket sums, shared by each vendor row's roll-up and the
+    report grand total. `total` == current + d31_60 + d61_90 + d90_plus. Buckets
+    the still-open bill balance by age = (as_of − bill_date).days: `current` 0–30,
+    `d31_60` 31–60, `d61_90` 61–90, `d90_plus` 90+. Money is Decimal (never float).
+    """
+
+    current: Decimal
+    d31_60: Decimal
+    d61_90: Decimal
+    d90_plus: Decimal
+    total: Decimal
+
+
+class ApAgingBucketRow(BaseModel):
+    """
+    One vendor's AP-aging row — the vendor identity plus its five bucket sums
+    (same shape as ApAgingTotals). `total` is the vendor's whole open payable.
+    """
+
+    vendor_id: str
+    vendor_name: str
+    current: Decimal
+    d31_60: Decimal
+    d61_90: Decimal
+    d90_plus: Decimal
+    total: Decimal
+
+
+class ApAgingReport(BaseModel):
+    """
+    Accounts-payable aging as of a date, with the 2110 subledger tie-out (AC6).
+
+    `vendors` lists each vendor with an open payable, bucketed by age; `grand_total`
+    is the column roll-up across vendors. `control_balance` is the date-filtered 2110
+    Accounts-Payable derived balance (negated to present the positive outstanding
+    payable, since 2110 is credit-normal); `in_balance` is True when the aging grand
+    total ties to that control to the cent (D-P9c-1). Money is Decimal (never float).
+    """
+
+    as_of: date
+    vendors: list[ApAgingBucketRow] = Field(default_factory=list)
+    grand_total: ApAgingTotals
+    control_balance: Decimal
+    in_balance: bool
+
+
+class TrialBalanceRow(BaseModel):
+    """
+    One trial-balance row — a posting account's net position as of a date, split
+    into a single non-zero column. If Σdebit − Σcredit >= 0 the magnitude sits in
+    `debit` (credit 0), otherwise in `credit` (debit 0). Money is Decimal.
+    """
+
+    account_id: int
+    code: str
+    name: str
+    account_type: str  # ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
+    debit: Decimal
+    credit: Decimal
+
+
+class TrialBalanceReport(BaseModel):
+    """
+    Trial balance as of a date — every posting account's net debit/credit (AC7).
+
+    `rows` are ordered by account code; `total_debit` / `total_credit` are the column
+    sums and `in_balance` is True when they are equal (a balanced ledger). Money is
+    Decimal (never float — D-11).
+    """
+
+    as_of: date
+    rows: list[TrialBalanceRow] = Field(default_factory=list)
+    total_debit: Decimal
+    total_credit: Decimal
+    in_balance: bool
+
+
+class ProfitLossLine(BaseModel):
+    """
+    One P&L line — a revenue or expense account's positive period activity. Money
+    is Decimal (never float — D-11).
+    """
+
+    account_id: int
+    code: str
+    name: str
+    amount: Decimal
+
+
+class ProfitLossReport(BaseModel):
+    """
+    Profit & loss over an inclusive [date_from, date_to] window (AC7).
+
+    `revenue` / `expense` list each account's positive period activity (ordered by
+    code); `total_revenue` / `total_expense` are the section sums and `net_income`
+    is total_revenue − total_expense. Money is Decimal (never float — D-11).
+    """
+
+    date_from: date
+    date_to: date
+    revenue: list[ProfitLossLine] = Field(default_factory=list)
+    total_revenue: Decimal
+    expense: list[ProfitLossLine] = Field(default_factory=list)
+    total_expense: Decimal
+    net_income: Decimal
+
+
+class BalanceSheetLine(BaseModel):
+    """
+    One balance-sheet line — an account's positive as-of balance (or the computed
+    current-year net-income equity line). Money is Decimal (never float — D-11).
+    """
+
+    account_id: int
+    code: str
+    name: str
+    amount: Decimal
+
+
+class BalanceSheetReport(BaseModel):
+    """
+    Balance sheet as of a date — assets vs. liabilities + equity (AC7).
+
+    Each section lists its accounts (ordered by code) as positive magnitudes.
+    `equity` additionally carries a COMPUTED current-year net-income line (3130) —
+    revenue less expense through `as_of` — because no closing entries are posted, so
+    ledger 3130 is empty. `in_balance` is True when total_assets == total_liabilities
+    + total_equity (the accounting identity). Money is Decimal (never float — D-11).
+    """
+
+    as_of: date
+    assets: list[BalanceSheetLine] = Field(default_factory=list)
+    total_assets: Decimal
+    liabilities: list[BalanceSheetLine] = Field(default_factory=list)
+    total_liabilities: Decimal
+    equity: list[BalanceSheetLine] = Field(default_factory=list)
+    total_equity: Decimal
+    in_balance: bool
