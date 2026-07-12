@@ -2425,3 +2425,109 @@ async def get_account_register(
         closing_balance=running_balance,
         rows=rows,
     )
+
+
+# ---------------------------------------------------------------------------
+# Accounts-payable pure helpers (Phase 9b, SYERP-12)
+# ---------------------------------------------------------------------------
+#
+# The AP core decisions are pinned in PURE helpers (no DB, no float, no
+# FastAPI) so their boundaries are unit-testable in isolation, exactly as the
+# PO number/receipt/FSM helpers above:
+#   - Bill numbers follow the numeric-safe BILL-#### series, mirroring
+#     _next_po_number (numeric-not-lexicographic — D-P9b-1).
+#   - Overpayment is rejected when pay_amount > open_balance; the exact
+#     boundary pay_amount == open_balance is ALLOWED (it fully pays). Decimal
+#     comparison — exact, no float drift (D-11, D-P8-7).
+#   - Three-way match is EXACT: a matched line auto-reconciles only when its
+#     quantity AND unit cost equal the unbilled/PO figures to the cent — any
+#     variance drops to manual review (D-P9b-2).
+# BILL_TRANSITIONS mirrors PO_TRANSITIONS' shape (draft -> posted -> paid,
+# paid terminal — D-P9b-5).
+
+_BILL_NUMBER_RE = re.compile(r"^BILL-[0-9]+$")
+
+
+def _next_bill_number(existing_numbers: "Iterable[str]") -> str:
+    """
+    Compute the next BILL-#### number from the set of existing bill numbers.
+
+    Pure (no DB) so the digit-boundary guarantee is unit-testable in isolation.
+    Considers only strictly-numeric BILL-series numbers (matching
+    ``^BILL-[0-9]+$``), selects the *numerically* highest suffix, and returns
+    that value + 1 zero-padded to 4 digits. Returns "BILL-0001" when no
+    BILL-series numbers exist yet.
+
+    The selection is numeric, never lexicographic: given {"BILL-9", "BILL-10"}
+    it picks 10 (not the lexicographically-larger "BILL-9") and returns
+    "BILL-0011". A lexicographic MAX would re-issue "BILL-0010" once the suffix
+    crosses a digit-width boundary — mirroring _next_po_number exactly (D-P9b-1).
+    """
+    suffixes = [
+        int(number.split("-", 1)[1])
+        for number in existing_numbers
+        if _BILL_NUMBER_RE.match(number)
+    ]
+    if not suffixes:
+        return "BILL-0001"
+    return f"BILL-{max(suffixes) + 1:04d}"
+
+
+def _is_overpayment(open_balance: Decimal, pay_amount: Decimal) -> bool:
+    """
+    Pure overpayment predicate (no DB — unit-testable).
+
+    Returns True when `pay_amount` exceeds the bill's `open_balance`
+    (`pay_amount > open_balance`), i.e. the payment must be REJECTED. The exact
+    boundary — `pay_amount == open_balance` — is ALLOWED (it fully pays the
+    bill) and returns False. All arithmetic is Decimal so the boundary is exact
+    with no float drift (D-11, D-P8-7).
+    """
+    return pay_amount > open_balance
+
+
+def _unbilled_qty(qty_received: Decimal, already_billed: Decimal) -> Decimal:
+    """
+    Pure unbilled-quantity helper (no DB — unit-testable).
+
+    Returns the quantity received but not yet billed
+    (`qty_received - already_billed`) — the ceiling a new AP bill line may draw
+    against a PO receipt. Decimal arithmetic (exact, no float drift — D-11).
+    """
+    return qty_received - already_billed
+
+
+def _is_exact_match(
+    matched_qty: Decimal,
+    unit_cost: Decimal,
+    unbilled_qty: Decimal,
+    po_unit_cost: Decimal,
+) -> bool:
+    """
+    Pure three-way-match predicate (no DB — unit-testable).
+
+    Returns True only when a bill line matches its PO receipt EXACTLY — the
+    matched quantity equals the unbilled quantity AND the unit cost equals the
+    PO unit cost (both Decimal-exact). Any quantity or price variance returns
+    False and drops the line to manual review (D-P9b-2).
+    """
+    return matched_qty == unbilled_qty and unit_cost == po_unit_cost
+
+
+BILL_TRANSITIONS: dict[str, set[str]] = {
+    "draft":  {"posted"},
+    "posted": {"paid"},
+    "paid":   set(),  # terminal — no outgoing transitions
+}
+
+
+def _bill_transition_allowed(current: str, target: str) -> bool:
+    """
+    Pure AP-bill FSM predicate (no DB — unit-testable).
+
+    Returns True when `target` is an allowed successor of `current` per
+    BILL_TRANSITIONS (draft -> posted -> paid, paid terminal). The service layer
+    (later task) raises HTTP 422 on top of this; the legality decision is pinned
+    here (D-P9b-5), mirroring PO_TRANSITIONS.
+    """
+    return target in BILL_TRANSITIONS.get(current, set())
