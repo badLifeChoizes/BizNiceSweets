@@ -44,6 +44,17 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
       in the same transaction as the stock receipt; the GR/IR (2150) derived
       balance moved by exactly the receipt amount.
   (e) the seeded GR/IR control account (code 2150, LIABILITY) exists.
+  (f) ATOMICITY (verify M3): forcing the GL auto-post to fail mid-receive rolls
+      BOTH the stock txn AND the JE back — nothing persists, qty_received unchanged.
+  (g) ZERO-COST receipt (verify M1): a unit_cost==0 line receives successfully,
+      records the physical stock txn, and posts NO GL entry (all-zero JE skipped).
+  (h) DOUBLE-REVERSAL guard (verify M2): reversing an already-reversed entry, or a
+      reversal itself, is refused with 409; the derived balance stays intact.
+
+Router-level concerns — the gl.journal_posted / gl.journal_reversed audit rows and
+the syerp:read/write RBAC 403 path — are proven over live HTTP by the companion
+scripts/verify_gl_api.py (this script drives the service layer directly and so
+cannot exercise the router where write_audit and require_permission live).
 
 The script uses uniquely-named throwaway data — two throwaway GL accounts, a
 vendor, an item, a location, a PO — and CLEANS UP after itself (deletes its
@@ -89,6 +100,7 @@ from app.modules.syerp.schemas import (
     POLineCreate,
     StockLocationCreate,
 )
+import app.modules.syerp.service as gl_service
 from app.modules.syerp.service import (
     add_line,
     advance_po_status,
@@ -175,6 +187,12 @@ async def run() -> None:
     loc_id: int | None = None
     po_id: str | None = None
     line_id: str | None = None
+
+    # Zero-cost receipt scenario (M1) uses its own item + PO so it does not perturb
+    # the scenario-(d) moving-average/balance assertions.
+    item0_id: str | None = None
+    po0_id: str | None = None
+    line0_id: str | None = None
 
     # Dates for the register series (in the past so the reversal, dated today,
     # falls OUTSIDE the register window and cannot perturb it).
@@ -496,6 +514,197 @@ async def run() -> None:
             f"before={inv_before!r} after={inv_after!r} delta={inv_after - inv_before!r}",
         )
 
+        # -------------------------------------------------------------------
+        # (f) ATOMICITY ROLLBACK (M2/verify M3): force the GL auto-post to FAIL
+        #     mid-receive and assert that NEITHER the stock receipt NOR the JE
+        #     persists — the negative half of scenario (d), the phase's highest
+        #     risk (a split unit of work leaving a receipt with no JE). We
+        #     monkeypatch _gl_account_id_by_code (a module global receive_line
+        #     resolves at call time) to raise when resolving 2150 — AFTER
+        #     post_receipt has already flushed the stock txn — so the raise must
+        #     roll the whole transaction back.
+        # -------------------------------------------------------------------
+        async with session_factory() as session:
+            txns_before = (
+                await session.execute(
+                    select(InventoryTxn.id).where(InventoryTxn.item_id == item_id)
+                )
+            ).scalars().all()
+            jes_before = (
+                await session.execute(
+                    select(JournalEntry.id).where(
+                        JournalEntry.source_type == "po_receipt",
+                        JournalEntry.source_id == line_id,
+                    )
+                )
+            ).scalars().all()
+
+        _real_lookup = gl_service._gl_account_id_by_code
+
+        async def _boom_on_grir(db, code):
+            if code == "2150":
+                raise HTTPException(status_code=500, detail="forced GR/IR failure (verify M3)")
+            return await _real_lookup(db, code)
+
+        gl_service._gl_account_id_by_code = _boom_on_grir
+        rollback_raised = False
+        try:
+            async with session_factory() as session:
+                # line still has 6 of 10 outstanding (received 4 in (d)); receive 3.
+                await receive_line(session, po_id, line_id, loc_id, Decimal("3"), actor_id)
+        except HTTPException:
+            rollback_raised = True
+        finally:
+            gl_service._gl_account_id_by_code = _real_lookup
+
+        async with session_factory() as session:
+            txns_after = (
+                await session.execute(
+                    select(InventoryTxn.id).where(InventoryTxn.item_id == item_id)
+                )
+            ).scalars().all()
+            jes_after = (
+                await session.execute(
+                    select(JournalEntry.id).where(
+                        JournalEntry.source_type == "po_receipt",
+                        JournalEntry.source_id == line_id,
+                    )
+                )
+            ).scalars().all()
+            line_after = (
+                await session.execute(
+                    select(PurchaseOrderLine).where(PurchaseOrderLine.id == line_id)
+                )
+            ).scalars().first()
+
+        check(
+            "forcing the GL auto-post to fail RAISES out of receive_line (no swallow)",
+            rollback_raised,
+            "receive_line did not raise when the JE post failed",
+        )
+        check(
+            "atomic rollback: NO new inventory txn persisted for the failed receipt "
+            "(the flushed stock receipt was rolled back with the failed JE)",
+            len(txns_after) == len(txns_before),
+            f"before={len(txns_before)} after={len(txns_after)}",
+        )
+        check(
+            "atomic rollback: NO new journal entry persisted for the failed receipt",
+            len(jes_after) == len(jes_before),
+            f"before={len(jes_before)} after={len(jes_after)}",
+        )
+        check(
+            "atomic rollback: the PO line's qty_received is UNCHANGED (still 4)",
+            line_after is not None and line_after.qty_received == Decimal("4"),
+            f"qty_received={line_after.qty_received if line_after else None!r}",
+        )
+
+        # -------------------------------------------------------------------
+        # (g) ZERO-COST RECEIPT (verify M1): a unit_cost==0 line (samples,
+        #     warranty/RMA replacements) is schema-legal and must still receive —
+        #     the GL post is SKIPPED (an all-zero JE cannot balance) while the
+        #     physical stock receipt is still recorded. Before the M1 fix this
+        #     422'd and rolled back the whole receipt.
+        # -------------------------------------------------------------------
+        async with session_factory() as session:
+            item0 = await create_item(
+                session,
+                InventoryItemCreate(name=f"VERIFY GL Sample {unique}", unit_of_measure="ea"),
+            )
+            item0_id = item0.id
+        async with session_factory() as session:
+            po0 = await create_po(session, POCreate(vendor_id=vendor_id))
+            po0_id = po0.id
+        async with session_factory() as session:
+            line0 = await add_line(
+                session,
+                po0_id,
+                POLineCreate(
+                    item_id=item0_id, qty_ordered=Decimal("5"), unit_cost=Decimal("0")
+                ),
+            )
+            line0_id = line0.id
+        async with session_factory() as session:
+            await advance_po_status(session, po0_id, "approved", actor_id)
+
+        zero_cost_ok = True
+        zero_cost_err = ""
+        try:
+            async with session_factory() as session:
+                await receive_line(session, po0_id, line0_id, loc_id, Decimal("2"), actor_id)
+        except HTTPException as exc:
+            zero_cost_ok = False
+            zero_cost_err = f"{exc.status_code}: {exc.detail}"
+
+        async with session_factory() as session:
+            zero_txns = (
+                await session.execute(
+                    select(InventoryTxn).where(InventoryTxn.item_id == item0_id)
+                )
+            ).scalars().all()
+            zero_jes = (
+                await session.execute(
+                    select(JournalEntry.id).where(
+                        JournalEntry.source_type == "po_receipt",
+                        JournalEntry.source_id == line0_id,
+                    )
+                )
+            ).scalars().all()
+        check(
+            "a zero-cost PO line RECEIVES successfully (M1 regression — no 422)",
+            zero_cost_ok,
+            f"receive raised {zero_cost_err}",
+        )
+        check(
+            "the zero-cost receipt still recorded the physical stock txn (qty 2)",
+            len(zero_txns) == 1 and zero_txns[0].quantity == Decimal("2"),
+            f"txns={[(t.quantity) for t in zero_txns]}",
+        )
+        check(
+            "the zero-cost receipt posted NO GL journal entry (all-zero JE skipped)",
+            len(zero_jes) == 0,
+            f"unexpected JEs={zero_jes!r}",
+        )
+
+        # -------------------------------------------------------------------
+        # (h) DOUBLE-REVERSAL GUARD (verify M2): an entry may be reversed at most
+        #     once, and a reversal is not itself reversible — else the opposite
+        #     swing applies twice and the derived control-account balance diverges
+        #     from the inventory valuation it mirrors. e2 was already reversed in
+        #     (b) by `reversal`; both re-reversal paths must 409.
+        # -------------------------------------------------------------------
+        rereverse_status = None
+        async with session_factory() as session:
+            try:
+                await reverse_journal_entry(session, e2.id, actor_id)
+            except HTTPException as exc:
+                rereverse_status = exc.status_code
+        check(
+            "reversing an ALREADY-reversed entry is refused with 409",
+            rereverse_status == 409,
+            f"status={rereverse_status!r}",
+        )
+
+        reverse_of_reversal_status = None
+        async with session_factory() as session:
+            try:
+                await reverse_journal_entry(session, reversal.id, actor_id)
+            except HTTPException as exc:
+                reverse_of_reversal_status = exc.status_code
+        check(
+            "reversing a REVERSAL entry is refused with 409",
+            reverse_of_reversal_status == 409,
+            f"status={reverse_of_reversal_status!r}",
+        )
+        async with session_factory() as session:
+            bal_a_final = await derive_account_balance(session, acct_a_id)
+        check(
+            "the refused double-reversals left account A's balance intact at 40 "
+            "(no phantom swing persisted)",
+            bal_a_final == Decimal("40"),
+            f"got {bal_a_final!r}",
+        )
+
     finally:
         # -------------------------------------------------------------------
         # Clean up the throwaway rows in FK-safe order: journal lines → journal
@@ -510,13 +719,16 @@ async def run() -> None:
 
             entry_ids = list(created_entry_ids)
             # The receipt auto-post JE is source-linked to the PO line, not tracked
-            # in created_entry_ids — collect it (and any reversal chain) to delete.
-            if line_id is not None:
+            # in created_entry_ids — collect it (and any reversal chain) for both the
+            # scenario-(d) line and the zero-cost line (which posts none, but stay
+            # symmetric) to delete.
+            source_line_ids = [lid for lid in (line_id, line0_id) if lid is not None]
+            if source_line_ids:
                 receipt_ids = (
                     await session.execute(
                         select(JournalEntry.id).where(
                             JournalEntry.source_type == "po_receipt",
-                            JournalEntry.source_id == line_id,
+                            JournalEntry.source_id.in_(source_line_ids),
                         )
                     )
                 ).scalars().all()
@@ -530,19 +742,21 @@ async def run() -> None:
                     delete(JournalEntry).where(JournalEntry.id.in_(entry_ids))
                 )
 
-            if po_id is not None:
+            po_ids = [pid for pid in (po_id, po0_id) if pid is not None]
+            if po_ids:
                 await session.execute(
-                    delete(PurchaseOrderLine).where(PurchaseOrderLine.po_id == po_id)
+                    delete(PurchaseOrderLine).where(PurchaseOrderLine.po_id.in_(po_ids))
                 )
                 await session.execute(
-                    delete(PurchaseOrder).where(PurchaseOrder.id == po_id)
+                    delete(PurchaseOrder).where(PurchaseOrder.id.in_(po_ids))
                 )
-            if item_id is not None:
+            item_ids = [iid for iid in (item_id, item0_id) if iid is not None]
+            if item_ids:
                 await session.execute(
-                    delete(InventoryTxn).where(InventoryTxn.item_id == item_id)
+                    delete(InventoryTxn).where(InventoryTxn.item_id.in_(item_ids))
                 )
                 await session.execute(
-                    delete(InventoryItem).where(InventoryItem.id == item_id)
+                    delete(InventoryItem).where(InventoryItem.id.in_(item_ids))
                 )
             if loc_id is not None:
                 await session.execute(
