@@ -3562,3 +3562,70 @@ async def ap_aging_report(db: AsyncSession, as_of: date | None = None) -> "ApAgi
         control_balance=control_balance,
         in_balance=(grand_total_amt == control_balance),
     )
+
+
+async def trial_balance(db: AsyncSession, as_of: date | None = None) -> "TrialBalanceReport":
+    """
+    Trial balance as of a date — every posting account's net debit/credit (AC7).
+
+    ONE grouped aggregate sums debit and credit per account over JournalLine ⋈
+    JournalEntry where entry_date <= as_of, each side coalesced independently
+    (D-P8-4), joined to GLAccount for code/name/account_type. The inner join over
+    JournalLine naturally includes ONLY accounts that carry a posting (rollup parents
+    carry none, so they never appear). Each account is netted into a single column:
+    if Σdr − Σcr >= 0 the magnitude sits in `debit` (credit 0), else in `credit`
+    (debit 0). total_debit/total_credit are the column sums; in_balance is True when
+    they are equal. Rows are ordered by code; all arithmetic is exact Decimal (D-11).
+    """
+    from app.modules.syerp.models import GLAccount, JournalEntry, JournalLine
+    from app.modules.syerp.schemas import TrialBalanceReport, TrialBalanceRow
+
+    if as_of is None:
+        as_of = date.today()
+
+    result = await db.execute(
+        select(
+            GLAccount.id,
+            GLAccount.code,
+            GLAccount.name,
+            GLAccount.account_type,
+            func.coalesce(func.sum(JournalLine.debit), 0),
+            func.coalesce(func.sum(JournalLine.credit), 0),
+        )
+        .select_from(JournalLine)
+        .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+        .join(GLAccount, JournalLine.account_id == GLAccount.id)
+        .where(JournalEntry.entry_date <= as_of)
+        .group_by(GLAccount.id, GLAccount.code, GLAccount.name, GLAccount.account_type)
+        .order_by(GLAccount.code)
+    )
+
+    rows: list[TrialBalanceRow] = []
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+    for account_id, code, name, account_type, sum_debit, sum_credit in result.all():
+        net = Decimal(sum_debit) - Decimal(sum_credit)
+        if net >= 0:
+            debit, credit = net, Decimal("0")
+        else:
+            debit, credit = Decimal("0"), -net
+        total_debit += debit
+        total_credit += credit
+        rows.append(
+            TrialBalanceRow(
+                account_id=account_id,
+                code=code,
+                name=name,
+                account_type=account_type,
+                debit=debit,
+                credit=credit,
+            )
+        )
+
+    return TrialBalanceReport(
+        as_of=as_of,
+        rows=rows,
+        total_debit=total_debit,
+        total_credit=total_credit,
+        in_balance=(total_debit == total_credit),
+    )
