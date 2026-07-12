@@ -1,10 +1,27 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-11 (Phase 9b **planned** — PLAN.md ready, 16 tasks, D-P9b-1..8 resolved; next `/zj:build 09b`)
+Updated: 2026-07-11 (Phase 9b **BUILD COMPLETE** — all 16 tasks done + verified; next `/zj:verify 09b`)
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** plan 09b **done** → next is `/zj:build 09b`
+- **Step:** build 09b **complete** → next is `/zj:verify 09b`.
+- **Next action:** `/zj:verify 09b` — verify AP bills / PO-match / payments (SYERP-12 AC4/AC5/AC8/AC9)
+  goal-backward + code review the diff on branch `feature-syerp-ap-bills`.
+  **All 16 PLAN tasks ticked, atomic commits.** Backend: T1 helpers `c1b431b`, T2 models `1697973`,
+  T3 migration 0010 `b91ed73`, T4 seed 1111 `5502445`, T5 create-bill `52d9a83` (+dup-guard `13ca4cd`),
+  T6 post_bill `3b8eb33`, T7 record_payment `be0a774`, T8 schemas `ff39967`, T9 bill router `7ef302b`,
+  T10 payment router `e7bb9b2` (+list_payments `99ef164`). Verify: T11 `verify_ap.py` `e2cd5f2`
+  (**22/22 PASS**, the GR/IR crux clears to zero Decimal-exact: 2150 pre-receipt −350 → post-bill −350),
+  T12 `verify_ap_api.py` `6aa86af` (**24/24 PASS**, bill.created/bill.posted/payment.recorded audit +
+  full 403/401/200 RBAC). T13 regression: verify_gl/purchasing/inventory/e2e_p8 all exit 0 unchanged.
+  Frontend: T14 Bills list `4e25ab2`, T15 BillDetail+Pay `bb57463`, T16 routes+nav `72cfd82`.
+  Suites green: **backend pytest 117 passed / 100 skipped (D-P7-4) / 0 failed**, **frontend 72/72**.
+  **Deviations** (in PLAN.md `## Deviations`): T5 in-payload duplicate `po_line_id` guard added
+  (protects the crux); T10 `list_payments` read added post-hoc (Task-7 scope gap); T2 timestamps are
+  Python-side defaults (no `server_default`) so 0010 matches the models. **Noticed** (PLAN `## Noticed`):
+  stale `Bills.tsx BillLineRead` type, a misleading `partially_paid` schema comment (FSM is
+  draft→posted→paid; partial payment stays `posted`), and the pre-existing `alembic check` drift.
+- **Prior next action (done):** `/zj:build 09b` — built 2026-07-11 off the 09a tip.
 - **Last update:** 2026-07-11
 - **Next action:** `/zj:build 09b` — build AP bills / PO-receipt match / payments (SYERP-12 AC4/AC5/AC8/AC9).
   **Plan ready:** `.zj/phases/09b-ap-bills-match-payments/PLAN.md` — 16 tasks, layered

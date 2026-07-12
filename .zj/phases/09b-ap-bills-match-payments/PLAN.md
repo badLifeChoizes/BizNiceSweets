@@ -38,14 +38,14 @@ Prior decisions honored: D-11 (Decimal money), D-P8-4 (derived sums, coalesce ea
 
 ## Tasks
 
-### [ ] 1. Add pure Decimal AP helpers + unit tests
+### [x] 1. Add pure Decimal AP helpers + unit tests
 - **Files:** `backend/app/modules/syerp/service.py`, `backend/tests/syerp/test_ap.py` (new)
 - **Do:** Add pure (no-DB) helpers mirroring `_next_po_number` (service.py:1308) / `_is_over_receipt` (service.py:1788): `_next_bill_number(existing) -> str` (`BILL-####`, numeric-not-lexicographic, `BILL-0001` when empty); `_is_overpayment(open_balance, pay_amount) -> bool` (`pay_amount > open_balance`, `==` boundary ALLOWED → fully pays, Decimal-exact — D-P8-7); `_unbilled_qty(qty_received, already_billed) -> Decimal`; `_is_exact_match(matched_qty, unit_cost, unbilled_qty, po_unit_cost) -> bool` (both equal — D-P9b-2). Add the `BILL_TRANSITIONS = {"draft":{"posted"}, "posted":{"paid"}, "paid":set()}` map + a pure `_bill_transition_allowed(current, target) -> bool`. Cite D-11, D-P9b-1/2/5. `test_ap.py` (model on `test_gl_journal.py`): numbering digit-boundary (`BILL-9`→`BILL-0010`), overpayment reject / boundary allow, exact-match true/false on qty and cost each, transition legal/illegal.
 - **Done when:** `pytest backend/tests/syerp/test_ap.py` passes all cases; helpers import cleanly.
 - **Verify:** `cd backend && pytest tests/syerp/test_ap.py -q`
 - **Parallel-ok:** yes
 
-### [ ] 2. Add Bill, BillLine, Payment, PaymentAllocation models (AC4, AC5)
+### [x] 2. Add Bill, BillLine, Payment, PaymentAllocation models (AC4, AC5)
 - **Files:** `backend/app/modules/syerp/models.py`
 - **Do:** Append four models after `JournalLine`, per Decision 6:
   - `Bill` (`syerp_bill`): `id String(36) uuid PK`; `bill_number String unique NOT NULL index`; `vendor_id String(36) FK→syerp_partner.id NOT NULL`; `vendor_invoice_ref String(200) NULL`; `status String(20) NOT NULL default 'draft'` (**MUTABLE FSM column** — copy `PurchaseOrder.status` intent, NOT the JournalEntry immutability); `memo String(500) NULL`; `posted_at DateTime(tz) NULL`; `actor_id String(36) NOT NULL`; `created_at`/`updated_at DateTime(tz)`.
@@ -57,21 +57,21 @@ Prior decisions honored: D-11 (Decimal money), D-P8-4 (derived sums, coalesce ea
 - **Verify:** `cd backend && python -c "import app.core.models; from app.core.base import Base; print(all(t in Base.metadata.tables for t in ('syerp_bill','syerp_bill_line','syerp_payment','syerp_payment_allocation')))"`
 - **Parallel-ok:** no (blocks 3, 5, 6, 7)
 
-### [ ] 3. Add migration 0010_syerp_ap_bills (AC4, AC5)
+### [x] 3. Add migration 0010_syerp_ap_bills (AC4, AC5)
 - **Files:** `backend/alembic/versions/0010_syerp_ap_bills.py` (new)
 - **Do:** Hand-write mirroring `0009_syerp_gl_journal.py` (`revision="0010"`, `down_revision="0009"`). `create_table` for all four tables matching the Task-2 columns exactly (uuid PKs, the FKs listed above, `Numeric(18,6)` money, `unique=True` on `bill_number`, `server_default=sa.text("now()")` on the `created_at`/`updated_at` timestamps, indexes on the FK columns declared `index=True`). Provide a real `downgrade()` dropping the four tables in FK-safe order (allocation → payment, bill_line → bill).
 - **Done when:** `alembic upgrade head` then `alembic downgrade -1` then `alembic upgrade head` all succeed against the dev DB, and `alembic check` reports no NEW `ap_bill`/`ap_payment` operations (the pre-existing 7-constraint + `now()` drift is accepted — 09a PLAN Deviations).
 - **Verify:** in the compose api container: `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` (dev DB per verify_gl.py HOW-TO-RUN block).
 - **Parallel-ok:** no (depends on 2; blocks the live verify scripts)
 
-### [ ] 4. Seed 1111 Bank – Checking in the standard CoA (D-P9b-4)
+### [x] 4. Seed 1111 Bank – Checking in the standard CoA (D-P9b-4)
 - **Files:** `backend/app/modules/syerp/coa_seed.py`
 - **Do:** Add `{"code": "1111", "name": "Bank – Checking", "account_type": "ASSET", "parent_code": "1100"}` to `_STANDARD_COA` (coa_seed.py:40) immediately after `1110` (coa_seed.py:44). No seed-function change (two-pass idempotent select-before-insert `seed_gl_accounts` at coa_seed.py:99 covers it; parent 1100 pre-exists). Cite D-P9b-4 in a comment.
 - **Done when:** after a startup seed run, `GET /api/v1/syerp/gl/accounts` includes code `1111` (ASSET, parent = 1100 id); re-running the seed adds no duplicate.
 - **Verify:** in the api container `python -c "import app.modules.syerp.coa_seed as c; print(any(a['code']=='1111' for a in c._STANDARD_COA))"`; confirmed live by `verify_ap.py` (Task 11).
 - **Parallel-ok:** yes
 
-### [ ] 5. Service: unbilled-receipts query + create/edit bill with match validation (SC1, SC2)
+### [x] 5. Service: unbilled-receipts query + create/edit bill with match validation (SC1, SC2)
 - **Files:** `backend/app/modules/syerp/service.py`
 - **Do:** Add:
   - `list_unbilled_receipts(db, vendor_id) -> list[UnbilledReceiptRead]` — for that vendor's POs, each PO line with `qty_received > 0`, compute `unbilled_qty = qty_received − coalesce(Σ BillLine.matched_qty for that po_line_id, 0)` (**coalesce each side independently**, D-P8-4 / 09a NULL-propagation bug); return only lines with `unbilled_qty > 0`, carrying `po_line_id`, `po_number`, `item_id`, `unbilled_qty`, `unit_cost`.
@@ -81,77 +81,77 @@ Prior decisions honored: D-11 (Decimal money), D-P8-4 (derived sums, coalesce ea
 - **Verify:** `cd backend && python -c "from app.modules.syerp.service import list_unbilled_receipts, create_bill, get_bill, list_bills"`; behavior via `verify_ap.py`.
 - **Parallel-ok:** no (depends on 1, 2)
 
-### [ ] 6. Service: post_bill → balanced JE + Draft→Posted transition (SC3, GR/IR crux)
+### [x] 6. Service: post_bill → balanced JE + Draft→Posted transition (SC3, GR/IR crux)
 - **Files:** `backend/app/modules/syerp/service.py`
 - **Do:** Add `post_bill(db, bill_id, actor_id) -> BillRead`. Load the bill (404 if missing); reject 422 via `_bill_transition_allowed` if status != `'draft'`. Build ONE JE line list: for each MATCHED line `{account_id: <2150 GR/IR>, debit: line.amount}`; for each EXPENSE line `{account_id: line.account_id, debit: line.amount}`; plus one `{account_id: <2110 AP>, credit: bill_total}`. Resolve 2110/2150 via `_gl_account_id_by_code` (service.py:1816). Call `post_journal_entry(db, entry_date=date.today(), memo=f"AP bill {bill.bill_number}", lines=..., actor_id=actor_id, source_type="ap_bill", source_id=bill.id, commit=False)` (service.py:2069 — `commit=False` so the JE + status flip share ONE transaction, exactly like `receive_line` at service.py:1950). Set `status='posted'`, stamp `posted_at`, single `await db.commit()`. Cite D-P9b-2/5 and note the GR/IR-clears-to-zero invariant in the docstring.
 - **Done when:** posting a draft bill creates one balanced JE (Σdebits == Cr AP == bill total) source-linked `ap_bill`; the bill flips to `posted`; posting a non-draft bill raises 422; for a bill matching a fully-received line, the 2150 GR/IR derived balance returns to its pre-receipt value.
 - **Verify:** `cd backend && python -c "from app.modules.syerp.service import post_bill"`; full behavior + GR/IR-to-zero via `verify_ap.py` (Task 11).
 - **Parallel-ok:** no (depends on 2, 5; reuses 09a `post_journal_entry`)
 
-### [ ] 7. Service: record_payment → JE + allocations + overpayment guard + auto-Paid (SC4)
+### [x] 7. Service: record_payment → JE + allocations + overpayment guard + auto-Paid (SC4)
 - **Files:** `backend/app/modules/syerp/service.py`
 - **Do:** Add `record_payment(db, *, payment_date, cash_account_id, reference, allocations, actor_id) -> PaymentRead` where `allocations` is `[{bill_id, amount}]`. Validate: `cash_account_id` resolves to an ASSET account (422 else); `Payment.amount = Σ allocation.amount` (>0); each target bill exists and is `status='posted'` (422 if draft/paid); for each bill compute live `open_balance = total − coalesce(Σ prior allocation.amount,0)` (**coalesce each side**) and reject 422 via `_is_overpayment(open_balance, alloc.amount)` (D-P8-7). Persist `Payment` + `PaymentAllocation` rows, then post ONE JE `Dr 2110 AP = Σ allocations / Cr cash_account_id = Σ allocations` via `post_journal_entry(..., source_type="ap_payment", source_id=payment.id, commit=False)`. After allocating, for each touched bill re-derive open balance and, when it hits exactly zero, `advance_bill_status(db, bill_id, 'paid', actor_id)` (auto-Paid, D-P9b-5). Single commit. Add `advance_bill_status` (clone `advance_po_status`, service.py:1726, using `BILL_TRANSITIONS`).
 - **Done when:** a partial payment leaves the bill `posted` with reduced open balance; a payment that zeroes it flips the bill to `paid`; an allocation exceeding a bill's open balance raises 422 and persists nothing; the payment JE is balanced and source-linked `ap_payment`.
 - **Verify:** `cd backend && python -c "from app.modules.syerp.service import record_payment, advance_bill_status"`; behavior via `verify_ap.py`.
 - **Parallel-ok:** no (depends on 2, 6; reuses 09a `post_journal_entry`)
 
-### [ ] 8. Add AP Pydantic schemas
+### [x] 8. Add AP Pydantic schemas
 - **Files:** `backend/app/modules/syerp/schemas.py`
 - **Do:** Following `POLineRead`/`PORead` (schemas.py:421–525): `UnbilledReceiptRead` (po_line_id, po_number, item_id, unbilled_qty, unit_cost); `BillLineCreate` (line_type + optional po_line_id/matched_qty OR account_id/amount) with a model-level validator enforcing exactly one shape (matched: po_line_id+matched_qty, no account_id; expense: account_id + amount>0, no po_line_id); `BillCreate` (vendor_id, vendor_invoice_ref?, lines); `BillLineRead`, `BillRead` (header + lines + derived `total`, `open_balance`, `status`, `posted_at`); `PaymentAllocationCreate` (bill_id, amount>0); `PaymentCreate` (payment_date, cash_account_id, reference?, allocations) with a validator that `amount` need not be client-supplied (server sums allocations); `PaymentRead` (with allocations). Money fields `Decimal` (D-11). Align field names with Tasks 5–7.
 - **Done when:** schemas import; a `BillLineCreate` that sets both `po_line_id` and `account_id` is rejected; a `PaymentCreate` with an empty allocations list is rejected.
 - **Verify:** `cd backend && python -c "from app.modules.syerp.schemas import BillCreate, BillRead, UnbilledReceiptRead, PaymentCreate, PaymentRead"`
 - **Parallel-ok:** yes (align field names with 5–7)
 
-### [ ] 9. Router: bill endpoints (unbilled / create / list / get / post) with RBAC + audit (AC4, AC8, AC9)
+### [x] 9. Router: bill endpoints (unbilled / create / list / get / post) with RBAC + audit (AC4, AC8, AC9)
 - **Files:** `backend/app/modules/syerp/router.py`
 - **Do:** Add per Decision 7, mirroring the journal-post endpoint (router.py:938–972) and receive endpoint (router.py:844–906): `GET /ap/unbilled-receipts?vendor_id=` (`syerp:read`); `POST /ap/bills` (`syerp:write`, calls `create_bill`, then `write_audit(action="bill.created", target_type="bill", target_id=bill.id, detail=...)`); `GET /ap/bills` + `GET /ap/bills/{id}` (`syerp:read`); `POST /ap/bills/{id}/post` (`syerp:write`, calls `post_bill`, then `write_audit(action="bill.posted", target_type="bill", ...)`). Every audit AFTER the service commit (`write_audit` self-commits, auth/service.py:342). NO PUT/DELETE on a posted bill.
 - **Done when:** OpenAPI shows the 5 routes; an un-permissioned token gets 403 on each; an exact-match violation POST returns 422; posting a non-draft bill returns 422; there is no edit/delete route for a posted bill.
 - **Verify:** curl the dev api (or `verify_ap_api.py`): POST a bad-match bill → 422; POST valid → 201; POST `{id}/post` → 200; GET unbilled/list/detail → 200; repeat with a `syerp:read`-only token on writes → 403.
 - **Parallel-ok:** no (depends on 5, 6, 8)
 
-### [ ] 10. Router: payment endpoint with RBAC + audit (AC5, AC8, AC9)
+### [x] 10. Router: payment endpoint with RBAC + audit (AC5, AC8, AC9)
 - **Files:** `backend/app/modules/syerp/router.py`
 - **Do:** Add `POST /ap/payments` (`syerp:write`, calls `record_payment`, then `write_audit(action="payment.recorded", target_type="payment", target_id=payment.id, detail=f"Payment {payment.id}: {amount} across {n} bill(s)")`) and `GET /ap/payments` (`syerp:read`). Audit after the service commit. Mirror the journal-post endpoint (router.py:938).
 - **Done when:** OpenAPI shows both routes; overpayment POST → 422; a valid payment → 201 and writes a `payment.recorded` audit row; `syerp:read`-only token on the POST → 403.
 - **Verify:** curl / `verify_ap_api.py`: overpay → 422, valid → 201, read-only token → 403.
 - **Parallel-ok:** no (depends on 7, 8)
 
-### [ ] 11. Write verify_ap.py live-Postgres verification (SC1, SC2, SC3, SC4 + GR/IR crux)
+### [x] 11. Write verify_ap.py live-Postgres verification (SC1, SC2, SC3, SC4 + GR/IR crux)
 - **Files:** `backend/scripts/verify_ap.py` (new)
 - **Do:** Mirror `verify_gl.py` (own async engine from `POSTGRES_*`, no conftest, PASS/FAIL prints, non-zero exit, self-cleanup in `finally`, in-container run header at verify_gl.py:24–31). Scenarios: (a) create vendor/item/location/PO/approve/receive a line, then `list_unbilled_receipts` surfaces the received qty. (b) `create_bill` with an EXACT matched line succeeds; a wrong-qty or wrong-cost matched line raises 422 (D-P9b-2). (c) a non-PO EXPENSE line bills against an expense account; a REVENUE account raises 422. (d) `post_bill` posts ONE balanced JE (Dr 2150 + Dr expense, Cr 2110 = total), source-linked `ap_bill`, and flips the bill to `posted`. (e) **GR/IR clears to zero (the crux):** capture the 2150 derived balance BEFORE the receipt; after receive→post_bill on the same fully-received PO line, assert the 2150 balance equals its pre-receipt value (receipt Cr GR/IR + bill Dr GR/IR net to zero). (f) `record_payment` partial → bill stays `posted`, open_balance reduced; full → bill auto-advances to `paid`; the payment JE is balanced Dr 2110 / Cr <cash>. (g) overpayment (allocation > open balance) raises 422 and persists nothing (bill unchanged). (h) seeded `1111 Bank – Checking` (ASSET) exists. (i) paying via 1110 vs 1111 both post to the chosen account.
 - **Done when:** `python scripts/verify_ap.py` prints all PASS and exits 0 against the live dev DB; re-runnable (cleans up).
 - **Verify:** in the api one-off container: `python scripts/verify_ap.py` → exit 0.
 - **Parallel-ok:** no (depends on 3, 4, 5, 6, 7)
 
-### [ ] 12. Write verify_ap_api.py HTTP-level verification (SC6, AC8, AC9)
+### [x] 12. Write verify_ap_api.py HTTP-level verification (SC6, AC8, AC9)
 - **Files:** `backend/scripts/verify_ap_api.py` (new)
 - **Do:** Model on `verify_gl_api.py` — drive the REAL endpoints over live HTTP (httpx against the running api, a `syerp:write` token and a `syerp:read`-only token). Assert: (a) creating a bill writes a `bill.created` audit row; posting it writes `bill.posted`; recording a payment writes `payment.recorded` (query the audit log by target_id). (b) RBAC — every mutation endpoint (`POST /ap/bills`, `POST /ap/bills/{id}/post`, `POST /ap/payments`) returns 403 with the read-only token and 401 unauthenticated; every GET (`/ap/bills`, `/ap/bills/{id}`, `/ap/unbilled-receipts`, `/ap/payments`) returns 200 with `syerp:read` and 401 unauthenticated. Include the in-container run header.
 - **Done when:** `python scripts/verify_ap_api.py` prints all PASS and exits 0; the three audit actions are found; every RBAC assertion holds.
 - **Verify:** in the api one-off container against the running api: `python scripts/verify_ap_api.py` → exit 0.
 - **Parallel-ok:** no (depends on 9, 10)
 
-### [ ] 13. Regression: re-run 9a + Phase-8 verify scripts unchanged (SC3 gate)
+### [x] 13. Regression: re-run 9a + Phase-8 verify scripts unchanged (SC3 gate)
 - **Files:** none (validation only) — exercises `backend/scripts/verify_gl.py`, `verify_purchasing.py`, `verify_inventory.py`, `verify_e2e_p8.py`
 - **Do:** Run all four after Tasks 6–7. The AP work reuses `post_journal_entry` and reads `qty_received` but must NOT touch `receive_line`, `post_receipt`, or the GL engine — confirm the receipt auto-post, on-hand, moving-average, and GL balance assertions still pass with unchanged counts. If any fails, the AP layer regressed a shared path — fix before proceeding.
 - **Done when:** all four scripts exit 0 with unchanged PASS counts.
 - **Verify:** in the api container: `python scripts/verify_gl.py && python scripts/verify_purchasing.py && python scripts/verify_inventory.py && python scripts/verify_e2e_p8.py`
 - **Parallel-ok:** no (depends on 6, 7)
 
-### [ ] 14. Frontend: Bills list + create/match dialog (SC5, AC4)
+### [x] 14. Frontend: Bills list + create/match dialog (SC5, AC4)
 - **Files:** `frontend/src/routes/syerp/Bills.tsx` (new), `frontend/src/routes/syerp/components/BillCreateDialog.tsx` (new), `frontend/src/routes/syerp/Bills.test.tsx` (new)
 - **Do:** List screen (TanStack Query GET `/api/v1/syerp/ap/bills`) reusing the `PurchaseOrders.tsx` / `JournalEntries.tsx` layout (`p-8 space-y-6`, `SyerpNav`), columns bill_number / vendor / status / total / open_balance. A "New bill" button opens `BillCreateDialog` (pattern from `ReceiveLineDialog.tsx`): pick a vendor → GET `/ap/unbilled-receipts?vendor_id=`, show its unbilled receipt lines with a "bill this line" checkbox (qty + unit_cost read-only, exact-match enforced by pre-fill), plus an "add non-PO line" grid (account select from GET `/gl/accounts` filtered to EXPENSE/ASSET, amount input). POST `/ap/bills` on submit; sonner toast; invalidate the list. Vitest: renders, selecting an unbilled line adds it, adding a non-PO line, submit calls POST with the right body.
 - **Done when:** `npm run test -- Bills` passes; a bill built from an unbilled receipt + a non-PO line posts and appears in the list.
 - **Verify:** `cd frontend && npm run test -- Bills && npx tsc -b`
 - **Parallel-ok:** yes (after 9 exists for the contract; UI mockable)
 
-### [ ] 15. Frontend: Bill detail + Post action + Pay dialog (SC5, AC4, AC5)
+### [x] 15. Frontend: Bill detail + Post action + Pay dialog (SC5, AC4, AC5)
 - **Files:** `frontend/src/routes/syerp/BillDetail.tsx` (new), `frontend/src/routes/syerp/components/PayBillDialog.tsx` (new), `frontend/src/routes/syerp/BillDetail.test.tsx` (new)
 - **Do:** Detail screen (GET `/ap/bills/{id}`) reusing `PurchaseOrderDetail.tsx` layout: header (bill_number, vendor, status, total, open_balance), lines table. A "Post" button (visible only when `status==='draft'`) POSTs `/ap/bills/{id}/post` → toast + invalidate. A "Pay" button (visible when `status==='posted'`) opens `PayBillDialog`: pick cash/bank account (GET `/gl/accounts` filtered ASSET, default 1110), payment_date, amount (client-guard amount ≤ open_balance mirroring the server 422), reference; POST `/ap/payments` with a single allocation for this bill → toast + invalidate. Vitest: Post button gated by status, Pay dialog rejects an amount above open_balance, successful pay calls POST.
 - **Done when:** `npm run test -- BillDetail` passes; posting flips the shown status to Posted; a partial then full payment drives open_balance to 0 and status to Paid.
 - **Verify:** `cd frontend && npm run test -- BillDetail && npx tsc -b`
 - **Parallel-ok:** no (depends on 14 for the list→detail link)
 
-### [ ] 16. Frontend: register routes in App.tsx + SyerpNav "Bills" tab (SC5)
+### [x] 16. Frontend: register routes in App.tsx + SyerpNav "Bills" tab (SC5)
 - **Files:** `frontend/src/App.tsx`, `frontend/src/routes/syerp/components/SyerpNav.tsx`
 - **Do:** Import + add routes `/syerp/ap/bills` → `Bills` and `/syerp/ap/bills/:id` → `BillDetail` (beside the GL routes at App.tsx:55–57; keep the static list route BEFORE the `/:id` detail route, per the PO comment at App.tsx:52). Add a `TABS` entry in `SyerpNav.tsx` (SyerpNav.tsx:15): `{ to: '/syerp/ap/bills', label: 'Bills' }` after the GL tabs.
 - **Done when:** the "Bills" tab renders and navigates; list→detail works; `tsc -b` clean; the full frontend suite passes.
@@ -172,3 +172,13 @@ Prior decisions honored: D-11 (Decimal money), D-P8-4 (derived sums, coalesce ea
 - Credit memos, vendor prepayments/deposits, early-payment discounts, multi-currency, tax lines on bills.
 - GL account CRUD (CoA stays seeded/read-only) and period close / fiscal-period locking.
 - Offline/Service-Worker support for the new screens (standing cross-module concern, not this phase).
+
+## Noticed (unrelated / follow-up, not fixed mid-task)
+- `frontend/src/routes/syerp/Bills.tsx` `BillLineRead` interface is stale — declares `quantity` (no such backend field), omits `line_no`/`matched_qty`. Harmless today (the list renders no lines); latent trap if reused. T15 defined accurate local types instead. Candidate cleanup.
+- A schema comment mentions a `partially_paid` status, but the implemented FSM is Draft→Posted→Paid only (a partial payment leaves the bill `posted`; auto-Paid at zero). Comment is misleading; behavior is per plan. Pay-button gating on `posted` is correct.
+- Pre-existing repo `alembic check` drift (7 unnamed unique constraints + `now()` defaults on Phase 4–8 tables) makes `alembic check` permanently non-zero — already accepted (09a), but will trip any future CI gate that runs it. Candidate for a dedicated cleanup migration.
+
+## Deviations
+- **T10 → follow-up (gap, required by SC6/Task-12):** `record_payment` (T7) shipped without a `list_payments` read, but the router needs one for `GET /ap/payments`. T10 registered the route with a lazy import so the app boots; a follow-up adds `list_payments(db) -> list[PaymentRead]` to `service.py`. Also: `PaymentCreate.cash_account_id` is a required int, so the D-P9b-4 "default 1110" is a UI concern (T15 PayBillDialog), not a router default.
+- **T5 → follow-up (correctness, in-scope of SC1):** `create_bill` validated each matched line's exact-match against the DB independently, so two matched lines against the SAME `po_line_id` in one payload could jointly over-bill a receipt (GR/IR would not clear — Risk #2). Fixed by rejecting duplicate `po_line_id` within a single bill payload (422). Cross-bill/draft double-billing was already handled.
+- **T2 (trivial):** Models use Python-side timestamp defaults (`default=lambda: datetime.now(timezone.utc)`, `updated_at` also `onupdate=`), NOT `server_default=func.now()` — matching every neighbor in `models.py` (`func` isn't even imported there). `bill_number` is `String(30)` to match `PurchaseOrder.po_number`. Consequence for T3: migration 0010 emits these columns with **no** DB-level server default (the plan's Task-3 `server_default=sa.text("now()")` text is overridden to match the actual models — models are the source of truth).
