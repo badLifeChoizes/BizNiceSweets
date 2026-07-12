@@ -515,6 +515,11 @@ class Bill(Base):
     vendor_id is an FK into syerp_partner.id (the vendor being paid).
     Money amounts live on the child BillLine rows as fixed-point Numeric(18,6)
     (never float — D-11).
+
+    bill_date is the vendor's invoice date — the date AP aging buckets from
+    (0/30/60/90+), distinct from created_at (when the row was entered). It is
+    always supplied by create_bill (defaulting to today server-side); existing
+    rows were backfilled to created_at::date by migration 0011 (D-P9c-1).
     """
 
     __tablename__ = "syerp_bill"
@@ -532,6 +537,8 @@ class Bill(Base):
     )
     # vendor_invoice_ref: the vendor's own invoice number (free text)
     vendor_invoice_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # bill_date: the vendor's invoice date — AP aging buckets from this (D-P9c-1)
+    bill_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     # status: MUTABLE FSM column (mirrors PurchaseOrder.status) — draft | posted
     # | paid ... walked forward by the service layer; NOT immutable (D-P9b-1)
