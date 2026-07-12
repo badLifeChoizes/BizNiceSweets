@@ -1,12 +1,27 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-11 (Phase 9b **BUILD COMPLETE** — all 16 tasks done + verified; next `/zj:verify 09b`)
+Updated: 2026-07-12 (Phase 9b **VERIFIED + tagged `zj/good-09b-ap-bills-match-payments`** — next `/zj:retro 09b`)
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** build 09b **complete** → next is `/zj:verify 09b`.
-- **Next action:** `/zj:verify 09b` — verify AP bills / PO-match / payments (SYERP-12 AC4/AC5/AC8/AC9)
-  goal-backward + code review the diff on branch `feature-syerp-ap-bills`.
+- **Step:** verify 09b **complete (PASS)** → next is `/zj:retro 09b` (then `/zj:plan 09c`).
+- **Next action:** `/zj:retro 09b` — extract the learning worth keeping (the review again caught a
+  major the green sequential live-verify missed: a concurrent double-bill/overpayment race — the
+  09a learning recurs, now "concurrency guards need FOR UPDATE + a gather-based verify scenario"),
+  update the roadmap, set up Phase 9c (AP aging + financial statements, AC6/AC7).
+- **Verify 09b (2026-07-12) — Verdict PASS + tagged `zj/good-09b-ap-bills-match-payments`.** Goal-backward + code
+  review on `feature-syerp-ap-bills`. All six SCs proven live: `test_ap.py` 14, **`verify_ap.py`
+  24/24** (GR/IR-clears-to-zero crux Decimal-exact: 2150 −550 pre-receipt → −550 post-bill; + two
+  concurrency race scenarios), **`verify_ap_api.py`** (audit + 403/401/200 RBAC over live HTTP);
+  regression `verify_gl` 28 / `verify_purchasing` 18 / `verify_inventory` 15 / `verify_e2e_p8` 18
+  all exit 0; FE 72/72. **Fix-loop closed one MAJOR (`380c73b`):** `create_bill`/`record_payment`
+  guarded double-bill/overpayment with a read-then-write and no row lock → two concurrent requests
+  for the same PO line (or bill) could both commit (2150 never clears / AP negative). Now each
+  contended PO-line/bill row is `SELECT … FOR UPDATE`-locked up-front in sorted id order
+  (deadlock-safe); pinned by verify scenarios (j)/(k). Two MINOR edge-cases logged to PLAN
+  `## Noticed` (fractional multi-lot GR/IR sub-micro residue; zero-qty matched line → unpostable
+  draft). Artifacts: `.zj/phases/09b-ap-bills-match-payments/{VERIFICATION,REVIEW}.md`.
+- **Prior next action (done):** `/zj:verify 09b` — verified AP bills / PO-match / payments.
   **All 16 PLAN tasks ticked, atomic commits.** Backend: T1 helpers `c1b431b`, T2 models `1697973`,
   T3 migration 0010 `b91ed73`, T4 seed 1111 `5502445`, T5 create-bill `52d9a83` (+dup-guard `13ca4cd`),
   T6 post_bill `3b8eb33`, T7 record_payment `be0a774`, T8 schemas `ff39967`, T9 bill router `7ef302b`,

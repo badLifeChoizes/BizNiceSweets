@@ -179,10 +179,20 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   the majors the green live-verify missed. Deferrals homed to BACKLOG (alembic drift, reverse-UI Vitest,
   entry_date UTC, MAP refresh). **Next: `/zj:plan 09b`.**
 
-#### Phase 9b: AP bills, PO match & payments  [planned 2026-07-11 — PLAN.md ready, next `/zj:build 09b`]
+#### Phase 9b: AP bills, PO match & payments  [verified 2026-07-12 — tag `zj/good-09b-ap-bills-match-payments`]
 - **Delivers:** SYERP-12 **AC4** (vendor bill + PO-receipt match, Dr GR/IR-or-Expense / Cr AP,
   Draft→Posted→Paid FSM), **AC5** (payments Dr AP / Cr Cash-or-Bank, partial, overpayment 4xx),
   plus AC8/AC9 (audit + RBAC) for that surface.
+- **Verified (2026-07-12):** goal-backward + code review on branch `feature-syerp-ap-bills`.
+  All six SCs proven live: `test_ap.py` 14, **`verify_ap.py` 24/24** (incl. the GR/IR-clears-to-zero
+  crux Decimal-exact and two concurrency race scenarios), **`verify_ap_api.py`** (audit +
+  403/401/200 RBAC over live HTTP); regression `verify_gl` 28 / `verify_purchasing` 18 /
+  `verify_inventory` 15 / `verify_e2e_p8` 18 all exit 0; frontend 72/72. **Verify fix-loop closed
+  one major** (`380c73b`): concurrent `create_bill`/`record_payment` could defeat the
+  double-bill/overpayment guards under READ COMMITTED — now `SELECT … FOR UPDATE`-serialized and
+  pinned by verify scenarios (j)/(k). Two minor edge-cases logged to PLAN `## Noticed` (fractional
+  multi-lot GR/IR sub-micro residue; zero-qty matched line → unpostable draft). Artifacts:
+  `VERIFICATION.md`, `REVIEW.md`.
 - **Plan:** `.zj/phases/09b-ap-bills-match-payments/PLAN.md` — 16 tasks (models→migration→seed→
   3 service→schemas→2 router→`verify_ap.py`+`verify_ap_api.py`→regression→3 frontend), branch
   `feature-syerp-ap-bills` off the 09a tip (D-P9b-8).
