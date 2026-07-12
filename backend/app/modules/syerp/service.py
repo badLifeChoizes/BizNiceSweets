@@ -3629,3 +3629,73 @@ async def trial_balance(db: AsyncSession, as_of: date | None = None) -> "TrialBa
         total_credit=total_credit,
         in_balance=(total_debit == total_credit),
     )
+
+
+async def profit_loss(
+    db: AsyncSession, date_from: date, date_to: date
+) -> "ProfitLossReport":
+    """
+    Profit & loss over an inclusive [date_from, date_to] window (AC7).
+
+    ONE grouped aggregate sums debit/credit per posting account over JournalLine ⋈
+    JournalEntry where date_from <= entry_date <= date_to (BOTH bounds inclusive),
+    joined to GLAccount and filtered to account_type in ('REVENUE','EXPENSE'); each
+    side is coalesced independently (D-P8-4). REVENUE is credit-normal so its period
+    activity is Σcr − Σdr (positive revenue); EXPENSE is debit-normal so Σdr − Σcr
+    (positive expense). Each account becomes a ProfitLossLine (ordered by code);
+    total_revenue / total_expense are the section sums and net_income is their
+    difference. A period with no activity folds to zeros (never NULL). Exact Decimal.
+    """
+    from app.modules.syerp.models import GLAccount, JournalEntry, JournalLine
+    from app.modules.syerp.schemas import ProfitLossLine, ProfitLossReport
+
+    result = await db.execute(
+        select(
+            GLAccount.id,
+            GLAccount.code,
+            GLAccount.name,
+            GLAccount.account_type,
+            func.coalesce(func.sum(JournalLine.debit), 0),
+            func.coalesce(func.sum(JournalLine.credit), 0),
+        )
+        .select_from(JournalLine)
+        .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+        .join(GLAccount, JournalLine.account_id == GLAccount.id)
+        .where(
+            JournalEntry.entry_date >= date_from,
+            JournalEntry.entry_date <= date_to,
+            GLAccount.account_type.in_(("REVENUE", "EXPENSE")),
+        )
+        .group_by(GLAccount.id, GLAccount.code, GLAccount.name, GLAccount.account_type)
+        .order_by(GLAccount.code)
+    )
+
+    revenue: list[ProfitLossLine] = []
+    expense: list[ProfitLossLine] = []
+    total_revenue = Decimal("0")
+    total_expense = Decimal("0")
+    for account_id, code, name, account_type, sum_debit, sum_credit in result.all():
+        sum_debit = Decimal(sum_debit)
+        sum_credit = Decimal(sum_credit)
+        if account_type == "REVENUE":
+            amount = sum_credit - sum_debit  # credit-normal → positive revenue
+            total_revenue += amount
+            revenue.append(
+                ProfitLossLine(account_id=account_id, code=code, name=name, amount=amount)
+            )
+        else:  # EXPENSE
+            amount = sum_debit - sum_credit  # debit-normal → positive expense
+            total_expense += amount
+            expense.append(
+                ProfitLossLine(account_id=account_id, code=code, name=name, amount=amount)
+            )
+
+    return ProfitLossReport(
+        date_from=date_from,
+        date_to=date_to,
+        revenue=revenue,
+        total_revenue=total_revenue,
+        expense=expense,
+        total_expense=total_expense,
+        net_income=total_revenue - total_expense,
+    )
