@@ -1868,9 +1868,11 @@ async def receive_line(
         AC3): Dr 1130 Inventory / Cr 2150 GR/IR for qty×unit_cost, source-linked
         (source_type='po_receipt', source_id=line.id) via post_journal_entry with
         commit=False. The JE rides THIS transaction's single commit alongside the
-        stock txn, the qty_received bump, and the status roll-up — a receipt can
-        never persist without its balanced GL entry, and if the JE raises nothing
-        persists.
+        stock txn, the qty_received bump, and the status roll-up — a non-zero-cost
+        receipt can never persist without its balanced GL entry, and if the JE
+        raises nothing persists. A ZERO-cost receipt (amount == 0) skips the GL
+        post entirely (an all-zero entry cannot balance) but still records the
+        physical stock receipt (Phase 9a verify M1).
 
     Status roll-up sets po.status DIRECTLY rather than routing through
     advance_po_status. This is deliberate: a second partial receipt while the PO is
@@ -1934,22 +1936,30 @@ async def receive_line(
     # stock valuation exactly. commit=False so the entry + its lines ride the single
     # commit below — if the JE raises (e.g. a control account is missing) the stock
     # txn and accumulator bump roll back too (no partial persist, SYERP-12 AC3).
+    #
+    # A ZERO-cost receipt (unit_cost == 0 → amount == 0: samples, warranty/RMA
+    # replacements, consignment) carries no accounting value: an all-zero JE cannot
+    # satisfy _je_is_balanced (every line would set neither a positive debit nor a
+    # positive credit) and would 422 the whole receipt, regressing a flow that
+    # worked before the GL hook (Phase 9a verify M1). Skip the GL post when the
+    # amount rounds to zero — the stock ledger still records the physical receipt.
     amount = (qty * line.unit_cost).quantize(_COST_QUANTUM, rounding=ROUND_HALF_UP)
-    inventory_account_id = await _gl_account_id_by_code(db, "1130")
-    grir_account_id = await _gl_account_id_by_code(db, "2150")
-    await post_journal_entry(
-        db,
-        entry_date=date.today(),
-        memo=f"PO receipt {line.id}",
-        lines=[
-            {"account_id": inventory_account_id, "debit": amount},
-            {"account_id": grir_account_id, "credit": amount},
-        ],
-        actor_id=actor_id,
-        source_type="po_receipt",
-        source_id=line.id,
-        commit=False,
-    )
+    if amount != 0:
+        inventory_account_id = await _gl_account_id_by_code(db, "1130")
+        grir_account_id = await _gl_account_id_by_code(db, "2150")
+        await post_journal_entry(
+            db,
+            entry_date=date.today(),
+            memo=f"PO receipt {line.id}",
+            lines=[
+                {"account_id": inventory_account_id, "debit": amount},
+                {"account_id": grir_account_id, "credit": amount},
+            ],
+            actor_id=actor_id,
+            source_type="po_receipt",
+            source_id=line.id,
+            commit=False,
+        )
 
     line.qty_received += qty
 
@@ -2165,8 +2175,43 @@ async def reverse_journal_entry(
     guarantee (a correction is a reversing entry, not a mutation). `memo` overrides
     the reversing entry's memo; when omitted a default derived from the original id
     is used. Returns the new reversing entry as a JournalEntryRead.
+
+    Double-reversal is REFUSED (HTTP 409, Phase 9a verify M2): a posted entry may
+    be reversed at most once, and a reversal is not itself reversible. Reversing
+    the same entry twice would apply its opposite swing twice, silently diverging
+    the DERIVED GL control-account balance from the physical inventory / moving-
+    average valuation it mirrors (e.g. a receipt's 1130/2150 legs would net to a
+    phantom −qty×cost while stock is still on hand). A correction beyond one
+    reversal must re-post a fresh entry, never reverse again.
     """
-    await _get_journal_entry_row(db, entry_id)  # 404 if the original is missing.
+    from app.modules.syerp.models import JournalEntry
+
+    original = await _get_journal_entry_row(db, entry_id)  # 404 if the original is missing.
+
+    # Guard A: a reversal is not itself reversible.
+    if original.reversal_of_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Journal entry {entry_id} is itself a reversal "
+                f"(of {original.reversal_of_id}) and cannot be reversed again."
+            ),
+        )
+    # Guard B: an entry may be reversed at most once.
+    existing_reversal = (
+        await db.execute(
+            select(JournalEntry.id).where(JournalEntry.reversal_of_id == entry_id)
+        )
+    ).scalars().first()
+    if existing_reversal is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Journal entry {entry_id} has already been reversed by "
+                f"{existing_reversal}."
+            ),
+        )
+
     original_lines = await _load_journal_lines(db, entry_id)
 
     # _reverse_lines swaps debit<->credit (pure amount swap, no account_id); zip the
@@ -2239,6 +2284,34 @@ async def get_journal_entry(db: AsyncSession, entry_id: str) -> "JournalEntryRea
     entry = await _get_journal_entry_row(db, entry_id)
     lines = await _load_journal_lines(db, entry_id)
     return _je_to_read(entry, lines)
+
+
+async def latest_journal_entry_id_for_source(
+    db: AsyncSession, source_type: str, source_id: str
+) -> str | None:
+    """
+    Return the id of the MOST RECENT journal entry auto-posted for a source
+    document, or None if none was posted (Phase 9a verify M5).
+
+    The receipt path posts one JE per receipt, all source-linked to the same PO
+    line (source_id == line.id); partial receipts therefore accumulate several.
+    The audit row for the receipt just processed needs the entry this request
+    posted — the newest by created_at. Returns None when the source posted no JE
+    at all (a zero-cost receipt skips the GL post), so the caller omits the
+    gl.journal_posted audit row rather than record a phantom, untraceable one.
+    """
+    from app.modules.syerp.models import JournalEntry
+
+    result = await db.execute(
+        select(JournalEntry.id)
+        .where(
+            JournalEntry.source_type == source_type,
+            JournalEntry.source_id == source_id,
+        )
+        .order_by(JournalEntry.created_at.desc())
+        .limit(1)
+    )
+    return result.scalars().first()
 
 
 async def derive_account_balance(db: AsyncSession, account_id: int) -> Decimal:

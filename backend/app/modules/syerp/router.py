@@ -131,6 +131,7 @@ from app.modules.syerp.service import (
     list_item_transactions,
     list_items,
     list_journal_entries,
+    latest_journal_entry_id_for_source,
     list_locations,
     list_partners,
     list_pos,
@@ -883,17 +884,25 @@ async def receive_po_line_endpoint(
     )
     # receive_line auto-posts a balanced GL journal entry (Dr 1130 / Cr 2150 at
     # receipt cost) inside its own transaction (D-P9a-5); record that a GL entry
-    # was posted for this receipt. Both audit rows land after receive_line commits.
-    await write_audit(
-        db,
-        actor_id=str(current_user.id),
-        action="gl.journal_posted",
-        target_type="journal_entry",
-        detail=(
-            f"GL journal posted for PO {po_id} line {line_id} receipt "
-            f"(source_type=po_receipt, source_id={line_id})"
-        ),
-    )
+    # was posted for this receipt, TARGETED at the specific entry so the audit log
+    # is traceable to the exact syerp_journal_entry.id (Phase 9a verify M5). Look
+    # up the just-posted entry by source (newest for this line). A ZERO-cost
+    # receipt posts no JE (skipped in receive_line) → no gl.journal_posted row,
+    # rather than a phantom one with no target. Both audit rows land after
+    # receive_line commits.
+    posted_je_id = await latest_journal_entry_id_for_source(db, "po_receipt", line_id)
+    if posted_je_id is not None:
+        await write_audit(
+            db,
+            actor_id=str(current_user.id),
+            action="gl.journal_posted",
+            target_type="journal_entry",
+            target_id=posted_je_id,
+            detail=(
+                f"GL journal {posted_je_id} posted for PO {po_id} line {line_id} "
+                f"receipt (source_type=po_receipt, source_id={line_id})"
+            ),
+        )
     return po
 
 
