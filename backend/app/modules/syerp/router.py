@@ -98,6 +98,8 @@ from app.modules.auth.service import write_audit
 from app.modules.syerp.schemas import (
     AccountRegisterRead,
     AdjustmentCreate,
+    ApAgingReport,
+    BalanceSheetReport,
     BillCreate,
     BillRead,
     GLAccountRead,
@@ -117,6 +119,7 @@ from app.modules.syerp.schemas import (
     POLineRead,
     POLineUpdate,
     PORead,
+    ProfitLossReport,
     ReceiptCreate,
     ReceiveLine,
     ReverseRequest,
@@ -125,12 +128,15 @@ from app.modules.syerp.schemas import (
     StockLocationUpdate,
     TransactionRead,
     TransferCreate,
+    TrialBalanceReport,
     UnbilledReceiptRead,
 )
 from app.modules.syerp.service import (
     add_line,
     advance_po_status,
+    ap_aging_report,
     archive_partner,
+    balance_sheet,
     create_bill,
     create_item,
     create_location,
@@ -159,10 +165,12 @@ from app.modules.syerp.service import (
     post_journal_entry,
     post_receipt,
     post_transfer,
+    profit_loss,
     receive_line,
     record_payment,
     reverse_journal_entry,
     remove_line,
+    trial_balance,
     update_item,
     update_line,
     update_location,
@@ -1264,3 +1272,73 @@ async def list_payments_endpoint(
     from app.modules.syerp.service import list_payments
 
     return await list_payments(db)
+
+
+# ---------------------------------------------------------------------------
+# SYERP reports (Phase 9c, SYERP-13 AC6/AC7/AC8/AC9)
+# ---------------------------------------------------------------------------
+#
+# All four are strictly READ-ONLY: no mutation, no write_audit row. Each just
+# calls its service function and returns the Pydantic report. Requires
+# syerp:read; unauthenticated → 401, wrong permission → 403.
+
+
+@router.get("/ap/aging", response_model=ApAgingReport)
+async def ap_aging_endpoint(
+    as_of: date | None = Query(default=None),
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> ApAgingReport:
+    """
+    AP aging report of open bill balances bucketed by age (AC6).
+
+    Query param `as_of` (optional) sets the aging reference date; it defaults to
+    today when omitted. Read-only: no audit row. Requires syerp:read permission.
+    """
+    return await ap_aging_report(db, as_of=as_of)
+
+
+@router.get("/reports/trial-balance", response_model=TrialBalanceReport)
+async def trial_balance_endpoint(
+    as_of: date | None = Query(default=None),
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> TrialBalanceReport:
+    """
+    Trial balance of posting-account debit/credit totals as of a date (AC8).
+
+    Query param `as_of` (optional) bounds the entries considered; it defaults to
+    today when omitted. Read-only: no audit row. Requires syerp:read permission.
+    """
+    return await trial_balance(db, as_of=as_of)
+
+
+@router.get("/reports/profit-loss", response_model=ProfitLossReport)
+async def profit_loss_endpoint(
+    date_from: date = Query(alias="from"),
+    date_to: date = Query(alias="to"),
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> ProfitLossReport:
+    """
+    Profit & loss over an inclusive [`from`, `to`] window (AC7).
+
+    Both `from` and `to` are required — FastAPI returns 422 if either is missing.
+    Read-only: no audit row. Requires syerp:read permission.
+    """
+    return await profit_loss(db, date_from, date_to)
+
+
+@router.get("/reports/balance-sheet", response_model=BalanceSheetReport)
+async def balance_sheet_endpoint(
+    as_of: date | None = Query(default=None),
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> BalanceSheetReport:
+    """
+    Balance sheet of asset/liability/equity balances as of a date (AC9).
+
+    Query param `as_of` (optional) sets the reporting date; it defaults to today
+    when omitted. Read-only: no audit row. Requires syerp:read permission.
+    """
+    return await balance_sheet(db, as_of=as_of)
