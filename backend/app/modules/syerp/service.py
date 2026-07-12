@@ -3699,3 +3699,126 @@ async def profit_loss(
         total_expense=total_expense,
         net_income=total_revenue - total_expense,
     )
+
+
+async def balance_sheet(db: AsyncSession, as_of: date | None = None) -> "BalanceSheetReport":
+    """
+    Balance sheet as of a date — assets vs. liabilities + equity (AC7).
+
+    ONE grouped aggregate sums debit/credit per posting account over JournalLine ⋈
+    JournalEntry where entry_date <= as_of, each side coalesced independently
+    (D-P8-4), joined to GLAccount and filtered to ASSET/LIABILITY/EQUITY. ASSET is
+    debit-normal → presented Σdr − Σcr; LIABILITY and EQUITY are credit-normal →
+    Σcr − Σdr, so every magnitude is positive. total_assets / total_liabilities /
+    posted total_equity are the section sums.
+
+    Because NO closing entries are posted, ledger 3130 (Current Year Net Income) is
+    empty, so a COMPUTED equity line is appended: revenue less expense through as_of
+    (Σcr − Σdr over REVENUE minus Σdr − Σcr over EXPENSE), reusing the P&L period
+    logic from beginning-of-time through as_of. Its amount is added into total_equity.
+    in_balance is True when total_assets == total_liabilities + total_equity (the
+    accounting identity). Each section is ordered by code; arithmetic is exact Decimal.
+    """
+    from app.modules.syerp.models import GLAccount, JournalEntry, JournalLine
+    from app.modules.syerp.schemas import BalanceSheetLine, BalanceSheetReport
+
+    if as_of is None:
+        as_of = date.today()
+
+    result = await db.execute(
+        select(
+            GLAccount.id,
+            GLAccount.code,
+            GLAccount.name,
+            GLAccount.account_type,
+            func.coalesce(func.sum(JournalLine.debit), 0),
+            func.coalesce(func.sum(JournalLine.credit), 0),
+        )
+        .select_from(JournalLine)
+        .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+        .join(GLAccount, JournalLine.account_id == GLAccount.id)
+        .where(
+            JournalEntry.entry_date <= as_of,
+            GLAccount.account_type.in_(("ASSET", "LIABILITY", "EQUITY")),
+        )
+        .group_by(GLAccount.id, GLAccount.code, GLAccount.name, GLAccount.account_type)
+        .order_by(GLAccount.code)
+    )
+
+    assets: list[BalanceSheetLine] = []
+    liabilities: list[BalanceSheetLine] = []
+    equity: list[BalanceSheetLine] = []
+    total_assets = Decimal("0")
+    total_liabilities = Decimal("0")
+    total_equity = Decimal("0")
+    for account_id, code, name, account_type, sum_debit, sum_credit in result.all():
+        sum_debit = Decimal(sum_debit)
+        sum_credit = Decimal(sum_credit)
+        if account_type == "ASSET":
+            amount = sum_debit - sum_credit  # debit-normal → positive asset
+            total_assets += amount
+            assets.append(
+                BalanceSheetLine(account_id=account_id, code=code, name=name, amount=amount)
+            )
+        elif account_type == "LIABILITY":
+            amount = sum_credit - sum_debit  # credit-normal → positive liability
+            total_liabilities += amount
+            liabilities.append(
+                BalanceSheetLine(account_id=account_id, code=code, name=name, amount=amount)
+            )
+        else:  # EQUITY
+            amount = sum_credit - sum_debit  # credit-normal → positive equity
+            total_equity += amount
+            equity.append(
+                BalanceSheetLine(account_id=account_id, code=code, name=name, amount=amount)
+            )
+
+    # Computed current-year net income (3130) — no closing entries are posted, so
+    # ledger 3130 is empty; surface it as revenue less expense through as_of (the
+    # P&L period logic from beginning-of-time through as_of, D-P9c-1).
+    pnl_result = await db.execute(
+        select(
+            GLAccount.account_type,
+            func.coalesce(func.sum(JournalLine.debit), 0),
+            func.coalesce(func.sum(JournalLine.credit), 0),
+        )
+        .select_from(JournalLine)
+        .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+        .join(GLAccount, JournalLine.account_id == GLAccount.id)
+        .where(
+            JournalEntry.entry_date <= as_of,
+            GLAccount.account_type.in_(("REVENUE", "EXPENSE")),
+        )
+        .group_by(GLAccount.account_type)
+    )
+    net_income = Decimal("0")
+    for account_type, sum_debit, sum_credit in pnl_result.all():
+        sum_debit = Decimal(sum_debit)
+        sum_credit = Decimal(sum_credit)
+        if account_type == "REVENUE":
+            net_income += sum_credit - sum_debit
+        else:  # EXPENSE
+            net_income -= sum_debit - sum_credit
+
+    net_income_account_id = await _gl_account_id_by_code(db, "3130")
+    equity.append(
+        BalanceSheetLine(
+            account_id=net_income_account_id,
+            code="3130",
+            name="Current Year Net Income",
+            amount=net_income,
+        )
+    )
+    total_equity += net_income
+    equity.sort(key=lambda line: line.code)
+
+    return BalanceSheetReport(
+        as_of=as_of,
+        assets=assets,
+        total_assets=total_assets,
+        liabilities=liabilities,
+        total_liabilities=total_liabilities,
+        equity=equity,
+        total_equity=total_equity,
+        in_balance=(total_assets == total_liabilities + total_equity),
+    )
