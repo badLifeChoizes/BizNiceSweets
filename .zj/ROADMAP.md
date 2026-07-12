@@ -156,7 +156,7 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
 - **Split confirmed at `/zj:plan 09` (D-P9a-1..5):** broken into three ZJ sub-phases rather than one
   mega-phase, each planned/built/verified independently:
 
-#### Phase 9a: GL posting engine + receipt auto-post  [planned 2026-07-11 — ready to build]
+#### Phase 9a: GL posting engine + receipt auto-post  [verified 2026-07-11 — tag `zj/good-09a-gl-posting-engine`]
 - **Goal:** A double-entry GL posting engine — balanced, immutable, reversible journal entries with
   derived account balances and an account register — plus a manual general-journal UI, and PO
   receipts auto-post a balanced GR/IR journal entry atomically with the stock ledger.
@@ -166,7 +166,12 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   Cash 1110 already exist); JEs append-only immutable (D-P9a-1); manual JE UI in scope; branch off
   **master** (D-P9a-2 — the D-P8-11 master-behind trap is resolved). Extends Phase-8 `receive_line`
   with an atomic JE side-effect → the Phase-8 verify scripts are a regression gate.
-- **Plan:** `.zj/phases/09a-gl-posting-engine/PLAN.md` — 13 tasks. Next: `/zj:build 09a`.
+- **Plan:** `.zj/phases/09a-gl-posting-engine/PLAN.md` — 13 tasks, all built + verified.
+- **Verified:** `/zj:verify 09a` (2026-07-11) — verdict PASS after a fix loop closing 2 majors
+  (M1 zero-cost receipt regression, M2 double-reversal guard) + the 2 mandated criteria-become-tests
+  (SC3 atomicity rollback, SC5 audit+RBAC). Live proof: `verify_gl.py` 28/28, new `verify_gl_api.py`
+  9/9, Phase-8 regression unchanged, `test_gl_journal.py` 13, FE 64/64. Minors logged in PLAN `## Noticed`.
+  Next: `/zj:plan 09b`.
 
 #### Phase 9b: AP bills, PO match & payments  [pending — plan after 9a]
 - **Delivers:** SYERP-12 **AC4** (vendor bill + PO-receipt match, Dr GR/IR-or-Expense / Cr AP,

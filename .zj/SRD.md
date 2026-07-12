@@ -359,6 +359,8 @@ future scope (expanded via `/zj:spec` when their milestones near).
 > financial reporting" is **narrowed to AP + GL + reporting**; the AR half moves to SYERP-13.
 
 ## SYERP-12: General ledger, accounts payable & financial reporting  [traces: PRD-7]  **Status: in progress (AC1/2/3/8/9 verified Phase 9a; AC4–7 pending 9b/9c)**
+- **Verified (AC1/2/3/8/9):** 8156157 (Phase 09a verify, 2026-07-11 — GL posting engine subset
+  live-proven: `verify_gl.py` 28/28 + `verify_gl_api.py` 9/9; AC4–7 unbuilt, pending Phase 9b/9c).
 - **Statement:** The system shall provide a **double-entry general-ledger posting engine**, an
   **accounts-payable workflow** (vendor bills matched to PO receipts, with payments), and
   **financial reporting** — where **inventory receipts (SYERP-11.4) and AP documents auto-post
