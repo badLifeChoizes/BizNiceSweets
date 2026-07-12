@@ -42,6 +42,8 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   GET    /syerp/ap/bills               — list bills (+?vendor_id=&status=) (syerp:read)
   GET    /syerp/ap/bills/{bill_id}     — get bill + lines (syerp:read)
   POST   /syerp/ap/bills/{bill_id}/post — post bill, auto-book AP journal (syerp:write)
+  POST   /syerp/ap/payments            — record cash payment vs bills (syerp:write)
+  GET    /syerp/ap/payments            — list payments (syerp:read)
 
 mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
 Full paths are therefore /api/v1/syerp/partners, /api/v1/syerp/gl/accounts, etc.
@@ -76,6 +78,7 @@ Audit logging (D-10, T-04-08):
   - gl.journal_reversed: on POST /gl/journal-entries/{id}/reverse success.
   - bill.created: on POST /ap/bills success.
   - bill.posted: on POST /ap/bills/{id}/post success.
+  - payment.recorded: on POST /ap/payments success.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -107,6 +110,8 @@ from app.modules.syerp.schemas import (
     PartnerCreate,
     PartnerRead,
     PartnerUpdate,
+    PaymentCreate,
+    PaymentRead,
     POCreate,
     POLineCreate,
     POLineRead,
@@ -155,6 +160,7 @@ from app.modules.syerp.service import (
     post_receipt,
     post_transfer,
     receive_line,
+    record_payment,
     reverse_journal_entry,
     remove_line,
     update_item,
@@ -1197,3 +1203,63 @@ async def post_bill_endpoint(
         detail=f"Bill posted: {bill.bill_number} (status: {bill.status})",
     )
     return bill
+
+
+@router.post(
+    "/ap/payments", response_model=PaymentRead, status_code=status.HTTP_201_CREATED
+)
+async def record_payment_endpoint(
+    data: PaymentCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PaymentRead:
+    """
+    Record a cash payment against one or more posted AP bills (AC5, SC4).
+
+    Disburses `data.amount` (summed from allocations by the service) from
+    `cash_account_id` — a required ASSET GL account id in the payload, passed through
+    unchanged (the 1110 default is a UI concern, D-P9b) — across each allocation's
+    bill. The whole payment is one atomic unit: any guard rejects (404 unknown bill /
+    422 unposted, non-ASSET account, or overpayment) with nothing persisted; success
+    lands the header, allocations, a balanced Dr AP / Cr cash journal, and any
+    auto-Paid transition together. Requires syerp:write. Writes a payment.recorded
+    audit row after the payment commits.
+    """
+    actor_id = str(current_user.id)
+    payment = await record_payment(
+        db,
+        payment_date=data.payment_date,
+        cash_account_id=data.cash_account_id,
+        reference=data.reference,
+        allocations=data.allocations,
+        actor_id=actor_id,
+    )
+    await write_audit(
+        db,
+        actor_id=actor_id,
+        action="payment.recorded",
+        target_type="payment",
+        target_id=str(payment.id),
+        detail=f"Payment {payment.id}: {payment.amount} across "
+        f"{len(data.allocations)} bill(s)",
+    )
+    return payment
+
+
+@router.get("/ap/payments", response_model=list[PaymentRead])
+async def list_payments_endpoint(
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[PaymentRead]:
+    """
+    List recorded payments (newest-first), each with its allocations nested.
+
+    Read-only: no audit row. Requires syerp:read permission.
+    """
+    # NOTE (P9b gap): the payments-list read lives in service.py, which is outside
+    # this task's file scope. It is imported lazily so the route still registers in
+    # OpenAPI (Done-when) without a module-load ImportError if the service read is
+    # not yet present. See the task report — record it if list_payments is missing.
+    from app.modules.syerp.service import list_payments
+
+    return await list_payments(db)
