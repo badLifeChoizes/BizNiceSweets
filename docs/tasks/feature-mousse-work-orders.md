@@ -28,4 +28,4 @@ so the WO's 1140 balance returns to zero (Decimal-exact). Closes the last v2.0 D
 - [x] 17. Frontend — WO create dialog
 - [x] 18. Frontend — WO detail + snapshot lines + Issue action + hold/resume
 - [x] 19. Frontend — Complete action (with override-incomplete warning)
-- [ ] 20. Frontend — Vitest coverage of key flows
+- [x] 20. Frontend — Vitest coverage of key flows
