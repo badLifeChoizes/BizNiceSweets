@@ -48,6 +48,7 @@ import {
 import { apiClient } from '@/api/client'
 import { MousseNav } from './components/MousseNav'
 import { IssueComponentsDialog } from './components/IssueComponentsDialog'
+import { CompleteWorkOrderDialog } from './components/CompleteWorkOrderDialog'
 import { WorkOrderStatusBadge } from './WorkOrders'
 import { useWorkOrder, workOrdersKey, workOrderKey } from './hooks'
 import type { WorkOrderComponentRead } from './hooks'
@@ -111,6 +112,7 @@ export function WorkOrderDetail() {
   const queryClient = useQueryClient()
 
   const [issueOpen, setIssueOpen] = useState(false)
+  const [completeOpen, setCompleteOpen] = useState(false)
 
   // ── Data ──
   const { data: wo, isLoading, isError } = useWorkOrder(id)
@@ -186,6 +188,7 @@ export function WorkOrderDetail() {
   const canIssue = ISSUABLE_STATUSES.has(wo.status)
   const canHold = wo.status === 'in_progress'
   const canResume = wo.status === 'on_hold'
+  const canComplete = wo.status === 'in_progress'
 
   // ── Render: main ──
   return (
@@ -238,6 +241,11 @@ export function WorkOrderDetail() {
               {canIssue && (
                 <Button variant="default" size="sm" onClick={() => setIssueOpen(true)}>
                   Issue Components
+                </Button>
+              )}
+              {canComplete && (
+                <Button variant="default" size="sm" onClick={() => setCompleteOpen(true)}>
+                  Complete
                 </Button>
               )}
               {canHold && (
@@ -358,6 +366,16 @@ export function WorkOrderDetail() {
         partName={partName}
         open={issueOpen}
         onOpenChange={setIssueOpen}
+        onSuccess={invalidateWo}
+      />
+
+      {/* Complete dialog */}
+      <CompleteWorkOrderDialog
+        workOrderId={id}
+        components={wo.components}
+        partName={partName}
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
         onSuccess={invalidateWo}
       />
     </div>
