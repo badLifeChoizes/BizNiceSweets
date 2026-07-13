@@ -539,14 +539,18 @@ async def run() -> None:
                 )
             ).scalars().all()
 
-        _real_lookup = gl_service._gl_account_id_by_code
+        # receive_line resolves _gl_account_id_by_code from the purchasing submodule's
+        # globals (post-service-split, chore-syerp-service-split), so patch it there —
+        # patching the package attribute would not affect the name receive_line calls.
+        _po_mod = gl_service.purchasing
+        _real_lookup = _po_mod._gl_account_id_by_code
 
         async def _boom_on_grir(db, code):
             if code == "2150":
                 raise HTTPException(status_code=500, detail="forced GR/IR failure (verify M3)")
             return await _real_lookup(db, code)
 
-        gl_service._gl_account_id_by_code = _boom_on_grir
+        _po_mod._gl_account_id_by_code = _boom_on_grir
         rollback_raised = False
         try:
             async with session_factory() as session:
@@ -555,7 +559,7 @@ async def run() -> None:
         except HTTPException:
             rollback_raised = True
         finally:
-            gl_service._gl_account_id_by_code = _real_lookup
+            _po_mod._gl_account_id_by_code = _real_lookup
 
         async with session_factory() as session:
             txns_after = (
