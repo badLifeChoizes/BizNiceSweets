@@ -301,3 +301,269 @@ async def get_work_order_detail(db: AsyncSession, wo_id: str) -> "WorkOrderDetai
     detail = WorkOrderDetailRead.model_validate(wo)
     detail.components = component_reads
     return detail
+
+
+# ---------------------------------------------------------------------------
+# Work-order lifecycle FSM (MOUSSE-01, SC1/SC1b, D-P10-9)
+# ---------------------------------------------------------------------------
+#
+# The lifecycle is pinned in a PURE transition table (no DB, no FastAPI) so the
+# legality decision is unit-testable in isolation, exactly like SYERP's
+# BILL_TRANSITIONS / PO_TRANSITIONS. The service layer raises HTTP 409 on top of
+# a False decision (a state conflict — the WO is not in a status from which the
+# requested action is legal). Business-rule rejections that are NOT pure state
+# (no released revision, an unlinked component, an under-issued completion) raise
+# 422 instead — the transition itself would be legal, the payload/preconditions
+# are not.
+#
+#   draft       -> released | cancelled
+#   released    -> in_progress (first issue) | cancelled
+#   in_progress -> on_hold | completed
+#   on_hold     -> in_progress (resume)
+#   completed / cancelled : terminal
+
+_WO_TRANSITIONS: dict[str, set[str]] = {
+    "draft":       {"released", "cancelled"},
+    "released":    {"in_progress", "cancelled"},
+    "in_progress": {"on_hold", "completed"},
+    "on_hold":     {"in_progress"},
+    "completed":   set(),  # terminal
+    "cancelled":   set(),  # terminal
+}
+
+
+def _validate_transition(current: str, target: str) -> bool:
+    """
+    Pure WO-lifecycle FSM predicate (no DB — unit-testable).
+
+    Returns True when `target` is an allowed successor of `current` per
+    _WO_TRANSITIONS (draft->released->in_progress->(on_hold<->in_progress)->
+    completed, plus draft/released->cancelled; completed & cancelled terminal).
+    The service layer raises HTTP 409 on top of a False result; this helper only
+    decides truth (mirrors _bill_transition_allowed).
+    """
+    return target in _WO_TRANSITIONS.get(current, set())
+
+
+def _require_transition(wo: "WorkOrder", target: str) -> None:
+    """
+    Guard a WO state transition, raising HTTP 409 when it is illegal.
+
+    Wraps the pure _validate_transition: a WO can only move to `target` from a
+    status _WO_TRANSITIONS permits; otherwise the request conflicts with the WO's
+    current state and is rejected 409 (nothing is mutated at the call site).
+    """
+    if not _validate_transition(wo.status, target):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot transition work order {wo.wo_number} from '{wo.status}' "
+                f"to '{target}'. Allowed: {sorted(_WO_TRANSITIONS.get(wo.status, set()))}."
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Release — snapshot the single-level BOM (MOUSSE-01, SC1, D-P10-5/7)
+# ---------------------------------------------------------------------------
+
+
+async def _resolve_item_by_part(db: AsyncSession, part_id: str) -> "object | None":
+    """Return the InventoryItem linked to a PLUM part (advisory link), or None."""
+    from app.modules.syerp.models import InventoryItem
+
+    result = await db.execute(
+        select(InventoryItem).where(InventoryItem.plum_part_id == part_id)
+    )
+    return result.scalars().first()
+
+
+async def release_work_order(
+    db: AsyncSession, wo_id: str, actor_id: str
+) -> "WorkOrderRead":
+    """
+    Release a Draft work order: snapshot its single-level BOM (MOUSSE-01, SC1).
+
+    Guards (each rejects with NOTHING persisted — no partial snapshot, D-P10-7):
+      - the WO must be in 'draft' (else 409, FSM);
+      - the WO's PLUM part must have a Released revision (else 422, SC1);
+      - the WO's OUTPUT finished-good must resolve to a SYERP InventoryItem via
+        plum_part_id (else 422 — completion cannot receive an unstocked FG);
+      - EVERY direct BOM child must resolve to a linked InventoryItem (else 422 —
+        an unstocked component cannot be issued; reject the WHOLE release,
+        D-P10-7).
+
+    The snapshot is SINGLE-LEVEL (D-P10-5): only the Released revision's DIRECT
+    children (PlumBomItem at parent_revision_id), NOT a multi-level leaf
+    explosion — sub-assemblies are issued from stock as components. Each child
+    becomes a WorkOrderComponent with qty_per = bom.qty, qty_required = qty_per *
+    planned_qty, its resolved item_id, and a unit_of_measure (the child's Released
+    revision UoM, falling back to the stock item's UoM). All validation happens
+    BEFORE any write; then released_revision_id / output_item_id / status are set
+    and the component rows persisted in ONE commit. Returns the WO as a
+    WorkOrderRead.
+    """
+    from app.modules.mousse.models import WorkOrderComponent
+    from app.modules.mousse.schemas import WorkOrderRead
+    from app.modules.plum.models import PlumBomItem
+    from app.modules.plum.service import get_released_revision
+
+    wo = await _get_work_order_row(db, wo_id)
+    _require_transition(wo, "released")  # 409 if not draft.
+
+    # SC1: the build target must have a Released revision to snapshot.
+    released_rev = await get_released_revision(db, wo.plum_part_id)
+    if released_rev is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"PLUM part {wo.plum_part_id} has no Released revision; "
+                f"a work order can only be released against a Released revision."
+            ),
+        )
+
+    # The finished good must resolve to a stockable SYERP item (else completion
+    # could never receive it).
+    output_item = await _resolve_item_by_part(db, wo.plum_part_id)
+    if output_item is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"PLUM part {wo.plum_part_id} has no linked SYERP inventory item; "
+                f"the finished good cannot be received into stock on completion."
+            ),
+        )
+
+    # Single-level BOM: the Released revision's DIRECT children only (D-P10-5).
+    bom_result = await db.execute(
+        select(PlumBomItem)
+        .where(PlumBomItem.parent_revision_id == released_rev.id)
+        .order_by(PlumBomItem.sort_order)
+    )
+    bom_items = list(bom_result.scalars().all())
+
+    # Validate & resolve EVERY component first (no partial snapshot, D-P10-7).
+    prepared: list[dict[str, object]] = []
+    for bom in bom_items:
+        component_item = await _resolve_item_by_part(db, bom.child_part_id)
+        if component_item is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"BOM component part {bom.child_part_id} has no linked SYERP "
+                    f"inventory item; the whole release is rejected (no partial "
+                    f"snapshot, D-P10-7)."
+                ),
+            )
+        # UoM from the child's Released revision when available, else the stock
+        # item's UoM (always present) so the snapshot line always has a unit.
+        child_rev = await get_released_revision(db, bom.child_part_id)
+        uom = (
+            child_rev.unit_of_measure
+            if child_rev is not None and child_rev.unit_of_measure
+            else component_item.unit_of_measure
+        )
+        prepared.append(
+            {
+                "child_part_id": bom.child_part_id,
+                "item_id": component_item.id,
+                "qty_per": bom.qty,
+                "qty_required": bom.qty * wo.planned_qty,
+                "unit_of_measure": uom,
+                "sort_order": bom.sort_order,
+            }
+        )
+
+    # Persist: header snapshot fields + component rows, in one commit.
+    wo.released_revision_id = released_rev.id
+    wo.output_item_id = output_item.id
+    wo.status = "released"
+    for p in prepared:
+        db.add(
+            WorkOrderComponent(
+                work_order_id=wo.id,
+                child_part_id=p["child_part_id"],
+                item_id=p["item_id"],
+                qty_per=p["qty_per"],
+                qty_required=p["qty_required"],
+                unit_of_measure=p["unit_of_measure"],
+                sort_order=p["sort_order"],
+            )
+        )
+
+    await db.commit()
+    await db.refresh(wo)
+    return WorkOrderRead.model_validate(wo)
+
+
+# ---------------------------------------------------------------------------
+# Cancel / hold / resume (MOUSSE-01, SC1/SC1b, D-P10-9)
+# ---------------------------------------------------------------------------
+
+
+async def cancel_work_order(
+    db: AsyncSession, wo_id: str, actor_id: str
+) -> "WorkOrderRead":
+    """
+    Cancel a work order — allowed only from Draft or Released (MOUSSE-01, SC1).
+
+    An in-progress / on-hold / completed WO has already consumed or produced
+    stock and cannot simply be cancelled (409, FSM); cancellation is terminal.
+    Sets status='cancelled' in one commit. Returns the WO as a WorkOrderRead.
+    """
+    from app.modules.mousse.schemas import WorkOrderRead
+
+    wo = await _get_work_order_row(db, wo_id)
+    _require_transition(wo, "cancelled")  # 409 unless draft/released.
+    wo.status = "cancelled"
+    await db.commit()
+    await db.refresh(wo)
+    return WorkOrderRead.model_validate(wo)
+
+
+async def hold_work_order(
+    db: AsyncSession, wo_id: str, actor_id: str
+) -> "WorkOrderRead":
+    """
+    Put an In-Progress work order On Hold (pause) — MOUSSE-01, SC1b, D-P10-9.
+
+    Only an 'in_progress' WO can be paused (else 409, FSM). Issuing is disallowed
+    while On Hold — the WO must be resumed first. Sets status='on_hold' in one
+    commit. Returns the WO as a WorkOrderRead.
+    """
+    from app.modules.mousse.schemas import WorkOrderRead
+
+    wo = await _get_work_order_row(db, wo_id)
+    _require_transition(wo, "on_hold")  # 409 unless in_progress.
+    wo.status = "on_hold"
+    await db.commit()
+    await db.refresh(wo)
+    return WorkOrderRead.model_validate(wo)
+
+
+async def resume_work_order(
+    db: AsyncSession, wo_id: str, actor_id: str
+) -> "WorkOrderRead":
+    """
+    Resume an On-Hold work order back to In Progress — MOUSSE-01, SC1b, D-P10-9.
+
+    Only an 'on_hold' WO can be resumed (else 409): the FSM also permits
+    released->in_progress, but that path is reserved for the first issue, so
+    resume requires the WO to currently be On Hold. Sets status='in_progress' in
+    one commit. Returns the WO as a WorkOrderRead.
+    """
+    from app.modules.mousse.schemas import WorkOrderRead
+
+    wo = await _get_work_order_row(db, wo_id)
+    if wo.status != "on_hold":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot resume work order {wo.wo_number}: it is '{wo.status}', "
+                f"only an 'on_hold' work order can be resumed."
+            ),
+        )
+    wo.status = "in_progress"
+    await db.commit()
+    await db.refresh(wo)
+    return WorkOrderRead.model_validate(wo)
