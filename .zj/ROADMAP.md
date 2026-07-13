@@ -1,5 +1,6 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-12 (Phase 9c **done + retro'd** → next `/zj:plan 10` (MOUSSE); learnings in LEARNINGS.md "Phase 09c")
+Updated: 2026-07-13 (Phase 10 **planned** — MOUSSE materials-only WO core, 20 tasks, D-P10-1..9; next = the D-P10-4 syerp split chore, then `/zj:build 10`)
+Prior: 2026-07-12 (Phase 9c **done + retro'd** → next `/zj:plan 10` (MOUSSE); learnings in LEARNINGS.md "Phase 09c")
 Prior: 2026-07-12 (Phase 9c verified + tagged `zj/good-09c-ap-aging-financial-statements` → next `/zj:retro 09c`)
 Prior: 2026-07-12 (Phase 9b done + retro'd → next `/zj:plan 09c`; learnings in LEARNINGS.md "Phase 09b")
 Prior: 2026-07-11 (Phase-9 spec — SYERP-12 = GL+AP+reporting, AR→CRUMB, v2.0 DoD confirmed; D-P9-1..5)
@@ -244,12 +245,33 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   net-income fiscal-year bounding, and the backdated-payment tie-out edge; syerp `service.py` size
   bumped in the split item (~3,700 lines). **Next: `/zj:plan 10` (MOUSSE).**
 
-### Phase 10: MOUSSE — manufacturing execution core  [pending]
-- **Goal:** Work orders with routing consume PLUM BOMs and SYERP inventory; costs flow back
-  to SYERP.
-- **Delivers:** MOUSSE-01.
-- **Notes:** consider splitting when planned; also the trigger to split `plum/service.py`
-  (~3k lines) before the pattern is copied (see BACKLOG).
+### Phase 10: MOUSSE — manufacturing execution core (materials-only)  [planned 2026-07-13]
+- **Goal:** Work orders that consume a PLUM BOM and SYERP inventory to produce a finished good,
+  with material cost flowing through a **WIP clearing account (1140) that returns to zero** —
+  closing the v2.0 DoD clause "execute work orders that consume PLUM BOMs and inventory."
+- **Delivers:** MOUSSE-01 (materials-only slice). New `backend/app/modules/mousse/` module.
+- **Scope (D-P10-1, owner):** WO header + FSM Draft→Released→In Progress→(On Hold⇄In Progress)→
+  Completed (+Cancelled), single-level BOM snapshot at release, **explicit component issue**
+  (Dr 1140 / Cr 1130 at moving-avg cost), completion → FG receipt (Dr 1130 / Cr 1140).
+  **Deferred to a follow-on MOUSSE phase:** routing/work-centers, labor + overhead costing
+  (5120/5130), the shop-floor operator execution view.
+- **Key decisions (D-P10-1..9):** actual moving-avg costing, WIP clears to zero, no variance
+  account (D-P10-2); explicit issue (D-P10-3); single-level direct BOM, sub-assemblies issued as
+  components (D-P10-5, owner-confirmed); reject release if any component has no linked InventoryItem
+  (D-P10-7); completion blocked on under-issue unless an audited `override_incomplete`, plus On Hold
+  pause/resume (D-P10-9).
+- **Plan:** `.zj/phases/10-mousse-work-orders/PLAN.md` — 20 tasks (models→migration 0012→perm
+  seed→schemas→service[create/release/issue/complete/hold/resume]→router→register→`verify_mousse.py`
+  +`verify_mousse_api.py`→regression→5 frontend). Branch `feature-mousse-work-orders` off tag
+  `zj/good-09c-ap-aging-financial-statements` (D-P10-8).
+- **Prerequisite chore first (D-P10-4):** split `backend/app/modules/syerp/service.py` (~3,824
+  lines, BACKLOG p2) into cohesive submodules behind unchanged public functions + refresh
+  `.zj/codebase/MAP.md` (stale at migration 0009; head 0011) on a **separate chore branch**,
+  verified green against existing `verify_*` scripts, BEFORE the MOUSSE build — kept out of the
+  MOUSSE feature diff.
+- **Notes:** the PLUM `service.py` split (~3k lines, BACKLOG p2) is the other half of the same
+  monolith-file item; MOUSSE, as a new module, does not extend either file — it imports SYERP's
+  inventory/GL service functions.
 
 ---
 

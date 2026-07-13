@@ -1,16 +1,33 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-12 (Phase 9c **done + retro'd** → next `/zj:plan 10` (MOUSSE); learnings in LEARNINGS.md "Phase 09c")
+Updated: 2026-07-13 (Phase 10 **planned** — MOUSSE materials-only WO core; next = D-P10-4 syerp-split chore, then `/zj:build 10`)
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** Phase 09c **done + retro'd** on branch `feature-syerp-financial-reports` (AP aging +
-  financial statements, SYERP-12 AC6/AC7). Tagged `zj/good-09c-ap-aging-financial-statements`.
-  **SYERP-12 fully delivered (all 9 ACs across 9a/9b/9c).**
-- **Next action:** `/zj:plan 10` — plan MOUSSE (manufacturing execution core, work orders consuming
-  PLUM BOMs + SYERP inventory; MOUSSE-01). Consider splitting when planned. Phase 10 is also the
-  trigger to split `syerp/service.py` (~3,700 lines, BACKLOG p2) *before* MOUSSE adds work-order
-  posting to it, and to run the `/zj:docs` MAP.md refresh covering Phases 8–9c (BACKLOG p3).
+- **Step:** **Phase 10 planned (2026-07-13)** — MOUSSE manufacturing execution core, materials-only
+  slice (MOUSSE-01). `.zj/phases/10-mousse-work-orders/PLAN.md` = **20 tasks** (new
+  `backend/app/modules/mousse/` module: models→migration 0012→perm seed→schemas→service→router→
+  register→`verify_mousse.py`+`verify_mousse_api.py`→regression→5 frontend). Branch
+  `feature-mousse-work-orders` cuts off tag `zj/good-09c-ap-aging-financial-statements` (D-P10-8).
+  Goal: a WO consumes a PLUM single-level BOM + SYERP inventory to produce a finished good, cost
+  flowing **Dr 1140 WIP / Cr 1130 on issue** and **Dr 1130 / Cr 1140 on completion so WIP clears to
+  zero** (the accounting crux, proven pre/post Decimal-exact). Closes the last v2.0 DoD clause.
+- **Decisions D-P10-1..9** (in DECISIONS.md): materials-only, routing/labor/shop-floor deferred
+  (D-P10-1); actual moving-avg costing, WIP clears, no variance (D-P10-2); explicit issue action
+  (D-P10-3); single-level direct BOM, sub-assemblies issued as components (D-P10-5, owner-confirmed);
+  reject release if any component has no linked InventoryItem (D-P10-7); **completion blocked on
+  under-issue unless an audited `override_incomplete`, plus an On Hold pause/resume state**
+  (D-P10-9, owner). Surfaces verified pre-plan: `post_receipt`/`post_journal_entry` (both
+  `commit=False`), `_adjustment_violates_floor`, `_gl_account_id_by_code`, the create_bill FOR-UPDATE
+  lock template; PLUM `get_released_revision` + direct `PlumBomItem`; CoA 1130/1140 already seeded;
+  `mousse` module already in `modules_seed.py`.
+- **Next action: the D-P10-4 prerequisite chore FIRST** — split
+  `backend/app/modules/syerp/service.py` (**3,824 lines**, BACKLOG p2) into cohesive submodules
+  behind unchanged public functions **+** refresh `.zj/codebase/MAP.md` (stale at migration 0009;
+  head is 0011) on a **separate chore branch** off `zj/good-09c-ap-aging-financial-statements`,
+  verified green against the existing `verify_*` scripts (no behavior change). Then `/zj:build 10`
+  builds MOUSSE on a clean base. *(Owner chose "separate chore first" over folding the refactor into
+  the feature diff — keeps the MOUSSE review clean. The MAP refresh half can run via `/zj:docs`.)*
 - **Retro 09c (2026-07-12) — complete.** Learnings → `.zj/LEARNINGS.md` "Phase 09c": (1) first
   phase since Phase 6 with **zero reviewer majors**, structurally — a read-only derivation phase has
   no read-check-write, so the recurring 7/9a/9b concurrency-major class has no home (triage: report

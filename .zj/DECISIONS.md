@@ -8,7 +8,7 @@ Numbering is append-only.
 ## Index
 
 One line per decision, newest last. Entries below are append-only — regenerate this index
-at milestone close, never hand-edit it. 55 decisions.
+at milestone close, never hand-edit it. 64 decisions.
 
 - **D-1:** Business domain = hybrid open-source business suite of 7 integrated suites (SYERP, PLUM, FLAN, MOUSSE, CRUMB, GELATO, CRISP), each usable…
 - **D-2:** Manufacturing (facilities, work centers, routings) lives in MOUSSE, not PLUM — PLUM is product development; released products hand off to MOUSSE.…
@@ -76,6 +76,15 @@ at milestone close, never hand-edit it. 55 decisions.
 - **D-P9c-1:** Add a real `Bill.bill_date` (Date, NOT NULL) via migration 0011 (add-nullable → backfill `created_at::date` → alter NOT NULL); `create_bill` accepts it (defaults to today), and the bill's posted JE `entry_date` is set from `bill.bill_date` so the AP subledger (aged by bill_date) and the 2110 control account (aged by entry_date) reconcile — AP aging buckets from bill_date
 - **D-P9c-2:** Reports UI = one **Financial Reports** SYERP nav item (tabbed Trial Balance / P&L / Balance Sheet sharing date controls) + **AP Aging** as its own nav item near Bills
 - **D-P9c-3:** Phase 9c branches fresh `feature-syerp-financial-reports` off the verified 09b tip (tag zj/good-09b-ap-bills-match-payments), per the per-sub-phase branch precedent (D-P9a-2/D-P9b-8)
+- **D-P10-1:** Phase 10 = MOUSSE **materials-only work-order core**; routing/work-centers, labor/overhead costing (5120/5130), and the shop-floor execution view deferred to a follow-on MOUSSE phase — this core closes the v2.0 DoD
+- **D-P10-2:** WO costing = **actual moving-average cost**, WIP account **1140 clears to zero** (Dr 1140/Cr 1130 on issue at each item's moving_avg; Dr 1130/Cr 1140 on finished-goods receipt at accumulated WIP); no standard-cost/variance account
+- **D-P10-3:** Components consumed via an **explicit issue action** (distinct from completion), posting signed `issue` InventoryTxn rows under the per-location negative-stock floor guard
+- **D-P10-4:** The `syerp/service.py` split (into cohesive submodules behind unchanged public functions) + MAP.md refresh are done as a **separate chore branch first**, verified green against existing verify scripts, BEFORE the MOUSSE build — kept out of the MOUSSE feature diff
+- **D-P10-5:** A WO snapshots the **single-level (direct) BOM** of the part's Released revision into WO component lines at release (not a multi-level leaf explosion) — materials-only core has no nested WOs; each assembly level is its own WO; avoids the `load_flat_bom` sub-assembly/leaf ambiguity *(flagged for confirmation at handoff)*
+- **D-P10-6:** MOUSSE is a **new module** (`backend/app/modules/mousse/`), self-registered in the registry, own router prefix `/mousse`, RBAC codes `mousse:read`/`mousse:write` (mirror syerp); it imports SYERP inventory/GL service functions rather than duplicating them
+- **D-P10-7:** A component whose PLUM part has **no linked InventoryItem** (nullable `plum_part_id`) makes a WO unbuildable → reject at WO **release** (4xx), so an unissuable WO can't reach In-Progress
+- **D-P10-8:** Chore branch and then `feature-mousse-work-orders` branch both cut off the **verified 09c tip** (tag `zj/good-09c-ap-aging-financial-statements`) — Phase 9 remains unmerged and the MOUSSE line stacks on it, per the per-phase branch precedent
+- **D-P10-9:** WO completion requires every component fully issued (issued ≥ qty_required) UNLESS an explicit **manual override** flag is passed (audited); and the FSM adds an **On Hold** state — In Progress ⇄ On Hold — so a build can be paused mid-flight and resumed (owner requirement at plan handoff)
 
 ## Product & Architecture
 
@@ -461,3 +470,58 @@ auto-post-only), and UI is folded into the plan with no separate DESIGN.md (D-P8
   `feature-syerp-ap-bills`. *Why:* mirrors the per-sub-phase branching of D-P9a-2 / D-P9b-8 and
   keeps the branch name descriptive of the reports work (the 09b branch name describes AP bills).
   All of Phase 9 remains unmerged and stacks on the same line; the tag is the 09b rollback point.
+
+### Phase 10 planning (MOUSSE manufacturing execution core — 2026-07-13)
+
+- **D-P10-1 (owner):** **Phase 10 = MOUSSE materials-only work-order core.** WO header + status
+  FSM, single-level BOM snapshot, explicit component issue → WIP, completion → finished-goods
+  receipt, materials cost to GL. **Routing/work-centers, labor + overhead costing (5120/5130), and
+  the shop-floor operator execution view are deferred** to a follow-on MOUSSE phase. *Why:* the
+  v2.0 DoD only requires "work orders that consume PLUM BOMs and inventory" with cost flowing to
+  SYERP — this slice closes it; the fuller MES is a later milestone. *Rejected:* core+routing+labor
+  (plan as 10a/10b) and full MOUSSE-01 in one phase (largest, highest verify risk).
+- **D-P10-2 (owner):** **Actual moving-average costing; WIP account 1140 clears to zero.** Component
+  issues post Dr 1140 WIP / Cr 1130 Inventory at each item's `moving_avg_cost`; the finished-goods
+  receipt is valued at the accumulated WIP so 1140 returns to its pre-WO balance (Dr 1130 / Cr
+  1140). No standard-cost/variance account. *Why:* 1140 is already seeded and unused; actual cost is
+  what's in inventory and makes WIP clear by construction (the 9b GR/IR clearing-crux pattern).
+  *Rejected:* PLUM standard cost (needs a variance account + reconciliation, doesn't clear cleanly).
+- **D-P10-3 (owner):** **Explicit issue action, distinct from completion** (`txn_type="issue"`,
+  reserved for MOUSSE). Matches shop-floor reality, supports partial/incremental issue, exercises
+  the per-location negative-stock floor guard. *Rejected:* backflush-on-completion (one atomic step,
+  simpler, but no partial-issue and less realism).
+- **D-P10-4 (manager):** **The `syerp/service.py` split (~3,824 lines → cohesive submodules behind
+  unchanged public functions) + the MAP.md refresh are a SEPARATE chore branch FIRST**, verified
+  green against the existing `verify_*` scripts, before the MOUSSE build — kept out of the MOUSSE
+  feature diff. *Why:* mixing a large no-behavior-change refactor with new-feature work muddies the
+  diff and the review/verify; a standalone refactor is independently reviewable (existing scripts
+  stay green = proof). *Rejected:* folding the split into Phase 10 (fewer branches, worse diff);
+  deferring the split entirely (monolith keeps growing under MOUSSE's imports).
+- **D-P10-5 (owner, confirmed at handoff):** **A WO snapshots the single-level (direct) BOM** of the
+  part's Released revision at release — the `PlumBomItem` rows at `parent_revision_id`, NOT a
+  multi-level leaf explosion. A sub-assembly is issued from stock as one component (it was produced
+  by its own earlier WO). *Why:* the materials-only core has no nested work orders; each assembly
+  level is its own WO; avoids the `load_flat_bom` sub-assembly/leaf ambiguity. *Rejected:*
+  multi-level-to-leaves (assumes one WO builds every level at once; conflicts with the deferred
+  routing model).
+- **D-P10-6 (manager):** **MOUSSE is a new module** `backend/app/modules/mousse/`, self-registered
+  in the registry, router prefix `/mousse`, RBAC codes `mousse:read`/`mousse:write` (mirror syerp);
+  it **imports** SYERP inventory/GL service functions rather than duplicating them. The `mousse`
+  module is already seeded in `modules_seed.py`.
+- **D-P10-7 (manager):** **A component whose PLUM part has no linked `InventoryItem`** (nullable
+  `plum_part_id`) makes the WO unbuildable → **reject at WO release (4xx), no partial snapshot** — so
+  an unissuable WO can never reach In Progress. *Why:* fail fast at release rather than dead-end at
+  issue time.
+- **D-P10-8 (manager, precedent-driven):** **Chore branch, then `feature-mousse-work-orders`, both
+  cut off the verified 09c tip** (tag `zj/good-09c-ap-aging-financial-statements`). Phase 9 stays
+  unmerged; the MOUSSE line stacks on it (per D-P9a-2/D-P9b-8/D-P9c-3).
+- **D-P10-9 (owner):** **Completion requires full component issue unless an explicit manual override
+  is passed; and the FSM gains an On Hold state (In Progress ⇄ On Hold) for pause/resume.**
+  `complete_work_order` rejects (4xx) if any component's issued qty < `qty_required` unless
+  `override_incomplete=true`, which is audited (`work_order.completed` detail records the override
+  and the FG is valued at whatever WIP accumulated — WIP still clears exactly). A WO In Progress can
+  be put On Hold and later resumed to In Progress. *Why:* the owner wants a deliberate, attributable
+  decision to close an under-issued build (not a silent default) and the ability to pause a build
+  mid-flight and return to it. *Rejected:* silently allowing under-issued completion (recommendation
+  (a) at handoff — owner tightened it to require an override); hard-blocking under-issued completion
+  with no escape (rejects legitimate under-builds/substitutions).
