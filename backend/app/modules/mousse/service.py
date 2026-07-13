@@ -27,8 +27,8 @@ All money/qty arithmetic is Decimal (never float — D-11).
 from __future__ import annotations
 
 import re
-from datetime import date
-from decimal import Decimal
+from datetime import date, datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
@@ -40,6 +40,9 @@ if TYPE_CHECKING:
 
     from app.modules.mousse.models import WorkOrder
     from app.modules.mousse.schemas import (
+        IssueComponentsRequest,
+        IssueResultRead,
+        WorkOrderCompleteResult,
         WorkOrderCreate,
         WorkOrderDetailRead,
         WorkOrderRead,
@@ -567,3 +570,221 @@ async def resume_work_order(
     await db.commit()
     await db.refresh(wo)
     return WorkOrderRead.model_validate(wo)
+
+
+# ---------------------------------------------------------------------------
+# Issue components — consume stock into WIP (MOUSSE-01, SC2/SC5, D-P10-3)
+# ---------------------------------------------------------------------------
+
+
+async def issue_components(
+    db: AsyncSession,
+    wo_id: str,
+    request: "IssueComponentsRequest",
+    actor_id: str,
+) -> "IssueResultRead":
+    """
+    Issue one or more components against a work order (MOUSSE-01, SC2/SC5).
+
+    The whole issue is ONE atomic unit of work (a single db.commit at the end):
+    every guard rejects (404/409/422) with NOTHING persisted, and a successful
+    issue lands its inventory movements, ONE balanced JE, and the issue rows
+    together — never partially.
+
+    Flow:
+      1. The WO must be 'released' or 'in_progress' (else 409) — On Hold must be
+         resumed first, and draft/completed/cancelled cannot consume stock.
+      2. Resolve each requested component (404 if it is not a line of THIS WO);
+         a component with no linked item (not released) is rejected 422. The draw
+         location defaults to the WO's target_location_id.
+      3. **Lock the contended InventoryItem rows FOR UPDATE in sorted-id order
+         BEFORE any on-hand read** (SC5 — copies the create_bill template): a
+         concurrent issue against the same item blocks until this transaction
+         commits and then re-reads the true on-hand, so two issues can never
+         drive on-hand negative or double-consume.
+      4. Per line, derive per-location on-hand and apply the SAME per-location
+         floor guard SYERP adjustments use (_adjustment_violates_floor); an
+         insufficient-stock line is rejected 422. Duplicate (item, location) lines
+         within one request accumulate so they cannot jointly overdraw.
+      5. Append one signed `issue` InventoryTxn per line (quantity = -qty,
+         unit_cost = item.moving_avg_cost, txn_type='issue',
+         source_type='mousse_work_order', source_id=wo.id) — added directly, NOT
+         via post_adjustment (which lacks commit control and would not value at
+         moving_avg).
+      6. Post ONE balanced JE Dr 1140 WIP / Cr 1130 Inventory for the total issued
+         value = Σ(qty × moving_avg, quantized to _COST_QUANTUM), dated wo.wo_date,
+         source-linked to the WO (post_journal_entry(commit=False)).
+      7. Write a WorkOrderIssue row per line linking its txn + the JE, flip a
+         'released' WO to 'in_progress' (first issue), and take the single commit.
+
+    Returns an IssueResultRead (lines issued + total value booked into WIP).
+    """
+    from app.modules.mousse.models import WorkOrderComponent, WorkOrderIssue
+    from app.modules.mousse.schemas import IssueResultRead
+    from app.modules.syerp.models import InventoryItem, InventoryTxn
+    from app.modules.syerp.service import (
+        _COST_QUANTUM,
+        _adjustment_violates_floor,
+        _gl_account_id_by_code,
+        post_journal_entry,
+    )
+
+    wo = await _get_work_order_row(db, wo_id)
+
+    # Only a released or in-progress WO can consume stock (409 otherwise). On Hold
+    # is deliberately excluded — the WO must be resumed before issuing (D-P10-9).
+    if wo.status not in ("released", "in_progress"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot issue components to work order {wo.wo_number}: it is "
+                f"'{wo.status}', only a 'released' or 'in_progress' work order "
+                f"can be issued to."
+            ),
+        )
+
+    # Resolve every requested component against THIS WO before any write.
+    resolved: list[tuple[WorkOrderComponent, Decimal, int]] = []
+    for line in request.lines:
+        comp_result = await db.execute(
+            select(WorkOrderComponent).where(
+                WorkOrderComponent.id == line.component_id,
+                WorkOrderComponent.work_order_id == wo.id,
+            )
+        )
+        comp = comp_result.scalars().first()
+        if comp is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    f"Component {line.component_id} is not a line of work order "
+                    f"{wo.wo_number}."
+                ),
+            )
+        if comp.item_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Component {comp.id} has no linked inventory item; the work "
+                    f"order must be released before its components can be issued."
+                ),
+            )
+        location_id = line.location_id if line.location_id is not None else wo.target_location_id
+        resolved.append((comp, line.quantity, location_id))
+
+    # SC5: lock the contended InventoryItem rows FOR UPDATE in sorted-id order
+    # BEFORE any on-hand read (create_bill template). Loading the full row also
+    # gives the moving_avg_cost each issue values at.
+    item_by_id: dict[str, InventoryItem] = {}
+    for locked_id in sorted({comp.item_id for comp, _, _ in resolved}):
+        item = (
+            await db.execute(
+                select(InventoryItem).where(InventoryItem.id == locked_id).with_for_update()
+            )
+        ).scalars().first()
+        item_by_id[locked_id] = item
+
+    # Per-location floor guard, then append the signed issue txns. Base on-hand is
+    # read once per (item, location); duplicate lines accumulate consumed qty so
+    # they cannot jointly overdraw (D-P8-7 per-location floor).
+    base_onhand: dict[tuple[str, int], Decimal] = {}
+    consumed: dict[tuple[str, int], Decimal] = {}
+    total_value = Decimal("0")
+    created: list[tuple[WorkOrderComponent, Decimal, int, Decimal, InventoryTxn]] = []
+    for comp, qty, location_id in resolved:
+        key = (comp.item_id, location_id)
+        if key not in base_onhand:
+            base_onhand[key] = await _component_onhand(db, comp.item_id, location_id)
+            consumed[key] = Decimal("0")
+        available = base_onhand[key] - consumed[key]
+        if _adjustment_violates_floor(available, -qty):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Issue of {qty} for component {comp.id} exceeds location "
+                    f"{location_id} on-hand ({available}) for item {comp.item_id}."
+                ),
+            )
+        consumed[key] += qty
+
+        item = item_by_id[comp.item_id]
+        unit_cost = item.moving_avg_cost
+        line_value = (qty * unit_cost).quantize(_COST_QUANTUM, rounding=ROUND_HALF_UP)
+        total_value += line_value
+
+        txn = InventoryTxn(
+            item_id=comp.item_id,
+            location_id=location_id,
+            txn_type="issue",
+            quantity=-qty,
+            unit_cost=unit_cost,
+            actor_id=actor_id,
+            source_type="mousse_work_order",
+            source_id=wo.id,
+        )
+        db.add(txn)
+        created.append((comp, qty, location_id, unit_cost, txn))
+
+    # The issue rows require a linked JE (NOT NULL), so the batch must carry a
+    # posted, balanced JE — which needs a strictly positive total (a zero-value
+    # issue cannot post a balanced Dr/Cr and has no GL meaning here).
+    if total_value <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Issue has no material value (components have zero moving-average "
+                "cost); nothing to post to WIP."
+            ),
+        )
+
+    # Materialize the txn ids (and PKs/timestamps) for the issue-row soft links.
+    await db.flush()
+
+    # ONE balanced JE: Dr 1140 WIP / Cr 1130 Inventory for the total issued value,
+    # dated on the WO's single accounting date and source-linked to the WO. Rides
+    # this transaction's single commit (commit=False).
+    wip_account_id = await _gl_account_id_by_code(db, "1140")
+    inventory_account_id = await _gl_account_id_by_code(db, "1130")
+    je = await post_journal_entry(
+        db,
+        entry_date=wo.wo_date,
+        memo=f"WO {wo.wo_number} component issue",
+        lines=[
+            {"account_id": wip_account_id, "debit": total_value, "credit": 0},
+            {"account_id": inventory_account_id, "debit": 0, "credit": total_value},
+        ],
+        actor_id=actor_id,
+        source_type="mousse_work_order",
+        source_id=wo.id,
+        commit=False,
+    )
+
+    # One WorkOrderIssue row per line, linking its txn + the shared JE.
+    now = datetime.now(timezone.utc)
+    for comp, qty, location_id, unit_cost, txn in created:
+        db.add(
+            WorkOrderIssue(
+                work_order_id=wo.id,
+                component_id=comp.id,
+                item_id=comp.item_id,
+                location_id=location_id,
+                quantity=qty,
+                unit_cost=unit_cost,
+                inventory_txn_id=txn.id,
+                journal_entry_id=je.id,
+                actor_id=actor_id,
+                created_at=now,
+            )
+        )
+
+    # First issue flips Released -> In Progress (the FSM permits it).
+    if wo.status == "released":
+        wo.status = "in_progress"
+
+    await db.commit()
+
+    return IssueResultRead(
+        work_order_id=wo.id,
+        lines_issued=len(created),
+        total_issued_value=total_value,
+    )
