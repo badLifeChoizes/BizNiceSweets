@@ -69,6 +69,7 @@ from app.modules.syerp.service.journal import (
     reverse_journal_entry,
 )
 from app.modules.syerp.service.purchasing import (
+    PO_TRANSITIONS,
     _POAggregates,
     _PO_NUMBER_RE,
     _get_line_row,
@@ -92,6 +93,7 @@ from app.modules.syerp.service.purchasing import (
     update_line,
 )
 from app.modules.syerp.service.bills import (
+    BILL_TRANSITIONS,
     _BILL_NUMBER_RE,
     _PreparedBillLine,
     _already_billed_qty,
@@ -122,6 +124,8 @@ from app.modules.syerp.service.reports import (
 )
 
 __all__ = [
+    "BILL_TRANSITIONS",
+    "PO_TRANSITIONS",
     "add_line",
     "advance_bill_status",
     "advance_po_status",
