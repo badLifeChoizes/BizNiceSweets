@@ -32,6 +32,9 @@ import { PartsList } from '@/routes/plum/PartsList'
 import { PartDetail } from '@/routes/plum/PartDetail'
 import { ImportExport } from '@/routes/plum/ImportExport'
 
+// MOUSSE routes (Phase 10)
+import { WorkOrders } from '@/routes/mousse/WorkOrders'
+
 export function App() {
   return (
     <Routes>
@@ -70,6 +73,10 @@ export function App() {
         <Route path="/plum/parts" element={<PartsList />} />
         <Route path="/plum/parts/:id" element={<PartDetail />} />
         <Route path="/plum/import-export" element={<ImportExport />} />
+
+        {/* MOUSSE module routes — Sidebar nav lands on /mousse → redirect to work orders */}
+        <Route path="/mousse" element={<Navigate to="/mousse/work-orders" replace />} />
+        <Route path="/mousse/work-orders" element={<WorkOrders />} />
 
         {/* Catch-all: unknown protected paths fall back to Home instead of a blank screen */}
         <Route path="*" element={<Navigate to="/" replace />} />
