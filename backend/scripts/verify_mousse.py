@@ -62,6 +62,10 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
       still clears to its pre-issue snapshot Decimal-exactly.
   (E) TRIAL BALANCE (SC4): after all WO activity the trial balance still nets zero
       (total_debit == total_credit), a global double-entry invariant.
+  (F) CONCURRENCY (SC5, task 13): two identical concurrent issues against a WO whose
+      component has on-hand enough for exactly ONE cannot both succeed — the FOR
+      UPDATE row lock serializes them, on-hand never goes negative, no double-
+      consume, and the WO's WIP reflects only the ONE successful issue.
 
 The script uses uniquely-suffixed throwaway PLUM parts / SYERP items / work orders
 and CLEANS UP after itself (issues -> mousse JEs -> components -> work orders ->
@@ -863,9 +867,145 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             f"debit={tb.total_debit!r} credit={tb.total_credit!r} in_balance={tb.in_balance!r}",
         )
 
+        # ===================================================================
+        # (F) CONCURRENCY (SC5) — two concurrent issues, exactly one wins (task 13)
+        # ===================================================================
+        await run_concurrency(session_factory, unique, actor_id, main_id, acct_1140,
+                              part_ids, item_ids, wo_ids)
+
     finally:
         await _cleanup(session_factory, part_ids, item_ids, wo_ids)
         await engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# (F) Concurrency scenario (SC5) — task 13
+# ---------------------------------------------------------------------------
+#
+# THE LOCK IS WHAT MAKES THIS HOLD. issue_components locks the contended
+# InventoryItem row `SELECT ... FOR UPDATE` BEFORE reading on-hand, so two
+# concurrent issues against the same item serialize: the loser blocks until the
+# winner commits, then re-reads the now-depleted on-hand and the per-location
+# floor guard rejects it 4xx. Removing that FOR UPDATE from
+# app.modules.mousse.service.issue_components makes BOTH read the original
+# on-hand under READ COMMITTED and both succeed — driving on-hand negative and
+# double-consuming (WIP == 2× one issue) — i.e. this scenario FAILS. A sequential
+# test cannot surface that race; only firing both with asyncio.gather on TWO
+# INDEPENDENT sessions can.
+
+
+async def run_concurrency(
+    session_factory,
+    unique: str,
+    actor_id: str,
+    main_id: int,
+    acct_1140: int,
+    part_ids: set[str],
+    item_ids: set[str],
+    wo_ids: set[str],
+) -> None:
+    """
+    Fire two identical issue requests concurrently against a WO whose single
+    component has on-hand enough for EXACTLY ONE, and prove exactly one wins.
+    """
+    # Fixture: FG + one child, on-hand EXACTLY 5 (both requests ask for 5).
+    async with session_factory() as session:
+        f_fg_id, f_fg_rev = await _make_part_with_revision(
+            session, f"P-MO-{unique}-F-fg", released=True
+        )
+        f_child_id, _ = await _make_part_with_revision(
+            session, f"P-MO-{unique}-F-child", released=True
+        )
+        part_ids.update({f_fg_id, f_child_id})
+        session.add(
+            PlumBomItem(parent_revision_id=f_fg_rev, child_part_id=f_child_id,
+                        qty=Decimal("5"), sort_order=0)
+        )
+        await session.commit()
+    f_fg_item = await _link_item(session_factory, unique, "F-FG", f_fg_id)
+    f_child_item = await _link_item(session_factory, unique, "F-CH", f_child_id)
+    item_ids.update({f_fg_item, f_child_item})
+    async with session_factory() as session:
+        await post_receipt(session, f_child_item, main_id, Decimal("5"), Decimal("4"), actor_id)
+    async with session_factory() as session:
+        wo_f = await create_work_order(
+            session,
+            WorkOrderCreate(
+                plum_part_id=f_fg_id, planned_qty=Decimal("1"), target_location_id=main_id
+            ),
+            actor_id,
+        )
+    wo_ids.add(wo_f.id)
+    async with session_factory() as session:
+        await release_work_order(session, wo_f.id, actor_id)
+    async with session_factory() as session:
+        f_detail = await get_work_order_detail(session, wo_f.id)
+    f_comp_id = f_detail.components[0].id  # qty_required == 5, on-hand == 5
+
+    # A start barrier makes the race DETERMINISTIC rather than timing-dependent: each
+    # worker owns an INDEPENDENT session, pre-warms its connection with a throwaway
+    # query (so connection-setup asymmetry can't let one worker finish before the
+    # other even starts), then both wait on the barrier and enter issue_components
+    # together. Aligned like this the two issues interleave await-by-await through the
+    # read-check-write window — so WITHOUT the FOR UPDATE lock both would read the same
+    # pre-issue on-hand and double-consume; WITH the lock the loser blocks on the item
+    # row until the winner commits, re-reads the depleted on-hand, and is floor-rejected.
+    barrier = asyncio.Barrier(2)
+
+    async def _issue_once():
+        from sqlalchemy import text
+
+        async with session_factory() as session:
+            await session.execute(text("SELECT 1"))  # pre-warm the connection
+            await barrier.wait()
+            return await issue_components(
+                session,
+                wo_f.id,
+                IssueComponentsRequest(
+                    lines=[IssueComponentLine(component_id=f_comp_id, quantity=Decimal("5"))]
+                ),
+                actor_id,
+            )
+
+    results = await asyncio.gather(_issue_once(), _issue_once(), return_exceptions=True)
+    successes = [r for r in results if not isinstance(r, Exception)]
+    failures = [r for r in results if isinstance(r, Exception)]
+    http_failures = [r for r in failures if isinstance(r, HTTPException)]
+    check(
+        "(F/SC5) two concurrent issues (on-hand for exactly one): EXACTLY ONE "
+        "succeeds and one fails",
+        len(successes) == 1 and len(failures) == 1,
+        f"successes={len(successes)} failures={[type(f).__name__ for f in failures]}",
+    )
+    check(
+        "(F/SC5) the loser fails with a 4xx (floor guard / lock serialization), not "
+        "an unexpected error",
+        len(http_failures) == 1 and 400 <= http_failures[0].status_code < 500,
+        f"failure={failures[0]!r}",
+    )
+
+    async with session_factory() as session:
+        final_onhand = await _onhand(session, f_child_item, main_id)
+        issue_rows = (
+            await session.execute(
+                select(func.count()).select_from(WorkOrderIssue).where(
+                    WorkOrderIssue.work_order_id == wo_f.id
+                )
+            )
+        ).scalar()
+        wo_f_wip = await _wo_account_balance(session, acct_1140, wo_f.id)
+    check(
+        "(F/SC5) on-hand never went negative and there was no double-consume "
+        "(final on-hand == 0, exactly one WorkOrderIssue row)",
+        final_onhand == Decimal("0") and issue_rows == 1,
+        f"onhand={final_onhand!r} issue_rows={issue_rows!r}",
+    )
+    check(
+        "(F/SC5) the WO's WIP reflects only the ONE successful issue "
+        "(1140 == 5 * 4 == 20.000000, not 40)",
+        wo_f_wip == Decimal("20.000000"),
+        f"wip={wo_f_wip!r}",
+    )
 
 
 # ---------------------------------------------------------------------------

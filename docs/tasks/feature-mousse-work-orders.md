@@ -21,7 +21,7 @@ so the WO's 1140 balance returns to zero (Decimal-exact). Closes the last v2.0 D
 - [x] 10. Router — 9 endpoints with RBAC + audit
 - [x] 11. Register MOUSSE module (`__init__` + main.py import)
 - [x] 12. `verify_mousse.py` — lifecycle + WIP-clears-to-zero + rejects + hold/resume + override
-- [ ] 13. Concurrency scenario (two concurrent issues via asyncio.gather)
+- [x] 13. Concurrency scenario (two concurrent issues via asyncio.gather)
 - [ ] 14. `verify_mousse_api.py` — HTTP RBAC + audit rows
 - [ ] 15. Full regression suite (8 verify scripts exit 0; TB nets zero)
 - [ ] 16. Frontend — WO list, hooks, route, nav wiring
