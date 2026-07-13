@@ -15,9 +15,9 @@ so the WO's 1140 balance returns to zero (Decimal-exact). Closes the last v2.0 D
 - [x] 4. Seed `mousse:read` / `mousse:write` permissions
 - [x] 5. MOUSSE Pydantic schemas
 - [x] 6. Service — create WO, wo_number gen, list/get, detail loader
-- [ ] 7. Service — FSM validator + release (BOM snapshot) + cancel + hold/resume
-- [ ] 8. Service — issue components (row locks, floor guard, txn + JE Dr1140/Cr1130, atomic)
-- [ ] 9. Service — complete WO (WIP clears to zero, FG receipt, Dr1130/Cr1140, under-issue guard)
+- [x] 7. Service — FSM validator + release (BOM snapshot) + cancel + hold/resume
+- [x] 8. Service — issue components (row locks, floor guard, txn + JE Dr1140/Cr1130, atomic)
+- [x] 9. Service — complete WO (WIP clears to zero, FG receipt, Dr1130/Cr1140, under-issue guard)
 - [ ] 10. Router — 9 endpoints with RBAC + audit
 - [ ] 11. Register MOUSSE module (`__init__` + main.py import)
 - [ ] 12. `verify_mousse.py` — lifecycle + WIP-clears-to-zero + rejects + hold/resume + override

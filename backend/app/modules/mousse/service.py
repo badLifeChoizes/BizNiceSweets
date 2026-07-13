@@ -788,3 +788,160 @@ async def issue_components(
         lines_issued=len(created),
         total_issued_value=total_value,
     )
+
+
+# ---------------------------------------------------------------------------
+# Complete — clear WIP to zero, receive the finished good (MOUSSE-01, SC3)
+# ---------------------------------------------------------------------------
+
+
+async def _wo_wip_balance(db: AsyncSession, wip_account_id: int, wo_id: str) -> Decimal:
+    """
+    Derive a work order's 1140-attributable balance (Σdebit − Σcredit).
+
+    Sums the WIP-account journal lines of every JE soft-linked to THIS WO
+    (source_type='mousse_work_order', source_id=wo_id), each side coalesced to
+    zero independently (D-P8-4). Before completion this equals the accumulated WIP
+    (issue debits only); after the clearing entry it returns to zero. This is the
+    EXACT figure the completion JE credits back, so 1140 clears by construction
+    (SC3) — no rounding residual can strand WIP.
+    """
+    from app.modules.syerp.models import JournalEntry, JournalLine
+
+    result = await db.execute(
+        select(
+            func.coalesce(func.sum(JournalLine.debit), 0)
+            - func.coalesce(func.sum(JournalLine.credit), 0)
+        )
+        .select_from(JournalLine)
+        .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+        .where(
+            JournalLine.account_id == wip_account_id,
+            JournalEntry.source_type == "mousse_work_order",
+            JournalEntry.source_id == wo_id,
+        )
+    )
+    return Decimal(result.scalar() or 0)
+
+
+async def complete_work_order(
+    db: AsyncSession,
+    wo_id: str,
+    actor_id: str,
+    override_incomplete: bool = False,
+) -> "WorkOrderCompleteResult":
+    """
+    Complete an In-Progress work order — clear WIP, receive the FG (MOUSSE-01, SC3).
+
+    The whole completion is ONE atomic unit of work (a single db.commit): every
+    guard rejects with NOTHING persisted, and success lands the FG receipt, the
+    clearing JE, and the status flip together.
+
+    Guards:
+      - the WO must be 'in_progress' (else 409, FSM);
+      - **under-issue guard (D-P10-9):** if ANY component has issued_so_far <
+        qty_required the completion is rejected 422 UNLESS override_incomplete is
+        True; when overridden the completion proceeds and the router audits the
+        override + the short components (this service returns them for that audit).
+
+    Costing (D-P10-2, SC3):
+      - accumulated_wip = the WO's 1140-attributable balance (Σ issue debits) —
+        read from the GL, so it EQUALS what was actually posted;
+      - fg_unit_cost = (accumulated_wip / planned_qty) quantized to _COST_QUANTUM
+        with ROUND_HALF_UP (exactly as compute_new_moving_avg quantizes);
+      - the FG is received via post_receipt(commit=False) at fg_unit_cost (updates
+        the FG moving average);
+      - ONE balanced JE Dr 1130 Inventory / Cr 1140 WIP is posted for EXACTLY
+        accumulated_wip (never planned_qty × fg_unit_cost) so the WO's 1140
+        balance returns to its pre-WO value Decimal-exactly — the credit equals
+        the debits by construction, any per-unit rounding residual is absorbed
+        into the moving-average receipt, never left stranded in WIP (SC3 / Risk).
+
+    Returns a WorkOrderCompleteResult (FG qty received + WIP value cleared).
+    """
+    from app.modules.mousse.schemas import WorkOrderCompleteResult
+    from app.modules.syerp.service import (
+        _COST_QUANTUM,
+        _gl_account_id_by_code,
+        post_journal_entry,
+        post_receipt,
+    )
+
+    wo = await _get_work_order_row(db, wo_id)
+    _require_transition(wo, "completed")  # 409 unless in_progress.
+
+    # Under-issue guard (D-P10-9): a component short of its required qty blocks
+    # completion unless explicitly overridden (the router audits the override).
+    components = await _load_components(db, wo_id)
+    short_component_ids: list[str] = []
+    for comp in components:
+        issued = await _component_issued_so_far(db, comp.id)
+        if issued < comp.qty_required:
+            short_component_ids.append(comp.id)
+    if short_component_ids and not override_incomplete:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Work order {wo.wo_number} has under-issued components "
+                f"{short_component_ids}; pass override_incomplete=true to complete "
+                f"anyway (the override is audited)."
+            ),
+        )
+
+    wip_account_id = await _gl_account_id_by_code(db, "1140")
+    inventory_account_id = await _gl_account_id_by_code(db, "1130")
+
+    # Accumulated WIP = the WO's 1140-attributable balance (exact GL figure).
+    accumulated_wip = await _wo_wip_balance(db, wip_account_id, wo.id)
+
+    # Per-unit FG cost for the moving-average receipt (quantized like costing).
+    fg_unit_cost = (accumulated_wip / wo.planned_qty).quantize(
+        _COST_QUANTUM, rounding=ROUND_HALF_UP
+    )
+
+    # Receive the planned output into stock at the FG unit cost (updates the FG
+    # moving average). commit=False — rides this transaction's single commit.
+    await post_receipt(
+        db,
+        wo.output_item_id,
+        wo.target_location_id,
+        wo.planned_qty,
+        fg_unit_cost,
+        actor_id,
+        source_type="mousse_work_order",
+        source_id=wo.id,
+        commit=False,
+    )
+
+    # Clearing JE Dr 1130 Inventory / Cr 1140 WIP for EXACTLY the accumulated WIP,
+    # so 1140 returns to its pre-WO balance Decimal-exactly (SC3). Skipped only in
+    # the degenerate zero-WIP case (nothing was issued under an override) — a zero
+    # entry cannot balance and there is nothing to clear.
+    if accumulated_wip > 0:
+        await post_journal_entry(
+            db,
+            entry_date=wo.wo_date,
+            memo=f"WO {wo.wo_number} completion (WIP -> finished goods)",
+            lines=[
+                {"account_id": inventory_account_id, "debit": accumulated_wip, "credit": 0},
+                {"account_id": wip_account_id, "debit": 0, "credit": accumulated_wip},
+            ],
+            actor_id=actor_id,
+            source_type="mousse_work_order",
+            source_id=wo.id,
+            commit=False,
+        )
+
+    wo.status = "completed"
+    wo.completed_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    await db.refresh(wo)
+
+    return WorkOrderCompleteResult(
+        work_order_id=wo.id,
+        output_item_id=wo.output_item_id,
+        quantity_received=wo.planned_qty,
+        wip_cleared_value=accumulated_wip,
+        completed_at=wo.completed_at,
+    )
