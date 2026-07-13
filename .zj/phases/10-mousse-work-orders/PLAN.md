@@ -149,7 +149,7 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Verify:** `podman exec -e PYTHONPATH=/app <api> python scripts/verify_mousse.py` includes the concurrency PASS lines; exit 0.
 - **Parallel-ok:** no (depends on 12)
 
-### [ ] 14. Write `verify_mousse_api.py` (HTTP-level RBAC + audit rows)
+### [x] 14. Write `verify_mousse_api.py` (HTTP-level RBAC + audit rows)
 - **Files:** `backend/scripts/verify_mousse_api.py`
 - **Do:** Model on `verify_reports_api.py` (stdlib urllib; mint throwaway users/roles with `create_access_token`; cleanup in `finally`). For each MOUSSE mutation route (create/release/issue/complete/cancel) and the read routes: assert `mousse:write` token → 2xx, no-permission token → 403, unauthenticated → 401; reads gated on `mousse:read`. After a successful create/release/issue/complete over HTTP, assert the matching `AuditLog` rows exist (`work_order.created/released/issued/completed`) attributable to the acting user (SC6). Uses its own fixture WO (create the minimal PLUM part/BOM/items via service imports, or reuse a seeded one) and cleans up. MOUSSE-01/SC6.
 - **Done when:** script exits 0 with 200/401/403 asserted on every route and audit rows confirmed.
