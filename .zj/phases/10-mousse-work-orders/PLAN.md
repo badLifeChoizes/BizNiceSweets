@@ -62,7 +62,7 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Verify:** `git branch --show-current` → `feature-mousse-work-orders`; `git merge-base --is-ancestor zj/good-09c-ap-aging-financial-statements HEAD && echo ok`.
 - **Parallel-ok:** no (blocks everything)
 
-### [ ] 2. Define MOUSSE ORM models (WorkOrder, WorkOrderComponent, WorkOrderIssue)
+### [x] 2. Define MOUSSE ORM models (WorkOrder, WorkOrderComponent, WorkOrderIssue)
 - **Files:** `backend/app/modules/mousse/models.py`, `backend/app/modules/mousse/__init__.py` (stub package)
 - **Do:** Import shared `Base` (`from app.core.db import Base`, matching syerp/models.py). Define (all tables prefixed `mousse_`, MOUSSE-01):
   - `WorkOrder` (`mousse_work_order`): `id` (str uuid PK, same default as InventoryItem), `wo_number` (str, unique, not null), `plum_part_id` (FK `plum_part.id`, not null), `released_revision_id` (FK `plum_part_revision.id`, nullable until release), `output_item_id` (FK `syerp_inventory_item.id`, nullable until release — the FG item resolved from the WO part), `planned_qty` (Numeric(18,6), not null, >0), `target_location_id` (FK `syerp_stock_location.id`, not null), `status` (str, not null, default `"draft"`), `wo_date` (Date, not null — single date basis for all this WO's JEs), `actor_id` (str), `created_at`, `completed_at` (nullable).
@@ -79,7 +79,7 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Verify:** `cd backend && alembic upgrade head && alembic current` shows 0012; then `alembic downgrade 0011 && alembic upgrade head`.
 - **Parallel-ok:** no (depends on task 2)
 
-### [ ] 4. Seed `mousse:read` / `mousse:write` permissions
+### [x] 4. Seed `mousse:read` / `mousse:write` permissions
 - **Files:** `backend/app/modules/auth/seed.py`
 - **Do:** Add `("mousse:read", "Read access to MOUSSE (manufacturing execution)")` and `("mousse:write", "Write access to MOUSSE")` to `_PERMISSIONS`; add both to `_USER_ROLE_PERMS` (admin auto-gets all). Idempotent by existing upsert-by-code logic. MOUSSE-01/D-P10-6.
 - **Done when:** after a seed run, `Permission` rows `mousse:read`/`mousse:write` exist and are attached to admin + user roles.
@@ -199,6 +199,14 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Parallel-ok:** no (depends on 16–19)
 
 ## Deviations
+- **Reference-fact corrections (Task 2, verified against real code):** two "verified" facts in the
+  Context were wrong. (a) Shared `Base` is `from app.core.base import Base` (NOT `app.core.db`) —
+  matches `syerp/models.py`. (b) `syerp_inventory_txn.id` is **`String(36)` UUID**, not an int PK, so
+  `WorkOrderIssue.inventory_txn_id` FK is `String(36)`. Downstream tasks (3 migration, 6-9 service)
+  must match `mousse/models.py` types, not the original Context prose. New source files carry the
+  `# ABOUTME:` header (zj guard). `app.core.models` uncommented to aggregate mousse models. (`162c463`)
+- **Task 4 (verified):** real tables are `permissions` + `role_permissions` (not `auth_permission`);
+  only the verification query changed, not the seed logic. (`0ce67ae`)
 - **Task 1 base:** branch `feature-mousse-work-orders` cut off the **D-P10-4 chore tip `6293c96`**
   (`chore-syerp-service-split`, which carries the syerp `service/` package split), not tag
   `zj/good-09c` as the task text says. The owner chose "run the syerp split chore first, then build
