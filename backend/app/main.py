@@ -78,6 +78,7 @@ app.include_router(health_router)
 # `import app.modules.*` statement would cause.
 importlib.import_module("app.modules.syerp")
 importlib.import_module("app.modules.plum")
+importlib.import_module("app.modules.mousse")
 importlib.import_module("app.modules.auth")
 
 # Wire all registered module routers under /api/v1
