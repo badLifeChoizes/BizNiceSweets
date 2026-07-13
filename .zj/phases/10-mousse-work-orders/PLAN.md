@@ -156,7 +156,7 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Verify:** `podman exec -e PYTHONPATH=/app <api> python scripts/verify_mousse_api.py` → exit 0.
 - **Parallel-ok:** no (depends on 11; can run alongside 12/13 authoring)
 
-### [ ] 15. Run the full regression suite
+### [x] 15. Run the full regression suite
 - **Files:** none (execution task); note results in `docs/tasks/feature-mousse-work-orders.md`
 - **Do:** Run `verify_inventory`, `verify_purchasing`, `verify_e2e_p8`, `verify_gl`, `verify_ap`, `verify_reports`, plus the new `verify_mousse` and `verify_mousse_api`, all with `PYTHONPATH=/app` in-container. Confirm trial balance still nets zero after MOUSSE activity. MOUSSE-01/SC4.
 - **Done when:** all eight scripts exit 0.
