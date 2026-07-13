@@ -1,14 +1,30 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-12 (Phase 9c **BUILD COMPLETE** — all 15 tasks on `feature-syerp-financial-reports` → next `/zj:verify 09c`)
+Updated: 2026-07-12 (Phase 9c **VERIFIED PASS** + tagged `zj/good-09c-ap-aging-financial-statements` → next `/zj:retro 09c`)
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** build 09c **complete** on branch `feature-syerp-financial-reports` (AP aging + financial
-  statements, SYERP-12 AC6/AC7). **All 15 PLAN tasks ticked, atomic commits.**
-- **Next action:** `/zj:verify 09c` — verify AP aging (per-vendor + grand-total buckets from the new
-  `Bill.bill_date`, tied to the derived 2110 control) and the three financial statements (Trial Balance,
-  P&L, Balance Sheet), all read-only from posted GL filtered by `entry_date`, `syerp:read`-gated.
+- **Step:** Phase 09c **verified PASS** on branch `feature-syerp-financial-reports` (AP aging +
+  financial statements, SYERP-12 AC6/AC7). Tagged `zj/good-09c-ap-aging-financial-statements`.
+- **Next action:** `/zj:retro 09c` — extract learnings (SC2 exact-Decimal subledger↔control tie-out
+  pattern; the read-only-report phase shape) and set up Phase 10 (MOUSSE), or `/zj:plan 10`.
+- **Verify 09c (2026-07-12) — Verdict PASS.** Goal-backward verifier + code reviewer both clean
+  (0 blockers, 0 majors). All 6 SCs live-proven: **`verify_reports.py` 17/17** (the exact-Decimal
+  2110 subledger↔control tie-out crux `grand_total==control_balance`, incl. partial-payment +
+  DRAFT-exclusion divergence guards; TB nets zero; P&L in/out-of-period; BS balances with the
+  computed current-year net-income line), **`verify_reports_api.py` 13/13** (200/401/403 × 4
+  endpoints + 422 missing-bound); regression `verify_ap` 24 / `verify_gl` 29 / `verify_purchasing`
+  19 / `verify_inventory` 16 / `verify_e2e_p8` 19 all exit 0; backend pytest 117 passed/100 skipped;
+  FE 81/81, tsc clean; alembic `0011 (head)`. **Fix loop:** added
+  `frontend/src/routes/syerp/components/BillCreateDialog.test.tsx` (`0eac5d4`) pinning the bill-date
+  field (renders defaulted to today; `bill_date` flows into the POST body) — the one net-new gap.
+  Deferred minors (all fiscal-close-gated, out of scope, logged in PLAN `## Noticed` + REVIEW): the
+  unconditional computed 3130 line (double-counts only if a future phase posts to 3130), the
+  "Current Year Net Income" label being all-time until fiscal-year bounding lands, and the
+  backdated-payment (`payment_date < bill_date`) tie-out edge (correct out-of-balance surfacing, not
+  a bug). SRD SYERP-12 flipped to **verified (all 9 ACs)** with an AC6/AC7 stamp at `0eac5d4`;
+  MAP.md refresh still owed to `/zj:docs` (pre-existing, Phases 8–9c). Artifacts:
+  `.zj/phases/09c-ap-aging-financial-statements/{VERIFICATION,REVIEW}.md`.
 - **Build 09c (2026-07-12) — 15/15 tasks, on `feature-syerp-financial-reports`** (cut at the 09b HEAD
   `81c2256`; `tag..HEAD` was docs-only so it carries the verified-09b code + planning docs — Deviations).
   Backend: `Bill.bill_date` col (`f6b9635`), migration `0011` NOT NULL + `created_at::date` backfill

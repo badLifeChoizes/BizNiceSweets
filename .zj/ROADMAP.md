@@ -1,6 +1,6 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-12 (Phase 9b done + retro'd → next `/zj:plan 09c`; learnings in LEARNINGS.md "Phase 09b")
-Prior: 2026-07-11 (Phase 9a done + retro'd → next `/zj:plan 09b`; learnings in LEARNINGS.md "Phase 09a")
+Updated: 2026-07-12 (Phase 9c **verified** + tagged `zj/good-09c-ap-aging-financial-statements` → next `/zj:retro 09c`)
+Prior: 2026-07-12 (Phase 9b done + retro'd → next `/zj:plan 09c`; learnings in LEARNINGS.md "Phase 09b")
 Prior: 2026-07-11 (Phase-9 spec — SYERP-12 = GL+AP+reporting, AR→CRUMB, v2.0 DoD confirmed; D-P9-1..5)
 Prior: 2026-07-09 (v1.0 milestone close; history reconstructed at ZJ adoption from git + GSD artifacts archived at `archive/planning-gsd/`)
 
@@ -217,9 +217,21 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   types + `partially_paid` comment → BACKLOG p3; FOR UPDATE template cross-referenced into the
   inventory-ledger race item. **Next: `/zj:plan 09c`.**
 
-#### Phase 9c: AP aging + financial statements  [pending — plan after 9b; next]
+#### Phase 9c: AP aging + financial statements  [verified — 2026-07-12, tag `zj/good-09c-ap-aging-financial-statements`]
 - **Delivers:** SYERP-12 **AC6** (AP aging buckets, ties to AP control balance), **AC7** (Trial
   Balance, P&L, Balance Sheet from posted GL activity).
+- **Plan:** `.zj/phases/09c-ap-aging-financial-statements/PLAN.md` — 15 tasks (models→migration→
+  schemas→4 service reports→router→2 verify scripts→regression→3 frontend), all built + verified.
+- **Verified:** `/zj:verify 09c` (2026-07-12) — verdict **PASS**, no blockers/majors from either
+  the goal-backward verifier or the code reviewer. All 6 SCs live-proven: `verify_reports.py` 17/17
+  (the exact-Decimal 2110 subledger↔control tie-out crux, incl. partial-payment + DRAFT-exclusion
+  divergence guards; TB nets zero; P&L in/out-of-period; BS balances with the computed net-income
+  line), `verify_reports_api.py` 13/13 (200/401/403 × 4 endpoints + 422); regression verify_ap 24 /
+  verify_gl 29 / verify_purchasing 19 / verify_inventory 16 / verify_e2e_p8 19 all exit 0; FE 81/81
+  (fix loop added `BillCreateDialog.test.tsx` pinning the bill-date field, `0eac5d4`). Deferred
+  minors logged (unconditional 3130 line, all-time net-income label, backdated-payment edge — all
+  gated on fiscal-close, out of scope). Artifacts: `.zj/phases/09c-.../{VERIFICATION,REVIEW}.md`.
+  **Next: `/zj:retro 09c`.**
 
 ### Phase 10: MOUSSE — manufacturing execution core  [pending]
 - **Goal:** Work orders with routing consume PLUM BOMs and SYERP inventory; costs flow back
