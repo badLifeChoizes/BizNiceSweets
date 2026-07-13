@@ -135,14 +135,14 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Verify:** boot stack; `curl -s localhost:8000/openapi.json | grep -c '/mousse/'` > 0.
 - **Parallel-ok:** no (depends on 10)
 
-### [ ] 12. Write `verify_mousse.py` (service-level lifecycle + WIP-clears-to-zero + rejects)
+### [x] 12. Write `verify_mousse.py` (service-level lifecycle + WIP-clears-to-zero + rejects)
 - **Files:** `backend/scripts/verify_mousse.py`
 - **Do:** Model on `verify_reports.py` (owns its own async engine + DSN from POSTGRES_* env). Build a fixture: a PLUM part with a Released revision whose direct BOM has ≥2 children, each linked to an InventoryItem with on-hand stock; a linked FG InventoryItem for the parent; a target location. Assert full happy path: create → release (snapshot line count, qty_required math), **snapshot the WO's 1140-attributable balance**, issue all components (on-hand decrements, JE Dr1140/Cr1130 = Σ qty×moving_avg, status→In Progress), complete (FG received at accumulated-WIP unit cost, FG moving_avg updated), **assert the WO's 1140-attributable balance == the pre-WO snapshot Decimal-exactly** (SC3). Negative cases: part with no Released rev → 4xx; BOM child with no linked InventoryItem → release 4xx (D-P10-7); issue beyond on-hand → 4xx, nothing persisted; illegal FSM transitions → 4xx. **Hold/resume (SC1b): In Progress→hold→On Hold, resume→In Progress; hold/resume from wrong state → 4xx. Under-issue completion (D-P10-9): completing an under-issued WO without override → 4xx; with `override_incomplete=True` → completes and WIP still clears to the pre-WO balance exactly.** Assert **trial balance nets zero** after WO activity (SC4). Clean up fixture rows in `finally`. Exit non-zero on any FAIL. MOUSSE-01/SC1/SC1b/SC2/SC3.
 - **Done when:** script exits 0 against a live dev DB with all assertions PASS.
 - **Verify:** `podman exec -e PYTHONPATH=/app <api> python scripts/verify_mousse.py` → exit 0.
 - **Parallel-ok:** no (depends on 11)
 
-### [ ] 13. Add the concurrency scenario (two concurrent issues via `asyncio.gather`)
+### [x] 13. Add the concurrency scenario (two concurrent issues via `asyncio.gather`)
 - **Files:** `backend/scripts/verify_mousse.py` (add a `run_concurrency()` scenario invoked from `main`)
 - **Do:** Set up a Released WO whose component has on-hand exactly enough for ONE of two identical issue requests. Fire both concurrently with `asyncio.gather` on two independent sessions. Assert exactly one succeeds and one fails (floor 4xx / lock serialization), on-hand never goes negative, no double-consume, and the WO's WIP reflects only the successful issue (SC5). A sequential-only test cannot prove this — the row lock (task 8) is what makes it hold. Clean up in `finally`. MOUSSE-01/SC5.
 - **Done when:** the concurrency scenario PASSes deterministically across repeated runs; removing the FOR UPDATE lock makes it FAIL (spot-check once, then restore).
