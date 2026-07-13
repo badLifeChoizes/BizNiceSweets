@@ -163,28 +163,28 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Verify:** run each; capture exit codes = 0.
 - **Parallel-ok:** no (depends on 12–14)
 
-### [ ] 16. Frontend — WO list, hooks, route, and nav wiring
+### [x] 16. Frontend — WO list, hooks, route, and nav wiring
 - **Files:** `frontend/src/routes/mousse/WorkOrders.tsx`, `frontend/src/routes/mousse/hooks.ts` (or `frontend/src/hooks/useWorkOrders.ts`), `frontend/src/routes/mousse/components/MousseNav.tsx`, `frontend/src/App.tsx`
 - **Do:** TanStack Query hook `useWorkOrders()` → `GET /api/v1/mousse/work-orders` via the axios client. `WorkOrders` screen: table of WOs (number, part, planned qty, status). `MousseNav` copying `SyerpNav.tsx` (Work Orders tab). In `App.tsx` add `<Route path="/mousse" element={<Navigate to="/mousse/work-orders" replace />} />` and `/mousse/work-orders`. Sidebar auto-shows `/mousse` when the module is enabled ∩ user has `mousse:read` (matches existing per-module NavLink gating). MOUSSE-01/SC7.
 - **Done when:** with MOUSSE enabled, the sidebar shows MOUSSE, `/mousse/work-orders` lists WOs, nav hidden when module disabled or without `mousse:read`.
 - **Verify:** `cd frontend && npm run build`; manual: enable module, load `/mousse/work-orders`.
 - **Parallel-ok:** yes (backend 10/11 define the contract; can start once schemas/router paths fixed)
 
-### [ ] 17. Frontend — Work Order create dialog
+### [x] 17. Frontend — Work Order create dialog
 - **Files:** `frontend/src/routes/mousse/components/WorkOrderCreateDialog.tsx`, list wiring in `WorkOrders.tsx`
 - **Do:** Dialog with PLUM part select, planned qty, target location select; `useMutation` → `POST /mousse/work-orders`; on success `invalidateQueries(['mousse','work-orders'])` and toast (sonner). MOUSSE-01/SC7.
 - **Done when:** creating a WO from the UI adds it to the list without a manual refresh.
 - **Verify:** `npm run build`; manual create round-trip.
 - **Parallel-ok:** no (depends on 16)
 
-### [ ] 18. Frontend — Work Order detail with snapshot lines + Issue action
+### [x] 18. Frontend — Work Order detail with snapshot lines + Issue action
 - **Files:** `frontend/src/routes/mousse/WorkOrderDetail.tsx`, `frontend/src/routes/mousse/components/IssueComponentsDialog.tsx`, route in `App.tsx`
 - **Do:** `/mousse/work-orders/:id` shows header/status, a Release button (Draft only), and the snapshot component lines with `qty_required`, `on_hand`, `issued_so_far` (visually flag under-issued lines). `IssueComponentsDialog` posts `POST /mousse/work-orders/{id}/issue`; on success invalidate the WO detail + list queries. Release button posts `.../release`. **Hold button (In Progress only) posts `.../hold`; Resume button (On Hold only) posts `.../resume`** (D-P10-9/SC1b) — both invalidate the detail query. MOUSSE-01/SC7.
 - **Done when:** detail renders component lines with live on-hand/issued and flags under-issue; releasing, issuing, holding, and resuming update the view via query invalidation.
 - **Verify:** `npm run build`; manual release→issue flow.
 - **Parallel-ok:** no (depends on 16)
 
-### [ ] 19. Frontend — Complete action
+### [x] 19. Frontend — Complete action
 - **Files:** `frontend/src/routes/mousse/WorkOrderDetail.tsx`, `frontend/src/routes/mousse/components/CompleteWorkOrderDialog.tsx`
 - **Do:** Complete button (visible only In Progress) → `POST /mousse/work-orders/{id}/complete`. **If any component is under-issued, the dialog surfaces a warning listing the short components and requires ticking an "override incomplete" checkbox before submit (sends `override_incomplete=true`); a fully-issued WO completes without the checkbox** (D-P10-9). On success invalidate WO detail + list + (optionally) the FG inventory item query; toast the received FG qty/cost. On a 4xx under-issue rejection (no override) surface the error. MOUSSE-01/SC7.
 - **Done when:** completing a fully-issued In-Progress WO moves it to Completed without manual refresh; an under-issued WO shows the override warning and only completes once the override is confirmed.
