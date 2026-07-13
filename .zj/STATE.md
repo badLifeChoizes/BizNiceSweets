@@ -1,14 +1,44 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-13 (Phase 10 **build in flight** — MOUSSE WO core on `feature-mousse-work-orders`; D-P10-4 chore DONE)
+Updated: 2026-07-13 (Phase 10 **build complete** — MOUSSE WO core, 20/20 green; next `/zj:verify 10`)
 
 ## Position
 
-- **Step:** **Phase 10 build in flight (2026-07-13)** — MOUSSE materials-only WO core on branch
-  `feature-mousse-work-orders`, cut off the chore tip `6293c96` (D-P10-4 done). Executing
-  `.zj/phases/10-mousse-work-orders/PLAN.md` (20 tasks). Task checklist:
-  `docs/tasks/feature-mousse-work-orders.md`. **Deviation from PLAN Task 1:** branch cut off the
-  D-P10-4 chore tip (which carries the syerp `service/` split), NOT tag `zj/good-09c` — the
-  owner chose "chore first, build on the clean post-split base."
+- **Step:** **Phase 10 build COMPLETE (2026-07-13)** — MOUSSE materials-only WO core on branch
+  `feature-mousse-work-orders` (cut off D-P10-4 chore tip `6293c96`). **All 20 PLAN tasks done,
+  atomic commits.** Next action: **`/zj:verify 10`**.
+  - **Backend (`backend/app/modules/mousse/`):** models+migration 0012 (`162c463`,`dd40197`), schemas
+    (`f94c5a9`), service layer T6-9 (`09c5a64` create/number/list/detail, `c84bf2b` FSM+release
+    snapshot+cancel+hold/resume, `21ad021` issue Dr1140/Cr1130, `83b4d0e` complete WIP-clears+FG
+    receipt), router 9 routes+RBAC+audit (`1f75d62`), module registered (`2e04ffc`). Perms seeded
+    (`0ce67ae`).
+  - **The crux is PROVEN Decimal-exact:** issue posts Dr 1140 / Cr 1130 at moving-avg, floor-guarded,
+    row-locked (FOR UPDATE sorted-id); completion posts Dr 1130 / Cr 1140 so the WO's 1140-attributable
+    balance returns to its pre-WO value exactly (incl. a 100/3 residual case). Under-issue completion
+    blocked 4xx unless audited `override_incomplete`; On Hold pause/resume FSM. Trial balance nets zero.
+  - **Verify scripts:** `verify_mousse.py` 34 PASS incl. the WIP-clears crux + hold/resume + override
+    (`66b1448`) and a load-bearing concurrency race (`ac7d658` — Barrier-forced interleave; removing
+    the lock double-consumes on-hand→−5, restoring it passes). `verify_mousse_api.py` 34 PASS — HTTP
+    RBAC 200/403/401 on every route + audit rows attributable (`cb09c1a`).
+  - **Frontend (`frontend/src/routes/mousse/`):** WO list+hooks+route+nav (`5a75966`), create dialog
+    (`67091c0`), detail+snapshot+issue+hold/resume (`3d93be4`), complete+override-warning (`c3239a6`),
+    Vitest 9 tests (`dca7e59`). Nav auto-gates on module-enabled ∩ `mousse:read`.
+  - **Full regression GREEN:** 13/13 verify_* scripts exit 0; backend pytest **117 passed / 100
+    skipped** (D-P7-4 harness, unchanged); frontend **90/90** Vitest; `npm run build` clean; alembic
+    head 0012.
+  - **Deviations (see PLAN `## Deviations`):** (1) branch cut off the chore tip not tag `zj/good-09c`
+    (owner: chore-first); (2) two PLAN "verified" reference facts were wrong — `Base` is
+    `app.core.base`, `syerp_inventory_txn.id` is `String(36)` not int (engineer corrected against real
+    code); (3) FSM 4xx split 409 (illegal transition) / 422 (precondition); (4) **D-P10-4 split defect
+    fixed at wrap-up (`fix(syerp)`):** the chore under-exported `PO_TRANSITIONS`/`BILL_TRANSITIONS`
+    (annotated assigns the AST split's node filter missed) — caught by pytest collection of
+    `test_purchasing.py`; re-exported, 95/95 original names now importable, pytest back to baseline.
+  - **Noticed (for verify/triage):** `HTTP_422_UNPROCESSABLE_ENTITY` emits a Starlette deprecation
+    warning (renamed `..._CONTENT`) — MOUSSE matched the existing SYERP convention; a codebase-wide
+    rename is a separate chore. Lint gates remain non-functional (BACKLOG p1) — correctness rests on
+    the verify_* + Vitest suites, both green.
+- **D-P10-4 chore DONE — deviation from PLAN Task 1:** branch cut off the D-P10-4 chore tip (which
+  carries the syerp `service/` split), NOT tag `zj/good-09c` — the owner chose "chore first, build on
+  the clean post-split base."
 - **D-P10-4 chore COMPLETE (2026-07-13, committed `6293c96` on `chore-syerp-service-split`).** Split
   `backend/app/modules/syerp/service.py` (3,824 lines) into a `service/` package of 10 cohesive
   submodules (`_common`/`partners`/`locations`/`accounts`/`items`/`inventory`/`journal`/`purchasing`/

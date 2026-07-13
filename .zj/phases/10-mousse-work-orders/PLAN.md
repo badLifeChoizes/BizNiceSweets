@@ -1,6 +1,6 @@
 # Plan: Phase 10 — MOUSSE manufacturing execution core (materials-only)
 Goal: A shop can create, release, issue components to, and complete a work order that consumes a PLUM BOM and SYERP inventory to produce a finished good, with material cost flowing through a WIP clearing account that returns to zero — closing the v2.0 "execute work orders that consume PLUM BOMs and inventory" DoD.
-Status: draft
+Status: build complete (2026-07-13) — 20/20 tasks, all green; awaiting /zj:verify 10
 
 ## Success criteria
 Implements requirement **MOUSSE-01** (materials-only slice). Every task below cites MOUSSE-01.
@@ -199,6 +199,15 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Parallel-ok:** no (depends on 16–19)
 
 ## Deviations
+- **D-P10-4 split defect caught at wrap-up (`fix(syerp)`):** the chore's `service/__init__.py`
+  under-exported two public constants — `PO_TRANSITIONS` and `BILL_TRANSITIONS` — because they are
+  *annotated* module-level assignments (`ast.AnnAssign`), which the AST split's node filter (only
+  `ast.Assign`) missed; they landed physically in `purchasing.py`/`bills.py` but were not re-exported,
+  and the parity check shared the same blind spot. Surfaced by backend pytest **collection** of
+  `tests/syerp/test_purchasing.py` (imports `PO_TRANSITIONS`) — the verify_* scripts don't import
+  these constants so they stayed green. Fixed by adding both to the package re-exports + `__all__`.
+  A complete parity re-check (incl. AnnAssign) confirms all 95 original top-level names are now
+  importable from the package. pytest back to 117 passed / 100 skipped.
 - **Reference-fact corrections (Task 2, verified against real code):** two "verified" facts in the
   Context were wrong. (a) Shared `Base` is `from app.core.base import Base` (NOT `app.core.db`) —
   matches `syerp/models.py`. (b) `syerp_inventory_txn.id` is **`String(36)` UUID**, not an int PK, so
