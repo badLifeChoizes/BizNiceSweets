@@ -9,7 +9,7 @@ Seed sequence:
   1. Upsert permission rows by code (users:manage, syerp:read, syerp:write,
      plum:read, plum:write) — check existence before insert.
   2. Upsert 'admin' and 'user' roles by name.
-  3. Assign ALL permissions to 'admin'; assign the four business read/write
+  3. Assign ALL permissions to 'admin'; assign the business read/write
      permissions to 'user' (but NOT users:manage).
   4. Create the admin User only if no row with bns_admin_email exists; hash
      the password via hash_password; attach the 'admin' role.
@@ -35,11 +35,20 @@ _PERMISSIONS: list[tuple[str, str]] = [
     ("syerp:write", "Write access to SYERP"),
     ("plum:read", "Read access to PLUM (Product Lifecycle Management)"),
     ("plum:write", "Write access to PLUM"),
+    ("mousse:read", "Read access to MOUSSE (manufacturing execution)"),
+    ("mousse:write", "Write access to MOUSSE"),
     ("settings:manage", "Configure system settings and enable/disable modules"),
 ]
 
 # Permissions granted to the standard 'user' role (all EXCEPT users:manage)
-_USER_ROLE_PERMS: set[str] = {"syerp:read", "syerp:write", "plum:read", "plum:write"}
+_USER_ROLE_PERMS: set[str] = {
+    "syerp:read",
+    "syerp:write",
+    "plum:read",
+    "plum:write",
+    "mousse:read",
+    "mousse:write",
+}
 
 
 async def seed_admin_user(db: "AsyncSession") -> None:
@@ -103,7 +112,7 @@ async def seed_admin_user(db: "AsyncSession") -> None:
         if code not in admin_existing_codes:
             admin_role.permissions.append(perm)
 
-    # User role gets the four business permissions only (NOT users:manage)
+    # User role gets the business permissions only (NOT users:manage)
     user_existing_codes = {p.code for p in await user_role.awaitable_attrs.permissions}
     for code in _USER_ROLE_PERMS:
         if code not in user_existing_codes:
