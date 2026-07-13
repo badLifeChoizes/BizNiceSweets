@@ -191,7 +191,7 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Verify:** `npm run build`; manual complete flow.
 - **Parallel-ok:** no (depends on 18)
 
-### [ ] 20. Frontend — Vitest coverage of the key flows
+### [x] 20. Frontend — Vitest coverage of the key flows
 - **Files:** `frontend/src/routes/mousse/WorkOrders.test.tsx`, `WorkOrderDetail.test.tsx`, `components/WorkOrderCreateDialog.test.tsx`, `components/IssueComponentsDialog.test.tsx`
 - **Do:** Testing-Library tests (mirror `routes/syerp/*.test.tsx`) mocking the axios client: list renders WOs; create dialog submits and invalidates; detail renders component lines with on-hand/issued; issue and complete mutations fire the right requests and invalidate. MOUSSE-01/SC7.
 - **Done when:** `npm run test` passes with the new tests covering create/issue/complete.
