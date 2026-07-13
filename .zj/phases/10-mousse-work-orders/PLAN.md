@@ -72,7 +72,7 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Verify:** `cd backend && python -c "import app.core.models; from app.modules.mousse import models; print([t for t in __import__('app.core.db',fromlist=['Base']).Base.metadata.tables if t.startswith('mousse_')])"`
 - **Parallel-ok:** no (foundation)
 
-### [ ] 3. Add Alembic migration 0012 for the MOUSSE tables
+### [x] 3. Add Alembic migration 0012 for the MOUSSE tables
 - **Files:** `backend/alembic/versions/0012_mousse_work_orders.py`
 - **Do:** Hand-author revision `0012`, `down_revision="0011"` (follow the 0011 header/ABOUTME convention). `upgrade()` creates the three tables with the columns/FKs/constraints from task 2 (unique on `wo_number`; FKs to `plum_part`, `plum_part_revision`, `syerp_inventory_item`, `syerp_stock_location`, `syerp_inventory_txn`, `syerp_journal_entry`). `downgrade()` drops them in reverse FK order. MOUSSE-01.
 - **Done when:** `alembic upgrade head` reaches 0012; `alembic downgrade -1` then `upgrade head` round-trips clean.
@@ -86,35 +86,35 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Verify:** restart stack (lifespan reseeds) then `SELECT code FROM auth_permission WHERE code LIKE 'mousse:%';` returns both rows.
 - **Parallel-ok:** yes (independent of models)
 
-### [ ] 5. Define MOUSSE Pydantic schemas
+### [x] 5. Define MOUSSE Pydantic schemas
 - **Files:** `backend/app/modules/mousse/schemas.py`
 - **Do:** `WorkOrderCreate` (`plum_part_id`, `planned_qty` >0, `target_location_id`, optional `wo_date`), `WorkOrderComponentRead` (component fields + `item_id`, `qty_required`, and computed `on_hand`/`issued_so_far` populated by the service), `WorkOrderRead` (header + status + numbers), `WorkOrderDetailRead` (header + `components: list[WorkOrderComponentRead]`), `IssueComponentsRequest` (list of `{component_id, quantity, location_id?}` — location defaults to `target_location_id`), `IssueResultRead`, `WorkOrderCompleteRequest` (`override_incomplete: bool = False` — D-P10-9), `WorkOrderCompleteResult`. `WorkOrderComponentRead` exposes `issued_so_far` and `qty_required` so the UI can show under-issue. `status` values include `on_hold`. Decimal fields as `Decimal`. MOUSSE-01.
 - **Done when:** `python -c "import app.modules.mousse.schemas"` clean; schemas validate a sample create payload.
 - **Verify:** `cd backend && python -c "from app.modules.mousse.schemas import WorkOrderCreate; WorkOrderCreate(plum_part_id='x', planned_qty='10', target_location_id=1)"`
 - **Parallel-ok:** yes (independent of service body)
 
-### [ ] 6. Service — create work order, wo_number generation, list/get
+### [x] 6. Service — create work order, wo_number generation, list/get
 - **Files:** `backend/app/modules/mousse/service.py`
 - **Do:** `create_work_order(db, data, actor_id)` — validate `planned_qty>0` (422), resolve the PLUM part exists (404), create a `WorkOrder` in `status="draft"` with `wo_date` (default today), generate `wo_number` as zero-padded sequential (e.g. `WO-000001` from a count/max; note collision risk under concurrency — acceptable for draft creation, unique constraint is the backstop). `get_work_order(db, wo_id)` → 404 if missing; `list_work_orders(db, status=None)`. Detail loader assembles `WorkOrderDetailRead` with per-component `on_hand` (SUM InventoryTxn at target location) and `issued_so_far` (SUM `WorkOrderIssue.quantity` for the component). MOUSSE-01/SC1.
 - **Done when:** `create_work_order` persists a Draft WO with a unique number; `get`/`list` return it.
 - **Verify:** covered by verify_mousse.py (task 12); interim `python` REPL create+get round-trip against dev DB.
 - **Parallel-ok:** no (depends on 2,5)
 
-### [ ] 7. Service — FSM validator + release (BOM snapshot) + cancel + hold/resume
+### [x] 7. Service — FSM validator + release (BOM snapshot) + cancel + hold/resume
 - **Files:** `backend/app/modules/mousse/service.py`
 - **Do:** Pure `_validate_transition(current, target) -> bool` allowing Draft→Released, Released→In Progress, **In Progress→On Hold, On Hold→In Progress**, In Progress→Completed, Draft→Cancelled, Released→Cancelled; everything else illegal → caller raises 409/422. Statuses: `draft | released | in_progress | on_hold | completed | cancelled`. `release_work_order(db, wo_id, actor_id)`: require Draft (else 4xx); call `plum.get_released_revision(db, wo.plum_part_id)` → None ⇒ 4xx (SC1); resolve the WO's OUTPUT InventoryItem via `InventoryItem.plum_part_id == wo.plum_part_id` (nullable ⇒ 4xx — cannot receive FG); snapshot the DIRECT BOM (`PlumBomItem` where `parent_revision_id == released_rev.id`, or `load_bom_tree` level-0 — D-P10-5, NOT `load_flat_bom`) into `WorkOrderComponent` rows: `qty_per=bom.qty`, `qty_required=qty_per*planned_qty`, `unit_of_measure` from child revision, resolve `item_id` per child via `plum_part_id`; **if ANY component's child has no linked InventoryItem, reject the whole release 4xx (D-P10-7) — no partial snapshot**; set `released_revision_id`, `output_item_id`, `status="released"`, commit. `cancel_work_order(db, wo_id, actor_id)`: require Draft/Released, set `status="cancelled"`. **`hold_work_order(db, wo_id, actor_id)`: require In Progress (else 4xx), set `status="on_hold"`. `resume_work_order(db, wo_id, actor_id)`: require On Hold (else 4xx), set `status="in_progress"`** (D-P10-9). MOUSSE-01/SC1/SC1b.
 - **Done when:** releasing a part with a Released rev + fully-linked BOM snapshots N component lines and moves to Released; no-released-rev and unlinked-component cases raise 4xx with nothing persisted; illegal transitions 4xx; hold from In Progress → On Hold and resume → In Progress; hold/resume from any other state 4xx.
 - **Verify:** exercised by verify_mousse.py (task 12).
 - **Parallel-ok:** no (depends on 6)
 
-### [ ] 8. Service — issue components (row locks, floor guard, txn + JE, atomic)
+### [x] 8. Service — issue components (row locks, floor guard, txn + JE, atomic)
 - **Files:** `backend/app/modules/mousse/service.py`
 - **Do:** `issue_components(db, wo_id, request, actor_id)`: require status Released or In Progress (else 4xx). **Lock the contended rows FOR UPDATE in sorted-id order BEFORE the guard read** (SC5, copy create_bill template): lock each target `InventoryItem` row (or a deterministic per-item/location key) for the components being issued, sorted by id. For each requested component: read per-location on-hand (SUM InventoryTxn at location); apply `_adjustment_violates_floor(on_hand, -qty)` → insufficient ⇒ 4xx, nothing persists. Post one signed `issue` InventoryTxn per component (`quantity = -qty`, `unit_cost = item.moving_avg_cost`, `txn_type="issue"`, `source_type="mousse_work_order"`, `source_id=wo.id`, `actor_id`) — add directly (do NOT call `post_adjustment`: it lacks `commit` and doesn't value at moving_avg). Accumulate total issued value = Σ(qty × moving_avg, quantized `_COST_QUANTUM`). Post ONE balanced JE via `post_journal_entry(commit=False)`: **Dr 1140 WIP / Cr 1130 Inventory** for the total, `entry_date=wo.wo_date`, `source_type="mousse_work_order"`, `source_id=wo.id`. Write a `WorkOrderIssue` row per component linking its txn + the JE. If status was Released, set In Progress. Single `db.commit()` at the end (all-or-nothing). MOUSSE-01/SC2.
 - **Done when:** issuing decrements on-hand, posts one Dr1140/Cr1130 JE equal to Σ(qty×moving_avg), moves WO to In Progress on first issue, writes issue rows; insufficient-stock request 4xx with zero rows written.
 - **Verify:** verify_mousse.py (task 12) + concurrency (task 13).
 - **Parallel-ok:** no (depends on 7)
 
-### [ ] 9. Service — complete work order (WIP clears to zero, FG receipt)
+### [x] 9. Service — complete work order (WIP clears to zero, FG receipt)
 - **Files:** `backend/app/modules/mousse/service.py`
 - **Do:** `complete_work_order(db, wo_id, actor_id, override_incomplete=False)`: require In Progress (else 4xx). **Under-issue guard (D-P10-9): if ANY component has `issued_so_far < qty_required`, reject 4xx UNLESS `override_incomplete=True`; when overridden, the audit detail (task 10) records `override_incomplete=true` + which components were short.** Compute accumulated WIP = Σ of this WO's 1140 DEBITS attributable to the WO (sum `WorkOrderIssue.quantity*unit_cost`, or the 1140 debits from `get_account_register` filtered by `source_id=wo.id` — use the same basis consistently). `fg_unit_cost = (accumulated_wip / planned_qty).quantize(_COST_QUANTUM, ROUND_HALF_UP)`. Receive FG via `post_receipt(db, wo.output_item_id, wo.target_location_id, planned_qty, fg_unit_cost, actor_id, source_type="mousse_work_order", source_id=wo.id, commit=False)` (updates FG moving_avg). Post ONE balanced JE `post_journal_entry(commit=False)`: **Dr 1130 Inventory / Cr 1140 WIP** for `planned_qty*fg_unit_cost`, `entry_date=wo.wo_date`, `source_id=wo.id`. Make the Cr-1140 amount equal the total WIP debits BY CONSTRUCTION so 1140-attributable balance returns to pre-WO exactly (SC3 — if a rounding residual appears from the divide, credit the exact accumulated WIP and receive at `accumulated_wip/planned_qty`; the receipt value must equal the WIP credit — do NOT loosen an assert). Set `status="completed"`, `completed_at`. Single `db.commit()`. MOUSSE-01/SC3/D-P10-2.
 - **Done when:** completing a fully-issued In-Progress WO receives planned_qty of FG at accumulated-WIP unit cost, posts Dr1130/Cr1140, and the WO's 1140-attributable balance equals its pre-WO value Decimal-exactly; an under-issued WO is rejected 4xx without override and completes (audited) with `override_incomplete=True`.
