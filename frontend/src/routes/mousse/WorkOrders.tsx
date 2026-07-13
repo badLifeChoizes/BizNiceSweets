@@ -16,9 +16,11 @@
  * Row click navigates to /mousse/work-orders/{id} (the detail screen).
  */
 
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -30,6 +32,7 @@ import {
 } from '@/components/ui/table'
 import { apiClient } from '@/api/client'
 import { MousseNav } from './components/MousseNav'
+import { WorkOrderCreateDialog } from './components/WorkOrderCreateDialog'
 import { useWorkOrders } from './hooks'
 import type { PartRead } from '../plum/components/PartSheet'
 
@@ -78,6 +81,7 @@ export function WorkOrderStatusBadge({ status }: { status: string }) {
 
 export function WorkOrders() {
   const navigate = useNavigate()
+  const [createOpen, setCreateOpen] = useState(false)
 
   const { data: orders = [], isLoading, isError } = useWorkOrders()
 
@@ -100,6 +104,13 @@ export function WorkOrders() {
           Create, release, issue components to, and complete work orders that consume
           PLUM BOMs and SYERP inventory.
         </p>
+      </div>
+
+      {/* Toolbar: Create work order */}
+      <div className="flex items-center">
+        <Button variant="default" className="ml-auto" onClick={() => setCreateOpen(true)}>
+          Create Work Order
+        </Button>
       </div>
 
       {/* Orders table / loading / empty states */}
@@ -149,6 +160,9 @@ export function WorkOrders() {
           </TableBody>
         </Table>
       )}
+
+      {/* Create dialog */}
+      <WorkOrderCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   )
 }

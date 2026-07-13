@@ -25,7 +25,7 @@ so the WO's 1140 balance returns to zero (Decimal-exact). Closes the last v2.0 D
 - [x] 14. `verify_mousse_api.py` — HTTP RBAC + audit rows
 - [x] 15. Full regression suite — 8/8 verify scripts exit 0; TB nets zero
 - [x] 16. Frontend — WO list, hooks, route, nav wiring
-- [ ] 17. Frontend — WO create dialog
+- [x] 17. Frontend — WO create dialog
 - [ ] 18. Frontend — WO detail + snapshot lines + Issue action + hold/resume
 - [ ] 19. Frontend — Complete action (with override-incomplete warning)
 - [ ] 20. Frontend — Vitest coverage of key flows
