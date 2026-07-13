@@ -121,14 +121,14 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Verify:** verify_mousse.py WIP pre/post equality + under-issue guard assertions (task 12).
 - **Parallel-ok:** no (depends on 8)
 
-### [ ] 10. Router — endpoints with RBAC + audit
+### [x] 10. Router — endpoints with RBAC + audit
 - **Files:** `backend/app/modules/mousse/router.py`
 - **Do:** `APIRouter()` (no prefix — `mount_all` adds `/api/v1`; module tag adds nothing — put paths under `/mousse/...`). Endpoints (mirror syerp router style, `current_user=Depends(require_permission(...))`, `actor_id=str(current_user.id)`, `write_audit` AFTER the service commit): `GET /mousse/work-orders` (read), `POST /mousse/work-orders` (write → `work_order.created`), `GET /mousse/work-orders/{id}` (read, returns detail with on-hand/issued), `POST /mousse/work-orders/{id}/release` (write → `work_order.released`), `POST /mousse/work-orders/{id}/issue` (write → `work_order.issued`), `POST /mousse/work-orders/{id}/hold` (write → `work_order.held`), `POST /mousse/work-orders/{id}/resume` (write → `work_order.resumed`), `POST /mousse/work-orders/{id}/complete` (write → `work_order.completed`; body carries `override_incomplete: bool = False`, threaded to the service; audit detail records the override + short components when true — D-P10-9), `POST /mousse/work-orders/{id}/cancel` (write → `work_order.cancelled`). Reads use `mousse:read`, mutations `mousse:write`. MOUSSE-01/SC1b/SC6.
 - **Done when:** router imports clean and exposes the nine routes; write routes gated `mousse:write`, reads `mousse:read`.
 - **Verify:** `cd backend && python -c "from app.modules.mousse.router import router; print([r.path for r in router.routes])"`
 - **Parallel-ok:** no (depends on 6–9)
 
-### [ ] 11. Register the MOUSSE module + wire nothing else to break
+### [x] 11. Register the MOUSSE module + wire nothing else to break
 - **Files:** `backend/app/modules/mousse/__init__.py`, `backend/app/main.py`
 - **Do:** `__init__.py`: `MODULE_NAME = "mousse"`, `from app.modules.mousse.router import router`, `registry.register(sys.modules[__name__])` (copy plum/__init__.py). In `main.py` add `importlib.import_module("app.modules.mousse")` after the plum import. (Permissions seed already wired via task 4 into `auth/seed.py`; modules table already has `mousse`.) MOUSSE-01/D-P10-6.
 - **Done when:** app boots with mousse mounted; `GET /api/v1/mousse/work-orders` responds (200 with token / 401 without).
