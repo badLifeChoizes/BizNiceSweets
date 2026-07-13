@@ -11,7 +11,7 @@ so the WO's 1140 balance returns to zero (Decimal-exact). Closes the last v2.0 D
 ## Checklist
 - [x] 1. Cut build branch off chore tip + open this checklist (branch: `feature-mousse-work-orders`)
 - [x] 2. MOUSSE ORM models (WorkOrder, WorkOrderComponent, WorkOrderIssue) + package stub
-- [ ] 3. Alembic migration 0012 (three `mousse_*` tables)
+- [x] 3. Alembic migration 0012 (three `mousse_*` tables)
 - [x] 4. Seed `mousse:read` / `mousse:write` permissions
 - [x] 5. MOUSSE Pydantic schemas
 - [ ] 6. Service — create WO, wo_number gen, list/get, detail loader
