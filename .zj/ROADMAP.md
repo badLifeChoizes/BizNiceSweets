@@ -1,5 +1,6 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-12 (Phase 9c **verified** + tagged `zj/good-09c-ap-aging-financial-statements` → next `/zj:retro 09c`)
+Updated: 2026-07-12 (Phase 9c **done + retro'd** → next `/zj:plan 10` (MOUSSE); learnings in LEARNINGS.md "Phase 09c")
+Prior: 2026-07-12 (Phase 9c verified + tagged `zj/good-09c-ap-aging-financial-statements` → next `/zj:retro 09c`)
 Prior: 2026-07-12 (Phase 9b done + retro'd → next `/zj:plan 09c`; learnings in LEARNINGS.md "Phase 09b")
 Prior: 2026-07-11 (Phase-9 spec — SYERP-12 = GL+AP+reporting, AR→CRUMB, v2.0 DoD confirmed; D-P9-1..5)
 Prior: 2026-07-09 (v1.0 milestone close; history reconstructed at ZJ adoption from git + GSD artifacts archived at `archive/planning-gsd/`)
@@ -217,7 +218,7 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   types + `partially_paid` comment → BACKLOG p3; FOR UPDATE template cross-referenced into the
   inventory-ledger race item. **Next: `/zj:plan 09c`.**
 
-#### Phase 9c: AP aging + financial statements  [verified — 2026-07-12, tag `zj/good-09c-ap-aging-financial-statements`]
+#### Phase 9c: AP aging + financial statements  [done — verified + retro'd 2026-07-12, tag `zj/good-09c-ap-aging-financial-statements`]
 - **Delivers:** SYERP-12 **AC6** (AP aging buckets, ties to AP control balance), **AC7** (Trial
   Balance, P&L, Balance Sheet from posted GL activity).
 - **Plan:** `.zj/phases/09c-ap-aging-financial-statements/PLAN.md` — 15 tasks (models→migration→
@@ -231,7 +232,17 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   (fix loop added `BillCreateDialog.test.tsx` pinning the bill-date field, `0eac5d4`). Deferred
   minors logged (unconditional 3130 line, all-time net-income label, backdated-payment edge — all
   gated on fiscal-close, out of scope). Artifacts: `.zj/phases/09c-.../{VERIFICATION,REVIEW}.md`.
-  **Next: `/zj:retro 09c`.**
+- **Retro 2026-07-12** (`/zj:retro 09c`): learnings in `.zj/LEARNINGS.md` "Phase 09c" — (1) first
+  phase since Phase 6 with zero reviewer majors, structurally: a read-only derivation phase has no
+  read-check-write, so the recurring 7/9a/9b concurrency-major class has no home (triage signal:
+  report phases are low-risk on the concurrency axis — spend review budget on sign-convention +
+  derivation correctness); (2) a subledger↔control tie-out holds only if both sides age on the same
+  date basis — D-P9c-1 unified it at write time (`entry_date=bill_date`), then assert Decimal-exact;
+  (3) `in_balance == True` on the balance sheet is tautological (identity holds by construction) —
+  assert the *composition* (exactly one 3130 row, its amount == P&L net income), not the identity
+  that must be true. Deferrals homed to BACKLOG p2/p3: the fiscal-close-gated 3130 double-count +
+  net-income fiscal-year bounding, and the backdated-payment tie-out edge; syerp `service.py` size
+  bumped in the split item (~3,700 lines). **Next: `/zj:plan 10` (MOUSSE).**
 
 ### Phase 10: MOUSSE — manufacturing execution core  [pending]
 - **Goal:** Work orders with routing consume PLUM BOMs and SYERP inventory; costs flow back

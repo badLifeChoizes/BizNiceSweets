@@ -1,13 +1,28 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-12 (Phase 9c **VERIFIED PASS** + tagged `zj/good-09c-ap-aging-financial-statements` → next `/zj:retro 09c`)
+Updated: 2026-07-12 (Phase 9c **done + retro'd** → next `/zj:plan 10` (MOUSSE); learnings in LEARNINGS.md "Phase 09c")
 
 ## Position
 
 - **Project:** BizNiceSweets
-- **Step:** Phase 09c **verified PASS** on branch `feature-syerp-financial-reports` (AP aging +
+- **Step:** Phase 09c **done + retro'd** on branch `feature-syerp-financial-reports` (AP aging +
   financial statements, SYERP-12 AC6/AC7). Tagged `zj/good-09c-ap-aging-financial-statements`.
-- **Next action:** `/zj:retro 09c` — extract learnings (SC2 exact-Decimal subledger↔control tie-out
-  pattern; the read-only-report phase shape) and set up Phase 10 (MOUSSE), or `/zj:plan 10`.
+  **SYERP-12 fully delivered (all 9 ACs across 9a/9b/9c).**
+- **Next action:** `/zj:plan 10` — plan MOUSSE (manufacturing execution core, work orders consuming
+  PLUM BOMs + SYERP inventory; MOUSSE-01). Consider splitting when planned. Phase 10 is also the
+  trigger to split `syerp/service.py` (~3,700 lines, BACKLOG p2) *before* MOUSSE adds work-order
+  posting to it, and to run the `/zj:docs` MAP.md refresh covering Phases 8–9c (BACKLOG p3).
+- **Retro 09c (2026-07-12) — complete.** Learnings → `.zj/LEARNINGS.md` "Phase 09c": (1) first
+  phase since Phase 6 with **zero reviewer majors**, structurally — a read-only derivation phase has
+  no read-check-write, so the recurring 7/9a/9b concurrency-major class has no home (triage: report
+  phases are low-risk on the concurrency axis, spend review budget on sign-convention + derivation
+  correctness); (2) a subledger↔control tie-out holds only if both sides age on the **same date
+  basis** — D-P9c-1 unified it at write time (`entry_date=bill_date`), then assert Decimal-exact;
+  (3) `in_balance == True` on the balance sheet is **tautological** (identity holds by construction)
+  — assert the *composition* (exactly one 3130 row, amount == P&L net income), not the identity.
+  Deferrals homed: balance-sheet fiscal-close-gated 3130 double-count + net-income fiscal-year
+  bounding → BACKLOG p2; backdated-payment tie-out edge → p3; syerp `service.py` ~3,700 lines +
+  MAP.md refresh through 0011 updated in their existing items. Roadmap 9c → `[done]`. Offer:
+  `/zj:log phase 09c` files the formal work log.
 - **Verify 09c (2026-07-12) — Verdict PASS.** Goal-backward verifier + code reviewer both clean
   (0 blockers, 0 majors). All 6 SCs live-proven: **`verify_reports.py` 17/17** (the exact-Decimal
   2110 subledger↔control tie-out crux `grand_total==control_balance`, incl. partial-payment +

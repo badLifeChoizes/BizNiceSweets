@@ -3,6 +3,53 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the bottom.
 
+## Phase 09c — AP aging + financial statements (verified 2026-07-12)
+
+### Patterns that worked (repeat these)
+- **First phase since Phase 6 with zero reviewer majors — and the reason is structural, not luck.**
+  Phases 7 / 9a / 9b each had the reviewer catch a major the green live-verify missed (a poison
+  input, a zero-cost regression, a concurrency race). 09c had none, because a **read-only
+  derivation phase has no read-check-write and no new invariant-guarding mutation** — the only
+  write was the additive `bill_date` column, which guards no invariant. The entire "reviewer finds
+  the concurrency/domain major the sequential verify can't express" class (the recurring 7/9a/9b
+  finding) simply had **no home** here. **Triage signal for planning: a report/statement phase that
+  only derives from already-posted data is structurally low-risk on the concurrency axis — spend the
+  review budget on sign-convention and derivation correctness (the two Risks that mattered here),
+  not on lock analysis.** Conversely, the moment a phase adds a mutation that guards an invariant,
+  the 9b concurrency rule reactivates.
+- **The subledger↔control tie-out (SC2, the crux) was made provable by a plan-time date-basis
+  decision, not by the verify assertion.** The aging subledger ages bills on `bill_date`; the 2110
+  control account ages journal lines on `entry_date`. These are *different columns* — the tie-out
+  can only hold exact-Decimal if they carry the same value, so D-P9c-1 set the bill JE
+  `entry_date = bill.bill_date` at post time (`729ec00`). Same shape as 09b's GR/IR
+  (make-it-hold-by-construction, then assert equality) and 09a's coalesce. **Durable rule: a
+  subledger↔control tie-out holds only if both sides age on the same date basis — unify the date
+  basis at write time, then assert `Decimal == Decimal` exact. If you find yourself needing a
+  tolerance on a tie-out, the date bases have diverged; fix the posting, don't loosen the assert.**
+
+### Surprises (assumptions that were wrong → corrected truth)
+- **`in_balance == True` on the balance sheet is a *tautological* assertion — it can never fail, so
+  it proves nothing about the line it was meant to check.** `assets == liabilities + equity` is a
+  mathematical consequence of every JE balancing *plus* the computed `net_income = Σrevenue −
+  Σexpense`; there is no ledger state that makes it false (the reviewer confirmed: `in_balance`
+  cannot be driven false). So the SC5 `in_balance` check, run alone, is green by construction and
+  would stay green even if the computed 3130 net-income line were doubled or mislabelled. The real
+  risks — the unconditional 3130 line **double-counting** if 3130 ever carries a posting (REVIEW #1),
+  and the "Current Year Net Income" label being **all-time R−E** rather than fiscal-year-bounded
+  (REVIEW #2) — are *presentation/composition* bugs the identity structurally cannot catch. What
+  saved SC5 was that `verify_reports.py` *also* asserted the **composition**: exactly one appended
+  3130 row, its amount `== profit_loss(BOT, as_of).net_income`, and zero posted 3130 lines. **Rule:
+  when an invariant holds by construction, asserting the invariant is worthless — assert the
+  composition that could actually be wrong (the row count, the line's provenance, the sign), not the
+  identity that must be true.** This is the balance-sheet cousin of the 09b "snapshot a control and
+  assert it *returns*, not that it's zero" lesson: assert the thing that can break, not the thing
+  that can't.
+
+### Cost sinks (time planning didn't predict)
+- **Same two recurring taxes, no new ones (6th consecutive phase):** in-container verify still needs
+  `PYTHONPATH=/app` and neither lint gate ran (both BACKLOG p1, unwritten wrapper / flat-config).
+  Noted only as continued evidence; not re-litigated.
+
 ## Phase 09b — AP bills, PO match & payments (verified 2026-07-12)
 
 ### Patterns that worked (repeat these)

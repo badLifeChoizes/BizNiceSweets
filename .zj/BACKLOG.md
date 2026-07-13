@@ -1,5 +1,7 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-12 (Phase 9b retro — 2 minor AP correctness edge-cases → p2, stale AP FE
+Updated: 2026-07-12 (Phase 9c retro — balance-sheet fiscal-close-gated defects → p2,
+backdated-payment tie-out edge → p3, syerp `service.py` now ~3,700 lines in the split item)
+Prior: 2026-07-12 (Phase 9b retro — 2 minor AP correctness edge-cases → p2, stale AP FE
 types → p3, FOR UPDATE template cross-referenced into the inventory-ledger race item)
 Prior: 2026-07-04 (seeded at adoption from the v1.0 milestone audit, codebase map, and the
 kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-ADOPT-5)
@@ -57,7 +59,10 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   the pattern — the monolith-file smell the prototypes suffered from. Target: before/at
   Phase 10 (MOUSSE). **Note (Phase 8):** `syerp/service.py` has now grown to ~1,800 lines
   (inventory + purchasing landed here) — the same smell is starting in the hub module; fold it
-  into this split when done.
+  into this split when done. **Update (Phase 9c):** `syerp/service.py` is now **~3,700 lines /
+  ~133 KB** (GL posting in 9a, AP bills/payments in 9b, the four report functions in 9c all landed
+  here) — it has passed `plum/service.py` and is the more urgent split. Phase 10 (MOUSSE) is the
+  trigger; do it before MOUSSE adds work-order posting to the same file.
 - [ ] **Auto-number double-collision race in `create_part`** (Phase 7 verify, 2026-07-09) —
   `backend/app/modules/plum/service.py` retries a collided auto-generated `part_number` exactly
   once, and the retry's `db.flush()` is unguarded. Two concurrent no-`part_number` creates are
@@ -105,6 +110,25 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   "nets to zero exactly" invariant. `verify_ap.py` (e) uses a single fully-received line and cannot
   surface it. Fix: derive the matched amount from the Σ of the *booked* receipt amounts for that
   `po_line_id` (or quantize identically per receipt). Fold into 9c if the crux is revisited.
+- [ ] **Balance-sheet "Current Year Net Income" line — two fiscal-close-gated defects** (Phase 9c
+  review #1/#2, both minor/latent, both resolved by the same future feature). `balance_sheet`
+  (`syerp/service.py:3735-3812`) appends a **computed** 3130 "Current Year Net Income" row
+  (`amount = Σrevenue − Σexpense`, all-time, `entry_date <= as_of`) and adds it into `total_equity`,
+  because no closing entries are posted so ledger 3130 is empty. Two problems surface the moment the
+  ledger grows: (1) **double-count** — the main query inner-joins `JournalLine` filtered to
+  ASSET/LIABILITY/EQUITY, so it includes 3130 as a *second* row the instant anything posts to 3130
+  (nothing forbids a manual JE to that leaf via `post_journal_entry`); the identity still holds
+  (`in_balance` is tautological — see LEARNINGS 09c), so this is silent presentation duplication.
+  (2) **wrong label** — the line sums R−E from beginning-of-time with no fiscal-year lower bound, so
+  once the ledger spans >1 fiscal year "Current Year Net Income" overstates the current year by all
+  prior years' cumulative P&L (balance still ties; label lies). **Both land with fiscal-year close /
+  closing entries / retained-earnings roll-forward** (explicitly out of scope for v2.0 — the DoD has
+  no closing-entry clause). Fix when that phase arrives: exclude 3130 from the main query (or skip
+  the computed line when ledger 3130 is non-empty) so exactly one 3130 row is ever emitted, and bound
+  net-income to the current fiscal year moving prior-year P&L to retained earnings. Until then,
+  documented as cumulative. `verify_reports.py` pins the *composition* (exactly one appended row ==
+  P&L net income) so a regression that breaks the current model would be caught.
+
 - [ ] **AP zero-quantity matched line → permanently unpostable draft** (Phase 9b review #3, minor)
   — for a fully-billed/never-received PO line (`unbilled_qty == 0`) a hand-crafted
   `{line_type:'matched', matched_qty:0}` passes `_is_exact_match(0 == 0)` and persists an `amount=0`
@@ -138,16 +162,29 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   supersede them (prototypes are frozen per D-ADOPT-4).
 - [ ] **Milestone bookkeeping** — GSD Wave-0 `wave_0_complete` flags were never set for any
   phase (historical; relevant only if auditing the archive).
+- [ ] **Backdated-payment AP-aging tie-out edge** (Phase 9c review Question + PLAN `## Noticed` T5,
+  low severity — reviewer and build both concur it is *correct* behavior, not a bug). Neither
+  `create_bill` nor `record_payment` validates `payment_date >= bill_date`. For a bill dated
+  2026-07-10 paid on 2026-07-01, `ap_aging_report(as_of=2026-07-05)` excludes the bill
+  (`bill_date > as_of`) while the payment's 2110 debit (`entry_date=2026-07-01`) is inside the control
+  window → `control_balance` negative, `grand_total` 0, `in_balance` False. This is a faithful
+  reflection of a genuinely anomalous ledger (AP carries a debit because cash left before the invoice
+  was booked), not a report defect. **Decision needed only if product wants to reject the data-entry
+  order at write time** (validate `payment_date >= bill_date`) rather than surface it as
+  out-of-balance. Left as-is for now; revisit if it ever confuses a real operator.
+
 - [ ] **Receipt auto-post `entry_date` is server-local, not UTC** (Phase 9a verify) —
   `receive_line` dates the auto-posted JE with `date.today()` while `created_at` is UTC, so near
   midnight a receipt and its JE can land on different calendar days and split across register
   periods. Acceptable for single-timezone self-host; switch to
   `datetime.now(timezone.utc).date()` if UTC-consistent periods are ever required (e.g. multi-region
   deploy or fiscal-period locking in 9c).
-- [ ] **`.zj/codebase/MAP.md` fuller refresh owed** (Phase 9a verify) — the migration list was
-  corrected through 0009 in the verify loop, but the GL endpoints, journal tables, and the grown
-  syerp `service.py` surface are still unmapped. Refresh via `/zj:docs` before the next mapper-driven
-  planning pass.
+- [ ] **`.zj/codebase/MAP.md` fuller refresh owed** (Phase 9a verify; still owed through 9c) — the
+  migration list stops at 0009 (head is now **0011**), and the entire Phase 9 surface is unmapped:
+  GL posting endpoints + journal tables (9a), AP bills/payments (9b), the four report endpoints +
+  AP-aging/financial-statement screens (9c), and the grown syerp `service.py` (~273 lines claimed at
+  `:124`; actually **~3,700 lines / ~133 KB**). Refresh via `/zj:docs` before the Phase-10
+  mapper-driven planning pass.
 - [ ] **Starlette 422 deprecation sweep** (Phase 8) — `HTTP_422_UNPROCESSABLE_ENTITY` is
   deprecated for `HTTP_422_UNPROCESSABLE_CONTENT`; fires from `post_receipt` / `post_adjustment` /
   `post_transfer` / `receive_line` in `backend/app/modules/syerp/service.py` and likely older
