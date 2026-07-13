@@ -55,7 +55,7 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 
 ## Tasks
 
-### [ ] 1. Cut the build branch and open the task checklist
+### [x] 1. Cut the build branch and open the task checklist
 - **Files:** git; `docs/tasks/feature-mousse-work-orders.md`
 - **Do:** From the verified 09c tip, `git checkout -b feature-mousse-work-orders zj/good-09c-ap-aging-financial-statements` (D-P10-8). Create the task checklist file listing tasks 2–20 (per CLAUDE.md task-workflow rule). Reference MOUSSE-01.
 - **Done when:** branch exists off the tag; checklist file committed.
@@ -197,6 +197,14 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **Done when:** `npm run test` passes with the new tests covering create/issue/complete.
 - **Verify:** `cd frontend && npm run test`.
 - **Parallel-ok:** no (depends on 16–19)
+
+## Deviations
+- **Task 1 base:** branch `feature-mousse-work-orders` cut off the **D-P10-4 chore tip `6293c96`**
+  (`chore-syerp-service-split`, which carries the syerp `service/` package split), not tag
+  `zj/good-09c` as the task text says. The owner chose "run the syerp split chore first, then build
+  MOUSSE on the clean post-split base" (STATE 2026-07-13). The chore tip is a descendant of the tag
+  by docs + the split commit only; the verified 9c code is unchanged underneath. MOUSSE imports
+  SYERP service functions by their existing public names (D-P10-4), which the split preserves.
 
 ## Risks
 - **WIP-clears-to-zero rounding (SC3).** `accumulated_wip / planned_qty` can produce a residual; if the FG receipt value ≠ the 1140 credit, 1140 won't return to pre-WO exactly. Mitigation: value the receipt at exactly the accumulated WIP (credit the exact Σ debits), quantize with `_COST_QUANTUM`/`ROUND_HALF_UP` as `compute_new_moving_avg` does; if the assert ever needs tolerance, the posting diverged — fix the posting. Early warning: verify_mousse.py pre/post inequality.

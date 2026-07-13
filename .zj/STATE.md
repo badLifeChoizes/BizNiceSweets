@@ -1,8 +1,23 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-13 (Phase 10 **planned** — MOUSSE materials-only WO core; next = D-P10-4 syerp-split chore, then `/zj:build 10`)
+Updated: 2026-07-13 (Phase 10 **build in flight** — MOUSSE WO core on `feature-mousse-work-orders`; D-P10-4 chore DONE)
 
 ## Position
 
+- **Step:** **Phase 10 build in flight (2026-07-13)** — MOUSSE materials-only WO core on branch
+  `feature-mousse-work-orders`, cut off the chore tip `6293c96` (D-P10-4 done). Executing
+  `.zj/phases/10-mousse-work-orders/PLAN.md` (20 tasks). Task checklist:
+  `docs/tasks/feature-mousse-work-orders.md`. **Deviation from PLAN Task 1:** branch cut off the
+  D-P10-4 chore tip (which carries the syerp `service/` split), NOT tag `zj/good-09c` — the
+  owner chose "chore first, build on the clean post-split base."
+- **D-P10-4 chore COMPLETE (2026-07-13, committed `6293c96` on `chore-syerp-service-split`).** Split
+  `backend/app/modules/syerp/service.py` (3,824 lines) into a `service/` package of 10 cohesive
+  submodules (`_common`/`partners`/`locations`/`accounts`/`items`/`inventory`/`journal`/`purchasing`/
+  `bills`/`reports`) behind unchanged public functions — zero behavior change, verbatim AST split (93
+  top-level defs identical), re-exported via `service/__init__.py` so all `from
+  app.modules.syerp.service import X` call sites keep working. `verify_gl.py` monkeypatch retargeted
+  to `gl_service.purchasing._gl_account_id_by_code`. All 11 `verify_*` scripts exit 0. MAP.md
+  refreshed (migrations→0011, service package). This chore branch merges to master ahead of / with
+  the MOUSSE feature branch (stacked).
 - **Project:** BizNiceSweets
 - **Step:** **Phase 10 planned (2026-07-13)** — MOUSSE manufacturing execution core, materials-only
   slice (MOUSSE-01). `.zj/phases/10-mousse-work-orders/PLAN.md` = **20 tasks** (new
