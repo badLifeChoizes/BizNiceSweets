@@ -1,46 +1,50 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-16 (**v3.0 "Customer & logistics" spec'd** — DoD sharpened into 3 clauses; CRUMB-01/GELATO-01/SYERP-13 expanded to full ACs; Phase 11→12→13 mapping proposed; D-V3-1..9 recorded. Next action: `/zj:plan 11`.)
+Updated: 2026-07-16 (**Phase 11a planned** — Phase 11 split into 11a/11b (D-V3-10); 11a CRUMB CRM & pipeline PLAN.md written, 19 tasks; D-V3-10..15 recorded. Next action: `/zj:build 11a`.)
 
 ## Position
 
-- **Step:** spec — **v3.0 "Customer & logistics" requirements complete (2026-07-16).** The milestone
-  DoD is sharpened into **three verifiable clauses** (CRM & sales pipeline / warehouse fulfillment /
-  AR & sell-side books) and the three coarse FRs are expanded to full acceptance criteria: **CRUMB-01**
-  (7 ACs, Phase 11), **GELATO-01** (8 ACs, Phase 12), **SYERP-13** (7 ACs, Phase 13). Nine scope
-  decisions recorded (**D-V3-1..9**). Sell side is a two-event real-books mirror of v2.0 procure-to-pay
-  and needs **no new CoA accounts** (1120 AR / 4110 Revenue / 5100 COGS already seeded). Deferred within
-  v3.0: lot/serial, email/analytics, price lists. Updated: PRD-8, SRD (3 FRs + traceability), ROADMAP
-  (phase→FR map), DECISIONS. `.zj/phases/` is empty — no phase planned yet.
+- **Step:** plan complete — **Phase 11a (CRUMB CRM & pipeline) planned 2026-07-16.** Phase 11
+  (CRUMB-01, the largest single FR) was **split into 11a + 11b** at plan (D-V3-10): **11a** = the
+  inventory-free CRM chain (leads → opportunities → quotes + communication log), **11b** = sales
+  orders + accepted-quote→SO conversion + the soft-reservation crux. PLAN.md for 11a holds **19 tasks**
+  in 5 waves (models → migration 0013 → perms → schemas → 4-entity `crumb/service/` package →
+  router+register → `verify_crumb.py` + `verify_crumb_api.py` + regression → frontend nav/4 pages/tests).
+  Every in-scope CRUMB-01 AC (1/2/3−/5/6/7) maps to a task; **AC4 (sales orders + reservation) is
+  deferred to 11b**. Six decisions recorded (**D-V3-10..15**). Plan reviewed goal-backward; one
+  architect error caught and fixed at manager check — the hub FK columns are `String(36)` (Partner/
+  plum_part PKs are UUIDs, not int).
 
 - **Project:** BizNiceSweets
-- **Milestone:** v3.0 Customer & logistics — **SPEC'D, planning next**. v2.0 CLOSED + tagged `v2.0`;
-  v1.0 closed + tagged 2026-07-11.
-- **Branch:** `chore-spec-v3-customer-logistics` (cut from `master`/`feature-mousse-work-orders` tip,
-  which are even) — carries only this spec's doc edits. `master` at `35f9b66` carries all of Phases
-  8–10.
+- **Milestone:** v3.0 Customer & logistics — **IN PROGRESS** (Phase 11a planned, unbuilt). v2.0
+  CLOSED + tagged `v2.0`; v1.0 closed + tagged 2026-07-11.
+- **Branch (planning artifacts):** `chore-spec-v3-customer-logistics` — carries the v3.0 spec + this
+  plan's doc edits. `master` at `35f9b66` carries all of Phases 8–10. **Phase 11a builds on a new
+  `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
+  master first.
 - **Last update:** 2026-07-16
-- **Next action:** `/zj:plan 11` — plan **Phase 11 (CRUMB CRM & sales orders, CRUMB-01)**, the first
-  of the three v3.0 phases (order → ship → invoice build order). Likely to sub-split at plan the way
-  Phase 9 became 9a/9b/9c.
+- **Next action:** `/zj:build 11a` — execute `.zj/phases/11a-crumb-crm-pipeline/PLAN.md` task by task
+  on `feature-crumb-crm-pipeline` off master.
 
 ## Next action (detail)
 
-**`/zj:plan 11`** — plan Phase 11 delivering **CRUMB-01** (new `crumb` module): leads → opportunities
-→ quotes → sales orders + communication log, PLUM-derived editable line pricing, and the
-**soft-reservation** invariant (`available = on-hand − reserved ≥ 0`, D-V3-8) which is the phase's
-crux. No GL in Phase 11. Depends only on shipped surfaces (SYERP customers, PLUM parts, SYERP
-inventory for reservation). See ROADMAP v3.0 phase→FR table and the SRD CRUMB-01 ACs.
+**`/zj:build 11a`** — build **CRUMB-01 (inventory-free portion)**: a new `crumb` module (mirrors the
+MOUSSE new-module pattern, D-P10-6) with a `crumb/service/` package split by entity, leads →
+opportunities (stage FSM) → quotes (PLUM-derived 30% markup default, `QUOTE-####` numeric-safe, Draft
+→Sent→Accepted/Rejected/Expired FSM), and an append-only customer communication log. Server-enforced
+FSMs, audit at the router layer, `crumb:read`/`crumb:write` RBAC. Proven by `verify_crumb.py` (service)
++ `verify_crumb_api.py` (HTTP RBAC + audit) + FE Vitest/build; the 13 existing `verify_*` stay green.
 
-**Sequencing:** build order follows the money — Phase 11 order → Phase 12 GELATO ship (posts the COGS
-JE) → Phase 13 SYERP-13 invoice/collect. The DoD, not the phase count, is the contract; sub-split at
-plan as needed.
+**Before building:** fast-forward `chore-spec-v3-customer-logistics` → `master`, then cut
+`feature-crumb-crm-pipeline` off master (D-V3-13).
+
+**After 11a verifies:** `/zj:plan 11b` — sales orders + the soft-reservation crux (`qty_reserved`
+accumulator on the SO line, D-V3-11; `available = on-hand − Σ reserved ≥ 0`, D-V3-8) + accepted-quote
+→SO conversion. Then Phase 12 (GELATO ship, posts COGS JE) → Phase 13 (SYERP-13 AR). The DoD, not the
+phase count, is the contract.
 
 **Alternative — pay down infra debt first:** the BACKLOG **p1** items (CI pipeline, live-DB pytest
-harness repair, both lint gates) are now two milestones old. A debt-paydown phase before Phase 11 is
-reasonable if the owner wants it (raise at `/zj:plan` or `/zj:ideate`).
-
-**This spec branch:** `chore-spec-v3-customer-logistics` holds only doc edits — merge it to `master`
-(fast-forward) whenever convenient; it is not a code phase and needs no verify.
+harness repair, both lint gates) are now two milestones old. A debt-paydown phase is reasonable if the
+owner wants it (raise at `/zj:ideate`).
 
 ## Deferred at the v2.0 close (owner-approved — do not lose)
 

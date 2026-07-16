@@ -316,7 +316,7 @@ Phase directories archived to `.zj/history/v2.0/phases/`.
 
 ---
 
-## v3.0 — Customer & logistics (CRUMB + GELATO + AR)  [spec'd 2026-07-16, D-V3-1..9 — planning next]
+## v3.0 — Customer & logistics (CRUMB + GELATO + AR)  [in progress — spec'd 2026-07-16; Phase 11 split 11a/11b and Phase 11a planned 2026-07-16, D-V3-1..15]
 
 Owner chose this as the milestone after v2.0 (over the FLAN port and PLUM-advanced): it completes
 the **sell-side + fulfillment loop** on top of the now-complete operations core, and it is where
@@ -344,7 +344,8 @@ service fns (D-V3-9).
 
 | Phase | Delivers | Depends on | Notes |
 |-------|----------|-----------|-------|
-| **11 — CRUMB CRM & sales orders** | CRUMB-01 (7 ACs) | SYERP customers ✓, PLUM parts ✓, SYERP inventory (reservation) | New `crumb` module; no GL. Confirm-order soft-reservation is the crux invariant. |
+| **11a — CRUMB CRM & pipeline** | CRUMB-01 AC1/2/3/5/6/7 (leads → opps → quotes + comm log, no inventory) | SYERP customers ✓, PLUM parts ✓ | New `crumb` module; **planned 2026-07-16** (`.zj/phases/11a-crumb-crm-pipeline/PLAN.md`, 19 tasks). No inventory, no GL. Split from Phase 11 at D-V3-10. |
+| **11b — CRUMB sales orders + reservation** | CRUMB-01 AC4 (+ AC3 SO-conversion tail) | Phase 11a, SYERP inventory (reservation) | Sales-order FSM + accepted-quote→SO conversion; **soft-reservation crux** (D-V3-8, `qty_reserved` accumulator on SO line D-V3-11). Plan after 11a verifies. |
 | **12 — GELATO warehouse core** | GELATO-01 (8 ACs) | Phase 11 (orders to fulfil), SYERP inventory ledger | New `gelato` module; **ship posts the COGS JE** (imports SYERP GL fns). Bins realize the D-P8-3 deferral. |
 | **13 — SYERP-13 AR & sell-side books** | SYERP-13 (7 ACs) | Phase 12 (invoices from shipments), SYERP-12 GL engine ✓ | Extends `syerp`; invoice-from-shipment + receipts + AR aging tie-out. New report screen: AR aging. |
 

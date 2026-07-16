@@ -98,6 +98,12 @@ at milestone close, never hand-edit it. 73 decisions.
 - **D-V3-7:** GELATO scope = inbound (directed putaway-to-bin on receipts) + outbound (pick/pack/ship); bins introduced as a sub-level within SYERP's flat stock locations (realizes the D-P8-3 deferral)
 - **D-V3-8:** A confirmed CRUMB sales order soft-reserves inventory (available = on-hand − reserved, never negative); shipping converts the reservation to an issue — chosen over decrement-only-at-ship
 - **D-V3-9:** Module ownership — leads/opps/quotes/orders = CRUMB; bins/putaway/pick/pack/ship = GELATO; AR invoices/receipts/aging + all GL JEs = SYERP; CRUMB & GELATO are new modules importing SYERP inventory/GL service fns (D-P10-6 precedent)
+- **D-V3-10:** Phase 11 (CRUMB-01) splits into 11a (CRM pipeline: leads/opps/quotes + comm log, no inventory) + 11b (sales orders + soft-reservation + accepted-quote→SO conversion), each planned/built/verified independently (9a/9b/9c precedent); 11a planned first
+- **D-V3-11:** Soft-reservation stored as a `qty_reserved` accumulator on the sales-order line (11b), mirroring PO qty_received (D-P8-15); available(item) = derived on-hand − Σ open SO-line reservations; GELATO ship decrements it and posts the real issue txn — chosen over a separate append-only reservation ledger
+- **D-V3-12:** CRUMB UI folded into the plan, no separate DESIGN.md (D-P8-9 precedent); opportunity pipeline is a per-stage grouped list (AC2), not a kanban; screens reuse the SYERP list/sheet/archive + FSM-detail template
+- **D-V3-13:** Phase 11a branch = `feature-crumb-crm-pipeline` off master (master is the working tip since v2.0 shipped via PR #2, D-P9a-2 discipline); the docs-only `chore-spec-v3-customer-logistics` spec branch fast-forwards to master first
+- **D-V3-14:** Quote-line markup default = a module constant `DEFAULT_MARKUP_PCT = Decimal("30")` in `crumb/service/_common.py`, per-line editable; no settings entity (D-V3-6 excludes a config/price-list surface)
+- **D-V3-15:** `spawn_quote` (opportunity→quote) requires the opportunity to be in stage `won` (else 422) — mirrors AC2's "a Won opportunity can spawn a quote"; qualify/proposal/lost cannot spawn
 
 ## Product & Architecture
 
@@ -667,3 +673,62 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   codes (mirror `syerp:*`); AR endpoints stay under `syerp:*`. *Why:* keeps SYERP the single GL
   authority (one posting engine, one set of tie-outs) while the customer/warehouse suites own their
   workflow surface.
+
+### Phase 11 planning — CRUMB CRM & sales orders split (2026-07-16)
+
+- **D-V3-10 (owner):** **Phase 11 (CRUMB-01) splits into 11a + 11b.** CRUMB-01 is the largest single
+  FR in the project — 5 new entities (leads, opportunities, quotes, sales orders, communication log),
+  3 server-enforced FSMs, PLUM-derived pricing, the soft-reservation invariant, and ~5 net-new
+  screens. **11a = CRM pipeline** (leads → opportunities → quotes + communication log): pure
+  CRUD/FSM/pricing referencing SYERP customers + PLUM parts, **no inventory dependency**. **11b =
+  sales orders** (Draft→Confirmed→Fulfilling→Closed), the **accepted-quote→sales-order conversion**,
+  and the **soft-reservation crux** (D-V3-8). Each is planned/built/verified on its own branch and
+  tag, extending the 9a/9b/9c precedent. *Why:* the clean seam is inventory — 11a has no hard
+  invariant (isolable, big-but-easy), 11b carries the one hard invariant (reservation) in a
+  small-but-hard phase with a focused verify. *Rejected:* one full-stack Phase 11 in waves (Phase-8/10
+  style) — a ~25–30-task diff and one heavy verify pass over both the CRM surface and the reservation
+  invariant at once. **11a is planned first (this `/zj:plan 11`).**
+
+- **D-V3-11 (owner):** **Soft-reservation = a `qty_reserved` accumulator on the sales-order line**
+  (an 11b concern, decided now because it shapes the GELATO handoff). On-hand is a derived
+  `SUM(InventoryTxn.quantity)` over the immutable ledger; a soft reservation moves no stock, so it
+  cannot live in that ledger. It is stored as `qty_reserved` on the SO line — a **mutable working
+  document**, exactly like the PO `qty_received` accumulator (D-P8-15) — and `available(item) =
+  derived_onhand − Σ open SO-line reservations`. GELATO shipping (11b/Phase 12) decrements
+  `qty_reserved` and posts the real `issue` InventoryTxn, converting the reservation to a physical
+  move. *Rejected:* a separate append-only `crumb_reservation` ledger mirroring InventoryTxn — more
+  auditable/replayable but a second ledger to maintain and reconcile against the SO, unwarranted at
+  single-shop scale for a soft (non-physical) quantity. *Why:* reuses the proven mutable-accumulator
+  pattern and keeps the immutable ledger reserved for real stock movements.
+
+- **D-V3-12 (owner):** **CRUMB UI folded into the plan — no separate DESIGN.md** (D-P8-9 precedent).
+  Leads/opportunities/quotes screens reuse the existing SYERP **list + sheet + archive** and
+  **FSM-detail** template (`Vendors.tsx`/`Customers.tsx`/`PartnerSheet.tsx`, PO detail); the
+  **opportunity pipeline is a per-stage grouped list** as AC2 literally states ("view the pipeline as
+  a per-stage list"), **not** a drag-drop kanban, which keeps the one novel screen inside the existing
+  component vocabulary. *Why:* the SYERP CRUD/FSM template is a strong enough starting point that a
+  separate design pass isn't worth the step; the pipeline's novelty collapses to a grouped list.
+  *Rejected:* running `/zj:design` first (de-risks novel UX but adds a step the reduced pipeline scope
+  doesn't need).
+
+- **D-V3-13 (manager, precedent-driven):** **Phase 11a branch = `feature-crumb-crm-pipeline` off
+  master.** Master is now the working tip (v2.0 shipped via PR #2 fast-forward to `35f9b66`, resolving
+  the D-M2-3 debt), so the D-P9a-2 discipline applies: branch feature work off master, not off an
+  unclosed line. The docs-only `chore-spec-v3-customer-logistics` spec branch (which carries these
+  v3.0 planning artifacts) **fast-forwards to master first**; then `feature-crumb-crm-pipeline` cuts
+  from that clean master tip. *Why:* keeps the CRUMB build on a merged base and the spec branch out of
+  the feature diff.
+
+- **D-V3-14 (owner):** **Quote-line markup default = a module constant.** `DEFAULT_MARKUP_PCT =
+  Decimal("30")` lives in `crumb/service/_common.py` and is applied as the initial per-line default
+  (`unit_price = released_cost_snapshot × (1 + DEFAULT_MARKUP_PCT/100)`), **editable per line**. *Why:*
+  gives a useful default and margin visibility (D-V3-6) with zero config surface. *Rejected:* a CRUMB
+  settings row (scope creep — D-V3-6 excludes a price-list/config entity) and per-line-default-0 (no
+  margin help, more keying). Change the constant to re-baseline; a per-customer/price-list model is
+  PLUM-16 territory, later.
+
+- **D-V3-15 (owner):** **A quote may be spawned only from a `won` opportunity.**
+  `spawn_quote(db, opp_id, …)` rejects (422) unless the opportunity's stage is `won` — mirroring AC2's
+  "a Won opportunity can spawn a quote." *Rejected:* allowing any open stage (qualify/proposal) to
+  spawn — defensible since a quote is the proposal document, but it loosens the pipeline's meaning;
+  revisit if the shop wants to quote earlier.
