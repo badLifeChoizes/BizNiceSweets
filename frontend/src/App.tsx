@@ -36,6 +36,15 @@ import { ImportExport } from '@/routes/plum/ImportExport'
 import { WorkOrders } from '@/routes/mousse/WorkOrders'
 import { WorkOrderDetail } from '@/routes/mousse/WorkOrderDetail'
 
+// CRUMB routes (Phase 11a)
+import { Leads } from '@/routes/crumb/Leads'
+import { LeadDetail } from '@/routes/crumb/LeadDetail'
+import { Pipeline } from '@/routes/crumb/Pipeline'
+import { OpportunityDetail } from '@/routes/crumb/OpportunityDetail'
+import { Quotes } from '@/routes/crumb/Quotes'
+import { QuoteDetail } from '@/routes/crumb/QuoteDetail'
+import { Communications } from '@/routes/crumb/Communications'
+
 export function App() {
   return (
     <Routes>
@@ -79,6 +88,16 @@ export function App() {
         <Route path="/mousse" element={<Navigate to="/mousse/work-orders" replace />} />
         <Route path="/mousse/work-orders" element={<WorkOrders />} />
         <Route path="/mousse/work-orders/:id" element={<WorkOrderDetail />} />
+
+        {/* CRUMB module routes — Sidebar nav lands on /crumb → redirect to leads list */}
+        <Route path="/crumb" element={<Navigate to="/crumb/leads" replace />} />
+        <Route path="/crumb/leads" element={<Leads />} />
+        <Route path="/crumb/leads/:id" element={<LeadDetail />} />
+        <Route path="/crumb/opportunities" element={<Pipeline />} />
+        <Route path="/crumb/opportunities/:id" element={<OpportunityDetail />} />
+        <Route path="/crumb/quotes" element={<Quotes />} />
+        <Route path="/crumb/quotes/:id" element={<QuoteDetail />} />
+        <Route path="/crumb/communications" element={<Communications />} />
 
         {/* Catch-all: unknown protected paths fall back to Home instead of a blank screen */}
         <Route path="*" element={<Navigate to="/" replace />} />
