@@ -1,9 +1,20 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-16 (**Phase 11a planned** — Phase 11 split into 11a/11b (D-V3-10); 11a CRUMB CRM & pipeline PLAN.md written, 19 tasks; D-V3-10..15 recorded. Next action: `/zj:build 11a`.)
+Updated: 2026-07-16 (**Phase 11a BUILD COMPLETE** on `feature-crumb-crm-pipeline` — all 19 tasks done, 17 commits, all verify/tests green. Next action: `/zj:verify 11a`.)
 
 ## Position
 
-- **Step:** plan complete — **Phase 11a (CRUMB CRM & pipeline) planned 2026-07-16.** Phase 11
+- **Step:** build complete — **Phase 11a (CRUMB CRM & pipeline) built 2026-07-16.** Branch
+  `feature-crumb-crm-pipeline` (cut off master `039c409`, D-V3-13). All **19 tasks** of
+  `.zj/phases/11a-crumb-crm-pipeline/PLAN.md` complete + committed (17 code commits). Backend: 5-table
+  `crumb` module (models `e57459c`, migration `0013` `5391918`, perms `79fcf31`, schemas `3cd5b1f`,
+  `crumb/service/` package `6bbb5d5`, quotes `e145998`, leads `67744c1`, interactions `8154c7c`,
+  opportunities `0dc2ddd`, router+router-layer-audit `ff88aeb`). Frontend: nav/hooks/routes `402d0482`,
+  leads `d409d4d`, pipeline `2fef975`, quotes `3550f69`, comms `1a6fbcd`, tests+build `326dd4a`.
+  **Proof:** `verify_crumb.py` 20/20 + `verify_crumb_api.py` 50/50 (SC6 HTTP RBAC+audit gate) + 13/13
+  regression verify_* exit 0 + FE Vitest 95/95 + `npm run build` exit 0. AC4 (sales orders +
+  soft-reservation) + accepted-quote→SO conversion deferred to 11b (D-V3-10). **Next action:**
+  `/zj:verify 11a`.
+  (Planned 2026-07-16 — Phase 11a is the inventory-free portion of CRUMB-01; AC4 sales orders + reservation deferred to 11b.) Phase 11
   (CRUMB-01, the largest single FR) was **split into 11a + 11b** at plan (D-V3-10): **11a** = the
   inventory-free CRM chain (leads → opportunities → quotes + communication log), **11b** = sales
   orders + accepted-quote→SO conversion + the soft-reservation crux. PLAN.md for 11a holds **19 tasks**
@@ -22,8 +33,8 @@ Updated: 2026-07-16 (**Phase 11a planned** — Phase 11 split into 11a/11b (D-V3
   `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
   master first.
 - **Last update:** 2026-07-16
-- **Next action:** `/zj:build 11a` — execute `.zj/phases/11a-crumb-crm-pipeline/PLAN.md` task by task
-  on `feature-crumb-crm-pipeline` off master.
+- **Next action:** `/zj:verify 11a` — verify the phase goal-backward against SC1–SC7 + review the diff;
+  no VERIFICATION.md exists yet so the gate is open.
 
 ## Next action (detail)
 

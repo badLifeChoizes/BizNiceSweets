@@ -60,7 +60,27 @@ Tracks completed requirements by phase, with implementing plans and evidence.
 
 ---
 
-*Last updated: 2026-07-16 — `/zj:verify 10` (Phase 10 MOUSSE materials-only WO core) **Verdict PASS**
+## CRUMB Module
+
+> **Evidence caveat (D-P7-4):** as with SYERP/MOUSSE, the backend live-DB pytest harness is still broken
+> (pytest is not even installed in the api container — BACKLOG p1), so CRUMB truth comes from **standalone
+> async scripts run against live Postgres** (`verify_crumb.py`, `verify_crumb_api.py`) plus the frontend
+> Vitest suite. No status below rests on an unrun live pytest.
+
+| Requirement | Description | Phase | Plans | Evidence | Status |
+|-------------|-------------|-------|-------|----------|--------|
+| CRUMB-01 (inventory-free portion) | New `crumb` CRM module against SYERP customers: **leads** (create/edit/archive → link-or-create a `Partner.is_customer` → convert to an opportunity); **opportunity pipeline** (customer, estimated value, expected close, server-enforced stage FSM Qualify→Proposal→Won/Lost, per-stage grouped list, a Won opportunity spawns a quote — D-V3-15); **quotes** (header + PLUM-part or free-text lines; line `unit_price` defaults from the part's PLUM released `released_cost_snapshot` × (1 + 30% markup, D-V3-14) and is per-line editable; numeric-safe `QUOTE-####`; FSM Draft→Sent→Accepted/Rejected/Expired); append-only **communication log** (call/email/note/meeting, UTC-stamped, per-customer timeline). Router-layer audit on every mutation; `crumb:read`/`crumb:write` RBAC. **(Sales orders + soft-reservation = AC4, deferred to 11b — D-V3-10.)** | Phase 11a | 11a | New `backend/app/modules/crumb/` module (mirrors MOUSSE new-module pattern): models 5 tables (`e57459c`), migration `0013_crumb_crm_pipeline.py` (`5391918`), `crumb:read`/`crumb:write` perms (`79fcf31`), schemas (`3cd5b1f`), `crumb/service/` package + FSM/markup helpers (`6bbb5d5`), quotes service PLUM-priced lines + `QUOTE-####` gen + FSM (`e145998`), leads service (`67744c1`), interactions service (`8154c7c`), opportunities service stage FSM + pipeline + spawn-quote (`0dc2ddd`), router + self-registration + router-layer audit (`ff88aeb`). **Live-DB: `verify_crumb.py` 20/20 PASS** (both link-existing & create-new customer, conversion stamps both sides + no-customer 422, stage FSM valid walk + invalid/terminal reject + won-only spawn gate, quote FSM valid+invalid, **PLUM cost×1.30 default + override + null-snapshot→0**, **numeric-safe `QUOTE-####` boundary + junk-row survival (D-P8-6)**, Σ line totals == `total_value` Decimal-exact, interaction append + newest-first timeline); **`verify_crumb_api.py` 50/50 PASS** (writer/reader/noperm — mutations 2xx/403/401, reads 200/403/401 + attributable `AuditLog` rows per mutation type — the SC6 HTTP gate). Regression: 13/13 existing verify_* exit 0. FE: `routes/crumb/` nav+hooks+routes (`402d0482`), leads (`d409d4d`), pipeline (`2fef975`), quote builder+line editor (`3550f69`), comm-log timeline (`1a6fbcd`), 4 colocated Vitest + build gate (`326dd4a`); full FE suite 95/95, `npm run build` exit 0. | **Inventory-free portion built & live-verified by verify scripts (2026-07-16); phase verification `/zj:verify 11a` pending.** AC4 (sales orders + soft-reservation) + accepted-quote→SO conversion deferred to Phase 11b; UI flow UAT pending (v3.0 milestone) |
+
+---
+
+*Last updated: 2026-07-16 — Phase 11a build (CRUMB CRM & pipeline, inventory-free portion of CRUMB-01):
+new `crumb` module built & **live-verified** by `verify_crumb.py` (20/20) + `verify_crumb_api.py` (50/50,
+the SC6 HTTP RBAC+audit gate), regression 13/13 verify_* exit 0, FE suite 95/95 + build clean. Phase
+verification `/zj:verify 11a` still pending (no VERIFICATION.md yet). Sales orders + soft-reservation
+(AC4) and accepted-quote→SO conversion deferred to Phase 11b (D-V3-10). Live pytest harness still broken
+(D-P7-4, BACKLOG p1) — no criterion depends on it.*
+
+*Prior: 2026-07-16 — `/zj:verify 10` (Phase 10 MOUSSE materials-only WO core) **Verdict PASS**
 after a fix loop closing one major: WO completion debited 1130 and credited 1140 for the same
 `accumulated_wip`, but the FG receipt capitalises only `planned_qty × fg_unit_cost` into the inventory
 subledger, so on non-divisible WIP (100/3) the 1130 control account permanently drifted from the
