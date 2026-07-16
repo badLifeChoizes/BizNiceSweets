@@ -138,6 +138,25 @@ describe('FinancialReports screen', () => {
     expect(screen.getByText('380.00')).toBeInTheDocument()
   })
 
+  it('fires the P&L query with a non-empty From date so it never 422s on first open (G1)', async () => {
+    const user = userEvent.setup()
+    mockGets()
+
+    renderReports()
+    await screen.findByText('Cash')
+
+    await user.click(screen.getByRole('tab', { name: 'Profit & Loss' }))
+    await screen.findByText('Revenue')
+
+    // The report must not fire with an empty `from` (backend rejects it 422). The default
+    // period start is the current calendar year (YYYY-01-01), passed via axios `params`.
+    const plCall = mockGet.mock.calls.find(([url]) => String(url).includes('profit-loss'))
+    expect(plCall).toBeDefined()
+    const params = (plCall![1] as { params: { from: string } }).params
+    expect(params.from).toBe(`${new Date().getFullYear()}-01-01`)
+    expect(params.from).not.toBe('')
+  })
+
   it('renders the Balance Sheet tab with assets/liabilities/equity and a balanced total', async () => {
     const user = userEvent.setup()
     mockGets()

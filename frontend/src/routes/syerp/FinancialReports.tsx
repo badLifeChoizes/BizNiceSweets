@@ -102,6 +102,12 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+/** First day of the current calendar year (YYYY-01-01) — a sensible default P&L period
+ * start so the report never fires with an empty `from` (which the backend rejects 422). */
+function yearStart(): string {
+  return `${new Date().getFullYear()}-01-01`
+}
+
 /** Balanced / out-of-balance indicator — color AND text together (never color alone). */
 function BalanceBadge({ inBalance }: { inBalance: boolean }) {
   return inBalance ? (
@@ -329,8 +335,9 @@ export function FinancialReports() {
   const [tab, setTab] = useState<ReportTab>('trial-balance')
   // Shared "as of" date drives Trial Balance and Balance Sheet.
   const [asOf, setAsOf] = useState(today())
-  // P&L period range.
-  const [from, setFrom] = useState('')
+  // P&L period range. `from` defaults to year-start so the P&L tab never fires with an
+  // empty date (the backend requires `from` and 422s on an empty value — G1, v2.0 audit).
+  const [from, setFrom] = useState(yearStart())
   const [to, setTo] = useState(today())
 
   return (
