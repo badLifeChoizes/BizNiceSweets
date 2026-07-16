@@ -23,8 +23,11 @@ WHY THIS EXISTS (the MOUSSE materials-only crux, MOUSSE-01 / SC1..SC5):
   The load-bearing invariant (SC3, THE CRUX) is that a WO's 1140-attributable
   balance returns to its pre-issue snapshot **Decimal-exactly** after completion —
   no rounding residual may strand WIP, even when accumulated_wip / planned_qty does
-  not divide evenly (the completion JE credits the exact accumulated WIP, absorbing
-  any per-unit residual into the moving-average receipt). None of that can be proven
+  not divide evenly (the completion JE credits the exact accumulated WIP to 1140).
+  The mirror invariant (D-P10-2 amended) is that the 1130 control account ties to
+  the inventory subledger: the JE debits 1130 by EXACTLY the FG receipt value
+  (planned_qty × fg_unit_cost) and routes the sub-quantum residual to 5190 Inventory
+  Rounding, so neither 1140 strands WIP nor 1130 silently drifts. None of that can be proven
   by the pure unit tests, and the backend live-DB pytest harness is broken (D-P7-4),
   so DB-dependent tests skip under plain ``pytest``. Verifiable truth must therefore
   come from a STANDALONE run against LIVE Postgres. This script stands up its own
@@ -291,10 +294,12 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             ).scalars().all()
             acct_1130 = await _account_id_by_code(session, "1130")
             acct_1140 = await _account_id_by_code(session, "1140")
+            acct_5190 = await _account_id_by_code(session, "5190")
         check(
-            "setup: exactly one seeded 'Main' location and 1130/1140 GL accounts resolve",
-            len(main_rows) == 1 and acct_1130 is not None and acct_1140 is not None,
-            f"main={len(main_rows)} 1130={acct_1130!r} 1140={acct_1140!r}",
+            "setup: exactly one seeded 'Main' location and 1130/1140/5190 GL accounts resolve",
+            len(main_rows) == 1 and acct_1130 is not None and acct_1140 is not None
+            and acct_5190 is not None,
+            f"main={len(main_rows)} 1130={acct_1130!r} 1140={acct_1140!r} 5190={acct_5190!r}",
         )
         main_id = main_rows[0].id
 
@@ -853,6 +858,51 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             "Decimal-EXACTLY even though 100/3 leaves a per-unit residual",
             wip_d2_post == wip_d2_pre and wip_d2_post == Decimal("0"),
             f"pre={wip_d2_pre!r} post={wip_d2_post!r}",
+        )
+        # D-P10-2 (amended): the MIRROR invariant — 1130 must tie to the inventory
+        # subledger. The completion debits 1130 by EXACTLY the FG receipt value
+        # (planned_qty × fg_unit_cost) and parks the sub-quantum residual in 5190,
+        # so the control account never silently drifts from the subledger.
+        async with session_factory() as session:
+            fg_txn = (
+                await session.execute(
+                    select(InventoryTxn.quantity, InventoryTxn.unit_cost).where(
+                        InventoryTxn.item_id == d2_fg_item,
+                        InventoryTxn.source_id == wo_d2.id,
+                        InventoryTxn.txn_type == "receipt",
+                    )
+                )
+            ).first()
+            fg_receipt_value = (fg_txn.quantity * fg_txn.unit_cost).quantize(Decimal("0.000001"))
+            comp_1130_debit = Decimal(
+                (
+                    await session.execute(
+                        select(func.coalesce(func.sum(JournalLine.debit), 0))
+                        .select_from(JournalLine)
+                        .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+                        .where(
+                            JournalLine.account_id == acct_1130,
+                            JournalEntry.source_type == "mousse_work_order",
+                            JournalEntry.source_id == wo_d2.id,
+                        )
+                    )
+                ).scalar()
+                or 0
+            )
+            wo_5190 = await _wo_account_balance(session, acct_5190, wo_d2.id)
+        check(
+            "(D/D-P10-2 amended) completion debits 1130 by EXACTLY the FG receipt value "
+            "(3 × 33.333333 == 99.999999) — 1130 control ties to the inventory subledger",
+            comp_1130_debit == fg_receipt_value and fg_receipt_value == Decimal("99.999999"),
+            f"1130_debit={comp_1130_debit!r} fg_receipt_value={fg_receipt_value!r}",
+        )
+        check(
+            "(D/D-P10-2 amended) the sub-quantum residual is parked in 5190 Inventory "
+            "Rounding (receipt_value + 5190 == accumulated_wip 100), never stranded/drifting",
+            wo_5190 == Decimal("100") - fg_receipt_value
+            and (fg_receipt_value + wo_5190) == Decimal("100")
+            and abs(wo_5190) < Decimal("3") * Decimal("0.000001"),
+            f"5190={wo_5190!r} receipt+5190={fg_receipt_value + wo_5190!r}",
         )
 
         # ===================================================================

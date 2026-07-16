@@ -85,6 +85,7 @@ _STANDARD_COA: list[dict] = [
     {"code": "5110", "name": "Direct Materials",            "account_type": "EXPENSE",   "parent_code": "5100"},
     {"code": "5120", "name": "Direct Labor",                "account_type": "EXPENSE",   "parent_code": "5100"},
     {"code": "5130", "name": "Manufacturing Overhead",      "account_type": "EXPENSE",   "parent_code": "5100"},
+    {"code": "5190", "name": "Inventory Rounding",          "account_type": "EXPENSE",   "parent_code": "5100"},
     {"code": "5200", "name": "Operating Expenses",          "account_type": "EXPENSE",   "parent_code": "5000"},
     {"code": "5210", "name": "Salaries and Wages",          "account_type": "EXPENSE",   "parent_code": "5200"},
     {"code": "5220", "name": "Rent and Occupancy",          "account_type": "EXPENSE",   "parent_code": "5200"},

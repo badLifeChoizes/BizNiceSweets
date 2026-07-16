@@ -486,6 +486,19 @@ auto-post-only), and UI is folded into the plan with no separate DESIGN.md (D-P8
   1140). No standard-cost/variance account. *Why:* 1140 is already seeded and unused; actual cost is
   what's in inventory and makes WIP clear by construction (the 9b GR/IR clearing-crux pattern).
   *Rejected:* PLUM standard cost (needs a variance account + reconciliation, doesn't clear cleanly).
+  - **AMENDED at /zj:verify 10 (2026-07-16, owner):** The original design credited 1140 AND debited
+    1130 for exactly `accumulated_wip`, but `post_receipt` capitalises only `planned_qty ×
+    fg_unit_cost` (6-dp quantized) into the inventory subledger. When `accumulated_wip` does not
+    divide evenly by `planned_qty` (e.g. 100/3), the 1130 control account permanently drifted from
+    the subledger by a sub-quantum residual — an invisible tie-out break (the class Phase 9c treats
+    as first-class). Fix: completion now posts a **3-line JE** — Cr 1140 for exactly `accumulated_wip`
+    (WIP still clears to zero, SC3), Dr 1130 for exactly the FG receipt value `planned_qty ×
+    fg_unit_cost` (1130 ties to the subledger), and a balancing Dr/Cr to a NEW seeded account **5190
+    Inventory Rounding** (COGS, under 5100) for the residual. This narrowly amends "no variance
+    account" — 5190 is a rounding sink, not a cost variance — so BOTH invariants hold Decimal-exactly.
+    Pinned by `verify_mousse.py` scenario D (1130-debit == FG receipt value; 5190 == residual;
+    receipt_value + 5190 == accumulated_wip). Surfaced by the reviewer at verify; owner chose the
+    rounding-sink remedy over accepting/documenting a sub-cent break.
 - **D-P10-3 (owner):** **Explicit issue action, distinct from completion** (`txn_type="issue"`,
   reserved for MOUSSE). Matches shop-floor reality, supports partial/incremental issue, exercises
   the per-location negative-stock floor guard. *Rejected:* backflush-on-completion (one atomic step,

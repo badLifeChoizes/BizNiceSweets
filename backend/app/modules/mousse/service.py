@@ -844,18 +844,28 @@ async def complete_work_order(
         True; when overridden the completion proceeds and the router audits the
         override + the short components (this service returns them for that audit).
 
-    Costing (D-P10-2, SC3):
+    Costing (D-P10-2 as amended, SC3):
       - accumulated_wip = the WO's 1140-attributable balance (Σ issue debits) —
         read from the GL, so it EQUALS what was actually posted;
       - fg_unit_cost = (accumulated_wip / planned_qty) quantized to _COST_QUANTUM
         with ROUND_HALF_UP (exactly as compute_new_moving_avg quantizes);
-      - the FG is received via post_receipt(commit=False) at fg_unit_cost (updates
-        the FG moving average);
-      - ONE balanced JE Dr 1130 Inventory / Cr 1140 WIP is posted for EXACTLY
-        accumulated_wip (never planned_qty × fg_unit_cost) so the WO's 1140
-        balance returns to its pre-WO value Decimal-exactly — the credit equals
-        the debits by construction, any per-unit rounding residual is absorbed
-        into the moving-average receipt, never left stranded in WIP (SC3 / Risk).
+      - the FG is received via post_receipt(commit=False) at fg_unit_cost, which
+        capitalises EXACTLY receipt_value = planned_qty × fg_unit_cost into
+        inventory (updates the FG moving average);
+      - ONE balanced JE clears WIP AND ties the inventory control account to the
+        subledger, both Decimal-exactly:
+          * Cr 1140 WIP for EXACTLY accumulated_wip  → 1140 returns to its pre-WO
+            balance (SC3),
+          * Dr 1130 Inventory for EXACTLY receipt_value → the 1130 control-account
+            debit equals what the FG receipt actually put into the subledger (the
+            same qty × unit_cost basis the PO-receive path uses), so 1130 GL ties
+            to the inventory subledger,
+          * a balancing Dr/Cr 5190 Inventory Rounding for the sub-quantum residual
+            (accumulated_wip − receipt_value), which is non-zero only when
+            accumulated_wip does not divide evenly by planned_qty under 6-dp
+            costing. The residual is routed to an explicit account (D-P10-2 amended
+            to add 5190) — NEVER stranded in WIP and NEVER silently breaking the
+            1130 control-vs-subledger tie-out. When it is zero the JE has two lines.
 
     Returns a WorkOrderCompleteResult (FG qty received + WIP value cleared).
     """
@@ -890,6 +900,7 @@ async def complete_work_order(
 
     wip_account_id = await _gl_account_id_by_code(db, "1140")
     inventory_account_id = await _gl_account_id_by_code(db, "1130")
+    rounding_account_id = await _gl_account_id_by_code(db, "5190")
 
     # Accumulated WIP = the WO's 1140-attributable balance (exact GL figure).
     accumulated_wip = await _wo_wip_balance(db, wip_account_id, wo.id)
@@ -913,19 +924,44 @@ async def complete_work_order(
         commit=False,
     )
 
-    # Clearing JE Dr 1130 Inventory / Cr 1140 WIP for EXACTLY the accumulated WIP,
-    # so 1140 returns to its pre-WO balance Decimal-exactly (SC3). Skipped only in
-    # the degenerate zero-WIP case (nothing was issued under an override) — a zero
-    # entry cannot balance and there is nothing to clear.
+    # The value the FG receipt actually capitalises into inventory — quantity ×
+    # unit_cost, exactly the basis on which post_receipt records the txn and the
+    # PO-receive path ties Dr 1130 to the subledger. The 1130 GL debit must equal
+    # THIS, not accumulated_wip, or the control account diverges from the subledger.
+    receipt_value = (wo.planned_qty * fg_unit_cost).quantize(
+        _COST_QUANTUM, rounding=ROUND_HALF_UP
+    )
+    # Sub-quantum residual: non-zero only when accumulated_wip does not divide
+    # evenly by planned_qty under 6-dp costing (e.g. 100 / 3). Routed to 5190 so
+    # 1140 clears to zero AND 1130 ties to the subledger — both exactly.
+    rounding_residual = accumulated_wip - receipt_value
+
+    # Clearing JE: Cr 1140 for EXACTLY accumulated_wip (WIP clears, SC3), Dr 1130
+    # for EXACTLY receipt_value (1130 ties to the subledger), and a balancing
+    # Dr/Cr 5190 for the residual. Skipped only in the degenerate zero-WIP case
+    # (nothing was issued under an override) — a zero entry cannot balance.
     if accumulated_wip > 0:
+        lines: list[dict] = []
+        if receipt_value > 0:
+            lines.append(
+                {"account_id": inventory_account_id, "debit": receipt_value, "credit": 0}
+            )
+        lines.append({"account_id": wip_account_id, "debit": 0, "credit": accumulated_wip})
+        if rounding_residual > 0:
+            # WIP consumed exceeds FG capitalised — debit the shortfall to rounding.
+            lines.append(
+                {"account_id": rounding_account_id, "debit": rounding_residual, "credit": 0}
+            )
+        elif rounding_residual < 0:
+            # FG capitalised exceeds WIP consumed — credit the excess to rounding.
+            lines.append(
+                {"account_id": rounding_account_id, "debit": 0, "credit": -rounding_residual}
+            )
         await post_journal_entry(
             db,
             entry_date=wo.wo_date,
             memo=f"WO {wo.wo_number} completion (WIP -> finished goods)",
-            lines=[
-                {"account_id": inventory_account_id, "debit": accumulated_wip, "credit": 0},
-                {"account_id": wip_account_id, "debit": 0, "credit": accumulated_wip},
-            ],
+            lines=lines,
             actor_id=actor_id,
             source_type="mousse_work_order",
             source_id=wo.id,
