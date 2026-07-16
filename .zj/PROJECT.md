@@ -17,14 +17,14 @@ one shop can actually deploy and operate on its own.
 
 ## The Seven Suites
 
-| Suite | Domain | Status (2026-07-04) |
-|-------|--------|---------------------|
-| SYERP | ERP — partners, GL, (later: inventory, POs, AP/AR) — **the hub** | Core shipped (Phase 4); extended = next milestone |
-| PLUM | Product Lifecycle Management | Ported to new stack (Phases 5–6); gap-closure phase pending |
+| Suite | Domain | Status (2026-07-16, post-v2.0) |
+|-------|--------|--------------------------------|
+| SYERP | ERP — partners, inventory, POs, GL, AP, reporting — **the hub** | Core (Phase 4) + operations shipped (Phases 8/9: inventory, purchasing, double-entry GL, AP, financial statements). AR (SYERP-13) = v3.0 |
+| PLUM | Product Lifecycle Management | Ported + shipped v1.0 (Phases 5–7: parts, revisions, BOM, costing, AVL, import/export). Advanced features (PLUM-11..16) = later milestone |
+| MOUSSE | Manufacturing Execution | Materials-only work-order core shipped (Phase 10, v2.0). Routing/work-centers, labor/overhead, shop-floor view deferred (D-P10-1) |
+| CRUMB | CRM | Planned — **v3.0 (next milestone)** |
+| GELATO | Warehouse Management | Planned — **v3.0 (next milestone)** |
 | FLAN | Project Management | HTML prototype only; port deferred to a later milestone |
-| MOUSSE | Manufacturing Execution | Planned — next milestone with SYERP extended |
-| CRUMB | CRM | Planned |
-| GELATO | Warehouse Management | Planned |
 | CRISP | Quality Management | Planned |
 
 ## Users
@@ -56,19 +56,25 @@ The re-platform is **substantially built** — this is no longer a prototypes-pl
 
 Full codebase detail: `.zj/codebase/MAP.md`.
 
-## Definition of done — current milestone (v2.0 Operations)
+## Definition of done — current milestone (v3.0 Customer & logistics)
 
-> "Can track inventory, raise purchase orders, keep real books (double-entry GL with AP +
-> financial statements), and execute work orders that consume PLUM BOMs and inventory."
+> **Draft (confirm at `/zj:spec`):** "Can manage customers and a sales pipeline through to orders,
+> fulfil those orders from warehouse inventory (receive → pick/pack → ship), and invoice customers
+> with AR posting to the GL and AR aging that ties to its control account."
 
-Confirmed at the Phase-9 spec (2026-07-11, D-P9-5) — all three clauses kept. Phase 8 (inventory +
-purchasing) is done and verified; **Phase 9 (GL + AP + financial reporting, SYERP-12) is now
-spec'd** — the owner chose full subledger→GL auto-posting over document-only aging (D-P9-1), AP
-with PO-receipt matching + payments (D-P9-2), and deferred AR to the CRUMB milestone (SYERP-13,
-D-P9-4). Phase 10 (MOUSSE work orders) closes the milestone. Next: `/zj:plan 09`.
+Chosen 2026-07-16 at the v2.0 close (D-M2-4) over the FLAN port and PLUM-advanced: it completes the
+sell-side + fulfilment loop on the operations core and is where AR was parked (SYERP-13, D-P9-4).
+Candidate phases — **CRUMB-01** (CRM: leads/pipeline/quotes/orders), **GELATO-01** (warehouse:
+bins, receiving, pick/pack/ship, lot/serial), **SYERP-13** (accounts receivable) — are all coarse
+FR placeholders needing `/zj:spec` expansion, and sequencing is open. **Next: `/zj:ship`** (resolve
+the 2-milestone-deep master-merge debt, D-M2-3) then **`/zj:spec`** to sharpen this DoD into clauses.
 
-**Shipped milestone:** v1.0 — *"Can deploy it, log in, manage vendors/customers, and design
-parts with multi-level BOMs and cost roll-up."* Closed 2026-07-09.
+**Shipped milestones:**
+- **v2.0 — Operations.** *"Can track inventory, raise purchase orders, keep real books (double-entry
+  GL with AP + financial statements), and execute work orders that consume PLUM BOMs and inventory."*
+  Closed 2026-07-16 (tag `v2.0`; audit `.zj/MILESTONE-v2.0-AUDIT.md`, all four clauses proven live).
+- **v1.0 — Foundation + PLUM.** *"Can deploy it, log in, manage vendors/customers, and design parts
+  with multi-level BOMs and cost roll-up."* Closed 2026-07-09 (tag `v1.0`).
 
 ## Constraints
 

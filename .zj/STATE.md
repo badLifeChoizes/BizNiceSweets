@@ -1,316 +1,55 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-16 (Phase 10 **DONE + retro'd** — MOUSSE WO core; learnings kept; roadmap done. **This closes the last v2.0 DoD clause — v2.0 is code-complete. Next action: `/zj:milestone` for v2.0.**)
+Updated: 2026-07-16 (**Milestone v2.0 "Operations" CLOSED + tagged `v2.0`**. Next milestone = v3.0 Customer & logistics. Next action: `/zj:ship` then `/zj:spec`.)
 
 ## Position
 
-- **Step:** **Phase 10 RETRO complete (2026-07-16, `/zj:retro 10`).** Four learnings kept in
-  `.zj/LEARNINGS.md` "Phase 10": (1) "WIP clears to zero" + "TB nets zero" are both Σdr==Σcr
-  identities — neither catches a GL-control-vs-subledger drift; assert a control account directly
-  against its subledger, never against zero (the 1130 major the green verify missed, reviewer
-  caught); (2) a completion JE moved two ledger accounts and only one had an invariant → enumerate
-  an invariant per account a mutation posts to; (3) the recurring concurrency-major was **pre-empted
-  by design** for the first time (row lock + `asyncio.Barrier` forced-interleave verify planned in
-  from Tasks 8/13 — the 9b rule paying off); (4) a mechanical AST refactor's parity check must not
-  reuse the transform's own node filter, and import-surface completeness is proven by import (pytest
-  collection), not behavioral verify scripts. Deferrals homed: MOUSSE↔SYERP cross-path
-  inventory-ledger lock gap → BACKLOG p2 inventory-race item (trigger now live since MOUSSE writes
-  the ledger); zero-cost lone-component issue → p3; 422-deprecation sweep now includes mousse.
-  Roadmap Phase 10 → `[done]`. **This closes the last v2.0 DoD clause ("execute work orders that
-  consume PLUM BOMs and inventory") — v2.0 is code-complete.** **Next action: `/zj:milestone` for
-  v2.0** (audits the v2.0 DoD, runs the carried human UAT `.zj/UAT-v2.0.md`, and homes the BACKLOG
-  p1 debt: live-DB pytest harness, both lint gates, CI). Offer: `/zj:log phase 10` files the formal
-  work log for the record.
-- **Step (prior):** **Phase 10 VERIFIED (2026-07-16, `/zj:verify 10`) — Verdict PASS, tagged
-  `zj/good-10-mousse-work-orders`.** Goal-backward verifier + code reviewer both run. All 7 SCs
-  live-proven: `verify_mousse.py` 34/34 (WIP-clears-to-zero Decimal-exact + `asyncio.Barrier`
-  concurrency race), `verify_mousse_api.py` 34/34 (HTTP RBAC + audit); full regression **13/13
-  verify_* exit 0**, TB nets zero; FE Vitest + `npm run build` clean; alembic head 0012. **Fix loop
-  closed ONE MAJOR (`5cffeeb`):** completion debited 1130 / credited 1140 for the same
-  `accumulated_wip`, but the FG receipt capitalises only `planned_qty × fg_unit_cost` into the
-  inventory subledger — so on non-divisible WIP (100/3) the 1130 control account permanently drifted
-  from the subledger (a silent tie-out break the verify suite missed; reviewer caught it). Owner chose
-  the rounding-sink remedy: completion now posts a 3-line JE routing the residual to a NEW seeded
-  **5190 Inventory Rounding** account (D-P10-2 amended) so 1140 clears AND 1130 ties to the subledger,
-  both Decimal-exact; pinned by `verify_mousse.py` scenario D. The D-P10-4 AST-split chore reviewed
-  clean. Doc gaps closed: SRD MOUSSE-01 rewritten with ACs + `Verified: 5cffeeb`,
-  `requirements-progress.md` MOUSSE section added, MAP.md (head 0012 + mousse registered), CLAUDE.md
-  suite table. Deferred minor logged (zero-cost lone-component issue). Artifacts:
-  `.zj/phases/10-mousse-work-orders/{VERIFICATION,REVIEW}.md`. **Next action: `/zj:retro 10`.**
-- **Step (prior):** **Phase 10 build COMPLETE (2026-07-13)** — MOUSSE materials-only WO core on branch
-  `feature-mousse-work-orders` (cut off D-P10-4 chore tip `6293c96`). **All 20 PLAN tasks done,
-  atomic commits.** Next action: **`/zj:verify 10`**.
-  - **Backend (`backend/app/modules/mousse/`):** models+migration 0012 (`162c463`,`dd40197`), schemas
-    (`f94c5a9`), service layer T6-9 (`09c5a64` create/number/list/detail, `c84bf2b` FSM+release
-    snapshot+cancel+hold/resume, `21ad021` issue Dr1140/Cr1130, `83b4d0e` complete WIP-clears+FG
-    receipt), router 9 routes+RBAC+audit (`1f75d62`), module registered (`2e04ffc`). Perms seeded
-    (`0ce67ae`).
-  - **The crux is PROVEN Decimal-exact:** issue posts Dr 1140 / Cr 1130 at moving-avg, floor-guarded,
-    row-locked (FOR UPDATE sorted-id); completion posts Dr 1130 / Cr 1140 so the WO's 1140-attributable
-    balance returns to its pre-WO value exactly (incl. a 100/3 residual case). Under-issue completion
-    blocked 4xx unless audited `override_incomplete`; On Hold pause/resume FSM. Trial balance nets zero.
-  - **Verify scripts:** `verify_mousse.py` 34 PASS incl. the WIP-clears crux + hold/resume + override
-    (`66b1448`) and a load-bearing concurrency race (`ac7d658` — Barrier-forced interleave; removing
-    the lock double-consumes on-hand→−5, restoring it passes). `verify_mousse_api.py` 34 PASS — HTTP
-    RBAC 200/403/401 on every route + audit rows attributable (`cb09c1a`).
-  - **Frontend (`frontend/src/routes/mousse/`):** WO list+hooks+route+nav (`5a75966`), create dialog
-    (`67091c0`), detail+snapshot+issue+hold/resume (`3d93be4`), complete+override-warning (`c3239a6`),
-    Vitest 9 tests (`dca7e59`). Nav auto-gates on module-enabled ∩ `mousse:read`.
-  - **Full regression GREEN:** 13/13 verify_* scripts exit 0; backend pytest **117 passed / 100
-    skipped** (D-P7-4 harness, unchanged); frontend **90/90** Vitest; `npm run build` clean; alembic
-    head 0012.
-  - **Deviations (see PLAN `## Deviations`):** (1) branch cut off the chore tip not tag `zj/good-09c`
-    (owner: chore-first); (2) two PLAN "verified" reference facts were wrong — `Base` is
-    `app.core.base`, `syerp_inventory_txn.id` is `String(36)` not int (engineer corrected against real
-    code); (3) FSM 4xx split 409 (illegal transition) / 422 (precondition); (4) **D-P10-4 split defect
-    fixed at wrap-up (`fix(syerp)`):** the chore under-exported `PO_TRANSITIONS`/`BILL_TRANSITIONS`
-    (annotated assigns the AST split's node filter missed) — caught by pytest collection of
-    `test_purchasing.py`; re-exported, 95/95 original names now importable, pytest back to baseline.
-  - **Noticed (for verify/triage):** `HTTP_422_UNPROCESSABLE_ENTITY` emits a Starlette deprecation
-    warning (renamed `..._CONTENT`) — MOUSSE matched the existing SYERP convention; a codebase-wide
-    rename is a separate chore. Lint gates remain non-functional (BACKLOG p1) — correctness rests on
-    the verify_* + Vitest suites, both green.
-- **D-P10-4 chore DONE — deviation from PLAN Task 1:** branch cut off the D-P10-4 chore tip (which
-  carries the syerp `service/` split), NOT tag `zj/good-09c` — the owner chose "chore first, build on
-  the clean post-split base."
-- **D-P10-4 chore COMPLETE (2026-07-13, committed `6293c96` on `chore-syerp-service-split`).** Split
-  `backend/app/modules/syerp/service.py` (3,824 lines) into a `service/` package of 10 cohesive
-  submodules (`_common`/`partners`/`locations`/`accounts`/`items`/`inventory`/`journal`/`purchasing`/
-  `bills`/`reports`) behind unchanged public functions — zero behavior change, verbatim AST split (93
-  top-level defs identical), re-exported via `service/__init__.py` so all `from
-  app.modules.syerp.service import X` call sites keep working. `verify_gl.py` monkeypatch retargeted
-  to `gl_service.purchasing._gl_account_id_by_code`. All 11 `verify_*` scripts exit 0. MAP.md
-  refreshed (migrations→0011, service package). This chore branch merges to master ahead of / with
-  the MOUSSE feature branch (stacked).
+- **Step:** milestone — **v2.0 "Operations" closed and tagged `v2.0` (2026-07-16).** The definition
+  of done ("track inventory, raise purchase orders, keep real books with AP + financial statements,
+  execute work orders that consume PLUM BOMs and inventory") was audited goal-backward against the
+  running stack (`.zj/MILESTONE-v2.0-AUDIT.md`): all four clauses proven end-to-end backend↔frontend↔DB,
+  **13/13 live `verify_*` scripts exit 0**, whole-DB trial balance nets zero, control accounts tie to
+  subledgers, `npm run build` clean, 90/90 Vitest, alembic head 0012. Verdict clean but for one minor
+  gap **G1** (P&L report 422'd on an empty `from` date), **fixed at close** (`2578ca5`). Records:
+  CHANGELOG (v2.0 released), `.zj/logs/milestone-v2.0.md`, LEARNINGS "Milestone v2.0", DECISIONS
+  D-M2-1..4 + regenerated index, the audit doc. Phases 8/9a/9b/9c/10 archived to
+  `.zj/history/v2.0/phases/`; `.zj/phases/` is empty.
+
 - **Project:** BizNiceSweets
-- **Step:** **Phase 10 planned (2026-07-13)** — MOUSSE manufacturing execution core, materials-only
-  slice (MOUSSE-01). `.zj/phases/10-mousse-work-orders/PLAN.md` = **20 tasks** (new
-  `backend/app/modules/mousse/` module: models→migration 0012→perm seed→schemas→service→router→
-  register→`verify_mousse.py`+`verify_mousse_api.py`→regression→5 frontend). Branch
-  `feature-mousse-work-orders` cuts off tag `zj/good-09c-ap-aging-financial-statements` (D-P10-8).
-  Goal: a WO consumes a PLUM single-level BOM + SYERP inventory to produce a finished good, cost
-  flowing **Dr 1140 WIP / Cr 1130 on issue** and **Dr 1130 / Cr 1140 on completion so WIP clears to
-  zero** (the accounting crux, proven pre/post Decimal-exact). Closes the last v2.0 DoD clause.
-- **Decisions D-P10-1..9** (in DECISIONS.md): materials-only, routing/labor/shop-floor deferred
-  (D-P10-1); actual moving-avg costing, WIP clears, no variance (D-P10-2); explicit issue action
-  (D-P10-3); single-level direct BOM, sub-assemblies issued as components (D-P10-5, owner-confirmed);
-  reject release if any component has no linked InventoryItem (D-P10-7); **completion blocked on
-  under-issue unless an audited `override_incomplete`, plus an On Hold pause/resume state**
-  (D-P10-9, owner). Surfaces verified pre-plan: `post_receipt`/`post_journal_entry` (both
-  `commit=False`), `_adjustment_violates_floor`, `_gl_account_id_by_code`, the create_bill FOR-UPDATE
-  lock template; PLUM `get_released_revision` + direct `PlumBomItem`; CoA 1130/1140 already seeded;
-  `mousse` module already in `modules_seed.py`.
-- **Next action: the D-P10-4 prerequisite chore FIRST** — split
-  `backend/app/modules/syerp/service.py` (**3,824 lines**, BACKLOG p2) into cohesive submodules
-  behind unchanged public functions **+** refresh `.zj/codebase/MAP.md` (stale at migration 0009;
-  head is 0011) on a **separate chore branch** off `zj/good-09c-ap-aging-financial-statements`,
-  verified green against the existing `verify_*` scripts (no behavior change). Then `/zj:build 10`
-  builds MOUSSE on a clean base. *(Owner chose "separate chore first" over folding the refactor into
-  the feature diff — keeps the MOUSSE review clean. The MAP refresh half can run via `/zj:docs`.)*
-- **Retro 09c (2026-07-12) — complete.** Learnings → `.zj/LEARNINGS.md` "Phase 09c": (1) first
-  phase since Phase 6 with **zero reviewer majors**, structurally — a read-only derivation phase has
-  no read-check-write, so the recurring 7/9a/9b concurrency-major class has no home (triage: report
-  phases are low-risk on the concurrency axis, spend review budget on sign-convention + derivation
-  correctness); (2) a subledger↔control tie-out holds only if both sides age on the **same date
-  basis** — D-P9c-1 unified it at write time (`entry_date=bill_date`), then assert Decimal-exact;
-  (3) `in_balance == True` on the balance sheet is **tautological** (identity holds by construction)
-  — assert the *composition* (exactly one 3130 row, amount == P&L net income), not the identity.
-  Deferrals homed: balance-sheet fiscal-close-gated 3130 double-count + net-income fiscal-year
-  bounding → BACKLOG p2; backdated-payment tie-out edge → p3; syerp `service.py` ~3,700 lines +
-  MAP.md refresh through 0011 updated in their existing items. Roadmap 9c → `[done]`. Offer:
-  `/zj:log phase 09c` files the formal work log.
-- **Verify 09c (2026-07-12) — Verdict PASS.** Goal-backward verifier + code reviewer both clean
-  (0 blockers, 0 majors). All 6 SCs live-proven: **`verify_reports.py` 17/17** (the exact-Decimal
-  2110 subledger↔control tie-out crux `grand_total==control_balance`, incl. partial-payment +
-  DRAFT-exclusion divergence guards; TB nets zero; P&L in/out-of-period; BS balances with the
-  computed current-year net-income line), **`verify_reports_api.py` 13/13** (200/401/403 × 4
-  endpoints + 422 missing-bound); regression `verify_ap` 24 / `verify_gl` 29 / `verify_purchasing`
-  19 / `verify_inventory` 16 / `verify_e2e_p8` 19 all exit 0; backend pytest 117 passed/100 skipped;
-  FE 81/81, tsc clean; alembic `0011 (head)`. **Fix loop:** added
-  `frontend/src/routes/syerp/components/BillCreateDialog.test.tsx` (`0eac5d4`) pinning the bill-date
-  field (renders defaulted to today; `bill_date` flows into the POST body) — the one net-new gap.
-  Deferred minors (all fiscal-close-gated, out of scope, logged in PLAN `## Noticed` + REVIEW): the
-  unconditional computed 3130 line (double-counts only if a future phase posts to 3130), the
-  "Current Year Net Income" label being all-time until fiscal-year bounding lands, and the
-  backdated-payment (`payment_date < bill_date`) tie-out edge (correct out-of-balance surfacing, not
-  a bug). SRD SYERP-12 flipped to **verified (all 9 ACs)** with an AC6/AC7 stamp at `0eac5d4`;
-  MAP.md refresh still owed to `/zj:docs` (pre-existing, Phases 8–9c). Artifacts:
-  `.zj/phases/09c-ap-aging-financial-statements/{VERIFICATION,REVIEW}.md`.
-- **Build 09c (2026-07-12) — 15/15 tasks, on `feature-syerp-financial-reports`** (cut at the 09b HEAD
-  `81c2256`; `tag..HEAD` was docs-only so it carries the verified-09b code + planning docs — Deviations).
-  Backend: `Bill.bill_date` col (`f6b9635`), migration `0011` NOT NULL + `created_at::date` backfill
-  (`cab8531`), bill_date wired through `BillCreate`/`create_bill` + `post_bill` JE `entry_date=bill.bill_date`
-  (`729ec00`, the tie-out date-basis), report schemas (`69e4724`), `ap_aging_report`+2110 tie-out
-  (`c24c9f6`), `trial_balance` (`7aecf7c`), `profit_loss` (`1d38ddb`), `balance_sheet` w/ computed 3130
-  net income (`6f79047`), 4 read-only report endpoints + `syerp:read` (`a9cae54`). Verify:
-  **`verify_reports.py` 17/17 PASS ×2** (`9ae4345`) — **tie-out crux `grand_total==control_balance`
-  Decimal-exact (1000.000000), incl. partial-payment + draft-exclusion divergence guard; TB nets zero +
-  rollup parents absent; P&L in/out-of-period; BS balances with the computed net-income line**;
-  **`verify_reports_api.py` PASS ×2** (`fdb0831`) — 200/401/403 across all 4 endpoints + 422 missing-bound,
-  read-only ⇒ no mutation audit. Frontend: AP Aging screen (`c6b47d3`, 4 tests), Financial Reports tabbed
-  page (`8994f5c`, 3 tests — Button toggle group, no shadcn tabs primitive), routes+nav+optional bill-date
-  field on the create dialog (`48c8453`). **Suites:** backend pytest **117 passed / 100 skipped** (D-P7-4,
-  unchanged); regression `verify_ap` 23 / `verify_gl` 28 / `verify_purchasing` 18 / `verify_inventory` 15 /
-  `verify_e2e_p8` 18 all exit 0 unchanged; frontend **79/79** (24 files). Lint gates still non-functional
-  (BACKLOG p1). **Deviations** (PLAN `## Deviations`): branch cut at HEAD not the tag (docs-only delta);
-  T3 router call-site threaded `bill_date`; T2/T3/T15 commit subjects trimmed to the ≤72-char guard; T10
-  used expense-line bills (Dr ASSET 1150 / Cr 2110) not the PO→receive path and isolates P&L accounts —
-  tie-out still real via `post_bill`. **Noticed** (PLAN `## Noticed`): stale `BillRead` FSM docstring
-  (`partially_paid`); `balance_sheet` appends the computed 3130 line unconditionally (double-counts IF a
-  future phase posts closing entries into 3130); exotic backdated-payment (payment_date<bill_date) tie-out
-  edge. **Owner note:** `docs/tasks/{branch}.md` not created for this branch — ZJ PLAN.md is the checklist.
-  Original plan crux/patterns recap: coalesce-each-side, `entry_date` filter via the `get_account_register`
-  join, HTTP-verify-from-the-start, `service.py` kept cohesive (split deferred to Phase 10).
-- **Retro 09b (2026-07-12) — complete.** Learnings → `.zj/LEARNINGS.md` "Phase 09b": (1) sequential
-  verify is structurally blind to read-then-write races (reviewer caught the major a 4th time) → row
-  lock/constraint **plus** an `asyncio.gather` two-request scenario for any invariant guard; (2) a
-  read-check-write race is deferrable only if its breach self-heals — 9b's double-bill/overpay
-  corrupts a ledger invariant permanently, so major even single-shop; (3) clearing-account invariant
-  proves as a pre/post derived-balance equality; (4) HTTP-verify-from-the-start (09a rule) is now
-  settled. Deferrals homed: 2 minor AP correctness edge-cases → BACKLOG p2, stale AP FE types → p3,
-  FOR UPDATE template cross-referenced into the inventory-ledger race item. Roadmap 9b marked
-  `[done]`; ROADMAP/BACKLOG/LEARNINGS updated. Offer: `/zj:log phase 09b` files the formal work log.
-- **Verify 09b (2026-07-12) — Verdict PASS + tagged `zj/good-09b-ap-bills-match-payments`.** Goal-backward + code
-  review on `feature-syerp-ap-bills`. All six SCs proven live: `test_ap.py` 14, **`verify_ap.py`
-  24/24** (GR/IR-clears-to-zero crux Decimal-exact: 2150 −550 pre-receipt → −550 post-bill; + two
-  concurrency race scenarios), **`verify_ap_api.py`** (audit + 403/401/200 RBAC over live HTTP);
-  regression `verify_gl` 28 / `verify_purchasing` 18 / `verify_inventory` 15 / `verify_e2e_p8` 18
-  all exit 0; FE 72/72. **Fix-loop closed one MAJOR (`380c73b`):** `create_bill`/`record_payment`
-  guarded double-bill/overpayment with a read-then-write and no row lock → two concurrent requests
-  for the same PO line (or bill) could both commit (2150 never clears / AP negative). Now each
-  contended PO-line/bill row is `SELECT … FOR UPDATE`-locked up-front in sorted id order
-  (deadlock-safe); pinned by verify scenarios (j)/(k). Two MINOR edge-cases logged to PLAN
-  `## Noticed` (fractional multi-lot GR/IR sub-micro residue; zero-qty matched line → unpostable
-  draft). Artifacts: `.zj/phases/09b-ap-bills-match-payments/{VERIFICATION,REVIEW}.md`.
-- **Prior next action (done):** `/zj:verify 09b` — verified AP bills / PO-match / payments.
-  **All 16 PLAN tasks ticked, atomic commits.** Backend: T1 helpers `c1b431b`, T2 models `1697973`,
-  T3 migration 0010 `b91ed73`, T4 seed 1111 `5502445`, T5 create-bill `52d9a83` (+dup-guard `13ca4cd`),
-  T6 post_bill `3b8eb33`, T7 record_payment `be0a774`, T8 schemas `ff39967`, T9 bill router `7ef302b`,
-  T10 payment router `e7bb9b2` (+list_payments `99ef164`). Verify: T11 `verify_ap.py` `e2cd5f2`
-  (**22/22 PASS**, the GR/IR crux clears to zero Decimal-exact: 2150 pre-receipt −350 → post-bill −350),
-  T12 `verify_ap_api.py` `6aa86af` (**24/24 PASS**, bill.created/bill.posted/payment.recorded audit +
-  full 403/401/200 RBAC). T13 regression: verify_gl/purchasing/inventory/e2e_p8 all exit 0 unchanged.
-  Frontend: T14 Bills list `4e25ab2`, T15 BillDetail+Pay `bb57463`, T16 routes+nav `72cfd82`.
-  Suites green: **backend pytest 117 passed / 100 skipped (D-P7-4) / 0 failed**, **frontend 72/72**.
-  **Deviations** (in PLAN.md `## Deviations`): T5 in-payload duplicate `po_line_id` guard added
-  (protects the crux); T10 `list_payments` read added post-hoc (Task-7 scope gap); T2 timestamps are
-  Python-side defaults (no `server_default`) so 0010 matches the models. **Noticed** (PLAN `## Noticed`):
-  stale `Bills.tsx BillLineRead` type, a misleading `partially_paid` schema comment (FSM is
-  draft→posted→paid; partial payment stays `posted`), and the pre-existing `alembic check` drift.
-- **Prior next action (done):** `/zj:build 09b` — built 2026-07-11 off the 09a tip.
-- **Last update:** 2026-07-11
-- **Next action:** `/zj:build 09b` — build AP bills / PO-receipt match / payments (SYERP-12 AC4/AC5/AC8/AC9).
-  **Plan ready:** `.zj/phases/09b-ap-bills-match-payments/PLAN.md` — 16 tasks, layered
-  models→migration→seed→3 service→schemas→2 router→2 verify scripts→regression→3 frontend.
-  **First action of the build: cut a fresh branch `feature-syerp-ap-bills` off the current
-  `feature-syerp-gl-posting-engine` HEAD (the verified 09a tip, tag `zj/good-09a-gl-posting-engine`)**
-  — D-P9b-8. Owner-resolved decisions at plan (D-P9b-1..8): receipt-driven bill creation matched at
-  PO-line grain (D-P9b-1); **exact match required** so Dr GR/IR 2150 == Cr AP 2110 and GR/IR clears
-  to zero — variance rejected 4xx, no PPV account (D-P9b-2); non-PO expense lines with user-chosen
-  EXPENSE/ASSET account (D-P9b-3); payments credit a **selectable cash/bank account** defaulting to
-  1110, seed new **1111 Bank – Checking** (D-P9b-4); BILL-#### numbering + Draft→Posted→Paid
-  `BILL_TRANSITIONS` FSM + auto-Paid + overpayment 4xx (D-P9b-5); Payment header + PaymentAllocation
-  (1 payment → N bills, D-P9b-6); `/syerp/ap/…` paths (D-P9b-7). Crux baked into `verify_ap.py` (e):
-  GR/IR balance returns to its pre-receipt value after receive→post_bill. SC6 (audit+RBAC) proven by
-  a **first-class HTTP verify** `verify_ap_api.py` (the Phase-09a learning: router behavior needs an
-  HTTP-level script, planned from the start).
-- **Prior next action (done):** `/zj:plan 09b` — planned 2026-07-11.
-  **Phase 9a is verified, tagged `zj/good-09a-gl-posting-engine`, and retro'd.** It delivered
-  SYERP-12 **AC1/AC2/AC3 + AC8/AC9**: double-entry JournalEntry/JournalLine (append-only, reversal
-  via self-FK), derived balances + account register, the manual general-journal UI, and the crux —
-  PO `receive_line` atomically posts a balanced **Dr 1130 / Cr 2150** JE at receipt cost (seeded
-  GR/IR 2150). Branch `feature-syerp-gl-posting-engine` off `master` (D-P9a-2).
-  - **Retro (2026-07-11) — learnings kept** (`.zj/LEARNINGS.md` "Phase 09a"): (1) service-level
-    verify scripts can't prove router behavior (audit/RBAC) — `verify_gl_api.py` over live HTTP was
-    needed; **plan an HTTP-level verify from the start in 9b/9c**; (2) a new atomic side-effect
-    narrowed a legal input domain (the zero-cost receipt regression); (3) SQL `SUM` NULL-propagates
-    on single-sided derived balances → **coalesce each side** (AP-control/cash in 9b/9c derive the
-    same way); (4) the review again caught the majors the green live-verify missed. Deferrals homed
-    to BACKLOG: alembic autogenerate drift (7 unnamed constraints + `server_default` now()), FE
-    reverse-action Vitest, receipt `entry_date` UTC, MAP fuller refresh.
-  - **Verify fix-loop (2026-07-11):** two majors fixed — **M1** a zero-cost PO receipt (`unit_cost=0`)
-    self-rejected the all-zero JE and rolled back the whole receipt (Phase-8 regression) → now skips
-    the GL post; **M2** no double-reversal guard let the derived control account diverge from
-    inventory → now 409. Plus **m5** entry-targeted receipt audit and **m7** docs. The two mandated
-    criteria-become-tests landed: `verify_gl.py` grew the atomicity-rollback / zero-cost / double-
-    reversal scenarios (**28/28**) and a **new `verify_gl_api.py`** pins the audit rows + 403/401
-    RBAC over live HTTP (**9/9**). Phase-8 regression unchanged, `test_gl_journal.py` 13, FE 64/64.
-  - **Phase 9 split (D-P9a-1..5):** 9a done → `/zj:plan 09b` (AP bills/match/payments, AC4/AC5) →
-    `/zj:plan 09c` (AP aging + statements, AC6/AC7). AR stays out (SYERP-13 → CRUMB, D-P9-4).
-- **Phase-9 spec (2026-07-11):** owner chose full subledger→GL auto-posting (D-P9-1) over
-  document-only aging; AP = vendor bill matched to PO receipts + payments (D-P9-2); GR/IR clearing
-  posting model (D-P9-3, CoA account codes to confirm at plan time); AR deferred to CRUMB (D-P9-4,
-  new SYERP-13); v2.0 DoD unchanged, MOUSSE stays required (D-P9-5).
-- **Ship record (2026-07-11):** **PR #1 MERGED** via local fast-forward
-  (`feature-syerp-inventory-purchasing` → `master`, `f4e2bd3..a5ad44b`). Master now carries the
-  full re-platform (Phases 1–8); `v1.0` tag (`4b6fee4`) pushed and confirmed an ancestor of
-  `master`. FF chosen over GitHub's rebase-button so commit SHAs — and thus the tag — were
-  preserved. The 4-year-old `master`-behind problem (standing debt #4) is **resolved**.
-- **Milestone:** v1.0 — Foundation + PLUM — **CLOSED + tagged `v1.0` 2026-07-11**.
-  v2.0 Operations in progress (Phase 8 done + verified + retro'd).
-- **Phase:** none active for v1.0 (Phase 7 archived to `.zj/history/v1.0/phases/`).
-  Phase 8 (`.zj/phases/08-syerp-inventory-purchasing/`) belongs to v2.0 and stays active.
-- **Branch:** `feature-syerp-inventory-purchasing` — carries Phases 7 + 8 + the milestone close.
+- **Milestone:** v2.0 Operations — **CLOSED + tagged `v2.0`**. v1.0 closed + tagged 2026-07-11.
+- **Branch:** `feature-mousse-work-orders` — carries Phases 9a→10 + the v2.0 close. The `v2.0` tag
+  sits at its HEAD.
+- **Last update:** 2026-07-16
+- **Next action:** `/zj:ship` (resolve the 2-milestone-deep master-merge debt, D-M2-3), then
+  `/zj:spec` to sharpen the v3.0 "Customer & logistics" DoD into clauses and expand the coarse FRs
+  (CRUMB-01, GELATO-01, SYERP-13/AR) before planning Phase 1 of v3.0.
 
-## v1.0 milestone close — status
+## Next action (detail)
 
-**Audit:** `.zj/MILESTONE-v1.0-AUDIT.md`, verdict **GAPS FOUND**, driven live against the running
-stack. All four definition-of-done clauses (deploy / log in / vendors+customers / multi-level BOM
-+ cost roll-up) proven at the API layer.
+**`/zj:ship`** — resolve the master-merge debt (D-M2-3, now two milestones deep): `master` is 98
+commits behind and carries none of Phases 9–10; both `v1.0` and `v2.0` are tagged on the working tip
+of an unmerged feature branch. Then **`/zj:spec`** to sharpen the v3.0 "Customer & logistics"
+definition of done into clauses and expand the coarse FRs (CRUMB-01, GELATO-01, SYERP-13/AR) before
+planning Phase 1 of v3.0.
 
-**Gaps triaged with the owner:**
-| Gap | Severity | Disposition |
-|---|---|---|
-| **G1** Where-Used labelled *every* parent "Direct parent" (PLUM-06) | major, unprotected | **Fixed** `63ea954` — backend now emits `via_part_number`; UI keys off `indirect`. Guards: `PartDetail.test.tsx` (5), `test_bom.py`. Proven live 14/14. |
-| **G2** Excel export 500 — `openpyxl` absent from the API image | blocker for UAT check 7 | **Fixed** by rebuilding `compose_api`. `/plum/export/excel` → 200, valid `.xlsx`. No code change. |
-| **G3** live-DB pytest harness skips 98 tests | systemic | **Deferred** (owner-approved) — BACKLOG p1, D-P7-4, D-M1-2. Not PLUM-only: auth 38, plum 34, syerp 17, core 7. |
+Alternative if the owner wants to pay down infra debt first: the BACKLOG **p1** items (CI pipeline,
+live-DB pytest harness repair, both lint gates) are now two milestones old — a `/zj:ideate` on
+whether v3.0 leads with a debt-paydown phase is reasonable.
 
-**Records produced:**
-- `CHANGELOG.md` — generated from commits, 98 `feat:`/`fix:` entries grouped by phase (new file;
-  never hand-edit).
-- `.zj/logs/milestone-v1.0.md` — work log: ≈47 h over 30 inferred sessions, 224 v1.0-era commits.
-- `.zj/LEARNINGS.md` — "Milestone v1.0" roll-up.
-- `.zj/DECISIONS.md` — regenerated `## Index` (44 entries) + **D-M1-1** (tag placement),
-  **D-M1-2** (G1/G2 fixed, G3 deferred).
-- `zj doctor`: **18 errors → 0** (19 warnings remain, all BACKLOG tag-format).
+## Deferred at the v2.0 close (owner-approved — do not lose)
 
-## What is left before the tag
+- **Human click-through UAT** (`.zj/UAT-v2.0.md` 14 checks + owed v1.0 round-2) → BACKLOG **p1**
+  pre-public-release gate (D-M2-2). Tag rests on backend live-proof + the wired-UI audit; extend the
+  checklist with GL/AP/reports/MOUSSE UI flows before running it.
+- **BACKLOG p1 infra debt** — no CI, live-DB pytest harness broken (100 skips, D-P7-4), both lint
+  gates non-functional. Correctness rests on `verify_*` + Vitest. Carried into v3.0.
+- **`/zj:ship` master-merge** (D-M2-3) — the 98-commit-behind master.
 
-**Human UAT round 1 ran 2026-07-11** (owner). Passed checks 3, 5, 6, 12. Surfaced three UI
-defects — **D1** flat-BOM cost footer (280 vs 110), **D2** AVL "Add Vendor" 500 on a duplicate,
-**D3** dead import file picker — all now **fixed** (`a88431c`, D-M1-3), tested, and D2 proven live.
-**Round 2 owed:** re-run checks **2, 4/9, 7, 10, 11**. These plus the already-passed 1, 3, 5, 6, 8,
-12 close all twelve. Residue is genuine visual confirmation: red styling (6 ✓), toast absence
-(9, 10), badges/footer (2, 4), visible no-refresh (11).
+## Standing context
 
-Stack must be up: `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`
-(rebuild `api` if the stack is recreated, or G2 returns). `alembic current` == `0008 (head)`.
-
-Once the UAT passes: `git tag -a v1.0 -m "Foundation + PLUM"` at HEAD (per **D-M1-1**, that tree
-also contains Phase 8 / v2.0 work — this is recorded, not accidental).
-
-## Standing debt (carried into v2.0)
-
-1. **Live-DB pytest harness never runs** — 98 skips across every module (BACKLOG p1, D-P7-4).
-   Regression protection currently rests on `backend/scripts/verify_*.py` (66 assertions) and the
-   Vitest suite, both of which do run.
-2. **Both lint gates non-functional** (BACKLOG p1) — ESLint 10 is flat-config-only but the repo
-   ships `.eslintrc.cjs` with a removed `--ext` flag and no `@typescript-eslint` parser deps;
-   `ruff` is pinned in `requirements-dev.txt` but not installed in `backend/.venv`.
-3. **No CI** (BACKLOG p1) — the `SyerpPartner` bug shipped through four plans because live-DB
-   tests never ran.
-4. **`master` is 263 commits behind** at `f4e2bd3` (2025-12-20) and contains no `backend/`,
-   `frontend/`, or `.zj/`. The entire re-platform is unmerged; the merge story is unresolved
-   (`/zj:ship`, D-P7-3 / D-P8-11).
-
-## After the tag
-
-1. `/zj:ship` — resolve the `master` merge story for the branch carrying Phases 7 + 8.
-2. `/zj:spec` — refine the v2.0 definition of done before planning Phase 9.
-3. `/zj:plan 09` — SYERP AP/AR & reporting (SYERP-12).
-
-## Adoption note
-
-Adopted from GSD on 2026-07-04. Prior planning system archived at `archive/planning-gsd/`
-(phases 01–07, REQUIREMENTS, ROADMAP, STATE, v1.0-MILESTONE-AUDIT, codebase snapshots) and
-`archive/planning-docs/` (program ROADMAP.md, decisions.md). `.zj/` is self-contained — the
-archive is history, not a dependency.
+- **Stack for verification:** `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`;
+  run verify scripts in-container: `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/<name>.py`.
+  Vite dev server for UI/UAT at `http://localhost:5173`.
+- **v2.0 tag placement (D-M2-3, mirrors D-M1-1):** the `v2.0` tag's tree is an unmerged branch tip —
+  recorded, not accidental; a later fast-forward preserves the SHA.
+- **Adoption note:** adopted from GSD 2026-07-04; prior systems archived under `archive/`. `.zj/` is
+  self-contained.

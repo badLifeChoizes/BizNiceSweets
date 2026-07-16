@@ -1,5 +1,6 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-16 (Phase 10 **done + retro'd** — MOUSSE WO core verified/tagged; learnings in LEARNINGS.md "Phase 10". **This closes the last v2.0 DoD clause — v2.0 is code-complete; next = `/zj:milestone` for v2.0** (carries the v2.0 human UAT + BACKLOG p1))
+Updated: 2026-07-16 (**Milestone v2.0 "Operations" CLOSED + tagged `v2.0`** — DoD audited goal-backward vs the running stack (`.zj/MILESTONE-v2.0-AUDIT.md`: 13/13 verify scripts, TB nets zero, subledgers tie; 1 minor gap G1 fixed at close `2578ca5`). Phases 8/9a/9b/9c/10 archived to `.zj/history/v2.0/`. **Next milestone = v3.0 Customer & logistics** (CRUMB + GELATO + AR, D-M2-4). Next action: `/zj:ship` (2-milestone master-merge debt) then `/zj:spec` for v3.0.)
+Prior: 2026-07-16 (Phase 10 done + retro'd — MOUSSE WO core verified/tagged; v2.0 code-complete)
 Prior: 2026-07-13 (Phase 10 **planned** — MOUSSE materials-only WO core, 20 tasks, D-P10-1..9; next = the D-P10-4 syerp split chore, then `/zj:build 10`)
 Prior: 2026-07-12 (Phase 9c **done + retro'd** → next `/zj:plan 10` (MOUSSE); learnings in LEARNINGS.md "Phase 09c")
 Prior: 2026-07-12 (Phase 9c verified + tagged `zj/good-09c-ap-aging-financial-statements` → next `/zj:retro 09c`)
@@ -122,16 +123,31 @@ running stack (`.zj/MILESTONE-v1.0-AUDIT.md`). All four clauses proven live.
 
 ---
 
-## v2.0 — Operations (SYERP extended + MOUSSE)  [in progress]
-Owner decision 2026-07-04: dependency-first order confirmed — operations before FLAN port /
-CRM. **Definition of done (confirmed 2026-07-11, D-P9-5):** "Can track inventory, raise purchase
-orders, keep real books (double-entry GL with AP + financial statements), and execute work
-orders that consume PLUM BOMs and inventory." All three clauses kept — MOUSSE (Phase 10) still
-required to close; AR ships later with CRUMB (D-P9-4).
+## v2.0 — Operations (SYERP extended + MOUSSE)  [done — closed 2026-07-16, tag `v2.0`]
 
-Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the BACKLOG p1 items
-(pytest live-DB harness, both lint gates, CI pipeline) and the v2.0 human UAT
-(`.zj/UAT-v2.0.md`).
+**Closed 2026-07-16.** Definition of done — *"Can track inventory, raise purchase orders, keep
+real books (double-entry GL with AP + financial statements), and execute work orders that consume
+PLUM BOMs and inventory"* — audited goal-backward against the running stack
+(`.zj/MILESTONE-v2.0-AUDIT.md`). All four clauses proven end-to-end, backend↔frontend↔DB.
+
+- **Audit verdict:** clean but for one minor gap — **G1** (Profit & Loss report fired with an empty
+  `from` date on first tab open → backend 422 → load error). Fixed at close (`2578ca5`, default
+  `from` to year-start + a pinning Vitest), mirroring the v1.0 fix-at-close of G1/G2 (D-M2-1a).
+- **Evidence:** 13/13 live `verify_*.py` scripts exit 0 (~200 assertions); whole-DB trial balance
+  nets 0.000000; control accounts tie to their subledgers; `npm run build` clean; 90/90 Vitest;
+  `tsc -b` clean; alembic head 0012.
+- **Records:** `CHANGELOG.md` (v2.0 released — Phases 8/9a/9b/9c/10), `.zj/logs/milestone-v2.0.md`
+  (≈12.7 h over 8 sessions, 104 post-v1.0 commits), `.zj/LEARNINGS.md` "Milestone v2.0",
+  `.zj/DECISIONS.md` D-M2-1..4 + regenerated index, `.zj/MILESTONE-v2.0-AUDIT.md`.
+- **Tag:** `v2.0` at the `feature-mousse-work-orders` HEAD. As with v1.0 (D-M1-1), that tree is the
+  working tip of an **unmerged** branch — master is 98 commits behind and carries none of Phases
+  9–10. The master-merge is the standing `/zj:ship` debt (D-M2-3).
+- **Deferred at close (owner-approved):** the human click-through UAT (`.zj/UAT-v2.0.md` + owed
+  v1.0 round-2) → BACKLOG p1 pre-release gate (D-M2-2); BACKLOG p1 infra debt (CI, live-DB pytest
+  harness, both lint gates) carried into v3.0 again — correctness rested on `verify_*` + Vitest.
+
+Phase 8 shipped inside the v1.0 tag tree (built pre-close, D-P8-11); Phases 9–10 built after.
+Phase directories archived to `.zj/history/v2.0/phases/`.
 
 ### Phase 8: SYERP Extended — inventory & purchasing  [done]
 - **Goal:** Inventory items (optional PLUM link) with per-location on-hand, immutable
@@ -299,12 +315,37 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
 
 ---
 
-## Later milestones (unordered candidates — sequence at v2.0 close)
+## v3.0 — Customer & logistics (CRUMB + GELATO + AR)  [planned — scoping, chosen 2026-07-16, D-M2-4]
+
+Owner chose this as the milestone after v2.0 (over the FLAN port and PLUM-advanced): it completes
+the **sell-side + fulfillment loop** on top of the now-complete operations core, and it is where
+**accounts receivable** was explicitly parked (SYERP-13, split out of Phase 9 at D-P9-4 so AR
+invoices flow from CRUMB sales orders rather than being keyed standalone).
+
+**Definition of done (draft — confirm at `/zj:spec`):** *"Can manage customers and a sales
+pipeline through to orders, fulfil those orders from warehouse inventory (receive → pick/pack →
+ship), and invoice customers with AR posting to the GL and AR aging that ties to its control
+account."* — to be sharpened into clauses when the milestone is spec'd.
+
+Candidate phases (coarse — all three FRs are placeholders needing `/zj:spec` expansion):
+- **CRUMB-01** — CRM core: leads, opportunity pipeline, quotes, orders, customer communication
+  log referencing SYERP customers.
+- **GELATO-01** — warehouse core: location/bin management, receiving, pick/pack/ship, lot/serial
+  tracking against SYERP inventory (the bin/zone hierarchy deferred out of SYERP-10 at D-P8-3).
+- **SYERP-13** — accounts receivable: customer invoices, receipts, AR aging, auto-posting to the
+  GL (Dr AR / Cr Revenue on invoice; Dr Cash / Cr AR on receipt) — the AP model on the sell side.
+
+**Sequencing + scope are open** — this is `/zj:ideate` / `/zj:spec` territory. Carried debt to
+weigh in during scoping: the BACKLOG p1 infra debt (CI, live-DB pytest harness, both lint gates)
+is now two milestones old; and the `/zj:ship` master-merge must be resolved before or alongside
+v3.0 (D-M2-3).
+
+---
+
+## Later milestones (unordered candidates — sequence at v3.0 close)
 
 - **FLAN port** (FLAN-01) — retire the second frozen prototype.
 - **PLUM advanced** (PLUM-11..16) — documents, ECO workflow, labor costing, cost ranges,
   distributor pricing.
-- **Customer & logistics** (CRUMB-01, GELATO-01) — **also carries SYERP-13 (accounts receivable)**,
-  split out of Phase 9 so AR invoices flow from CRUMB sales orders (D-P9-4).
 - **Quality & release** (CRISP-01, NFR-3 offline, license audit, public open-source release
   prep).
