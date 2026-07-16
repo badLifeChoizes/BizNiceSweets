@@ -394,6 +394,56 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             f"audit={status_audit!r}",
         )
 
+        # A bogus opportunity_id on direct quote create must surface as a clean 404,
+        # not a DB IntegrityError re-raised as a 500 by the quote-number retry.
+        s, _ = http(
+            "POST", "/quotes", writer_token,
+            {"partner_id": cust_id, "opportunity_id": f"missing-{unique}", "lines": []},
+        )
+        check(
+            "(C) POST /crumb/quotes with a nonexistent opportunity_id → 404 (not 500)",
+            s == 404,
+            f"status={s}",
+        )
+
+        # ===================================================================
+        # (C2) SPAWN a quote from a WON opportunity → BOTH audit rows (SC6/D-V3-15).
+        #      The section-B opportunity is at 'proposal'; walk it to 'won', spawn,
+        #      and assert an opportunity.quote_spawned row (target: the opp) AND a
+        #      quote.created row (target: the new quote) — the spawned quote carries
+        #      the same attributable creation record as a directly-created one.
+        # ===================================================================
+        http("POST", f"/opportunities/{opp_id}/stage", writer_token, {"target_stage": "won"})
+        s, body = http("POST", f"/opportunities/{opp_id}/quote", writer_token, {})
+        spawned_quote_id = body.get("id") if isinstance(body, dict) else None
+        if spawned_quote_id:
+            quote_ids.add(spawned_quote_id)
+        check(
+            "(C2) POST /crumb/opportunities/{id}/quote on a WON opportunity → 201 "
+            "with a Draft quote",
+            s == 201 and spawned_quote_id is not None and body.get("status") == "draft",
+            f"status={s} body={body!r}",
+        )
+        spawn_audit = await _audit_row(session_factory, "opportunity.quote_spawned", opp_id)
+        check(
+            "(C2/SC6) an opportunity.quote_spawned audit row exists (target: the opportunity)",
+            spawn_audit is not None
+            and spawn_audit.actor_id == writer_id
+            and spawn_audit.target_type == "crumb_opportunity",
+            f"audit={spawn_audit!r}",
+        )
+        spawned_created_audit = await _audit_row(
+            session_factory, "quote.created", spawned_quote_id
+        )
+        check(
+            "(C2/SC6) a spawned quote also gets its own quote.created audit row "
+            "(target: the new quote) — no audit asymmetry with direct create",
+            spawned_created_audit is not None
+            and spawned_created_audit.actor_id == writer_id
+            and spawned_created_audit.target_type == "crumb_quote",
+            f"audit={spawned_created_audit!r}",
+        )
+
         # ===================================================================
         # (D) INTERACTION log over HTTP (writer) + audit (SC6).
         # ===================================================================

@@ -535,6 +535,61 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             f"unit_price={lines[3].unit_price!r}",
         )
 
+        # (E2/SC4/D-V3-14) Identity rule: a part-less line MUST carry a description,
+        # even when a price is supplied — otherwise an unlabeled line lands on a
+        # customer-facing quote. A supplied price must not bypass this guard.
+        try:
+            async with session_factory() as session:
+                await create_quote(
+                    session,
+                    QuoteCreate(
+                        partner_id=cust_id,
+                        lines=[QuoteLineCreate(quantity=Decimal("2"), unit_price=Decimal("50"))],
+                    ),
+                    actor_id,
+                )
+            check(
+                "(E2/SC4) a part-less line with a price but NO description is rejected",
+                False,
+                "create_quote accepted an unlabeled free-text line",
+            )
+        except HTTPException as exc:
+            check(
+                "(E2/SC4) a part-less line with a price but NO description is rejected 422",
+                exc.status_code == 422,
+                f"status={exc.status_code}",
+            )
+
+        # (E3/SC4) A legitimate free-text line (description + explicit price, no part)
+        # is accepted and persists verbatim — the guard rejects only unlabeled lines.
+        async with session_factory() as session:
+            q_freetext = await create_quote(
+                session,
+                QuoteCreate(
+                    partner_id=cust_id,
+                    lines=[
+                        QuoteLineCreate(
+                            description="Custom tooling charge",
+                            quantity=Decimal("1"),
+                            unit_price=Decimal("75"),
+                        )
+                    ],
+                ),
+                actor_id,
+            )
+        quote_ids.add(q_freetext.id)
+        async with session_factory() as session:
+            ft_detail = await get_quote_detail(session, q_freetext.id)
+        check(
+            "(E3/SC4) a free-text line with a description + explicit price is accepted "
+            "and persists (description + unit_price 75)",
+            len(ft_detail.lines) == 1
+            and ft_detail.lines[0].description == "Custom tooling charge"
+            and ft_detail.lines[0].unit_price == Decimal("75")
+            and ft_detail.lines[0].plum_part_id is None,
+            f"lines={[(l.description, l.unit_price) for l in ft_detail.lines]!r}",
+        )
+
         # (G) line integrity: Σ(qty × unit_price) == total_value, Decimal-exact.
         expected_total = (
             Decimal("2") * Decimal("130")

@@ -170,9 +170,11 @@ async def convert_to_opportunity(
     Convert a qualified lead into an opportunity (CRUMB-01).
 
     Requires the lead to already be linked to a customer (lead.partner_id set,
-    422 otherwise). Creates an Opportunity in stage "qualify" against that partner
-    seeded from the request (name/estimated_value/expected_close_date), stamps
-    lead.opportunity_id and status="converted", commits and returns the opportunity.
+    422 otherwise) that is still a valid customer (re-resolved via _resolve_customer,
+    AC6 — the flag may have been cleared in SYERP since link time). Creates an
+    Opportunity in stage "qualify" against that partner seeded from the request
+    (name/estimated_value/expected_close_date), stamps lead.opportunity_id and
+    status="converted", commits and returns the opportunity.
     """
     from app.modules.crumb.models import Opportunity
 
@@ -182,6 +184,10 @@ async def convert_to_opportunity(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Lead must be linked to a customer before it can be converted.",
         )
+    # Re-resolve the customer (404 if the partner is gone or no longer is_customer),
+    # matching create_opportunity / create_quote so every opportunity path enforces
+    # the AC6 is_customer invariant rather than trusting the link-time check.
+    await _resolve_customer(db, lead.partner_id)
 
     opp = Opportunity(
         name=data.name,

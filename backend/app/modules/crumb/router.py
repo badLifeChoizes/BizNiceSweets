@@ -336,8 +336,10 @@ async def spawn_quote_endpoint(
     db: AsyncSession = Depends(get_db),
 ) -> QuoteRead:
     """
-    Spawn a draft quote from a won opportunity. Writes an opportunity.quote_spawned
-    audit row (target: the opportunity) after the commit.
+    Spawn a draft quote from a won opportunity. Writes two audit rows after the
+    commit: an opportunity.quote_spawned row (target: the opportunity) and a
+    quote.created row (target: the new quote) so the spawned quote carries the same
+    attributable creation record as a directly-created quote (no audit asymmetry).
     """
     quote = await crumb_service.spawn_quote(db, opp_id, data, str(current_user.id))
     await write_audit(
@@ -347,6 +349,14 @@ async def spawn_quote_endpoint(
         target_type="crumb_opportunity",
         target_id=opp_id,
         detail=f"Opportunity {opp_id} spawned quote {quote.quote_number}",
+    )
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="quote.created",
+        target_type="crumb_quote",
+        target_id=quote.id,
+        detail=f"Quote created: {quote.quote_number} (spawned from opportunity {opp_id})",
     )
     return quote
 

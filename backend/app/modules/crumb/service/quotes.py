@@ -101,6 +101,11 @@ async def _resolve_line_amounts(
     """
     Resolve (unit_price, markup_pct) for one quote line per the pricing rules.
 
+    Identity rule (D-V3-14): a line must label itself — a part-less line always
+    requires a non-empty description, regardless of whether a price was supplied.
+    This is enforced FIRST so a caller cannot slip an unlabeled, part-less line
+    onto a customer-facing quote via the explicit-price branch below.
+
     Priority:
       1. Explicit unit_price → persisted verbatim (a user override); markup_pct
          passes through unchanged (may be None).
@@ -111,6 +116,12 @@ async def _resolve_line_amounts(
       3. Free-text (no part, no price) → requires a description (422) and then an
          explicit unit_price (422).
     """
+    if line.plum_part_id is None and not line.description:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A free-text quote line (no PLUM part) requires a description.",
+        )
+
     if line.unit_price is not None:
         return line.unit_price, line.markup_pct
 
@@ -127,12 +138,8 @@ async def _resolve_line_amounts(
         unit_price = snapshot * (Decimal("1") + markup / Decimal("100"))
         return unit_price, markup
 
-    # Free-text line: requires a description, then an explicit unit_price.
-    if not line.description:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="A free-text quote line (no PLUM part) requires a description.",
-        )
+    # Free-text line with a description but no price: the description was already
+    # enforced by the identity rule above, so only the missing price remains.
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         detail="A free-text quote line (no PLUM part) requires an explicit unit_price.",
@@ -178,6 +185,18 @@ async def create_quote(db: AsyncSession, data: "QuoteCreate", actor_id: str) -> 
     from app.modules.crumb.models import Quote, QuoteLine
 
     await _resolve_customer(db, data.partner_id)
+
+    # Validate an optional opportunity link up front (404) so a bad opportunity_id
+    # surfaces as a clean 4xx rather than a DB FK IntegrityError that the
+    # quote_number retry below would misread and re-raise as a 500.
+    if data.opportunity_id is not None:
+        from app.modules.crumb.models import Opportunity
+
+        if await db.get(Opportunity, data.opportunity_id) is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Opportunity '{data.opportunity_id}' not found",
+            )
 
     # Resolve line pricing up front (independent of the header id) so a
     # quote_number collision retry does not re-run the PLUM cost lookups.
