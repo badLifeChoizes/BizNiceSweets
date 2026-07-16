@@ -85,6 +85,10 @@ at milestone close, never hand-edit it. 64 decisions.
 - **D-P10-7:** A component whose PLUM part has **no linked InventoryItem** (nullable `plum_part_id`) makes a WO unbuildable → reject at WO **release** (4xx), so an unissuable WO can't reach In-Progress
 - **D-P10-8:** Chore branch and then `feature-mousse-work-orders` branch both cut off the **verified 09c tip** (tag `zj/good-09c-ap-aging-financial-statements`) — Phase 9 remains unmerged and the MOUSSE line stacks on it, per the per-phase branch precedent
 - **D-P10-9:** WO completion requires every component fully issued (issued ≥ qty_required) UNLESS an explicit **manual override** flag is passed (audited); and the FSM adds an **On Hold** state — In Progress ⇄ On Hold — so a build can be paused mid-flight and resumed (owner requirement at plan handoff)
+- **D-M2-1:** v2.0 milestone closed — DoD audited goal-backward against the running stack (13/13 live verify scripts, TB nets zero, subledgers tie); verdict clean bar one minor gap (G1, P&L empty-from 422) fixed at close (`2578ca5`); tagged `v2.0` at the `feature-mousse-work-orders` HEAD, which is still unmerged to master (the master-merge is the standing `/zj:ship` debt, per D-M1-1)
+- **D-M2-2:** Human click-through UAT (`.zj/UAT-v2.0.md` + owed v1.0 round-2) deferred to a tracked post-tag BACKLOG task rather than blocking the tag — backend behavior is live-proven and the UI is wired + contract-checked by the milestone audit (D-P7-5 precedent); UAT becomes a pre-public-release gate
+- **D-M2-3:** Version = `v2.0` (matches the roadmap milestone name "v2.0 Operations"; a major operations increment over v1.0)
+- **D-M2-4:** Next milestone = Customer & logistics — CRUMB (CRM) + GELATO (WMS) + SYERP-13 (accounts receivable, split here at D-P9-4) — chosen over the FLAN port and PLUM-advanced
 
 ## Product & Architecture
 
@@ -538,3 +542,33 @@ auto-post-only), and UI is folded into the plan with no separate DESIGN.md (D-P8
   mid-flight and return to it. *Rejected:* silently allowing under-issued completion (recommendation
   (a) at handoff — owner tightened it to require an override); hard-blocking under-issued completion
   with no escape (rejects legitimate under-builds/substitutions).
+
+## v2.0 milestone close (2026-07-16)
+
+- **D-M2-1 (manager):** **v2.0 "Operations" closed.** The definition of done — *"Can track
+  inventory, raise purchase orders, keep real books (double-entry GL with AP + financial
+  statements), and execute work orders that consume PLUM BOMs and inventory"* — was audited
+  goal-backward against the running stack (`.zj/MILESTONE-v2.0-AUDIT.md`): all four clauses traced
+  end-to-end backend→router→schema→frontend, 13/13 live `verify_*` scripts exit 0, whole-DB trial
+  balance nets zero, control accounts tie to their subledgers, frontend build + 90 Vitest green.
+  Verdict clean but for one minor gap. *Consequence:* v2.0 is a real, integrated release, not just
+  a phase-list completion. Tagged `v2.0` at the milestone HEAD (see D-M2-3).
+- **D-M2-1a (manager):** **Gap G1 fixed at close, not deferred** (mirrors D-M1-2). The audit's one
+  finding — the Profit & Loss report fired with an empty `from` date on first tab open and 422'd —
+  was fixed in `2578ca5` (default `from` to year-start, pinned by a new `FinancialReports.test.tsx`
+  case). Cosmetic first-render error, but cheap to fix and it strengthens the tagged tree.
+- **D-M2-2 (owner):** **Human click-through UAT deferred to a tracked post-tag task**, not a tag
+  blocker. `.zj/UAT-v2.0.md` (14 UI checks) and the owed v1.0 round-2 checks never ran. All backend
+  behavior is live-proven (13/13 verify scripts) and the milestone audit confirmed every route is
+  mounted, in-nav, and contract-aligned with its backend schema — so the tag rests on backend
+  proof + wired-UI audit (the D-P7-5 precedent that backend proof substitutes for the click-through).
+  *Consequence:* the UAT becomes a **pre-public-release gate**, homed as a BACKLOG item. *Rejected:*
+  running the 14-check UAT now (blocks the close); waiving it entirely (loses the release-gate).
+- **D-M2-3 (owner):** **Version = `v2.0`**, applied at the `feature-mousse-work-orders` HEAD. As with
+  v1.0 (D-M1-1), that tree is the working tip of an **unmerged** branch — master is 98 commits behind
+  and carries none of Phases 9–10. The master-merge remains the standing `/zj:ship` debt (D-P7-3 /
+  D-P8-11); the tag preserves the SHAs a later fast-forward will keep.
+- **D-M2-4 (owner):** **Next milestone = Customer & logistics** — CRUMB (CRM), GELATO (WMS), and
+  **SYERP-13 accounts receivable** (split out of Phase 9 at D-P9-4, so AR invoices flow from CRUMB
+  sales orders). Chosen over the FLAN port and PLUM-advanced. *Why:* completes the sell-side +
+  fulfillment loop on top of the now-complete operations core; AR was explicitly parked here.

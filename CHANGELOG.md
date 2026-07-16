@@ -8,7 +8,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Only `fe
 `fix:` commits appear here; `docs:`/`chore:`/`test:` are omitted.
 
 
-## [Unreleased] — v2.0 Operations (in progress)
+## [v2.0] — Operations — 2026-07-16
+
+Definition of done: *"Can track inventory, raise purchase orders, keep real books (double-entry
+GL with AP + financial statements), and execute work orders that consume PLUM BOMs and
+inventory."* All four clauses audited goal-backward against the running stack
+(`.zj/MILESTONE-v2.0-AUDIT.md`): 13/13 live verify scripts exit 0, trial balance nets zero, all
+control accounts tie to their subledgers, frontend build + 90 Vitest green. Human click-through
+UAT (`.zj/UAT-v2.0.md`) deferred post-tag by owner decision (D-M2-2).
 
 
 ### Phase 8 — SYERP inventory & purchasing
@@ -44,7 +51,112 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Only `fe
 - reject non-existent plum_part_id with 4xx, not 500 (`554c3fe`)
 
 
-## [v1.0] — Foundation + PLUM — *pending tag*
+### Phase 9a — GL posting engine + receipt auto-post (SYERP-12 AC1/2/3/8/9)
+
+
+**Added**
+
+- seed GR/IR clearing account 2150 in standard CoA (`8b97fc2`)
+- pure Decimal journal-entry balance helpers (`9844b3e`)
+- JournalEntry and JournalLine GL models (`f570f68`)
+- GL journal-entry and account-register schemas (`5679510`)
+- 0009 GL journal migration (`343b334`)
+- GL posting/reversal/register services (`fd9adf1`)
+- GL journal-entry endpoints with RBAC + audit (`dee9820`)
+- auto-post balanced GL entry (Dr 1130 / Cr 2150) on PO receipt (`0d9eb98`)
+- manual journal entry list + post dialog (`38d65b1`)
+- reverse action + Account Register screen (`c2bde3d`)
+- GL journal + account register routes and nav tabs (`706432c`)
+
+
+**Fixed**
+
+- GL Read-schema id fields are uuid str, not int (`89daadc`)
+- verify-loop majors: zero-cost receipt regression, double-reversal guard (`c905a6b`)
+
+
+### Phase 9b — AP bills, PO match & payments (SYERP-12 AC4/AC5)
+
+
+**Added**
+
+- pure Decimal AP helpers + unit tests (`c1b431b`)
+- seed 1111 Bank – Checking in standard CoA (`5502445`)
+- Bill, BillLine, Payment, PaymentAllocation models (`1697973`)
+- AP bill/payment Pydantic schemas (`ff39967`)
+- 0010 AP bills/payments migration (`b91ed73`)
+- unbilled-receipts query + create bill with PO-line match (`52d9a83`)
+- post_bill balanced JE + Draft→Posted→Paid FSM (`3b8eb33`)
+- record_payment JE + allocations + overpayment guard (`be0a774`)
+- AP bill endpoints — unbilled/create/list/get/post (`7ef302b`)
+- AP payment endpoints — record + list (`e7bb9b2`)
+- AP bills list + create/match dialog (`4e25ab2`)
+- bill detail with post + pay actions (`bb57463`)
+- AP Bills routes + nav tab (`72cfd82`)
+
+
+**Fixed**
+
+- reject duplicate po_line_id in one bill payload (`13ca4cd`)
+- add list_payments read for GET /ap/payments (`99ef164`)
+- row-lock AP guards against concurrent double-bill/overpay (`380c73b`)
+
+
+### Phase 9c — AP aging + financial statements (SYERP-12 AC6/AC7)
+
+
+**Added**
+
+- Bill.bill_date column (invoice date for AP aging) (`f6b9635`)
+- migration 0011 — syerp_bill.bill_date NOT NULL (`cab8531`)
+- wire bill_date through create_bill and bill JE (`729ec00`)
+- report read schemas (AP aging, TB, P&L, balance sheet) (`69e4724`)
+- AP aging report with 2110 subledger tie-out (`c24c9f6`)
+- trial balance report (nets debits == credits) (`7aecf7c`)
+- profit & loss report over a date range (`1d38ddb`)
+- balance sheet with computed current-year net income (`6f79047`)
+- read-only report endpoints (AP aging, TB, P&L, BS) (`a9cae54`)
+- AP aging screen with per-vendor buckets + 2110 tie-out (`c6b47d3`)
+- financial reports page (trial balance, P&L, balance sheet) (`8994f5c`)
+- report routes + nav; bill-date on the create dialog (`48c8453`)
+
+
+### Phase 10 — MOUSSE manufacturing execution core (materials-only, MOUSSE-01)
+
+
+**Added**
+
+- seed mousse:read/write permissions (`0ce67ae`)
+- WorkOrder ORM models (`162c463`)
+- work-order Pydantic schemas (`f94c5a9`)
+- alembic 0012 for work-order tables (`dd40197`)
+- WO create, number gen, list/get, detail (`09c5a64`)
+- WO FSM, release BOM snapshot, cancel/hold/resume (`c84bf2b`)
+- issue components — Dr 1140 WIP / Cr 1130 at moving-avg (`21ad021`)
+- complete WO — WIP clears to zero, FG receipt Dr 1130 / Cr 1140 (`83b4d0e`)
+- work-order router with RBAC and audit (`1f75d62`)
+- register module and mount work-order router (`2e04ffc`)
+- work-order list, hooks, route, and nav wiring (`5a75966`)
+- work-order create dialog (`67091c0`)
+- work-order detail — snapshot lines, issue, hold/resume (`3d93be4`)
+- work-order complete action with override-incomplete guard (`c3239a6`)
+
+
+**Fixed**
+
+- route WO completion residual to 5190 rounding account so 1130 ties to subledger (`5cffeeb`)
+- re-export PO_TRANSITIONS/BILL_TRANSITIONS from split service pkg (`3d59068`)
+
+
+### Milestone close — v2.0 audit fixes
+
+
+**Fixed**
+
+- default P&L From date to year-start so the report never 422s on first open (`2578ca5`)
+
+
+## [v1.0] — Foundation + PLUM — 2026-07-11 (tag `v1.0`)
 
 Definition of done: *"Can deploy it, log in, manage vendors/customers, and design parts with
 multi-level BOMs and cost roll-up."* Proven at the API layer by the milestone audit

@@ -3,6 +3,71 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Milestone v2.0 — Operations (closed 2026-07-16)
+
+Roll-up of Phases 8, 9a, 9b, 9c, 10 (SYERP inventory/purchasing + GL/AP/reporting + MOUSSE
+work orders). Distilled from the phase retros plus the milestone audit
+(`.zj/MILESTONE-v2.0-AUDIT.md`), which traced all four DoD clauses end-to-end and found one
+minor gap (G1). The milestone's spine was double-entry accounting, and its lessons cluster there.
+
+### Repeat these
+
+- **Assert a GL control account directly against its subledger — never against zero.** This was
+  the milestone's hardest-won lesson (Phase 10, the 1130 drift), but it generalizes across the
+  whole GL surface: every crux invariant this milestone shipped was a *zero-sum identity* — WIP
+  clears to zero, GR/IR clears to zero, trial balance nets zero, balance sheet balances — and **not
+  one of them can detect a control-account/subledger divergence**, because a mismatch preserves
+  Σdr==Σcr by construction. The reviewer caught a real 1130-vs-perpetual-inventory drift that 34
+  green assertions were blind to. Durable rule: to protect 1130/2110/2150…, assert
+  `control_balance == Σ(subledger)` Decimal-exact; "the clearing account cleared" and "the books
+  balance" are both true while the control account silently lies. (09c saw the seed of this — an
+  `in_balance` identity is tautological; Phase 10 was the same bug one level out.)
+- **Plan the row lock AND a forced-interleave verify in the same task breath as any invariant-
+  guarding mutation.** The read-check-write concurrency major was caught post-hoc by the reviewer in
+  Phases 7, 9a, and 9b — four times the sequential verify script was structurally blind to it. 9b
+  codified the counter-pattern (`SELECT … FOR UPDATE` in sorted-id order + an `asyncio.gather`/
+  `Barrier` two-request scenario). **Phase 10 was the first phase to add a live invariant-guarding
+  mutation and have the reviewer find *nothing* on that axis** — because the lock and the
+  forced-interleave scenario were planned in from the start and spot-checked red-without / green-with.
+  The counter-pattern works; apply it pre-emptively, not after the fourth catch.
+- **HTTP-level `verify_*_api.py` from the start.** 9a learned the hard way that a service-level verify
+  script cannot prove router behavior (audit rows, 401/403 RBAC); 9b/9c/10 each shipped an API-level
+  verify script from the plan. Now settled practice — router concerns get their own live-HTTP gate.
+- **Standalone live-DB `verify_*.py` are the real integration gate** while the pytest harness stays
+  down (D-P7-4). 13 scripts / ~200 assertions proved the entire v2.0 DoD backend; the milestone audit
+  re-ran them clean. They carried regression protection across five phases with no automated suite.
+
+### Never do these again
+
+- **Never let a mechanical refactor's self-check reuse the transform's own node filter.** The
+  D-P10-4 AST split of `syerp/service.py` filtered on `ast.Assign` and silently dropped two
+  `ast.AnnAssign` maps (`PO_TRANSITIONS`/`BILL_TRANSITIONS`); its parity check shared the same filter
+  and was blind to its own omission. Only pytest *collection* (an actual import) surfaced it — the
+  `verify_*` scripts never import those names. Prove import-surface completeness by importing every
+  public name, not by behavioral scripts that touch a subset.
+- **Never port a PLAN's "verified" reference facts as fact.** Phase 10's plan Context asserted `Base`
+  lived in `app.core.db` (it's `app.core.base`) and `syerp_inventory_txn.id` was an int PK (it's
+  `String(36)`). Both wrong; the engineer caught them against source. Same family as v1.0's "never
+  trust a doc's file path" — re-confirm import paths and column types at implementation.
+
+### Process notes
+
+- **A recurring reviewer-caught major is a planning gap, not bad luck — codify the counter-pattern
+  the second time you see it, not the fourth.** The concurrency race cost a fix-loop in 7, 9a, and 9b
+  before 9b's rule pre-empted it in 10. Three of those four were avoidable had the pattern been
+  written down after the second occurrence.
+- **The master-merge debt is now two milestones deep.** v1.0 and v2.0 were both tagged on the working
+  tip of an *unmerged* feature branch (D-M1-1, D-M2-3); each phase cut off the previous unclosed tip
+  (D-P8-11 and successors). Master is 98 commits behind and carries none of Phases 9–10. `/zj:ship`
+  owes the reconciliation; deferring it per-phase compounds it per-milestone.
+- **The p1 infra debt rode the whole milestone unpaid** — no CI, the live-DB pytest harness still
+  broken, both lint gates still non-functional. Correctness rested entirely on `verify_*` + Vitest for
+  five phases. It held, but the debt is now two milestones old and was deferred again at close in
+  favor of Customer & logistics (D-M2-4).
+- **The milestone audit earned its cost again** (as in v1.0): goal-backward from the DoD found G1 — a
+  first-render report error the phase verify never exercised — that all five phase verifications
+  missed. Cheap insurance; run it every milestone.
+
 ## Phase 10 — MOUSSE work-order core, materials-only (verified 2026-07-16)
 
 ### Surprises (assumptions that were wrong → corrected truth)

@@ -56,6 +56,15 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   and cite `.zj/codebase/MAP.md`. (Any remaining Windows-path references elsewhere are out of
   that task's scope.)
 
+- [ ] **[task] [p1] Human click-through UAT for v2.0 operations** (deferred at the v2.0 milestone
+  close, D-M2-2) — the 14-check `.zj/UAT-v2.0.md` (SYERP inventory + purchasing UI flows) and the
+  owed v1.0 round-2 checks never ran. All backend behavior is live-proven (13/13 verify scripts) and
+  the milestone audit confirmed every route is mounted, in-nav, and contract-aligned, so the tag
+  rests on backend proof + wired-UI audit (D-P7-5 precedent). This is now a **pre-public-release
+  gate**: run it against the Vite dev server (`localhost:5173`) with the Podman stack up before any
+  public open-source release, and extend it with GL/AP/reports/MOUSSE UI flows (Phases 9–10 shipped
+  no UAT checklist of their own). Record results in `.zj/UAT-v2.0.md`.
+
 ## p2 — architecture & docs
 
 - [ ] **Split `backend/app/modules/plum/service.py` (~3,000 lines)** before MOUSSE/CRISP copy
