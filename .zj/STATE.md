@@ -1,5 +1,5 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-16 (**Milestone v2.0 "Operations" CLOSED + tagged `v2.0`**. Next milestone = v3.0 Customer & logistics. Next action: `/zj:ship` then `/zj:spec`.)
+Updated: 2026-07-16 (**v2.0 SHIPPED to master** — PR #2 merged via fast-forward, `v2.0` tag pushed, master-merge debt D-M2-3 resolved. Next action: `/zj:spec` for v3.0 Customer & logistics.)
 
 ## Position
 
@@ -16,20 +16,24 @@ Updated: 2026-07-16 (**Milestone v2.0 "Operations" CLOSED + tagged `v2.0`**. Nex
 
 - **Project:** BizNiceSweets
 - **Milestone:** v2.0 Operations — **CLOSED + tagged `v2.0`**. v1.0 closed + tagged 2026-07-11.
-- **Branch:** `feature-mousse-work-orders` — carries Phases 9a→10 + the v2.0 close. The `v2.0` tag
-  sits at its HEAD.
+- **Branch:** `feature-mousse-work-orders` — carried Phases 9a→10 + the v2.0 close; now **merged to
+  `master` (fast-forward, `aa497b1..35f9b66`)**. Safe to delete locally + on origin. The `v2.0` tag
+  (`d6c91cb`) is preserved and reachable from master; a `chore:` gitignore commit (`35f9b66`) sits
+  one above it.
 - **Last update:** 2026-07-16
-- **Next action:** `/zj:ship` (resolve the 2-milestone-deep master-merge debt, D-M2-3), then
-  `/zj:spec` to sharpen the v3.0 "Customer & logistics" DoD into clauses and expand the coarse FRs
-  (CRUMB-01, GELATO-01, SYERP-13/AR) before planning Phase 1 of v3.0.
+- **Next action:** `/zj:spec` to sharpen the v3.0 "Customer & logistics" DoD into clauses and expand
+  the coarse FRs (CRUMB-01, GELATO-01, SYERP-13/AR) before planning Phase 1 of v3.0.
 
 ## Next action (detail)
 
-**`/zj:ship`** — resolve the master-merge debt (D-M2-3, now two milestones deep): `master` is 98
-commits behind and carries none of Phases 9–10; both `v1.0` and `v2.0` are tagged on the working tip
-of an unmerged feature branch. Then **`/zj:spec`** to sharpen the v3.0 "Customer & logistics"
-definition of done into clauses and expand the coarse FRs (CRUMB-01, GELATO-01, SYERP-13/AR) before
-planning Phase 1 of v3.0.
+**`/zj:spec`** — sharpen the v3.0 "Customer & logistics" definition of done into clauses and expand
+the coarse FRs (CRUMB-01, GELATO-01, SYERP-13/AR) before planning Phase 1 of v3.0. The v2.0
+milestone is fully closed and shipped; `master` now carries all of Phases 8–10.
+
+**Ship record (2026-07-16):** PR **#2** (`feature-mousse-work-orders` → `master`) opened and merged
+via **fast-forward** — 104 milestone commits + the gitignore hygiene commit. Mirrors the v1.0 ship
+(PR #1). `v2.0` tag pushed to origin. **D-M2-3 (master-merge debt) resolved.** Local + origin master
+at `35f9b66`.
 
 Alternative if the owner wants to pay down infra debt first: the BACKLOG **p1** items (CI pipeline,
 live-DB pytest harness repair, both lint gates) are now two milestones old — a `/zj:ideate` on
@@ -42,14 +46,15 @@ whether v3.0 leads with a debt-paydown phase is reasonable.
   checklist with GL/AP/reports/MOUSSE UI flows before running it.
 - **BACKLOG p1 infra debt** — no CI, live-DB pytest harness broken (100 skips, D-P7-4), both lint
   gates non-functional. Correctness rests on `verify_*` + Vitest. Carried into v3.0.
-- **`/zj:ship` master-merge** (D-M2-3) — the 98-commit-behind master.
+- **`/zj:ship` master-merge** (D-M2-3) — **RESOLVED 2026-07-16** (PR #2, fast-forward to `35f9b66`).
 
 ## Standing context
 
 - **Stack for verification:** `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`;
   run verify scripts in-container: `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/<name>.py`.
   Vite dev server for UI/UAT at `http://localhost:5173`.
-- **v2.0 tag placement (D-M2-3, mirrors D-M1-1):** the `v2.0` tag's tree is an unmerged branch tip —
-  recorded, not accidental; a later fast-forward preserves the SHA.
+- **v2.0 tag placement (D-M2-3, mirrors D-M1-1):** the `v2.0` tag (`d6c91cb`) was applied on the
+  then-unmerged branch tip; the fast-forward ship (PR #2) preserved the SHA and it is now reachable
+  from `master`. Debt cleared.
 - **Adoption note:** adopted from GSD 2026-07-04; prior systems archived under `archive/`. `.zj/` is
   self-contained.
