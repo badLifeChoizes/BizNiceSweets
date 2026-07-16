@@ -37,6 +37,8 @@ _PERMISSIONS: list[tuple[str, str]] = [
     ("plum:write", "Write access to PLUM"),
     ("mousse:read", "Read access to MOUSSE (manufacturing execution)"),
     ("mousse:write", "Write access to MOUSSE"),
+    ("crumb:read", "Read access to CRUMB (CRM & sales pipeline)"),
+    ("crumb:write", "Write access to CRUMB"),
     ("settings:manage", "Configure system settings and enable/disable modules"),
 ]
 
@@ -48,6 +50,8 @@ _USER_ROLE_PERMS: set[str] = {
     "plum:write",
     "mousse:read",
     "mousse:write",
+    "crumb:read",
+    "crumb:write",
 }
 
 
