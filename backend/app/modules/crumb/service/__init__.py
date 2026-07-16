@@ -21,12 +21,30 @@ from app.modules.crumb.service._common import (
 # Per-entity re-exports go here as tasks 6–9 land:
 #   from app.modules.crumb.service.leads import ...
 #   from app.modules.crumb.service.opportunities import ...
-#   from app.modules.crumb.service.quotes import ...
 #   from app.modules.crumb.service.interactions import ...
+from app.modules.crumb.service.quotes import (
+    add_line,
+    advance_quote_status,
+    create_quote,
+    delete_line,
+    generate_quote_number,
+    get_quote_detail,
+    list_quotes,
+    update_line,
+)
 
 __all__ = [
     "DEFAULT_MARKUP_PCT",
     "QUOTE_TRANSITIONS",
     "STAGE_TRANSITIONS",
     "_resolve_customer",
+    # quotes
+    "add_line",
+    "advance_quote_status",
+    "create_quote",
+    "delete_line",
+    "generate_quote_number",
+    "get_quote_detail",
+    "list_quotes",
+    "update_line",
 ]
