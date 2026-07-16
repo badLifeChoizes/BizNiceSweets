@@ -20,7 +20,10 @@ from app.modules.crumb.service._common import (
 
 # Per-entity re-exports go here as tasks 6–9 land:
 #   from app.modules.crumb.service.opportunities import ...
-#   from app.modules.crumb.service.interactions import ...
+from app.modules.crumb.service.interactions import (
+    create_interaction,
+    list_customer_timeline,
+)
 from app.modules.crumb.service.leads import (
     archive_lead,
     convert_to_opportunity,
@@ -46,6 +49,9 @@ __all__ = [
     "QUOTE_TRANSITIONS",
     "STAGE_TRANSITIONS",
     "_resolve_customer",
+    # interactions
+    "create_interaction",
+    "list_customer_timeline",
     # leads
     "archive_lead",
     "convert_to_opportunity",
