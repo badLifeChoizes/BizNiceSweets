@@ -1,6 +1,6 @@
 # Verification: Phase 10 — MOUSSE manufacturing execution core (materials-only)
 Date: 2026-07-14 | Commits: d9da607..c263d90 (HEAD c263d90, branch feature-mousse-work-orders)
-Verdict: **PASS** (after fix loop — see "Fix loop" section at the bottom). Every functional success criterion (SC1–SC7) PASSES empirically; the phase GOAL is met: a shop can create → release → issue → complete a WO, WIP (1140) clears to zero Decimal-exactly. The initial pass found **GAPS FOUND** — one correctness major surfaced by the reviewer (1130↔subledger drift) plus documentation/source-of-truth staleness (SRD, MAP, requirements-progress); **all were closed in the fix loop** (code fix `5cffeeb` + doc updates), the full regression was re-run 13/13 green, and the verdict is now PASS.
+Verdict: PASS (after fix loop — see "Fix loop" section at the bottom). Every functional success criterion (SC1–SC7) PASSES empirically; the phase GOAL is met: a shop can create → release → issue → complete a WO, WIP (1140) clears to zero Decimal-exactly. The initial pass found **GAPS FOUND** — one correctness major surfaced by the reviewer (1130↔subledger drift) plus documentation/source-of-truth staleness (SRD, MAP, requirements-progress); **all were closed in the fix loop** (code fix `5cffeeb` + doc updates), the full regression was re-run 13/13 green, and the verdict is now PASS.
 
 Original-pass verdict (pre-fix, for the record): **GAPS FOUND** — SC1–SC7 all passed empirically; gaps were the reviewer's 1130↔subledger finding and doc staleness.
 
