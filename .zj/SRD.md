@@ -532,10 +532,15 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Verification method:** live-Postgres `backend/scripts/verify_mousse.py` (34 assertions incl. the WIP-clears + 1130-subledger-tie + concurrency crux) and `verify_mousse_api.py` (HTTP RBAC + audit); frontend Vitest; full regression suite (13/13 verify_* exit 0). Verified at `/zj:verify 10` (2026-07-16).
 - **Verified:** 5cffeeb (AC1–AC7, materials-only slice; deferred clauses remain planned)
 
-## CRUMB-01: CRM core & sales orders  [traces: PRD-8]  **Status: planned (v3.0 — Phase 11)**
+## CRUMB-01: CRM core & sales orders  [traces: PRD-8]  **Status: partially verified (v3.0 — Phase 11a done; AC4 + AC3-tail pending Phase 11b)**
 > New module `backend/app/modules/crumb/` + `frontend/src/routes/crumb/`; RBAC codes
 > `crumb:read`/`crumb:write` (mirror syerp, D-P10-6). References SYERP customers and PLUM parts.
 > Full lean chain, no email/analytics (D-V3-5). See the v3.0 scope preamble (D-V3-1..9).
+- **Verified (Phase 11a, AC1/2/3−/5/6/7):** efcf2e6 (2026-07-16 — leads → opportunities (stage FSM)
+  → quotes (PLUM-derived line pricing + status FSM) + append-only communication log; server-enforced
+  FSMs, router-layer audit, `crumb:read`/`crumb:write` RBAC proven at HTTP level. verify_crumb 22/22
+  + verify_crumb_api 54/54 + 13/13 regression + FE Vitest 4/4 + build. **AC4 (sales orders +
+  soft-reservation) and the AC3 accepted-quote→SO tail remain planned for Phase 11b**, D-V3-10.)
 - **Statement:** The system shall support the sell-side pipeline against SYERP customers — **leads →
   opportunities (pipeline stages) → quotes → sales orders** — plus a **customer communication log**,
   where a confirmed sales order **soft-reserves inventory** and feeds GELATO fulfillment (GELATO-01)
