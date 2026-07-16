@@ -18,8 +18,6 @@ from app.modules.crumb.service._common import (
     _resolve_customer,
 )
 
-# Per-entity re-exports go here as tasks 6–9 land:
-#   from app.modules.crumb.service.opportunities import ...
 from app.modules.crumb.service.interactions import (
     create_interaction,
     list_customer_timeline,
@@ -32,6 +30,15 @@ from app.modules.crumb.service.leads import (
     link_or_create_customer,
     list_leads,
     update_lead,
+)
+from app.modules.crumb.service.opportunities import (
+    advance_stage,
+    create_opportunity,
+    get_opportunity,
+    list_opportunities,
+    list_pipeline,
+    spawn_quote,
+    update_opportunity,
 )
 from app.modules.crumb.service.quotes import (
     add_line,
@@ -60,6 +67,14 @@ __all__ = [
     "link_or_create_customer",
     "list_leads",
     "update_lead",
+    # opportunities
+    "advance_stage",
+    "create_opportunity",
+    "get_opportunity",
+    "list_opportunities",
+    "list_pipeline",
+    "spawn_quote",
+    "update_opportunity",
     # quotes
     "add_line",
     "advance_quote_status",
