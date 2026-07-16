@@ -1,5 +1,8 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-12 (Phase 9c retro — balance-sheet fiscal-close-gated defects → p2,
+Updated: 2026-07-16 (Phase 10 retro — MOUSSE now writes the inventory ledger so the p2
+inventory-ledger race item's "revisit when MOUSSE writes this" trigger is live; zero-cost
+lone-component issue → p3; 422 sweep + placeholder-dir prune now include mousse)
+Prior: 2026-07-12 (Phase 9c retro — balance-sheet fiscal-close-gated defects → p2,
 backdated-payment tie-out edge → p3, syerp `service.py` now ~3,700 lines in the split item)
 Prior: 2026-07-12 (Phase 9b retro — 2 minor AP correctness edge-cases → p2, stale AP FE
 types → p3, FOR UPDATE template cross-referenced into the inventory-ledger race item)
@@ -87,6 +90,13 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `SELECT … FOR UPDATE` / serialized posting then. **Template now exists (Phase 9b):**
   `create_bill` / `record_payment` in `syerp/service.py` lock the contended rows up-front in
   sorted-id order (deadlock-safe) before the guard read — copy that shape when locking this ledger.
+  **Trigger now live (Phase 10 review):** MOUSSE `issue_components` writes this ledger and locks
+  only issue-vs-issue (its own `InventoryItem` rows FOR UPDATE) — a concurrent MOUSSE issue and a
+  SYERP `post_adjustment`/`post_receipt` on the same item/location can both pass their floor guards
+  and drive derived on-hand negative, because the SYERP adjust/receive paths still take no row lock.
+  The narrow phase invariant ("two concurrent issues can't overdraw") holds; the ledger-wide floor
+  guarantee does not. Fix is the shared lock across every floor-guarded path (issue/adjust/receive/
+  transfer), not a MOUSSE-only lock. Still accepted-risk single-shop.
 - [ ] **Alembic autogenerate never exits clean** (Phase 9a verify, 2026-07-11) — `alembic check`
   reports spurious drift on **7 pre-existing unnamed `unique=True` constraints** (plum_part.part_number,
   uq_plum_part_one_released, syerp_gl_account/inventory_item/partner.code, purchase_order.po_number,
@@ -152,6 +162,14 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **MOUSSE zero-cost lone-component issue is unpostable** (Phase 10 review Q2 / PLAN `## Noticed`,
+  minor UX edge) — issuing ONLY a component whose `moving_avg_cost` is 0 makes `total_value == 0`, and
+  the balanced-JE guard rejects an all-zero JE 422, so the component's stock is never consumed and it
+  stays under-issued — forcing an audited `override_incomplete` at completion for a genuinely
+  free/nominal part. Documented intentional (a zero JE has no GL meaning). Workaround: issue it
+  alongside a non-zero component. Fix only if a real workflow hits it — e.g. skip the GL leg (still
+  post the InventoryTxn) when a line values to zero, or allow a zero-value issue to consume stock
+  without a JE. Revisit if it confuses a real operator.
 - [ ] **Linux-native stack launcher** — only launcher is PowerShell (`scripts/uat.ps1`);
   add a bash equivalent or document the manual compose commands prominently.
 - [ ] **Root placeholder suite dirs** (`syerp/`, `crumb/`, `mousse/`, `crisp/`, `gelato/`
@@ -187,5 +205,6 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   mapper-driven planning pass.
 - [ ] **Starlette 422 deprecation sweep** (Phase 8) — `HTTP_422_UNPROCESSABLE_ENTITY` is
   deprecated for `HTTP_422_UNPROCESSABLE_CONTENT`; fires from `post_receipt` / `post_adjustment` /
-  `post_transfer` / `receive_line` in `backend/app/modules/syerp/service.py` and likely older
-  modules. Cosmetic; one mechanical sweep before it becomes log noise.
+  `post_transfer` / `receive_line` in `backend/app/modules/syerp/service.py`, now also
+  `backend/app/modules/mousse/service.py` (which matched the SYERP convention, Phase 10), and likely
+  older modules. Cosmetic; one mechanical sweep before it becomes log noise.

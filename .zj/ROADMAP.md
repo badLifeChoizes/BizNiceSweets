@@ -1,5 +1,6 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-13 (Phase 10 **planned** — MOUSSE materials-only WO core, 20 tasks, D-P10-1..9; next = the D-P10-4 syerp split chore, then `/zj:build 10`)
+Updated: 2026-07-16 (Phase 10 **done + retro'd** — MOUSSE WO core verified/tagged; learnings in LEARNINGS.md "Phase 10". **This closes the last v2.0 DoD clause — v2.0 is code-complete; next = `/zj:milestone` for v2.0** (carries the v2.0 human UAT + BACKLOG p1))
+Prior: 2026-07-13 (Phase 10 **planned** — MOUSSE materials-only WO core, 20 tasks, D-P10-1..9; next = the D-P10-4 syerp split chore, then `/zj:build 10`)
 Prior: 2026-07-12 (Phase 9c **done + retro'd** → next `/zj:plan 10` (MOUSSE); learnings in LEARNINGS.md "Phase 09c")
 Prior: 2026-07-12 (Phase 9c verified + tagged `zj/good-09c-ap-aging-financial-statements` → next `/zj:retro 09c`)
 Prior: 2026-07-12 (Phase 9b done + retro'd → next `/zj:plan 09c`; learnings in LEARNINGS.md "Phase 09b")
@@ -245,7 +246,7 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   net-income fiscal-year bounding, and the backdated-payment tie-out edge; syerp `service.py` size
   bumped in the split item (~3,700 lines). **Next: `/zj:plan 10` (MOUSSE).**
 
-### Phase 10: MOUSSE — manufacturing execution core (materials-only)  [verified 2026-07-16]
+### Phase 10: MOUSSE — manufacturing execution core (materials-only)  [done — verified + retro'd 2026-07-16]
 - **Goal:** Work orders that consume a PLUM BOM and SYERP inventory to produce a finished good,
   with material cost flowing through a **WIP clearing account (1140) that returns to zero** —
   closing the v2.0 DoD clause "execute work orders that consume PLUM BOMs and inventory."
@@ -283,6 +284,18 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   Rounding** account (D-P10-2 amended), so 1140 clears AND 1130 ties to the subledger, both exact;
   pinned by `verify_mousse.py` scenario D. The AST-split chore (`6293c96`+`3d59068`) reviewed clean.
   Artifacts: `.zj/phases/10-mousse-work-orders/{VERIFICATION,REVIEW}.md`.
+- **Retro 2026-07-16** (`/zj:retro 10`): learnings in `.zj/LEARNINGS.md` "Phase 10" — (1) "WIP clears
+  to zero" + "TB nets zero" are both Σdr==Σcr identities and neither can catch a GL-control-vs-subledger
+  drift; assert a control account directly against its subledger, never against zero (the 1130 major);
+  (2) one completion JE moved two accounts and only one had an invariant → enumerate an invariant per
+  account a mutation posts to; (3) the recurring concurrency-major was *pre-empted by design* for the
+  first time (lock + `asyncio.Barrier` verify planned in from the start, the 9b rule paying off);
+  (4) a mechanical AST refactor's parity check must not reuse the transform's own node filter, and
+  import-surface completeness is proven by import (pytest collection), not by behavioral verify scripts.
+  Deferrals homed: MOUSSE↔SYERP cross-path inventory-ledger lock gap → the existing BACKLOG p2
+  inventory-race item (trigger now live); zero-cost lone-component issue → p3; 422 sweep now includes
+  mousse. **This closes the last v2.0 DoD clause ("execute work orders that consume PLUM BOMs and
+  inventory") — v2.0 is code-complete; next is `/zj:milestone` for v2.0.**
 
 ---
 

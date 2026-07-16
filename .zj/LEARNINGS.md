@@ -1,7 +1,69 @@
 # LEARNINGS — BizNiceSweets
 
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
-section beats a padded one. Newest phase at the bottom.
+section beats a padded one. Newest phase at the top.
+
+## Phase 10 — MOUSSE work-order core, materials-only (verified 2026-07-16)
+
+### Surprises (assumptions that were wrong → corrected truth)
+- **"WIP clears to zero" + "trial balance nets zero" are BOTH Σdr==Σcr identities — neither can
+  detect a GL-control-vs-subledger divergence, and the phase's whole verify suite rested on exactly
+  those two.** `verify_mousse.py` proved the 1140 WIP account returned to its pre-WO balance
+  Decimal-exact and the TB still netted zero (34/34 green). The reviewer still found a MAJOR: on
+  completion the clearing JE debited 1130 by `accumulated_wip` while `post_receipt` capitalised only
+  `planned_qty × fg_unit_cost` into the inventory subledger, so on non-divisible WIP (100/3) the
+  1130 **control account** permanently drifted from the perpetual-inventory valuation (Σ on_hand ×
+  moving_avg) by a sub-quantum every WO. Both green assertions are blind to it *by construction*: a
+  clearing-account-returns-to-X check is a property of one account's own postings, and TB-nets-zero
+  is the universal Σdr==Σcr identity — **a control-account/subledger mismatch changes neither**.
+  This is the exact cousin of the 09c "`in_balance` is tautological" lesson, one level out: there,
+  the balance-sheet identity couldn't catch a composition bug; here, two *different* zero-sum
+  identities couldn't catch a subledger tie-out break. **Durable rule: to protect a GL control
+  account (1130/2110/2150…) you must assert it directly against its subledger — `control_balance ==
+  Σ(subledger)` — never against zero, never against the trial balance. "The clearing account
+  cleared" and "the books balance" are both true while the control account silently lies.** The fix
+  (`5cffeeb`, D-P10-2 amended) routes the residual to a seeded 5190 Inventory Rounding account so
+  1140 clears AND 1130 ties; `verify_mousse.py` scenario D now asserts `1130 debit == FG receipt
+  value` and `5190 == residual`.
+- **A single completion JE moved TWO ledger accounts and only ONE was invariant-checked.** The plan's
+  crux ("1140 returns to pre-WO exactly") framed completion as a one-account event; the same JE also
+  debits 1130, whose correctness is a *separate* invariant (tie to subledger, above) that no
+  assertion covered. **Rule: when one mutation posts to N accounts, enumerate an invariant per
+  account before writing the verify — the account the plan is focused on clearing is rarely the only
+  one that can be wrong.**
+
+### Patterns that worked (repeat these)
+- **The recurring concurrency-major class was pre-empted by design, not just absent — this is the
+  9b rule paying off, and the first proof it does.** Phases 7/9a/9b each had the reviewer catch a
+  read-check-write major the sequential verify couldn't express; 09c dodged it only because a
+  read-only phase has no such write. Phase 10 *did* add an invariant-guarding mutation (issue
+  decrements on-hand under a floor guard) — the class was live — yet the reviewer found nothing on
+  that axis, because the FOR-UPDATE row lock (Task 8, `create_bill` template) **and** the
+  `asyncio.Barrier`-forced two-concurrent-issue verify scenario (Task 13) were planned in from the
+  start and spot-checked red-without-lock / green-with-lock. **Confirmation: for any new mutation
+  guarding a hard invariant, plan the row lock + a forced-interleave verify scenario in the same
+  task breath — it converts the recurring post-hoc major into a pre-empted non-event.** (Caveat the
+  reviewer still raised: the issue lock serializes issue-vs-issue only, not issue-vs-SYERP-adjustment
+  against the same item — the broader inventory-ledger lock gap, now concrete since MOUSSE writes
+  this ledger; homed to BACKLOG p2.)
+
+### Cost sinks / recurrences (no new lesson, continued evidence)
+- **Mechanical AST refactor had a silent blind spot that only `import` caught.** The D-P10-4
+  syerp `service.py` split filtered module-level constants on `ast.Assign` and so dropped two
+  `ast.AnnAssign` (type-annotated) maps, `PO_TRANSITIONS`/`BILL_TRANSITIONS`; the split's own parity
+  check shared the same filter and so was blind to its own omission. Nothing surfaced it until
+  pytest *collection* failed importing `test_purchasing.py` — the `verify_*` scripts never import
+  those names, so they stayed green (`3d59068` re-exported them). **Rule: a mechanical transform's
+  self-check must not reuse the transform's own node filter — verify import-surface completeness by
+  actually importing every public name (collection/`__all__` parity), not by the behavioral scripts,
+  which only touch a subset of the API.**
+- **Two "verified" reference facts in the PLAN Context were wrong** — `Base` is `app.core.base` (not
+  `app.core.db`), and `syerp_inventory_txn.id` is `String(36)` (not an int PK). The engineer caught
+  both against real source at Task 2. Same family as the v1.0 "never trust a doc's file path" lesson:
+  even a plan's own "verified" Context drifts; re-confirm types/import paths against source at
+  implementation, don't port the prose.
+- **7th consecutive phase paying the same two taxes:** in-container verify needs `PYTHONPATH=/app`;
+  neither lint gate runs (both BACKLOG p1). Noted as continued evidence, not re-litigated.
 
 ## Phase 09c — AP aging + financial statements (verified 2026-07-12)
 

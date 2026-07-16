@@ -1,9 +1,26 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-16 (Phase 10 **VERIFIED** — MOUSSE WO core PASS, tagged `zj/good-10-mousse-work-orders`; next `/zj:retro 10`)
+Updated: 2026-07-16 (Phase 10 **DONE + retro'd** — MOUSSE WO core; learnings kept; roadmap done. **This closes the last v2.0 DoD clause — v2.0 is code-complete. Next action: `/zj:milestone` for v2.0.**)
 
 ## Position
 
-- **Step:** **Phase 10 VERIFIED (2026-07-16, `/zj:verify 10`) — Verdict PASS, tagged
+- **Step:** **Phase 10 RETRO complete (2026-07-16, `/zj:retro 10`).** Four learnings kept in
+  `.zj/LEARNINGS.md` "Phase 10": (1) "WIP clears to zero" + "TB nets zero" are both Σdr==Σcr
+  identities — neither catches a GL-control-vs-subledger drift; assert a control account directly
+  against its subledger, never against zero (the 1130 major the green verify missed, reviewer
+  caught); (2) a completion JE moved two ledger accounts and only one had an invariant → enumerate
+  an invariant per account a mutation posts to; (3) the recurring concurrency-major was **pre-empted
+  by design** for the first time (row lock + `asyncio.Barrier` forced-interleave verify planned in
+  from Tasks 8/13 — the 9b rule paying off); (4) a mechanical AST refactor's parity check must not
+  reuse the transform's own node filter, and import-surface completeness is proven by import (pytest
+  collection), not behavioral verify scripts. Deferrals homed: MOUSSE↔SYERP cross-path
+  inventory-ledger lock gap → BACKLOG p2 inventory-race item (trigger now live since MOUSSE writes
+  the ledger); zero-cost lone-component issue → p3; 422-deprecation sweep now includes mousse.
+  Roadmap Phase 10 → `[done]`. **This closes the last v2.0 DoD clause ("execute work orders that
+  consume PLUM BOMs and inventory") — v2.0 is code-complete.** **Next action: `/zj:milestone` for
+  v2.0** (audits the v2.0 DoD, runs the carried human UAT `.zj/UAT-v2.0.md`, and homes the BACKLOG
+  p1 debt: live-DB pytest harness, both lint gates, CI). Offer: `/zj:log phase 10` files the formal
+  work log for the record.
+- **Step (prior):** **Phase 10 VERIFIED (2026-07-16, `/zj:verify 10`) — Verdict PASS, tagged
   `zj/good-10-mousse-work-orders`.** Goal-backward verifier + code reviewer both run. All 7 SCs
   live-proven: `verify_mousse.py` 34/34 (WIP-clears-to-zero Decimal-exact + `asyncio.Barrier`
   concurrency race), `verify_mousse_api.py` 34/34 (HTTP RBAC + audit); full regression **13/13
