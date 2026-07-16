@@ -1,5 +1,6 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-16 (**Milestone v2.0 "Operations" CLOSED + tagged `v2.0`** — DoD audited goal-backward vs the running stack (`.zj/MILESTONE-v2.0-AUDIT.md`: 13/13 verify scripts, TB nets zero, subledgers tie; 1 minor gap G1 fixed at close `2578ca5`). Phases 8/9a/9b/9c/10 archived to `.zj/history/v2.0/`. **Next milestone = v3.0 Customer & logistics** (CRUMB + GELATO + AR, D-M2-4). Next action: `/zj:ship` (2-milestone master-merge debt) then `/zj:spec` for v3.0.)
+Updated: 2026-07-16 (**v3.0 "Customer & logistics" spec'd** — DoD sharpened into 3 clauses, CRUMB-01/GELATO-01/SYERP-13 expanded to full ACs, Phase 11→12→13 mapping proposed; D-V3-1..9. Next: `/zj:plan 11`.)
+Prior: 2026-07-16 (**Milestone v2.0 "Operations" CLOSED + tagged `v2.0`** — DoD audited goal-backward vs the running stack (`.zj/MILESTONE-v2.0-AUDIT.md`: 13/13 verify scripts, TB nets zero, subledgers tie; 1 minor gap G1 fixed at close `2578ca5`). Phases 8/9a/9b/9c/10 archived to `.zj/history/v2.0/`. **Next milestone = v3.0 Customer & logistics** (CRUMB + GELATO + AR, D-M2-4). Next action: `/zj:ship` (2-milestone master-merge debt) then `/zj:spec` for v3.0.)
 Prior: 2026-07-16 (Phase 10 done + retro'd — MOUSSE WO core verified/tagged; v2.0 code-complete)
 Prior: 2026-07-13 (Phase 10 **planned** — MOUSSE materials-only WO core, 20 tasks, D-P10-1..9; next = the D-P10-4 syerp split chore, then `/zj:build 10`)
 Prior: 2026-07-12 (Phase 9c **done + retro'd** → next `/zj:plan 10` (MOUSSE); learnings in LEARNINGS.md "Phase 09c")
@@ -315,30 +316,46 @@ Phase directories archived to `.zj/history/v2.0/phases/`.
 
 ---
 
-## v3.0 — Customer & logistics (CRUMB + GELATO + AR)  [planned — scoping, chosen 2026-07-16, D-M2-4]
+## v3.0 — Customer & logistics (CRUMB + GELATO + AR)  [spec'd 2026-07-16, D-V3-1..9 — planning next]
 
 Owner chose this as the milestone after v2.0 (over the FLAN port and PLUM-advanced): it completes
 the **sell-side + fulfillment loop** on top of the now-complete operations core, and it is where
 **accounts receivable** was explicitly parked (SYERP-13, split out of Phase 9 at D-P9-4 so AR
 invoices flow from CRUMB sales orders rather than being keyed standalone).
 
-**Definition of done (draft — confirm at `/zj:spec`):** *"Can manage customers and a sales
-pipeline through to orders, fulfil those orders from warehouse inventory (receive → pick/pack →
-ship), and invoice customers with AR posting to the GL and AR aging that ties to its control
-account."* — to be sharpened into clauses when the milestone is spec'd.
+**Definition of done (sharpened at `/zj:spec`, D-V3-1) — three clauses:**
+1. **CRM & sales pipeline (CRUMB-01)** — manage customers and run leads → opportunities → quotes →
+   sales orders, with PLUM-derived editable line pricing and a customer communication log; confirming
+   an order **soft-reserves inventory**.
+2. **Warehouse fulfillment (GELATO-01)** — bins within SYERP stock locations; directed putaway on
+   inbound receipts; outbound **pick → pack → ship** of sales orders; shipping **relieves the reserved
+   inventory** (quantities only — lot/serial deferred).
+3. **Accounts receivable & sell-side books (SYERP-13)** — shipment posts Dr COGS / Cr Inventory;
+   invoice-from-shipment posts Dr AR / Cr Revenue; customer receipt posts Dr Cash / Cr AR; **AR aging
+   ties Decimal-exactly to the 1120 control account** and the **Trial Balance still nets zero**.
 
-Candidate phases (coarse — all three FRs are placeholders needing `/zj:spec` expansion):
-- **CRUMB-01** — CRM core: leads, opportunity pipeline, quotes, orders, customer communication
-  log referencing SYERP customers.
-- **GELATO-01** — warehouse core: location/bin management, receiving, pick/pack/ship, lot/serial
-  tracking against SYERP inventory (the bin/zone hierarchy deferred out of SYERP-10 at D-P8-3).
-- **SYERP-13** — accounts receivable: customer invoices, receipts, AR aging, auto-posting to the
-  GL (Dr AR / Cr Revenue on invoice; Dr Cash / Cr AR on receipt) — the AP model on the sell side.
+**Scope decisions (D-V3-1..9, see SRD preamble):** sell-side = two-event real books, no clearing
+account (all CoA accounts already seeded); invoices are shipment-driven; **deferred** — lot/serial
+(D-V3-4), email/analytics (D-V3-5), price lists (D-V3-6); GELATO does inbound **and** outbound
+(D-V3-7); orders soft-reserve (D-V3-8); CRUMB & GELATO are new modules that import SYERP inventory/GL
+service fns (D-V3-9).
 
-**Sequencing + scope are open** — this is `/zj:ideate` / `/zj:spec` territory. Carried debt to
-weigh in during scoping: the BACKLOG p1 infra debt (CI, live-DB pytest harness, both lint gates)
-is now two milestones old; and the `/zj:ship` master-merge must be resolved before or alongside
-v3.0 (D-M2-3).
+**Phase → FR mapping (proposed; confirm/sub-split at `/zj:plan`, mirroring the 9a/9b/9c precedent):**
+
+| Phase | Delivers | Depends on | Notes |
+|-------|----------|-----------|-------|
+| **11 — CRUMB CRM & sales orders** | CRUMB-01 (7 ACs) | SYERP customers ✓, PLUM parts ✓, SYERP inventory (reservation) | New `crumb` module; no GL. Confirm-order soft-reservation is the crux invariant. |
+| **12 — GELATO warehouse core** | GELATO-01 (8 ACs) | Phase 11 (orders to fulfil), SYERP inventory ledger | New `gelato` module; **ship posts the COGS JE** (imports SYERP GL fns). Bins realize the D-P8-3 deferral. |
+| **13 — SYERP-13 AR & sell-side books** | SYERP-13 (7 ACs) | Phase 12 (invoices from shipments), SYERP-12 GL engine ✓ | Extends `syerp`; invoice-from-shipment + receipts + AR aging tie-out. New report screen: AR aging. |
+
+Build order follows the money: order (11) → ship (12) → invoice/collect (13). Likely to sub-split at
+plan the way Phase 9 became 9a/9b/9c; **the DoD, not the phase count, is the contract.**
+
+**Carried debt to weigh at planning:** the BACKLOG p1 infra debt (CI, live-DB pytest harness, both
+lint gates) is now two milestones old; the standing **inventory-ledger row-lock race** (BACKLOG p2)
+gains a third writer when GELATO ship lands — plan the shared FOR-UPDATE lock across every
+floor-guarded path (issue/adjust/receive/transfer/**ship**) rather than a per-module lock. The
+`/zj:ship` master-merge debt (D-M2-3) is **resolved** (v2.0 shipped via PR #2).
 
 ---
 

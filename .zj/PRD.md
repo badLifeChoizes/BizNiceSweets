@@ -1,5 +1,7 @@
 # PRD — BizNiceSweets
-Updated: 2026-07-11 (PRD-7/8 refined at the Phase-9 spec — GL+AP+reporting scope, AR→CRUMB; D-P9-1..4)
+Updated: 2026-07-16 (PRD-8 refined + promoted to the active next milestone at the v3.0 spec —
+order-to-cash + WMS scope, sell-side real books; D-V3-1..9)
+Prior: 2026-07-11 (PRD-7/8 refined at the Phase-9 spec — GL+AP+reporting scope, AR→CRUMB; D-P9-1..4)
 Originally: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` GSD artifacts, and `docs/` program roadmap — all archived; see DECISIONS.md D-ADOPT-1)
 
 ## PRD-1: Self-hosted single-command deployment
@@ -98,20 +100,27 @@ Originally: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/
   AP + financial reporting (SYERP-12) specified and planned for Phase 9; manufacturing execution
   (MOUSSE-01) planned for Phase 10 (closes v2.0). AR (SYERP-13) deferred to the CRUMB milestone.
 
-## PRD-8: Customer and logistics — CRM and warehouse
-- **Statement:** The product shall support selling and shipping: leads → opportunities →
-  quotes → orders (CRUMB) and warehouse locations, receiving, pick/pack/ship, lot/serial
-  tracking (GELATO).
-- **Why:** Completes the lifecycle to fulfillment; required for the "sells physical products"
-  half of the audience.
-- **Priority:** could (later milestone)
-- **Source:** program roadmap Phase 3 (archived)
-- **Acceptance signal:** An order placed in CRUMB is picked, packed, and shipped in GELATO
-  against live SYERP inventory.
-- **Evidence:** CRUMB-01, GELATO-01 planned; **SYERP-13 (accounts receivable)** rides this
-  milestone — AR invoices flow from CRUMB sales orders rather than being keyed standalone
-  (split out of SYERP-12 at the Phase-9 spec, D-P9-4).
-- **Status: planned**
+## PRD-8: Customer and logistics — order-to-cash and warehouse
+- **Statement:** The product shall support the full sell-side loop: **manage customers and a sales
+  pipeline through to orders** (leads → opportunities → quotes → sales orders, CRUMB), **fulfil those
+  orders from warehouse inventory** (bins, directed putaway, pick → pack → ship, GELATO), and
+  **invoice customers with the books kept** — shipment relieves stock (Dr COGS / Cr Inventory), the
+  invoice books revenue (Dr AR / Cr Revenue), the receipt collects cash (Dr Cash / Cr AR), and AR
+  aging ties to its control account (SYERP-13).
+- **Why:** Completes the lifecycle to fulfillment and closes the money loop — the sell-side mirror of
+  the v2.0 procure-to-pay operations core; required for the "sells physical products" half of the
+  audience. Chosen as the milestone after v2.0 over the FLAN port and PLUM-advanced (D-M2-4).
+- **Priority:** should (**active next milestone — v3.0 "Customer & logistics"**)
+- **Source:** program roadmap Phase 3 (archived); owner decisions at the v2.0 close (D-M2-4) and the
+  v3.0 spec (D-V3-1..9)
+- **Acceptance signal:** An order placed in CRUMB is picked, packed, and shipped in GELATO against
+  live SYERP inventory; invoicing the shipment posts AR and revenue; a customer receipt clears it;
+  and AR aging ties to the 1120 control account while the Trial Balance still nets zero.
+- **Evidence:** CRUMB-01 (CRM + sales orders, Phase 11), GELATO-01 (warehouse core, Phase 12),
+  SYERP-13 (AR + sell-side books, Phase 13) — all **expanded to full acceptance criteria at the v3.0
+  spec** (2026-07-16). **Deferred within v3.0** (D-V3-4/5/6): lot/serial tracking, email
+  integration/analytics, and price-list pricing.
+- **Status: planned** — v3.0 spec complete; phases not yet planned/built.
 
 ## PRD-9: Quality and compliance
 - **Statement:** The product shall support quality management — inspections, NCRs, CAPA,

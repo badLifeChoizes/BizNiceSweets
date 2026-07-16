@@ -1,5 +1,5 @@
 # DECISIONS — BizNiceSweets
-Updated: 2026-07-11
+Updated: 2026-07-16 (v3.0 "Customer & logistics" spec — D-V3-1..9)
 
 Recovered decisions are marked `(recovered)` with their original source (now archived).
 Numbering is append-only.
@@ -8,7 +8,7 @@ Numbering is append-only.
 ## Index
 
 One line per decision, newest last. Entries below are append-only — regenerate this index
-at milestone close, never hand-edit it. 64 decisions.
+at milestone close, never hand-edit it. 73 decisions.
 
 - **D-1:** Business domain = hybrid open-source business suite of 7 integrated suites (SYERP, PLUM, FLAN, MOUSSE, CRUMB, GELATO, CRISP), each usable…
 - **D-2:** Manufacturing (facilities, work centers, routings) lives in MOUSSE, not PLUM — PLUM is product development; released products hand off to MOUSSE.…
@@ -89,6 +89,15 @@ at milestone close, never hand-edit it. 64 decisions.
 - **D-M2-2:** Human click-through UAT (`.zj/UAT-v2.0.md` + owed v1.0 round-2) deferred to a tracked post-tag BACKLOG task rather than blocking the tag — backend behavior is live-proven and the UI is wired + contract-checked by the milestone audit (D-P7-5 precedent); UAT becomes a pre-public-release gate
 - **D-M2-3:** Version = `v2.0` (matches the roadmap milestone name "v2.0 Operations"; a major operations increment over v1.0)
 - **D-M2-4:** Next milestone = Customer & logistics — CRUMB (CRM) + GELATO (WMS) + SYERP-13 (accounts receivable, split here at D-P9-4) — chosen over the FLAN port and PLUM-advanced
+- **D-V3-1:** v3.0 DoD = three clauses — CRM & sales pipeline (CRUMB-01), warehouse fulfillment (GELATO-01), accounts receivable & sell-side books (SYERP-13)
+- **D-V3-2:** Sell-side GL = two-event real books (ship Dr 5100 COGS/Cr 1130 Inventory at moving-avg; invoice Dr 1120 AR/Cr 4110 Revenue; receipt Dr Cash/Cr 1120 AR); all accounts already seeded, no clearing account (disjoint accounts, unlike buy-side GR/IR)
+- **D-V3-3:** Customer invoices are shipment-driven (bill what shipped, matched at SO-line grain), mirroring the receipt-driven AP bill (D-P9b-1); partial shipments → partial invoices
+- **D-V3-4:** Lot/serial tracking deferred to a follow-on GELATO phase — v3.0 fulfillment is quantity + cost only (mirrors carving routing out of MOUSSE, D-P10-1)
+- **D-V3-5:** CRUMB depth = full lean chain (leads → opportunities → quotes → sales orders + customer communication log); no email integration or analytics
+- **D-V3-6:** Quote/order line pricing = PLUM-derived default (part's released cost + editable markup), editable per line; no price-list entity (that is PLUM-16 territory)
+- **D-V3-7:** GELATO scope = inbound (directed putaway-to-bin on receipts) + outbound (pick/pack/ship); bins introduced as a sub-level within SYERP's flat stock locations (realizes the D-P8-3 deferral)
+- **D-V3-8:** A confirmed CRUMB sales order soft-reserves inventory (available = on-hand − reserved, never negative); shipping converts the reservation to an issue — chosen over decrement-only-at-ship
+- **D-V3-9:** Module ownership — leads/opps/quotes/orders = CRUMB; bins/putaway/pick/pack/ship = GELATO; AR invoices/receipts/aging + all GL JEs = SYERP; CRUMB & GELATO are new modules importing SYERP inventory/GL service fns (D-P10-6 precedent)
 
 ## Product & Architecture
 
@@ -572,3 +581,89 @@ auto-post-only), and UI is folded into the plan with no separate DESIGN.md (D-P8
   **SYERP-13 accounts receivable** (split out of Phase 9 at D-P9-4, so AR invoices flow from CRUMB
   sales orders). Chosen over the FLAN port and PLUM-advanced. *Why:* completes the sell-side +
   fulfillment loop on top of the now-complete operations core; AR was explicitly parked here.
+
+## v3.0 "Customer & logistics" spec (2026-07-16)
+
+Sharpens the D-M2-4 milestone into a verifiable DoD and expands the three coarse FRs (CRUMB-01,
+GELATO-01, SYERP-13) into full acceptance criteria. The through-line is a **sell-side mirror of the
+v2.0 buy-side**: order-to-cash mirrors procure-to-pay, and the proven Phase 8–10 patterns
+(numeric-safe numbering, Draft→…FSM enforced server-side, immutable balanced JEs on the SYERP-12
+engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency verify, live-Postgres
+`verify_*` scripts) carry over.
+
+- **D-V3-1 (owner):** **v3.0 DoD = three clauses** — (1) CRM & sales pipeline (CRUMB-01), (2)
+  warehouse fulfillment (GELATO-01), (3) accounts receivable & sell-side books (SYERP-13). *Why:* the
+  milestone is the order → ship → invoice → collect loop; each clause is one suite's contribution and
+  independently verifiable, exactly as v2.0's four clauses mapped to inventory/PO/GL-AP/MOUSSE.
+
+- **D-V3-2 (owner):** **Sell-side GL = two-event real books.** Shipment posts **Dr 5100 COGS / Cr
+  1130 Inventory** at moving-avg cost; the invoice posts **Dr 1120 AR / Cr 4110 Product Revenue**; a
+  customer receipt posts **Dr Cash/Bank / Cr 1120 AR**. *Key simplification vs. the buy side:* the
+  two events touch **disjoint accounts** (COGS/Inventory vs AR/Revenue), so **no clearing account** is
+  needed — the sell side has no GR/IR analogue. Every account is **already seeded** in `coa_seed.py`
+  (1120 AR, 4110 Product Revenue, 5100 COGS, 1110/1111 Cash/Bank, 1130 Inventory) — no new CoA codes,
+  no migration for accounts. *Rejected:* a single invoice-time event posting both revenue and COGS
+  (would make GELATO shipping non-financial — stock wouldn't move until invoiced); AR-side-only with
+  COGS deferred (leaves inventory un-relieved, GELATO decorative). *Why chosen:* keeps GELATO
+  shipping financially meaningful and matches the D-P9-1 real-books depth. *Caveat (accepted, deferred
+  refinement):* COGS lands at ship and revenue at invoice, so if the two straddle a period boundary
+  they mismatch — negligible for a shop that invoices from shipment same-period; a "shipped-not-
+  invoiced" deferral clearing is out of scope (revisit only if period-accurate matching is needed).
+
+- **D-V3-3 (owner):** **Invoices are shipment-driven** — the user invoices a customer's
+  shipped-but-uninvoiced quantities (uninvoiced = shipped − Σ already-invoiced, matched at
+  sales-order-line grain), mirroring the receipt-driven AP bill (D-P9b-1). Partial shipments → partial
+  invoices. *Rejected:* invoice-from-order (can bill goods that never shipped) and free-form manual
+  invoices (no order↔invoice tie-out). *Why:* hardest to mis-key and preserves the procure-to-pay
+  symmetry the shop already knows from AP.
+
+- **D-V3-4 (owner):** **Lot/serial tracking deferred** to a follow-on GELATO phase; v3.0 fulfillment
+  is **quantity + cost only**. *Why:* lot/serial is the heaviest schema addition (a dimension on
+  every stock movement and on-hand read) and the DoD's fulfillment loop doesn't require it; carving it
+  out mirrors deferring routing/labor out of MOUSSE (D-P10-1) to keep the milestone shippable.
+  *Rejected:* lot-only and lot+serial now (largest verify surface; the medical-device traceability
+  story is better served once CRISP frames the requirement).
+
+- **D-V3-5 (owner):** **CRUMB depth = full lean chain** — leads → opportunities (pipeline stages) →
+  quotes → sales orders, plus a **customer communication/interaction log**; **no** email send/receive
+  integration and **no** reporting/analytics. *Why:* delivers the DoD's "sales pipeline through to
+  orders" without pulling in an external-service (email) dependency, which would breach the
+  self-hosted/offline posture and balloon scope. *Rejected:* trimmed to quotes→orders (loses the
+  pipeline the DoD names); full incl. email/analytics (external dependency, largest).
+
+- **D-V3-6 (owner):** **Quote/order line pricing = PLUM-derived default, editable.** A line's unit
+  price defaults from the part's PLUM released cost + an editable markup and is editable per line; the
+  effective cost is shown for margin visibility. **No price-list entity.** *Why:* gives useful default
+  pricing and margin insight without a price-list/customer-pricing table (which overlaps the deferred
+  PLUM-16 distributor-pricing FR). *Rejected:* manual-only (no margin help); full price list (PLUM-16
+  territory, later milestone).
+
+- **D-V3-7 (owner):** **GELATO scope = inbound + outbound.** v3.0 adds **bins** as a sub-level within
+  SYERP's flat stock locations (realizing the bin/zone hierarchy deferred at D-P8-3), **directed
+  putaway-to-bin** on inbound receipts, **and** the outbound **pick → pack → ship** flow. Per-bin
+  on-hand derives from bin-aware movements and rolls up to the SYERP location total. *Why:* the owner
+  wants a real WMS layer, not just an outbound shipping hook; bins are the foundational structure both
+  directions share. *Rejected:* outbound-only (leaves inbound putaway unbuilt) and ship-from-flat-
+  locations-no-bins (leaves the D-P8-3 bin promise unmet). *Cost accepted:* larger than the
+  outbound-only slice; the inbound putaway overlaps SYERP-11.4 receiving and the integration seam
+  (extend the receipt to target a bin vs. a follow-on putaway move) is a `/zj:plan` detail.
+
+- **D-V3-8 (owner):** **A confirmed sales order soft-reserves inventory.** Confirming reserves
+  `min(qty_ordered, available)` per line against the SYERP inventory item; `available = on-hand − Σ
+  reservations` and a reservation **never drives available negative**; a short line is confirmed with
+  a visible **backorder** indicator (not hard-blocked, single-shop). Shipping (GELATO-01.5) converts
+  the reservation to an issue. *Why:* prevents the same stock being promised twice across orders — the
+  reservation invariant is the crux CRUMB-01 verify pins. *Rejected:* decrement-only-at-ship (simpler,
+  but two orders can each believe stock is available). *Note:* reservation is a soft ledger concept,
+  not a physical move — no InventoryTxn until ship.
+
+- **D-V3-9 (manager, precedent-driven):** **Module ownership** — leads/opportunities/quotes/sales
+  orders live in the new **CRUMB** module; bins/putaway/pick/pack/ship in the new **GELATO** module;
+  AR invoices/receipts/aging **and all GL journal entries** stay in **SYERP** (the hub owns the
+  books). GELATO ship and the AR invoice **import** SYERP inventory/GL service functions rather than
+  duplicating them (the MOUSSE D-P10-6 precedent). Sales orders are CRUMB (not SYERP) per PRD-8 — the
+  deliberate asymmetry with SYERP purchase orders, because the sell side is CRUMB's domain and POs
+  predate the CRUMB module. RBAC: new `crumb:read`/`crumb:write` and `gelato:read`/`gelato:write`
+  codes (mirror `syerp:*`); AR endpoints stay under `syerp:*`. *Why:* keeps SYERP the single GL
+  authority (one posting engine, one set of tie-outs) while the customer/warehouse suites own their
+  workflow surface.

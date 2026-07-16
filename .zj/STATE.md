@@ -1,43 +1,46 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-16 (**v2.0 SHIPPED to master** — PR #2 merged via fast-forward, `v2.0` tag pushed, master-merge debt D-M2-3 resolved. Next action: `/zj:spec` for v3.0 Customer & logistics.)
+Updated: 2026-07-16 (**v3.0 "Customer & logistics" spec'd** — DoD sharpened into 3 clauses; CRUMB-01/GELATO-01/SYERP-13 expanded to full ACs; Phase 11→12→13 mapping proposed; D-V3-1..9 recorded. Next action: `/zj:plan 11`.)
 
 ## Position
 
-- **Step:** milestone — **v2.0 "Operations" closed and tagged `v2.0` (2026-07-16).** The definition
-  of done ("track inventory, raise purchase orders, keep real books with AP + financial statements,
-  execute work orders that consume PLUM BOMs and inventory") was audited goal-backward against the
-  running stack (`.zj/MILESTONE-v2.0-AUDIT.md`): all four clauses proven end-to-end backend↔frontend↔DB,
-  **13/13 live `verify_*` scripts exit 0**, whole-DB trial balance nets zero, control accounts tie to
-  subledgers, `npm run build` clean, 90/90 Vitest, alembic head 0012. Verdict clean but for one minor
-  gap **G1** (P&L report 422'd on an empty `from` date), **fixed at close** (`2578ca5`). Records:
-  CHANGELOG (v2.0 released), `.zj/logs/milestone-v2.0.md`, LEARNINGS "Milestone v2.0", DECISIONS
-  D-M2-1..4 + regenerated index, the audit doc. Phases 8/9a/9b/9c/10 archived to
-  `.zj/history/v2.0/phases/`; `.zj/phases/` is empty.
+- **Step:** spec — **v3.0 "Customer & logistics" requirements complete (2026-07-16).** The milestone
+  DoD is sharpened into **three verifiable clauses** (CRM & sales pipeline / warehouse fulfillment /
+  AR & sell-side books) and the three coarse FRs are expanded to full acceptance criteria: **CRUMB-01**
+  (7 ACs, Phase 11), **GELATO-01** (8 ACs, Phase 12), **SYERP-13** (7 ACs, Phase 13). Nine scope
+  decisions recorded (**D-V3-1..9**). Sell side is a two-event real-books mirror of v2.0 procure-to-pay
+  and needs **no new CoA accounts** (1120 AR / 4110 Revenue / 5100 COGS already seeded). Deferred within
+  v3.0: lot/serial, email/analytics, price lists. Updated: PRD-8, SRD (3 FRs + traceability), ROADMAP
+  (phase→FR map), DECISIONS. `.zj/phases/` is empty — no phase planned yet.
 
 - **Project:** BizNiceSweets
-- **Milestone:** v2.0 Operations — **CLOSED + tagged `v2.0`**. v1.0 closed + tagged 2026-07-11.
-- **Branch:** `feature-mousse-work-orders` — carried Phases 9a→10 + the v2.0 close; now **merged to
-  `master` (fast-forward, `aa497b1..35f9b66`)**. Safe to delete locally + on origin. The `v2.0` tag
-  (`d6c91cb`) is preserved and reachable from master; a `chore:` gitignore commit (`35f9b66`) sits
-  one above it.
+- **Milestone:** v3.0 Customer & logistics — **SPEC'D, planning next**. v2.0 CLOSED + tagged `v2.0`;
+  v1.0 closed + tagged 2026-07-11.
+- **Branch:** `chore-spec-v3-customer-logistics` (cut from `master`/`feature-mousse-work-orders` tip,
+  which are even) — carries only this spec's doc edits. `master` at `35f9b66` carries all of Phases
+  8–10.
 - **Last update:** 2026-07-16
-- **Next action:** `/zj:spec` to sharpen the v3.0 "Customer & logistics" DoD into clauses and expand
-  the coarse FRs (CRUMB-01, GELATO-01, SYERP-13/AR) before planning Phase 1 of v3.0.
+- **Next action:** `/zj:plan 11` — plan **Phase 11 (CRUMB CRM & sales orders, CRUMB-01)**, the first
+  of the three v3.0 phases (order → ship → invoice build order). Likely to sub-split at plan the way
+  Phase 9 became 9a/9b/9c.
 
 ## Next action (detail)
 
-**`/zj:spec`** — sharpen the v3.0 "Customer & logistics" definition of done into clauses and expand
-the coarse FRs (CRUMB-01, GELATO-01, SYERP-13/AR) before planning Phase 1 of v3.0. The v2.0
-milestone is fully closed and shipped; `master` now carries all of Phases 8–10.
+**`/zj:plan 11`** — plan Phase 11 delivering **CRUMB-01** (new `crumb` module): leads → opportunities
+→ quotes → sales orders + communication log, PLUM-derived editable line pricing, and the
+**soft-reservation** invariant (`available = on-hand − reserved ≥ 0`, D-V3-8) which is the phase's
+crux. No GL in Phase 11. Depends only on shipped surfaces (SYERP customers, PLUM parts, SYERP
+inventory for reservation). See ROADMAP v3.0 phase→FR table and the SRD CRUMB-01 ACs.
 
-**Ship record (2026-07-16):** PR **#2** (`feature-mousse-work-orders` → `master`) opened and merged
-via **fast-forward** — 104 milestone commits + the gitignore hygiene commit. Mirrors the v1.0 ship
-(PR #1). `v2.0` tag pushed to origin. **D-M2-3 (master-merge debt) resolved.** Local + origin master
-at `35f9b66`.
+**Sequencing:** build order follows the money — Phase 11 order → Phase 12 GELATO ship (posts the COGS
+JE) → Phase 13 SYERP-13 invoice/collect. The DoD, not the phase count, is the contract; sub-split at
+plan as needed.
 
-Alternative if the owner wants to pay down infra debt first: the BACKLOG **p1** items (CI pipeline,
-live-DB pytest harness repair, both lint gates) are now two milestones old — a `/zj:ideate` on
-whether v3.0 leads with a debt-paydown phase is reasonable.
+**Alternative — pay down infra debt first:** the BACKLOG **p1** items (CI pipeline, live-DB pytest
+harness repair, both lint gates) are now two milestones old. A debt-paydown phase before Phase 11 is
+reasonable if the owner wants it (raise at `/zj:plan` or `/zj:ideate`).
+
+**This spec branch:** `chore-spec-v3-customer-logistics` holds only doc edits — merge it to `master`
+(fast-forward) whenever convenient; it is not a code phase and needs no verify.
 
 ## Deferred at the v2.0 close (owner-approved — do not lose)
 

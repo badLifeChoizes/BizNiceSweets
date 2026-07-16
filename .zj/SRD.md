@@ -1,5 +1,7 @@
 # SRD — BizNiceSweets
-Updated: 2026-07-11
+Updated: 2026-07-16 (v3.0 "Customer & logistics" spec — SYERP-13 (AR), CRUMB-01, GELATO-01
+expanded from coarse placeholders into full acceptance criteria; D-V3-1..9)
+Prior: 2026-07-11
 
 > **Provenance:** requirement IDs and statements ingested verbatim from the GSD-era
 > `.planning/REQUIREMENTS.md` (defined 2026-06-22, last updated 2026-06-30), archived at
@@ -440,15 +442,81 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ---
 
-## Future Suites (coarse placeholders — expand via /zj:spec at milestone planning)
+## Customer & Logistics — order-to-cash + WMS (v3.0 — Phases 11–13)
 
-## SYERP-13: Accounts receivable  [traces: PRD-7]  **Status: planned (CRUMB milestone)**
+> Expanded from coarse placeholders 2026-07-16 (`/zj:spec`) ahead of v3.0 planning. This
+> milestone completes the **sell-side + fulfillment loop** (order → ship → invoice → collect) on
+> top of the v2.0 operations core, mirroring the buy-side procure-to-pay model built in Phases 8–9.
+> Scope decisions (append-only, D-V3-1..9):
+> - **D-V3-1** — DoD = three clauses: CRM & sales pipeline (CRUMB-01), warehouse fulfillment
+>   (GELATO-01), accounts receivable & sell-side books (SYERP-13).
+> - **D-V3-2** — Sell-side GL = **two-event real books**: shipment posts Dr 5100 COGS / Cr 1130
+>   Inventory at moving-avg; invoice posts Dr 1120 AR / Cr 4110 Product Revenue; customer receipt
+>   posts Dr Cash/Bank / Cr 1120 AR. All accounts already seeded (`coa_seed.py`) — no new CoA
+>   codes and **no sell-side clearing account** (the two events touch disjoint accounts, unlike
+>   the buy-side GR/IR bridge).
+> - **D-V3-3** — Invoices are **shipment-driven** (bill what shipped), mirroring the receipt-driven
+>   AP bill (D-P9b-1); partial shipments → partial invoices, matched at sales-order-line grain.
+> - **D-V3-4** — **Lot/serial tracking deferred** to a follow-on GELATO phase; v3.0 fulfillment is
+>   quantity + cost only (mirrors carving routing out of MOUSSE, D-P10-1).
+> - **D-V3-5** — CRUMB depth = **full lean chain** (leads → opportunities → quotes → sales orders
+>   + customer communication log); **no** email integration or analytics.
+> - **D-V3-6** — Quote/order line pricing = **PLUM-derived default** (part's released cost + an
+>   editable markup), editable per line; **no price-list entity** (that is PLUM-16 territory).
+> - **D-V3-7** — GELATO scope = **inbound + outbound**: directed putaway-to-bin on receipts AND
+>   pick/pack/ship; **bins** are introduced as a sub-level within SYERP's flat stock locations
+>   (realizes the D-P8-3 deferral).
+> - **D-V3-8** — A confirmed sales order **soft-reserves inventory** (available = on-hand −
+>   reserved); shipping converts the reservation to an issue.
+> - **D-V3-9** — Module ownership: leads/opportunities/quotes/sales orders = **CRUMB**;
+>   bins/putaway/pick/pack/ship = **GELATO**; AR invoices/receipts/aging + **all GL JEs** = SYERP.
+>   GELATO ship and the AR invoice **import** SYERP inventory/GL service functions rather than
+>   duplicating them (D-P10-6 precedent).
+>
+> IDs are append-only and unchanged. CRISP-01 remains a coarse placeholder.
+
+## SYERP-13: Accounts receivable & sell-side books  [traces: PRD-7, PRD-8]  **Status: planned (v3.0 — Phase 13)**
 - **Statement:** The system shall support customer **invoices, receipts (customer payments), and
-  AR aging**, auto-posting to the GL (Dr Accounts Receivable / Cr Revenue on invoice; Dr Cash /
-  Cr AR on receipt), mirroring the SYERP-12 AP model on the sell side.
-- **Note:** Split out of the original SYERP-12 at the Phase-9 spec (D-P9-4). Deferred to the
-  **CRUMB milestone**, where invoices flow from sales orders rather than being keyed standalone;
-  expand its acceptance criteria via `/zj:spec` when that milestone nears.
+  AR aging**, with sell-side activity **auto-posting balanced journal entries to the GL** on the
+  existing SYERP-12 posting engine — **shipment** (GELATO-01.5) posts Dr 5100 COGS / Cr 1130
+  Inventory at moving-avg cost, an **invoice** posts Dr 1120 AR / Cr 4110 Product Revenue, and a
+  **customer receipt** posts Dr Cash/Bank / Cr 1120 AR — so AR aging and the financial statements
+  derive from posted GL activity. Invoices are **created from shipments** (bill what shipped, D-V3-3),
+  mirroring the SYERP-12 AP model on the sell side (D-P9-4).
+- **Acceptance criteria:**
+  1. **Sell-side postings** — All three JE shapes post on the SYERP-12 engine (AC1): ≥2 balanced
+     lines, `Numeric(18,6)`/`Decimal` (D-11), append-only/immutable, reversible. The COGS-on-ship
+     JE is **atomic** with the inventory issue (one transaction, mirroring the receipt→GR/IR
+     atomicity of SYERP-12.3). No new CoA accounts (D-V3-2).
+  2. **Invoice from shipment** — User creates an AR **invoice** for a customer by selecting that
+     customer's **shipped-but-uninvoiced** quantities (uninvoiced qty = shipped − Σ already-invoiced,
+     matched at sales-order-line grain, mirroring D-P9b-1). Invoice auto-numbers `INV-####`
+     (numeric-safe generator, D-P8-6); **Draft → Posted → Paid** FSM enforced server-side (invalid
+     transitions HTTP 4xx). Posting the invoice posts Dr 1120 AR / Cr 4110 Revenue for the invoiced
+     value; the invoice's JE `entry_date` = `invoice_date` (so aging and the control account share
+     one date basis, D-P9c-1 pattern).
+  3. **Customer receipts** — User records a **receipt** against one or more posted invoices (full or
+     partial), modelled as `Receipt` header + `ReceiptAllocation` (one receipt settles N invoices;
+     `Receipt.amount` == Σ allocations), mirroring Payment/PaymentAllocation (D-P9b-6). Posting
+     posts Dr <selectable cash/bank, default 1110> / Cr 1120 AR. A receipt that would drive an
+     invoice's open balance (invoiced − received) **negative is rejected 4xx** (D-P8-7 guard); an
+     invoice auto-advances to **Paid** when its open balance reaches zero.
+  4. **AR aging** — Open AR balances **bucketed by age** (current / 31–60 / 61–90 / 90+) from
+     invoice dates, **per customer and total**; the grand total **ties Decimal-exactly to the 1120
+     Accounts-Receivable control-account balance** (subledger ↔ control, the AC6/D-P9c-1 tie-out on
+     the sell side).
+  5. **Statements** — With AR/revenue/COGS activity posted, the SYERP-12 **Trial Balance still nets
+     zero**, **P&L** shows revenue − COGS over a period, and the **Balance Sheet** includes AR under
+     assets and still balances. (Extends SYERP-12.7 reports; the only new report screen is AR aging.)
+  6. **Audit** — Invoice create/post, receipt, every JE and reversal emit attributable audit events
+     (NFR-1).
+  7. **RBAC** — All endpoints gated by `syerp:<action>` permission codes; an un-permissioned API
+     call is refused regardless of UI (CORE-05 / D-P8-10 pattern).
+- **Verification:** live-Postgres `backend/scripts/verify_ar.py` (Decimal-exact AR-control tie-out,
+  invoice-from-shipment match, overpayment reject, COGS-on-ship moving-avg, and an `asyncio.gather`
+  concurrency scenario on receipt/invoice guards — the D-P9b concurrency lesson) + `verify_ar_api.py`
+  (HTTP RBAC + audit rows); full regression suite still exits 0 and the Trial Balance nets zero; FE
+  Vitest + `npm run build`. Flow-level human UAT at the v3.0 milestone (D-P7-5 precedent).
 
 ## MOUSSE-01: Manufacturing execution core  [traces: PRD-7]  **Status: partially verified (materials-only slice, Phase 10)**
 - **Statement:** The system shall support work orders with status workflow, routing (operations/work centers), BOM consumption from PLUM, inventory consumption, shop-floor execution view, and work-order costing flowing to SYERP.
@@ -464,11 +532,94 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Verification method:** live-Postgres `backend/scripts/verify_mousse.py` (34 assertions incl. the WIP-clears + 1130-subledger-tie + concurrency crux) and `verify_mousse_api.py` (HTTP RBAC + audit); frontend Vitest; full regression suite (13/13 verify_* exit 0). Verified at `/zj:verify 10` (2026-07-16).
 - **Verified:** 5cffeeb (AC1–AC7, materials-only slice; deferred clauses remain planned)
 
-## CRUMB-01: CRM core  [traces: PRD-8]  **Status: planned**
-- **Statement:** The system shall support leads, opportunity pipeline, quotes, orders, and a customer communication log referencing SYERP customers.
+## CRUMB-01: CRM core & sales orders  [traces: PRD-8]  **Status: planned (v3.0 — Phase 11)**
+> New module `backend/app/modules/crumb/` + `frontend/src/routes/crumb/`; RBAC codes
+> `crumb:read`/`crumb:write` (mirror syerp, D-P10-6). References SYERP customers and PLUM parts.
+> Full lean chain, no email/analytics (D-V3-5). See the v3.0 scope preamble (D-V3-1..9).
+- **Statement:** The system shall support the sell-side pipeline against SYERP customers — **leads →
+  opportunities (pipeline stages) → quotes → sales orders** — plus a **customer communication log**,
+  where a confirmed sales order **soft-reserves inventory** and feeds GELATO fulfillment (GELATO-01)
+  and SYERP-13 invoicing.
+- **Acceptance criteria:**
+  1. **Leads** — User can create/view/edit/archive a **lead** (name, company, contact, source,
+     status); a qualified lead links to (or creates) a SYERP customer (`Partner.is_customer`) and can
+     be converted to an opportunity.
+  2. **Opportunity pipeline** — **Opportunities** carry a customer, estimated value, expected close
+     date, and a **pipeline stage** (e.g. Qualify → Proposal → Won/Lost); user can view the pipeline
+     as a per-stage list and move an opportunity between stages (transitions audited). A won
+     opportunity can spawn a quote.
+  3. **Quotes** — A **quote** header (customer) + lines (PLUM part or free-text description, qty,
+     unit price). Line unit price **defaults from the part's PLUM released cost + an editable markup**
+     and is user-editable (D-V3-6); quote shows line + total value. FSM **Draft → Sent →
+     Accepted/Rejected/Expired** enforced server-side (4xx invalid); auto-number `QUOTE-####`
+     (numeric-safe, D-P8-6). An **accepted quote converts to a sales order**, copying its lines.
+  4. **Sales orders** — A **sales order** header (customer, order/required dates) + lines (item, qty,
+     unit price); auto-number `SO-####`; FSM **Draft → Confirmed → Fulfilling → Closed** (+ Cancelled
+     from Draft/Confirmed) enforced server-side (4xx invalid). **Confirming soft-reserves inventory**
+     (D-V3-8): each line reserves `min(qty_ordered, available_on_hand)` against its SYERP inventory
+     item; `available = on-hand − Σ reservations` and a reservation **never drives available
+     negative**; a line whose ordered qty exceeds available is confirmed with a visible **shortage /
+     backorder** indicator (not hard-blocked, single-shop). GELATO shipping (GELATO-01.5) consumes
+     the reservation.
+  5. **Communication log** — Append-only **interaction log** entries (type call/email/note/meeting,
+     UTC timestamp, acting user, body) referencing a SYERP customer and optionally a lead/opportunity/
+     quote/order; user can read a per-customer timeline. (Logging only — **no email send/receive
+     integration**, D-V3-5.)
+  6. **Cross-module integrity** — Leads/opportunities/quotes/orders FK to `syerp_partner`
+     (`is_customer`) and PLUM parts; a sales order is the document GELATO fulfills and SYERP-13
+     invoices. Deleting/archiving respects downstream references.
+  7. **Audit + RBAC** — Every mutation (incl. stage/FSM transitions, quote→order conversion) emits an
+     attributable audit event (NFR-1); all endpoints gated by `crumb:read`/`crumb:write`, refused
+     server-side regardless of UI (CORE-05).
+- **Verification:** live-Postgres `backend/scripts/verify_crumb.py` (FSM enforcement, numeric-safe
+  numbering, quote→order conversion copies lines exactly, PLUM-derived price default, and the
+  reservation invariant `available = on-hand − reserved ≥ 0` incl. a concurrency scenario) +
+  `verify_crumb_api.py` (HTTP RBAC + audit); FE Vitest + `npm run build`; nav gated on CRUMB enabled
+  ∩ `crumb:read`. Flow-level human UAT at the v3.0 milestone.
 
-## GELATO-01: Warehouse core  [traces: PRD-8]  **Status: planned**
-- **Statement:** The system shall support warehouse/location management, receiving, pick/pack/ship, lot and serial tracking against SYERP inventory.
+## GELATO-01: Warehouse core  [traces: PRD-8]  **Status: planned (v3.0 — Phase 12)**
+> New module `backend/app/modules/gelato/` + `frontend/src/routes/gelato/`; RBAC codes
+> `gelato:read`/`gelato:write`. Writes the **SYERP inventory ledger** and posts GL JEs via imported
+> SYERP service functions (D-V3-9 / D-P10-6). Quantities + cost only — **lot/serial deferred**
+> (D-V3-4). See the v3.0 scope preamble (D-V3-1..9).
+- **Statement:** The system shall add a **warehouse layer** over SYERP inventory — **bins** within
+  the existing flat stock locations, **directed putaway** on inbound receipts, and outbound **pick →
+  pack → ship** of CRUMB sales orders — where **shipping relieves reserved inventory** and posts the
+  sell-side COGS journal entry, without lot or serial tracking (deferred, D-V3-4).
+- **Acceptance criteria:**
+  1. **Bins within locations** — User can create/edit/archive **bins** (code, description, active) as
+     a **sub-level within a SYERP stock location** (the D-P8-3 bin deferral). Per-bin on-hand is
+     **derived** from bin-aware inventory movements and **rolls up to the SYERP location total**,
+     which continues to derive per SYERP-10.3.
+  2. **Inbound putaway** — A **receiving/putaway** screen directs received stock (a SYERP-11.4 PO
+     receipt, or a manual receipt) into a target bin; putaway writes bin-aware inventory transactions
+     and **nets zero at the location grain** (moves qty between bins, not into/out of the location).
+  3. **Pick** — Against a **Confirmed** CRUMB sales order, the system generates a **pick list** of
+     order lines → suggested bins holding sufficient on-hand; user confirms picked qty from bins.
+     Picking draws against the order's **reservation** (CRUMB-01.4) and moves stock to a pack/staging
+     area (bin-level moves).
+  4. **Pack** — User **packs** picked items into a shipment/package for an order; partial packs
+     allowed; a pack records what is staged to ship.
+  5. **Ship** — Shipping a packed shipment posts SYERP **issue** transactions relieving on-hand at
+     moving-avg cost, **clears the consumed reservation**, and is **atomic** with a balanced GL JE
+     **Dr 5100 COGS / Cr 1130 Inventory** (D-V3-2; imports SYERP inventory/GL service fns, D-V3-9).
+     Partial shipments accumulate and stamp each order line's shipped qty; the shipment is the
+     document SYERP-13 invoices from (D-V3-3).
+  6. **Quantities only** — No lot or serial capture in v3.0 (D-V3-4); every movement is quantity +
+     cost.
+  7. **Floor & reservation guards** — A putaway/pick/ship that would drive a **bin or location
+     on-hand negative is rejected 4xx** (D-P8-7 floor-guard pattern); a ship **never over-ships** an
+     order line beyond its picked/ordered qty. *(The cross-path inventory-ledger row-lock is the
+     standing BACKLOG p2 race item — GELATO ship now joins MOUSSE issue and SYERP adjust/receive as a
+     writer of this ledger; lock contended rows FOR UPDATE per the D-P9b template.)*
+  8. **Audit + RBAC** — Bin changes, putaway, pick, pack, and ship emit attributable audit events
+     (NFR-1); endpoints gated by `gelato:read`/`gelato:write` (CORE-05).
+- **Verification:** live-Postgres `backend/scripts/verify_gelato.py` (per-bin on-hand rolls up to the
+  location total; putaway nets zero at location grain; ship relieves inventory + posts the COGS JE
+  Decimal-exact + clears the reservation + ties 1130 to the subledger; negative-stock reject; an
+  `asyncio` concurrency scenario) + `verify_gelato_api.py` (HTTP RBAC + audit); full regression
+  (`verify_inventory` etc. still exit 0, Trial Balance nets zero); FE Vitest + `npm run build`.
+  Flow-level human UAT at the v3.0 milestone.
 
 ## CRISP-01: Quality core  [traces: PRD-9]  **Status: planned**
 - **Statement:** The system shall support inspections, NCRs, CAPA, quality holds on inventory, and compliance tracking linked to MOUSSE work orders.
@@ -503,11 +654,17 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-4 | SYERP-01..05, PLUM-07 | — |
 | PRD-5 | PLUM-01..16 | Phase-7 **verified** 2026-07-09 (`8975eeb`): fixes `5c33ed8`/`1b8bfa1`/`37b5f97` proven live, plus blocker `7562a02` (int4 overflow bricked auto-numbering) found and fixed in the verify fix loop; PLUM-01/07/10 backends now guarded by `verify_plum_vendor_paths.py`, `verify_part_numbering.py`, `test_part_number.py`, `ImportExport.test.tsx`. PLUM-04..10 flow-level UI confirmation still deferred to v1.0 milestone UAT (`.zj/UAT-v1.0.md`, 2/12 done, D-P7-5) |
 | PRD-6 | FLAN-01 | expand at milestone planning |
-| PRD-7 | SYERP-10..13, MOUSSE-01 | SYERP-10/11 backend built & live-verified (Phase 8: migrations 0007/0008; `verify_inventory`/`verify_purchasing`/`verify_e2e_p8` scripts), UI flow UAT deferred to v2.0 milestone (D-P7-5); **SYERP-12 expanded 2026-07-11 (Phase 9 target — GL + AP + reporting, 9 ACs)**; SYERP-13 (AR) split out to the CRUMB milestone (D-P9-4); **MOUSSE-01 materials-only slice built & live-verified (Phase 10, verified 2026-07-16 `5cffeeb`: `verify_mousse.py`/`verify_mousse_api.py`; migration 0012); routing/labor/shop-floor deferred (D-P10-1)** |
-| PRD-8 | CRUMB-01, GELATO-01 | coarse — expand via /zj:spec |
+| PRD-7 | SYERP-10..13, MOUSSE-01 | SYERP-10/11 backend built & live-verified (Phase 8: migrations 0007/0008; `verify_inventory`/`verify_purchasing`/`verify_e2e_p8` scripts), UI flow UAT deferred to v2.0 milestone (D-P7-5); **SYERP-12 built & verified (Phases 9a/9b/9c, all 9 ACs)**; **SYERP-13 (AR) expanded 2026-07-16 for v3.0 Phase 13 (7 ACs — sell-side books, invoice-from-shipment, AR aging tie-out; D-V3-1..9)**; **MOUSSE-01 materials-only slice built & live-verified (Phase 10, verified 2026-07-16 `5cffeeb`: `verify_mousse.py`/`verify_mousse_api.py`; migration 0012); routing/labor/shop-floor deferred (D-P10-1)** |
+| PRD-8 | CRUMB-01, GELATO-01, SYERP-13 | **expanded 2026-07-16 (v3.0 spec, D-V3-1..9)** — CRUMB-01 (CRM + sales orders, Phase 11), GELATO-01 (warehouse core, Phase 12), SYERP-13 (AR + sell-side books, Phase 13); all `planned`, full ACs written. SYERP-13 now also traces PRD-8 (invoices flow from CRUMB sales orders). Lot/serial + email/analytics + price lists explicitly deferred |
 | PRD-9 | CRISP-01, NFR-1 | CRISP coarse |
 | PRD-10 | NFR-3 | — |
 | PRD-11 | NFR-2 | license audit outstanding |
+
+**v3.0 spec update (2026-07-16):** SYERP-13, CRUMB-01, and GELATO-01 moved from *coarse
+placeholder* to *fully-specified `planned`* (7 / 7 / 8 acceptance criteria respectively), targeting
+Phases 13 / 11 / 12 of the v3.0 "Customer & logistics" milestone. No IDs renumbered (append-only);
+CRISP-01 and NFR-3 remain the only coarse placeholders left. The historical counts below predate
+this and the v2.0 build-out (they are left as a provenance snapshot, not re-tallied here).
 
 **Counts (2026-07-09, post-Phase-7-verify):** implemented 19 (CORE-01..09, SYERP-01..05, PLUM-01..03 —
 PLUM-01 defect **resolved** & proven live, `1b8bfa1`, and the int4-overflow blocker its fix
