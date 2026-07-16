@@ -450,8 +450,19 @@ future scope (expanded via `/zj:spec` when their milestones near).
   **CRUMB milestone**, where invoices flow from sales orders rather than being keyed standalone;
   expand its acceptance criteria via `/zj:spec` when that milestone nears.
 
-## MOUSSE-01: Manufacturing execution core  [traces: PRD-7]  **Status: planned**
+## MOUSSE-01: Manufacturing execution core  [traces: PRD-7]  **Status: partially verified (materials-only slice, Phase 10)**
 - **Statement:** The system shall support work orders with status workflow, routing (operations/work centers), BOM consumption from PLUM, inventory consumption, shop-floor execution view, and work-order costing flowing to SYERP.
+- **Scope note:** Phase 10 delivered the **materials-only slice** (D-P10-1). Routing/operations/work-centers, labor & overhead, and the shop-floor operator view are **deferred** to a later MOUSSE phase — those clauses of the statement remain unverified.
+- **Acceptance criteria (materials-only slice, delivered Phase 10):**
+  - **AC1** — WO create + single-level (direct) BOM snapshot at release + server-enforced FSM Draft→Released→In Progress→(On Hold⇄In Progress)→Completed, +Cancelled from Draft/Released; no-Released-revision → 4xx; a BOM child with no linked InventoryItem rejects the whole release 4xx (D-P10-7). *(Verify: `verify_mousse.py` A/B/C.)*
+  - **AC2** — Explicit component issue posts signed `issue` InventoryTxn rows (negative qty, `source_type="mousse_work_order"`) at moving-avg cost, floor-guarded, atomic with one balanced JE **Dr 1140 / Cr 1130**; first issue → In Progress. *(Verify: `verify_mousse.py` A.)*
+  - **AC3** — Completion receives planned qty at accumulated-WIP unit cost (Dr 1130 / Cr 1140) so the WO's **1140 balance returns to its pre-WO value Decimal-exactly**, AND the **1130 control account ties to the inventory subledger** — the residual routes to 5190 Inventory Rounding (D-P10-2 amended). Under-issued completion rejected 4xx unless audited `override_incomplete` (D-P10-9). *(Verify: `verify_mousse.py` A/D.)*
+  - **AC4** — Two concurrent issues (`asyncio.gather`) cannot double-consume / drive on-hand negative; contended rows `SELECT … FOR UPDATE` in sorted-id order. *(Verify: `verify_mousse.py` F.)*
+  - **AC5** — Every WO mutation writes an attributable audit row and enforces `mousse:write` (403/401/200) at HTTP level; reads gated `mousse:read`. *(Verify: `verify_mousse_api.py`.)*
+  - **AC6** — Regression: `verify_inventory`/`verify_purchasing`/`verify_e2e_p8`/`verify_gl`/`verify_ap`/`verify_reports` still exit 0; trial balance nets zero. *(Verify: full suite, 13/13.)*
+  - **AC7** — Frontend: WO list, create dialog, detail (snapshot lines + on-hand + issued-so-far), Issue/Hold/Resume/Complete actions with under-issue override warning; TanStack Query invalidation; nav gated on MOUSSE enabled ∩ `mousse:read`. *(Verify: Vitest `routes/mousse/*.test.tsx`, `npm run build`.)*
+- **Verification method:** live-Postgres `backend/scripts/verify_mousse.py` (34 assertions incl. the WIP-clears + 1130-subledger-tie + concurrency crux) and `verify_mousse_api.py` (HTTP RBAC + audit); frontend Vitest; full regression suite (13/13 verify_* exit 0). Verified at `/zj:verify 10` (2026-07-16).
+- **Verified:** 5cffeeb (AC1–AC7, materials-only slice; deferred clauses remain planned)
 
 ## CRUMB-01: CRM core  [traces: PRD-8]  **Status: planned**
 - **Statement:** The system shall support leads, opportunity pipeline, quotes, orders, and a customer communication log referencing SYERP customers.
@@ -492,7 +503,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-4 | SYERP-01..05, PLUM-07 | — |
 | PRD-5 | PLUM-01..16 | Phase-7 **verified** 2026-07-09 (`8975eeb`): fixes `5c33ed8`/`1b8bfa1`/`37b5f97` proven live, plus blocker `7562a02` (int4 overflow bricked auto-numbering) found and fixed in the verify fix loop; PLUM-01/07/10 backends now guarded by `verify_plum_vendor_paths.py`, `verify_part_numbering.py`, `test_part_number.py`, `ImportExport.test.tsx`. PLUM-04..10 flow-level UI confirmation still deferred to v1.0 milestone UAT (`.zj/UAT-v1.0.md`, 2/12 done, D-P7-5) |
 | PRD-6 | FLAN-01 | expand at milestone planning |
-| PRD-7 | SYERP-10..13, MOUSSE-01 | SYERP-10/11 backend built & live-verified (Phase 8: migrations 0007/0008; `verify_inventory`/`verify_purchasing`/`verify_e2e_p8` scripts), UI flow UAT deferred to v2.0 milestone (D-P7-5); **SYERP-12 expanded 2026-07-11 (Phase 9 target — GL + AP + reporting, 9 ACs)**; SYERP-13 (AR) split out to the CRUMB milestone (D-P9-4); MOUSSE-01 still coarse (expand at Phase-10 planning) |
+| PRD-7 | SYERP-10..13, MOUSSE-01 | SYERP-10/11 backend built & live-verified (Phase 8: migrations 0007/0008; `verify_inventory`/`verify_purchasing`/`verify_e2e_p8` scripts), UI flow UAT deferred to v2.0 milestone (D-P7-5); **SYERP-12 expanded 2026-07-11 (Phase 9 target — GL + AP + reporting, 9 ACs)**; SYERP-13 (AR) split out to the CRUMB milestone (D-P9-4); **MOUSSE-01 materials-only slice built & live-verified (Phase 10, verified 2026-07-16 `5cffeeb`: `verify_mousse.py`/`verify_mousse_api.py`; migration 0012); routing/labor/shop-floor deferred (D-P10-1)** |
 | PRD-8 | CRUMB-01, GELATO-01 | coarse — expand via /zj:spec |
 | PRD-9 | CRISP-01, NFR-1 | CRISP coarse |
 | PRD-10 | NFR-3 | — |

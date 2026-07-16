@@ -1,9 +1,25 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-13 (Phase 10 **build complete** — MOUSSE WO core, 20/20 green; next `/zj:verify 10`)
+Updated: 2026-07-16 (Phase 10 **VERIFIED** — MOUSSE WO core PASS, tagged `zj/good-10-mousse-work-orders`; next `/zj:retro 10`)
 
 ## Position
 
-- **Step:** **Phase 10 build COMPLETE (2026-07-13)** — MOUSSE materials-only WO core on branch
+- **Step:** **Phase 10 VERIFIED (2026-07-16, `/zj:verify 10`) — Verdict PASS, tagged
+  `zj/good-10-mousse-work-orders`.** Goal-backward verifier + code reviewer both run. All 7 SCs
+  live-proven: `verify_mousse.py` 34/34 (WIP-clears-to-zero Decimal-exact + `asyncio.Barrier`
+  concurrency race), `verify_mousse_api.py` 34/34 (HTTP RBAC + audit); full regression **13/13
+  verify_* exit 0**, TB nets zero; FE Vitest + `npm run build` clean; alembic head 0012. **Fix loop
+  closed ONE MAJOR (`5cffeeb`):** completion debited 1130 / credited 1140 for the same
+  `accumulated_wip`, but the FG receipt capitalises only `planned_qty × fg_unit_cost` into the
+  inventory subledger — so on non-divisible WIP (100/3) the 1130 control account permanently drifted
+  from the subledger (a silent tie-out break the verify suite missed; reviewer caught it). Owner chose
+  the rounding-sink remedy: completion now posts a 3-line JE routing the residual to a NEW seeded
+  **5190 Inventory Rounding** account (D-P10-2 amended) so 1140 clears AND 1130 ties to the subledger,
+  both Decimal-exact; pinned by `verify_mousse.py` scenario D. The D-P10-4 AST-split chore reviewed
+  clean. Doc gaps closed: SRD MOUSSE-01 rewritten with ACs + `Verified: 5cffeeb`,
+  `requirements-progress.md` MOUSSE section added, MAP.md (head 0012 + mousse registered), CLAUDE.md
+  suite table. Deferred minor logged (zero-cost lone-component issue). Artifacts:
+  `.zj/phases/10-mousse-work-orders/{VERIFICATION,REVIEW}.md`. **Next action: `/zj:retro 10`.**
+- **Step (prior):** **Phase 10 build COMPLETE (2026-07-13)** — MOUSSE materials-only WO core on branch
   `feature-mousse-work-orders` (cut off D-P10-4 chore tip `6293c96`). **All 20 PLAN tasks done,
   atomic commits.** Next action: **`/zj:verify 10`**.
   - **Backend (`backend/app/modules/mousse/`):** models+migration 0012 (`162c463`,`dd40197`), schemas

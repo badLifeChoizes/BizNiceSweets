@@ -1,6 +1,6 @@
 # Plan: Phase 10 — MOUSSE manufacturing execution core (materials-only)
 Goal: A shop can create, release, issue components to, and complete a work order that consumes a PLUM BOM and SYERP inventory to produce a finished good, with material cost flowing through a WIP clearing account that returns to zero — closing the v2.0 "execute work orders that consume PLUM BOMs and inventory" DoD.
-Status: build complete (2026-07-13) — 20/20 tasks, all green; awaiting /zj:verify 10
+Status: VERIFIED (2026-07-16, /zj:verify 10) — Verdict PASS, tagged `zj/good-10-mousse-work-orders`; one major fixed in the loop (1130↔subledger tie via 5190, `5cffeeb`)
 
 ## Success criteria
 Implements requirement **MOUSSE-01** (materials-only slice). Every task below cites MOUSSE-01.
@@ -233,6 +233,8 @@ These are settled (D-P10-1..8, in `.zj/DECISIONS.md`) — honor, do not re-litig
 - **D-P10-5 scope (confirmed).** Single-level snapshot means sub-assemblies are issued as components, not exploded to leaves — owner-confirmed at handoff. A part whose sub-assembly is not itself stocked/produced will fail the D-P10-7 release guard (no linked InventoryItem), which is the intended fail-fast.
 
 ## Noticed / deferred
+- **Zero-cost lone-component issue (verify 10, reviewer question).** Issuing ONLY a component whose `moving_avg_cost` is 0 produces `total_value == 0`, which the balanced-JE guard rejects 422 (a zero JE line fails the XOR balance check) — so the component's stock is never consumed and it stays under-issued, forcing an audited `override_incomplete` at completion for a genuinely free/nominal part. Documented intentional ("no GL meaning"); minor UX edge, deferred. Workaround: issue it alongside a non-zero component. Revisit if a real workflow hits it.
+- **Verify-10 fix loop:** completion rounding residual now routes to **5190 Inventory Rounding** (D-P10-2 amended) so 1130 ties to the inventory subledger, not just 1140 clearing — see VERIFICATION/REVIEW fix-loop sections and DECISIONS D-P10-2 amendment (`5cffeeb`).
 - Routing, work centers, labor, overhead (5120/5130), shop-floor operator view — deferred (D-P10-1); the 5120/5130 accounts stay unused this phase.
 - WO scrap / yield loss, partial/backflush issue automation, WO reopen/uncancel — not in this slice.
 - Multi-level BOM explosion for WO components — deferred pending D-P10-5 confirmation.

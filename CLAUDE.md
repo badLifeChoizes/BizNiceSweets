@@ -93,7 +93,7 @@ The vanilla-JS / CDN / localStorage details in the "Legacy prototypes" subsectio
 | PLUM (PLM) | `backend/app/modules/plum/`, `frontend/src/routes/plum/` | Building (parts, revisions, BOM, costing, AVL, import/export); legacy `plum/app/plm_v54.html` |
 | FLAN (Project Mgmt) | — (legacy `flan/app/prj-mgmt-v24.html`) | Prototype only, not yet re-platformed |
 | CRUMB (CRM) | — | Planned |
-| MOUSSE (MES) | — | Planned |
+| MOUSSE (MES) | `backend/app/modules/mousse/`, `frontend/src/routes/mousse/` | Building (materials-only work orders: create/release/issue/complete, WIP clears to zero; verified Phase 10) |
 | CRISP (QMS) | — | Planned |
 | GELATO (WMS) | — | Planned |
 

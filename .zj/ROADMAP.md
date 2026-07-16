@@ -245,7 +245,7 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
   net-income fiscal-year bounding, and the backdated-payment tie-out edge; syerp `service.py` size
   bumped in the split item (~3,700 lines). **Next: `/zj:plan 10` (MOUSSE).**
 
-### Phase 10: MOUSSE — manufacturing execution core (materials-only)  [planned 2026-07-13]
+### Phase 10: MOUSSE — manufacturing execution core (materials-only)  [verified 2026-07-16]
 - **Goal:** Work orders that consume a PLUM BOM and SYERP inventory to produce a finished good,
   with material cost flowing through a **WIP clearing account (1140) that returns to zero** —
   closing the v2.0 DoD clause "execute work orders that consume PLUM BOMs and inventory."
@@ -272,6 +272,17 @@ Phase 8 is **done**; Phases 9–10 pending. Carried in from the v1.0 close: the 
 - **Notes:** the PLUM `service.py` split (~3k lines, BACKLOG p2) is the other half of the same
   monolith-file item; MOUSSE, as a new module, does not extend either file — it imports SYERP's
   inventory/GL service functions.
+- **Verified 2026-07-16 (`/zj:verify 10`, tag `zj/good-10-mousse-work-orders`):** Verdict PASS.
+  All 7 SCs live-proven — `verify_mousse.py` 34/34 (WIP-clears-to-zero Decimal-exact + concurrency
+  race via `asyncio.Barrier`), `verify_mousse_api.py` 34/34 (HTTP RBAC + audit); full regression
+  13/13 verify_* exit 0, TB nets zero; FE Vitest + build clean; alembic head 0012. **Fix loop
+  closed one major** (`5cffeeb`): completion debited 1130 / credited 1140 for the same
+  `accumulated_wip`, but the FG receipt capitalises only `planned_qty × fg_unit_cost` into the
+  inventory subledger, so on non-divisible WIP (100/3) the 1130 control account permanently drifted
+  from the subledger — now a 3-line JE routes the residual to a new seeded **5190 Inventory
+  Rounding** account (D-P10-2 amended), so 1140 clears AND 1130 ties to the subledger, both exact;
+  pinned by `verify_mousse.py` scenario D. The AST-split chore (`6293c96`+`3d59068`) reviewed clean.
+  Artifacts: `.zj/phases/10-mousse-work-orders/{VERIFICATION,REVIEW}.md`.
 
 ---
 
