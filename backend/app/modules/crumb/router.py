@@ -34,6 +34,16 @@ Endpoints (mount_all in registry.py adds the /api/v1 prefix — full paths are
     PATCH  /crumb/quotes/{quote_id}/lines/{line_id} — replace a line (draft only) (crumb:write)
     DELETE /crumb/quotes/{quote_id}/lines/{line_id} — delete a line (draft only) (crumb:write)
     POST   /crumb/quotes/{quote_id}/status    — advance the status FSM (crumb:write)
+    POST   /crumb/quotes/{quote_id}/convert   — convert an accepted quote → sales order (crumb:write)
+
+  Sales orders
+    GET    /crumb/sales-orders                 — list order headers (crumb:read)
+    POST   /crumb/sales-orders                 — create a draft order (crumb:write)
+    GET    /crumb/sales-orders/{so_id}         — header + lines + totals (crumb:read)
+    POST   /crumb/sales-orders/{so_id}/lines   — add a line (draft only) (crumb:write)
+    PATCH  /crumb/sales-orders/{so_id}/lines/{line_id} — replace a line (draft only) (crumb:write)
+    DELETE /crumb/sales-orders/{so_id}/lines/{line_id} — delete a line (draft only) (crumb:write)
+    POST   /crumb/sales-orders/{so_id}/status  — advance the order-status FSM (crumb:write)
 
   Interactions
     POST   /crumb/interactions                — log a customer touch (crumb:write)
@@ -48,9 +58,14 @@ commit (write_audit self-commits), reads never audit. Actions: lead.created,
 lead.updated, lead.archived, lead.linked_customer, lead.converted,
 opportunity.created, opportunity.updated, opportunity.stage_changed,
 opportunity.quote_spawned, quote.created, quote.line_added, quote.line_updated,
-quote.line_deleted, quote.status_changed, interaction.logged.
+quote.line_deleted, quote.status_changed, quote.converted_to_sales_order,
+sales_order.created, sales_order.line_added, sales_order.line_updated,
+sales_order.line_deleted, sales_order.status_changed, sales_order.confirmed,
+sales_order.cancelled, interaction.logged.
 """
 from __future__ import annotations
+
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,6 +93,23 @@ from app.modules.crumb.schemas import (
     QuoteLineRead,
     QuoteRead,
     QuoteStatusRequest,
+    QuoteToSalesOrderRequest,
+    SalesOrderCreate,
+    SalesOrderDetailRead,
+    SalesOrderLineCreate,
+    SalesOrderLineRead,
+    SalesOrderRead,
+    SalesOrderStatusRequest,
+)
+
+# The sales-order Draft-only line editors share the names add_line/update_line/
+# delete_line with the quote editors, so they are intentionally NOT flat-re-exported
+# from service/__init__.py (see its NOTE). Import them from the submodule and alias
+# so calling the SO editors never shadows crumb_service.add_line (the quote editor).
+from app.modules.crumb.service.sales_orders import (
+    add_line as add_so_line,
+    delete_line as delete_so_line,
+    update_line as update_so_line,
 )
 
 router = APIRouter()
@@ -506,6 +538,210 @@ async def advance_quote_status_endpoint(
         detail=f"Quote {quote.quote_number} moved to status '{quote.status}'",
     )
     return quote
+
+
+@router.post(
+    "/crumb/quotes/{quote_id}/convert",
+    response_model=SalesOrderDetailRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def convert_quote_endpoint(
+    quote_id: str,
+    data: QuoteToSalesOrderRequest,
+    current_user=Depends(require_permission("crumb:write")),
+    db: AsyncSession = Depends(get_db),
+) -> SalesOrderDetailRead:
+    """
+    Convert an accepted quote into a draft sales order (422 if the quote is not
+    accepted). Writes a quote.converted_to_sales_order audit row (target: the new
+    order) after the commit.
+    """
+    so = await crumb_service.convert_quote_to_sales_order(
+        db, quote_id, data, str(current_user.id)
+    )
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="quote.converted_to_sales_order",
+        target_type="sales_order",
+        target_id=so.id,
+        detail=f"Quote {quote_id} converted to sales order {so.so_number}",
+    )
+    return SalesOrderDetailRead.model_validate(so)
+
+
+# ---------------------------------------------------------------------------
+# Sales orders (CRUMB-01)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/crumb/sales-orders", response_model=list[SalesOrderRead])
+async def list_sales_orders_endpoint(
+    current_user=Depends(require_permission("crumb:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[SalesOrderRead]:
+    """List sales-order headers ordered by SO number. Read-only."""
+    return await crumb_service.list_sales_orders(db)
+
+
+@router.post(
+    "/crumb/sales-orders",
+    response_model=SalesOrderDetailRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_sales_order_endpoint(
+    data: SalesOrderCreate,
+    current_user=Depends(require_permission("crumb:write")),
+    db: AsyncSession = Depends(get_db),
+) -> SalesOrderDetailRead:
+    """Create a draft sales order (header + ordered lines). Writes a sales_order.created row."""
+    so = await crumb_service.create_sales_order(db, data, str(current_user.id))
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="sales_order.created",
+        target_type="sales_order",
+        target_id=so.id,
+        detail=f"Sales order created: {so.so_number}",
+    )
+    return SalesOrderDetailRead.model_validate(so)
+
+
+@router.get("/crumb/sales-orders/{so_id}", response_model=SalesOrderDetailRead)
+async def get_sales_order_endpoint(
+    so_id: str,
+    current_user=Depends(require_permission("crumb:read")),
+    db: AsyncSession = Depends(get_db),
+) -> SalesOrderDetailRead:
+    """
+    Get a sales-order header with its ordered lines and derived figures (each
+    line's line_total and shortage, and the header total_value). Read-only.
+    """
+    so = await crumb_service.get_sales_order_detail(db, so_id)
+    return SalesOrderDetailRead.model_validate(so)
+
+
+@router.post(
+    "/crumb/sales-orders/{so_id}/lines",
+    response_model=SalesOrderLineRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_sales_order_line_endpoint(
+    so_id: str,
+    line: SalesOrderLineCreate,
+    current_user=Depends(require_permission("crumb:write")),
+    db: AsyncSession = Depends(get_db),
+) -> SalesOrderLineRead:
+    """Add an ordered line to a draft sales order. Writes a sales_order.line_added row."""
+    row = await add_so_line(db, so_id, line, str(current_user.id))
+    row.line_total = row.qty_ordered * row.unit_price
+    row.shortage = row.qty_ordered - row.qty_reserved
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="sales_order.line_added",
+        target_type="sales_order",
+        target_id=so_id,
+        detail=f"Sales order {so_id} line added: {row.id}",
+    )
+    return SalesOrderLineRead.model_validate(row)
+
+
+@router.patch(
+    "/crumb/sales-orders/{so_id}/lines/{line_id}",
+    response_model=SalesOrderLineRead,
+)
+async def update_sales_order_line_endpoint(
+    so_id: str,
+    line_id: str,
+    patch: SalesOrderLineCreate,
+    current_user=Depends(require_permission("crumb:write")),
+    db: AsyncSession = Depends(get_db),
+) -> SalesOrderLineRead:
+    """Replace a draft sales-order line's ordered fields. Writes a sales_order.line_updated row."""
+    row = await update_so_line(db, so_id, line_id, patch, str(current_user.id))
+    row.line_total = row.qty_ordered * row.unit_price
+    row.shortage = row.qty_ordered - row.qty_reserved
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="sales_order.line_updated",
+        target_type="sales_order",
+        target_id=so_id,
+        detail=f"Sales order {so_id} line updated: {line_id}",
+    )
+    return SalesOrderLineRead.model_validate(row)
+
+
+@router.delete(
+    "/crumb/sales-orders/{so_id}/lines/{line_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_sales_order_line_endpoint(
+    so_id: str,
+    line_id: str,
+    current_user=Depends(require_permission("crumb:write")),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete a line from a draft sales order. Writes a sales_order.line_deleted row."""
+    await delete_so_line(db, so_id, line_id, str(current_user.id))
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="sales_order.line_deleted",
+        target_type="sales_order",
+        target_id=so_id,
+        detail=f"Sales order {so_id} line deleted: {line_id}",
+    )
+
+
+@router.post("/crumb/sales-orders/{so_id}/status", response_model=SalesOrderDetailRead)
+async def advance_sales_order_status_endpoint(
+    so_id: str,
+    data: SalesOrderStatusRequest,
+    current_user=Depends(require_permission("crumb:write")),
+    db: AsyncSession = Depends(get_db),
+) -> SalesOrderDetailRead:
+    """
+    Advance the sales-order status FSM (confirm reserves stock; cancel releases it —
+    both dispatched inside the service). Writes one audit row after the commit:
+    sales_order.confirmed (target=confirmed, with a reserved/shortage summary),
+    sales_order.cancelled (target=cancelled), else sales_order.status_changed — each
+    carrying the from→to transition.
+    """
+    # Read the current status BEFORE the transition so the audit row can carry
+    # from→to (the service returns the post-transition detail only).
+    prior = await crumb_service.get_sales_order_detail(db, so_id)
+    from_status = prior.status
+
+    so = await crumb_service.advance_sales_order_status(
+        db, so_id, data.target_status, str(current_user.id)
+    )
+
+    if data.target_status == "confirmed":
+        reserved = sum((ln.qty_reserved for ln in so.lines), Decimal("0"))
+        shortage = sum((ln.shortage for ln in so.lines), Decimal("0"))
+        action = "sales_order.confirmed"
+        detail = (
+            f"Sales order {so.so_number} {from_status}→{so.status} "
+            f"(reserved {reserved}, shortage {shortage})"
+        )
+    elif data.target_status == "cancelled":
+        action = "sales_order.cancelled"
+        detail = f"Sales order {so.so_number} {from_status}→{so.status}"
+    else:
+        action = "sales_order.status_changed"
+        detail = f"Sales order {so.so_number} {from_status}→{so.status}"
+
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action=action,
+        target_type="sales_order",
+        target_id=so.id,
+        detail=detail,
+    )
+    return SalesOrderDetailRead.model_validate(so)
 
 
 # ---------------------------------------------------------------------------
