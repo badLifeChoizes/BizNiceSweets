@@ -43,6 +43,8 @@ import { Pipeline } from '@/routes/crumb/Pipeline'
 import { OpportunityDetail } from '@/routes/crumb/OpportunityDetail'
 import { Quotes } from '@/routes/crumb/Quotes'
 import { QuoteDetail } from '@/routes/crumb/QuoteDetail'
+import { SalesOrders } from '@/routes/crumb/SalesOrders'
+import { SalesOrderDetail } from '@/routes/crumb/SalesOrderDetail'
 import { Communications } from '@/routes/crumb/Communications'
 
 export function App() {
@@ -97,6 +99,8 @@ export function App() {
         <Route path="/crumb/opportunities/:id" element={<OpportunityDetail />} />
         <Route path="/crumb/quotes" element={<Quotes />} />
         <Route path="/crumb/quotes/:id" element={<QuoteDetail />} />
+        <Route path="/crumb/sales-orders" element={<SalesOrders />} />
+        <Route path="/crumb/sales-orders/:id" element={<SalesOrderDetail />} />
         <Route path="/crumb/communications" element={<Communications />} />
 
         {/* Catch-all: unknown protected paths fall back to Home instead of a blank screen */}

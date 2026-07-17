@@ -14,6 +14,8 @@
  *   ['crumb', 'pipeline']               — the stage-grouped board (?pipeline=true)
  *   ['crumb', 'quotes']                 — the quote-header list
  *   ['crumb', 'quotes', id]             — one quote's detail (header + priced lines)
+ *   ['crumb', 'sales-orders']           — the sales-order header list
+ *   ['crumb', 'sales-orders', id]       — one sales order's detail (header + lines)
  *   ['crumb', 'interactions', partnerId]— a customer's interaction timeline
  *
  * Reads are GETs; every mutation invalidates the affected keys after it resolves.
@@ -500,6 +502,197 @@ export function useCreateInteraction() {
       apiClient.post<Interaction>('/api/v1/crumb/interactions', payload).then((r) => r.data),
     onSuccess: (interaction) => {
       qc.invalidateQueries({ queryKey: timelineKey(interaction.partner_id) })
+    },
+  })
+}
+
+// ══ Sales orders (CRUMB-01, Phase 11b) ═══════════════════════════════════════
+// Mirror the quote seam above: header list + detail (header + ordered lines),
+// line CRUD (draft only), a status FSM, and quote→SO conversion. Money and
+// quantity fields arrive as exact STRINGS (D-11) — render as-is, never float math.
+
+/** Sales-order lifecycle status. */
+export type SalesOrderStatus = 'draft' | 'confirmed' | 'fulfilling' | 'closed' | 'cancelled'
+
+/** One ordered sales-order line (SalesOrderLineRead). line_total/shortage are service-derived. */
+export interface SalesOrderLine {
+  id: string
+  sales_order_id: string
+  item_id: string | null
+  plum_part_id: string | null
+  description: string | null
+  qty_ordered: string
+  unit_price: string
+  qty_reserved: string
+  sort_order: number
+  line_total: string
+  shortage: string
+}
+
+/** Sales-order header row (SalesOrderRead). */
+export interface SalesOrder {
+  id: string
+  so_number: string
+  partner_id: string
+  source_quote_id: string | null
+  source_opportunity_id: string | null
+  status: string
+  order_date: string
+  required_date: string | null
+  actor_id: string
+  created_at: string
+}
+
+/** Sales-order detail (SalesOrderDetailRead) — header plus its ordered lines and total. */
+export interface SalesOrderDetail extends SalesOrder {
+  lines: SalesOrderLine[]
+  total_value: string
+}
+
+/** One ordered line of a sales-order create / line-CRUD request (SalesOrderLineCreate). */
+export interface SalesOrderLinePayload {
+  item_id?: string | null
+  plum_part_id?: string | null
+  description?: string | null
+  qty_ordered: string
+  unit_price: string
+}
+
+export interface SalesOrderCreatePayload {
+  partner_id: string
+  order_date?: string | null
+  required_date?: string | null
+  lines?: SalesOrderLinePayload[]
+}
+
+/** Convert-quote-to-sales-order payload (QuoteToSalesOrderRequest) — thin by design. */
+export interface QuoteConvertPayload {
+  order_date?: string | null
+  required_date?: string | null
+}
+
+export const salesOrdersKey = ['crumb', 'sales-orders'] as const
+export const salesOrderKey = (id: string) => ['crumb', 'sales-orders', id] as const
+
+function fetchSalesOrders(): Promise<SalesOrder[]> {
+  return apiClient.get<SalesOrder[]>('/api/v1/crumb/sales-orders').then((r) => r.data)
+}
+
+function fetchSalesOrder(id: string): Promise<SalesOrderDetail> {
+  return apiClient.get<SalesOrderDetail>(`/api/v1/crumb/sales-orders/${id}`).then((r) => r.data)
+}
+
+/** Sales-order header list (ordered by SO number). */
+export function useSalesOrders() {
+  return useQuery<SalesOrder[], Error>({
+    queryKey: salesOrdersKey,
+    queryFn: fetchSalesOrders,
+  })
+}
+
+/** One sales order's detail (header + ordered lines + total). */
+export function useSalesOrder(id: string) {
+  return useQuery<SalesOrderDetail, Error>({
+    queryKey: salesOrderKey(id),
+    queryFn: () => fetchSalesOrder(id),
+    enabled: !!id,
+  })
+}
+
+/** Create a draft sales order (header + ordered lines). Invalidates the SO list. */
+export function useCreateSalesOrder() {
+  const qc = useQueryClient()
+  return useMutation<SalesOrderDetail, Error, SalesOrderCreatePayload>({
+    mutationFn: (payload) =>
+      apiClient
+        .post<SalesOrderDetail>('/api/v1/crumb/sales-orders', payload)
+        .then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: salesOrdersKey })
+    },
+  })
+}
+
+/** Add an ordered line to a draft sales order. Invalidates that order's detail. */
+export function useAddSoLine() {
+  const qc = useQueryClient()
+  return useMutation<SalesOrderLine, Error, { soId: string; line: SalesOrderLinePayload }>({
+    mutationFn: ({ soId, line }) =>
+      apiClient
+        .post<SalesOrderLine>(`/api/v1/crumb/sales-orders/${soId}/lines`, line)
+        .then((r) => r.data),
+    onSuccess: (_line, { soId }) => {
+      qc.invalidateQueries({ queryKey: salesOrderKey(soId) })
+    },
+  })
+}
+
+/** Replace a draft sales-order line. Invalidates that order's detail. */
+export function useUpdateSoLine() {
+  const qc = useQueryClient()
+  return useMutation<
+    SalesOrderLine,
+    Error,
+    { soId: string; lineId: string; patch: SalesOrderLinePayload }
+  >({
+    mutationFn: ({ soId, lineId, patch }) =>
+      apiClient
+        .patch<SalesOrderLine>(`/api/v1/crumb/sales-orders/${soId}/lines/${lineId}`, patch)
+        .then((r) => r.data),
+    onSuccess: (_line, { soId }) => {
+      qc.invalidateQueries({ queryKey: salesOrderKey(soId) })
+    },
+  })
+}
+
+/** Delete a line from a draft sales order. Invalidates that order's detail. */
+export function useDeleteSoLine() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { soId: string; lineId: string }>({
+    mutationFn: ({ soId, lineId }) =>
+      apiClient
+        .delete<void>(`/api/v1/crumb/sales-orders/${soId}/lines/${lineId}`)
+        .then((r) => r.data),
+    onSuccess: (_res, { soId }) => {
+      qc.invalidateQueries({ queryKey: salesOrderKey(soId) })
+    },
+  })
+}
+
+/** Advance the sales-order status FSM. Invalidates the list and that order's detail. */
+export function useAdvanceSalesOrderStatus() {
+  const qc = useQueryClient()
+  return useMutation<SalesOrderDetail, Error, { id: string; target_status: string }>({
+    mutationFn: ({ id, target_status }) =>
+      apiClient
+        .post<SalesOrderDetail>(`/api/v1/crumb/sales-orders/${id}/status`, { target_status })
+        .then((r) => r.data),
+    onSuccess: (so) => {
+      qc.invalidateQueries({ queryKey: salesOrdersKey })
+      qc.invalidateQueries({ queryKey: salesOrderKey(so.id) })
+    },
+  })
+}
+
+/**
+ * Convert an accepted quote into a draft sales order. Invalidates the SO list and
+ * the source quote (whose status moves to converted).
+ */
+export function useConvertQuoteToSalesOrder() {
+  const qc = useQueryClient()
+  return useMutation<
+    SalesOrderDetail,
+    Error,
+    { quoteId: string; payload?: QuoteConvertPayload }
+  >({
+    mutationFn: ({ quoteId, payload }) =>
+      apiClient
+        .post<SalesOrderDetail>(`/api/v1/crumb/quotes/${quoteId}/convert`, payload ?? {})
+        .then((r) => r.data),
+    onSuccess: (_so, { quoteId }) => {
+      qc.invalidateQueries({ queryKey: salesOrdersKey })
+      qc.invalidateQueries({ queryKey: quotesKey })
+      qc.invalidateQueries({ queryKey: quoteKey(quoteId) })
     },
   })
 }

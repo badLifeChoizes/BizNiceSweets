@@ -1,5 +1,5 @@
 // ABOUTME: CRUMB (CRM) sub-navigation tab strip (copies MousseNav) — lets users move
-// ABOUTME: between the module's screens: Leads, Pipeline, Quotes, Communications.
+// ABOUTME: between the module's screens: Leads, Pipeline, Quotes, Sales Orders, Communications.
 
 /**
  * CrumbNav — sub-navigation tab strip for the CRUMB (CRM) module screens.
@@ -18,6 +18,7 @@ const TABS: Array<{ to: string; label: string; end?: boolean }> = [
   { to: '/crumb/leads', label: 'Leads' },
   { to: '/crumb/opportunities', label: 'Pipeline' },
   { to: '/crumb/quotes', label: 'Quotes' },
+  { to: '/crumb/sales-orders', label: 'Sales Orders' },
   { to: '/crumb/communications', label: 'Communications' },
 ]
 
