@@ -3,6 +3,69 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 11b — CRUMB sales orders + soft-reservation (verified 2026-07-17)
+
+CRUMB-01 completed: SO FSM, accepted-quote→SO conversion, and the soft-reservation crux
+(lock-before-read, Σ-reserved over open SOs, concurrency-proven). Clean build — and then the
+**same class of blind spot as 11a struck again**, in a sharper, more instructive form. The
+parallel code review caught a BLOCKER while 17/17 verify assertions stayed green.
+
+### Surprises (assumptions wrong → corrected truth)
+
+- **The 11a "green-but-broken" keeper recurred — with a nameable mechanism: verify built its
+  inputs in a shape no UI path sends.** `verify_crumb_so.py` passed `item_id=` directly to the
+  line-create schema. But the frontend line editor sends a part line as `plum_part_id` ONLY, and
+  the *direct* create/add/update service path never bridged `plum_part_id→item_id` (only the
+  conversion path did). Result: every UI-created SO line persisted `item_id=NULL`, reserved 0 on
+  confirm, and showed a false "Non-stock" badge + full shortage even with stock on hand — the
+  **headline feature was dead through the UI** while every verify assertion passed, because the
+  test constructed the one input shape the UI never produces. **Corrected truth / keeper:
+  service-layer verify scripts must construct inputs in the SAME shape the router/UI actually
+  sends — resolve-from-`plum_part_id`, not hand-fed `item_id`. Green over a synthetic shape
+  proves a path no user travels.** This is the 11a lesson made concrete: it's not just "verify
+  misses negative space," it's "verify can mismatch the real input contract and certify a dead
+  feature." Both times the fix included a NEW load-bearing assertion driving the *real* shape
+  (11b's `(D2)` asserts a `plum_part_id`-only line resolves to the linked stock item).
+
+### Patterns that worked (repeat these)
+
+- **Run verifier and reviewer in parallel, and let a reviewer BLOCKER override a verifier PASS.**
+  The verifier returned PASS (17/17, source-read); the reviewer, working the same diff
+  independently, found the dead-through-UI blocker the harness structurally hid. The manager
+  treated the reviewer's blocker as authoritative over the premature PASS, ran a fix loop, and
+  re-verified. **The independent adversarial review is not redundant with verify — on this
+  project it has now caught the one defect that mattered on two consecutive phases. Budget it as
+  non-optional, especially on "low-risk, just-mirror-the-exemplar" builds where verify feels
+  sufficient.**
+- **A multi-entry invariant needs ONE shared resolver, wired into every entry point from the
+  start.** Root cause was asymmetry: conversion resolved `plum_part_id→item_id`
+  (`_resolve_item_id_for_part`); direct create/add/update copied `item_id` verbatim. The fix
+  factored a single `_resolve_and_validate_item_id` used by all three direct paths, reusing
+  conversion's resolver. Keeper: **when two+ entry points must establish the same invariant
+  (here: a line needs a resolved `item_id` to reserve), the resolution belongs in one helper on
+  the shared path, never re-implemented (or forgotten) per entry point.** Same shape as the 11a
+  "structural guard before value early-return" lesson — invariant enforcement must not depend on
+  which door you came through.
+- **The concurrency crux got a real load-bearing test, not a mock.** Scenario F
+  (`asyncio.gather` + `Barrier`, two independent sessions, on-hand 10 / each orders 7, ×5) asserts
+  combined `qty_reserved == 10` exactly — and is proven load-bearing (removing the FOR-UPDATE lock
+  fails it). Plus the mandated Task-8 adversarial review of the invariant ran *before* verify.
+  Repeat for any concurrency/invariant crux: assert the invariant under genuine contention and
+  prove the guard is what holds it.
+
+### Deferred items (each has a home)
+
+- **Quote→SO conversion has no idempotency guard** — an Accepted quote converts to unlimited
+  duplicate SOs (no status change, button always visible). Owner chose fix-blocker-only at verify.
+  → **BACKLOG p3** (`.zj/BACKLOG.md:176`); fix when post-conversion quote lifecycle is specified
+  (candidate: 422 re-convert if an SO already stamps this quote, or a `converted` quote status).
+- **`InventoryItem.plum_part_id` has no uniqueness constraint** — conversion/resolution picks the
+  lowest `id` deterministically. **Accepted for the single-shop model, no action**; if a shop ever
+  links two sellable items to one PLUM part the chosen item is arbitrary. Follow-up only if it
+  bites: a primary/sellable flag or uniqueness constraint. Documented in PLAN `## Noticed`.
+- **Closed SOs retain stale `qty_reserved`** (cosmetic; Closed ∉ the OPEN availability sum, so no
+  invariant impact). Optional zero-on-close. Recorded in VERIFICATION Gaps #2 / REVIEW-task8 #3.
+
 ## Phase 11a — CRUMB CRM & pipeline (verified 2026-07-16)
 
 First v3.0 phase: a whole new `crumb` suite (leads → opportunities → quotes + comm log) built

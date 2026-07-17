@@ -1,20 +1,21 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-17 (**Phase 11b VERIFIED** — `/zj:verify 11b` PASS after a fix loop; CRUMB-01 complete. Next action: `/zj:retro 11b`.)
+Updated: 2026-07-17 (**Phase 11b RETRO'D** — CRUMB-01 complete; learnings banked, roadmap trued up. Next action: `/zj:plan 12` (GELATO warehouse core).)
 
 ## Position
 
-- **Step:** **VERIFIED** — **Phase 11b (CRUMB sales orders + soft-reservation) verified 2026-07-17**,
-  tag `zj/good-11b-crumb-sales-orders` (`fec334f`). **CRUMB-01 now complete (all ACs).** Verifier +
-  reviewer ran in parallel: 17/17 verify_* green, concurrency crux load-bearing, TB nets zero — **but
-  the code review caught a BLOCKER the verify harness hid** (the 11a "green-but-broken" keeper): direct
-  SO create/add/update line paths never bridged `plum_part_id→item_id` (the UI line-editor sends
-  `plum_part_id` only), so every UI-created order reserved 0 stock and showed a false Non-stock badge.
-  **Fixed `fec334f`** (folded resolution into `_resolve_and_validate_item_id`, reusing conversion's
-  resolver) + pinned by new `verify_crumb_so.py` (D2) assertions; full suite re-run **17/17**. Owner
-  decision **D-V3-20:** fix-blocker-only — the quote→SO convert idempotency guard (unlimited duplicate
-  SOs) is deferred to Phase 13 (BACKLOG p3). Artifacts: VERIFICATION.md (+ manager fix-loop note),
-  REVIEW.md, REVIEW-task8.md. **Next action:** `/zj:retro 11b` (fix loop produced a keeper — the
-  code-review-catches-what-verify-misses lesson recurred and paid off again).
+- **Step:** **RETRO'D** — **Phase 11b (CRUMB sales orders + soft-reservation) closed 2026-07-17**,
+  tag `zj/good-11b-crumb-sales-orders` (`fec334f`). **CRUMB-01 complete (all ACs).** Roadmap marked
+  `[done — verified + retro'd]`. Retro banked three keepers (LEARNINGS Phase 11b): (1) **verify built
+  its inputs in a shape the UI never sends** — `item_id=` hand-fed while the UI sends `plum_part_id`
+  only — so 17/17 green certified a dead-through-UI headline feature; the 11a "green-but-broken"
+  pattern recurred with a nameable mechanism (verify inputs must match the real router/UI contract);
+  (2) **run verifier + reviewer in parallel and let a reviewer BLOCKER override a verifier PASS** — it
+  has now caught the one defect that mattered on two consecutive phases; (3) **a multi-entry invariant
+  needs one shared resolver wired into every door** (the `_resolve_and_validate_item_id` fix).
+  Deferred items each have a home: quote→SO idempotency guard → BACKLOG p3; `plum_part_id` non-unique
+  → accepted for single-shop; Closed-SO stale `qty_reserved` → cosmetic, recorded. **Next action:**
+  `/zj:plan 12` (GELATO warehouse core — ship posts the COGS JE; realizes the D-P8-3 bin deferral).
+  Optional: `/zj:log phase 11b` to file the formal work log; `/zj:ship` to merge the 11a+11b stack.
 
 - **(historical) Step:** **BUILD COMPLETE** — **Phase 11b (CRUMB sales orders + soft-reservation) built 2026-07-17.**
   All **17 tasks** shipped on branch `feature-crumb-sales-orders` (cut off the verified 11a code tip
