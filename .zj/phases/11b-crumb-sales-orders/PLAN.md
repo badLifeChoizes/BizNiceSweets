@@ -81,7 +81,7 @@ Recorded this planning session; the manager appends them to `DECISIONS.md` as D-
 - **Verify:** exercised by Task 10; interim `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.modules.syerp.service import get_item_on_hand; print(callable(get_item_on_hand))"`.
 - **Parallel-ok:** yes (with Tasks 3/4, after nothing runtime)
 
-### [ ] 6. Sales-orders service — SO-#### generator, direct create (header+lines), read/list, draft-only line edits, status FSM
+### [x] 6. Sales-orders service — SO-#### generator, direct create (header+lines), read/list, draft-only line edits, status FSM
 - **Files:** `backend/app/modules/crumb/service/sales_orders.py` (new)
 - **Do:** Copy the quotes-service shapes (D-V3-17):
   - `_next_sales_order_number` (pure) + `generate_sales_order_number(db)` — regex `~ '^SO-[0-9]+$'`, `cast(func.substring(so_number, 4), Integer).desc()` (skip the 3-char `SO-` prefix), `f"SO-{n:04d}"`, `"SO-0001"` seed. Never lexicographic MAX (D-P8-6).
@@ -94,7 +94,7 @@ Recorded this planning session; the manager appends them to `DECISIONS.md` as D-
 - **Verify:** `verify_crumb_so.py` (Task 10) covers create + numeric-safe boundary + draft-only 409 + FSM valid/invalid.
 - **Parallel-ok:** no (Tasks 7/8 import it; needs 3/4/5)
 
-### [ ] 7. Sales-orders service — accepted-quote→SO conversion (item_id resolution, linkage)
+### [x] 7. Sales-orders service — accepted-quote→SO conversion (item_id resolution, linkage)
 - **Files:** `backend/app/modules/crumb/service/sales_orders.py` (extend)
 - **Do:** `convert_quote_to_sales_order(db, quote_id, data, actor_id)`:
   - Load the quote (404); require `quote.status == "accepted"` else **422** (AC3 tail).
@@ -105,7 +105,7 @@ Recorded this planning session; the manager appends them to `DECISIONS.md` as D-
 - **Verify:** `verify_crumb_so.py` (Task 10) — accepted-only guard, line-copy exactness, item_id resolution incl. a non-stock line, linkage stamped both ways.
 - **Parallel-ok:** no (extends Task 6)
 
-### [ ] 8. Sales-orders service — confirm (reserve, FOR UPDATE lock) + cancel (release) — THE crux
+### [x] 8. Sales-orders service — confirm (reserve, FOR UPDATE lock) + cancel (release) — THE crux
 - **Files:** `backend/app/modules/crumb/service/sales_orders.py` (extend)
 - **Do:** This is the adversarial-review centerpiece (SC4, D-V3-8/11/16/18).
   - `confirm_sales_order(db, so_id, actor_id)`: load the Draft SO (404; 422 if not Draft). Collect the **distinct** non-NULL `item_id`s across its lines; **lock them FOR UPDATE in sorted-id order BEFORE any read** (copy `bills.py:352` — `for iid in sorted(item_ids): await db.execute(select(InventoryItem.id).where(InventoryItem.id == iid).with_for_update())`). Then, per item, compute `available(item) = get_item_on_hand(db, item_id) − Σ qty_reserved across all OPEN SO lines for that item` where OPEN = SO status in `{confirmed, fulfilling}` (a SQL sum joined on line→SO, excluding this SO's own lines which are still Draft). For each line (deterministic order) reserve `qty_reserved = min(qty_ordered, remaining_available)` clamped ≥ 0, decrementing an in-memory running `remaining_available` per item so multiple lines of the same item on one SO cannot jointly over-reserve. A non-stock line (`item_id` NULL) reserves 0. Set status `confirmed`. **Single commit** releases the locks. Never drive available negative; shortage is derived, never stored, never blocks.
@@ -209,3 +209,4 @@ None — all visible choices (non-stock line handling, direct-create-plus-conver
 <!-- Build-time observations, surprises, and follow-ups discovered during execution — append as you go. -->
 - **Task 6 — confirm/cancel seam:** `advance_sales_order_status` dispatches the two reservation-bearing moves (`draft→confirmed`, any `→cancelled`) to module-level `confirm_sales_order`/`cancel_sales_order` stubs that currently `raise NotImplementedError("… wired in Task 8")`. Task 8 fills those two bodies with the soft-reservation side-effects — no change needed to the FSM dispatch itself. Added a small private `_validate_line` helper (not named in the plan) for the item-existence 404, mirroring how quotes.py factors `_resolve_line_amounts`.
 - **Task 6 — line-editor name collision (for Task 7/wiring):** `sales_orders.py` defines `add_line`/`update_line`/`delete_line`/`_get_line` with the same names as `quotes.py`. Fine while both are imported from their submodules, but the CRUMB `service/__init__.py` cannot re-export both flat sets under those bare names — the router/wiring task must import from the submodules directly or alias (e.g. `add_so_line`).
+- **Task 7 — item_id resolution ambiguity (as flagged in Risks):** `InventoryItem.plum_part_id` is advisory with no uniqueness constraint, so multiple stock items can carry the same `plum_part_id`. Conversion resolves it deterministically as the first match `ORDER BY InventoryItem.id LIMIT 1` (helper `_resolve_item_id_for_part`) — acceptable for the single-shop model, but if a shop ever links two items to one PLUM part the chosen item is arbitrary (lowest id), not necessarily the intended sellable one. Follow-up if it bites: add a "primary/sellable" flag or a uniqueness constraint on the advisory link.
