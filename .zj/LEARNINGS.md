@@ -3,6 +3,63 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 11a — CRUMB CRM & pipeline (verified 2026-07-16)
+
+First v3.0 phase: a whole new `crumb` suite (leads → opportunities → quotes + comm log) built
+by mirroring MOUSSE. The smoothest large build to date — and yet the code review, not the
+verify scripts, caught the one defect that mattered.
+
+### Patterns that worked (repeat these)
+
+- **Start a new module's service as a package from day one.** CRUMB shipped as `crumb/service/`
+  (`_common`, `leads`, `opportunities`, `quotes`, `interactions` + `__init__` re-export) instead of
+  a single `service.py` — applying the D-V3-9 lesson (SYERP's 3,800-line monolith that had to be
+  split under duress) *preemptively*, at the architect's call. Zero refactor debt; each entity's
+  logic stayed small. Every new suite should start as a package, never as one file that later
+  metastasizes.
+- **Mirror the newest exemplar module wholesale.** A 19-task new suite landed with only a 4-gap
+  fix loop because MOUSSE (Phase 10) was copied shape-for-shape: self-register, audit-after-commit
+  at the router, RBAC gating, FSM transition tables (`STAGE_TRANSITIONS`/`QUOTE_TRANSITIONS`), the
+  numeric-safe `QUOTE-####` generator (the D-P8-6 shape), and the paired verify scripts. The module
+  pattern is now a worn groove; copying the freshest exemplar is the cheapest way to add a suite.
+- **The two-tier verify pair again earned SC6.** `verify_crumb.py` (service, live Postgres) +
+  `verify_crumb_api.py` (HTTP RBAC + attributable audit) — the plan made the HTTP script
+  *non-optional* because a service-level script structurally cannot prove router-layer audit/RBAC
+  (the 9a lesson). It caught the audit rows and the 403/401 gating that service tests can't see.
+
+### Surprises (assumptions wrong → corrected truth)
+
+- **20 green verify assertions missed a major defect; the code review caught it.** `verify_crumb.py`
+  passed 20/20, yet a part-less quote line carrying a price but no description was silently accepted
+  — an unlabeled, customer-facing $100 line. The **reviewer** (REVIEW.md #1), not the verifier,
+  found it, plus two minor correctness gaps and one audit-asymmetry question. Corrected truth:
+  **verify proves the paths you thought to write; it does not cover the negative space. The
+  adversarial branch review is not redundant with verify — budget for it on every phase, most of
+  all on a "just mirror the exemplar" one where the build feels low-risk.**
+- **A value shortcut ran before the structural guard.** The root cause of the major defect:
+  `_resolve_line_amounts` returned on the explicit-price branch *before* the part-or-description
+  identity check ran. Keeper: **structural / identity invariants must be enforced before any
+  value-based early return** — an early `return` past a guard is the same bug class as an early
+  `continue` past a validation.
+
+### Cost sinks (time planning didn't predict)
+
+- **A mirror-the-exemplar build still needs a fix-loop budget.** The plan treated regression as
+  "should hold trivially" and implicitly the whole build as low-defect because it copied MOUSSE.
+  It still produced 1 major + 2 minor correctness gaps needing a build+re-verify cycle
+  (`a697c69`, `efcf2e6`). Copying an exemplar retires *architectural* risk, not *correctness* risk
+  in the novel business logic (pricing rules, FK validation, audit symmetry) — that logic is new
+  every time and deserves the full review pass regardless of how familiar the scaffolding looks.
+
+### Process notes
+
+- **Autogenerate can't persist inside the container.** Task 2 `alembic revision --autogenerate` ran
+  in-container but hit `PermissionError` writing the host bind-mounted `alembic/versions/`; the
+  migration was hand-authored on the host to match the 0012 convention (circular
+  `crumb_lead`↔`crumb_opportunity` FK broken via a post-create `op.create_foreign_key`). Autogenerate
+  stays a *drift-detection aid only* — and it still can't exit clean (the p1 naming-convention item,
+  re-hit here at Task 2). Migrations are authored by hand.
+
 ## Milestone v2.0 — Operations (closed 2026-07-16)
 
 Roll-up of Phases 8, 9a, 9b, 9c, 10 (SYERP inventory/purchasing + GL/AP/reporting + MOUSSE

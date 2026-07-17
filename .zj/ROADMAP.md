@@ -344,7 +344,7 @@ service fns (D-V3-9).
 
 | Phase | Delivers | Depends on | Notes |
 |-------|----------|-----------|-------|
-| **11a — CRUMB CRM & pipeline** `[verified]` | CRUMB-01 AC1/2/3−/5/6/7 (leads → opps → quotes + comm log, no inventory) | SYERP customers ✓, PLUM parts ✓ | New `crumb` module; **verified 2026-07-16** (`efcf2e6`, tag `zj/good-11a-crumb-crm-pipeline`). 19 tasks; verify_crumb 22/22 + verify_crumb_api 54/54 + 13/13 regression + FE 4/4 + build. 4 review/verify gaps fixed at close (`a697c69`). No inventory, no GL. Split from Phase 11 at D-V3-10. |
+| **11a — CRUMB CRM & pipeline** `[done — verified + retro'd 2026-07-16]` | CRUMB-01 AC1/2/3−/5/6/7 (leads → opps → quotes + comm log, no inventory) | SYERP customers ✓, PLUM parts ✓ | New `crumb` module; **verified 2026-07-16** (`efcf2e6`, tag `zj/good-11a-crumb-crm-pipeline`). 19 tasks; verify_crumb 22/22 + verify_crumb_api 54/54 + 13/13 regression + FE 4/4 + build. 4 review/verify gaps fixed at close (`a697c69`). No inventory, no GL. Split from Phase 11 at D-V3-10. |
 | **11b — CRUMB sales orders + reservation** | CRUMB-01 AC4 (+ AC3 SO-conversion tail) | Phase 11a, SYERP inventory (reservation) | Sales-order FSM + accepted-quote→SO conversion; **soft-reservation crux** (D-V3-8, `qty_reserved` accumulator on SO line D-V3-11). Plan after 11a verifies. |
 | **12 — GELATO warehouse core** | GELATO-01 (8 ACs) | Phase 11 (orders to fulfil), SYERP inventory ledger | New `gelato` module; **ship posts the COGS JE** (imports SYERP GL fns). Bins realize the D-P8-3 deferral. |
 | **13 — SYERP-13 AR & sell-side books** | SYERP-13 (7 ACs) | Phase 12 (invoices from shipments), SYERP-12 GL engine ✓ | Extends `syerp`; invoice-from-shipment + receipts + AR aging tie-out. New report screen: AR aging. |

@@ -1,23 +1,21 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-16 (**Phase 11a VERIFIED** on `feature-crumb-crm-pipeline` — Verdict PASS, 4 verify/review gaps fixed at close, tagged `zj/good-11a-crumb-crm-pipeline`. Next action: `/zj:retro 11a` then `/zj:plan 11b`.)
+Updated: 2026-07-16 (**Phase 11a RETRO'd** — learnings captured, roadmap stamped `[done]`, deferred items homed. Next action: `/zj:plan 11b`.)
 
 ## Position
 
-- **Step:** **VERIFIED** — **Phase 11a (CRUMB CRM & pipeline) verified 2026-07-16, Verdict PASS.** Branch
+- **Step:** **RETRO'd** — **Phase 11a (CRUMB CRM & pipeline) verified + retro'd 2026-07-16.** Branch
   `feature-crumb-crm-pipeline` (cut off master `039c409`, D-V3-13), tip `efcf2e6`, tagged
-  `zj/good-11a-crumb-crm-pipeline`. All 19 build tasks + the verify fix loop committed. VERIFICATION.md
-  (all 7 SCs PASS, each pinned by a durable test) + REVIEW.md written. **Fix loop (`a697c69`, `efcf2e6`)
-  closed 4 gaps:** (1major) part-less quote line with a price but no description was accepted → now 422
-  (free-text identity guard runs before the explicit-price branch, verify_crumb E2/E3); (minor)
-  `convert_to_opportunity` now re-resolves the customer (AC6); (minor) bad `opportunity_id` on quote
-  create → 404 not 500; (owner Q) a Won-spawned quote now writes its own `quote.created` audit row
-  (verify_crumb_api C2). Docs refreshed: CLAUDE.md Suite Status + MAP.md now record the shipped crumb
-  module. **Proof (post-fix):** `verify_crumb.py` **22/22** + `verify_crumb_api.py` **54/54** (SC6 HTTP
-  RBAC+audit gate) + 13/13 regression verify_* exit 0 + FE crumb Vitest 4/4 + `npm run build` exit 0. AC4
-  (sales orders + soft-reservation) + accepted-quote→SO conversion deferred to 11b (D-V3-10). **Next
-  action:** `/zj:retro 11a` (the fix loop produced lessons — missing negative-path test coverage; plus
-  the Task-2 pre-existing alembic unique-constraint drift Noticed item worth surfacing), then `/zj:plan 11b`.
-  (Planned 2026-07-16 — Phase 11a is the inventory-free portion of CRUMB-01; AC4 sales orders + reservation deferred to 11b.) Phase 11
+  `zj/good-11a-crumb-crm-pipeline`. Retro (`/zj:retro 11a`) appended LEARNINGS Phase 11a
+  (new-module-as-a-package from day one; mirror the newest exemplar; the two-tier verify pair earns
+  SC6; **and the keeper — 20 green verify assertions missed a major defect that the code review
+  caught**, so the adversarial review is not redundant with verify). Deferred items homed: the Task-2
+  alembic unique-constraint drift and the 422 deprecation sweep were re-hit by crumb and noted on the
+  existing p1/p3 BACKLOG entries (not duplicated); AC4 (sales orders + soft-reservation) +
+  accepted-quote→SO conversion remain Phase 11b (D-V3-10). All 19 build tasks + the fix loop
+  (`a697c69`, `efcf2e6`, 4 gaps) committed; VERIFICATION.md + REVIEW.md written. **Proof (post-fix):**
+  `verify_crumb.py` **22/22** + `verify_crumb_api.py` **54/54** (SC6 HTTP RBAC+audit gate) + 13/13
+  regression verify_* exit 0 + FE crumb Vitest 4/4 + `npm run build` exit 0. **Next action:**
+  `/zj:plan 11b`. Phase 11
   (CRUMB-01, the largest single FR) was **split into 11a + 11b** at plan (D-V3-10): **11a** = the
   inventory-free CRM chain (leads → opportunities → quotes + communication log), **11b** = sales
   orders + accepted-quote→SO conversion + the soft-reservation crux. PLAN.md for 11a holds **19 tasks**
@@ -36,18 +34,18 @@ Updated: 2026-07-16 (**Phase 11a VERIFIED** on `feature-crumb-crm-pipeline` — 
   `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
   master first.
 - **Last update:** 2026-07-16
-- **Next action:** `/zj:retro 11a` — capture the fix-loop lessons (missing negative-path test coverage;
-  the Task-2 pre-existing alembic unique-constraint drift), then `/zj:plan 11b`. Phase 11a is verified
-  and tagged; the good-tag gate is closed until the next phase.
+- **Next action:** `/zj:plan 11b` — Phase 11a is verified, tagged, and retro'd; the good-tag gate is
+  closed until the next phase. Optionally `/zj:log phase 11a` for the formal work log.
 
 ## Next action (detail)
 
-**`/zj:retro 11a`** then **`/zj:plan 11b`** — Phase 11a (CRUMB CRM & pipeline) is verified (Verdict
-PASS, tag `zj/good-11a-crumb-crm-pipeline`). Retro is worth running: the verify fix loop surfaced a
-real major defect (a part-less priced quote line skipped the free-text description guard) that the
-build's own verify scripts did not cover — a durable lesson about negative-path test coverage — plus
-the standing Task-2 alembic unique-constraint drift (see PLAN Noticed) to surface to the owner. Then
-plan 11b (sales orders + accepted-quote→SO conversion + the soft-reservation crux).
+**`/zj:plan 11b`** — Phase 11a (CRUMB CRM & pipeline) is verified + retro'd (Verdict PASS, tag
+`zj/good-11a-crumb-crm-pipeline`; LEARNINGS Phase 11a captured, roadmap `[done]`). Plan 11b: sales
+orders + accepted-quote→SO conversion (the AC3 tail) + the **soft-reservation crux** (`qty_reserved`
+accumulator on the SO line, D-V3-11; `available = on-hand − Σ reserved ≥ 0`, D-V3-8). Carry the
+11a keeper into 11b's plan — budget a full adversarial review of the reservation logic; the verify
+scripts alone will not cover its negative space (concurrent-writer over-reservation especially).
+Optional: `/zj:log phase 11a` for the record.
 
 ### (historical) Phase 11a build — CRUMB-01 inventory-free portion
 **`/zj:build 11a`** built a new `crumb` module (mirrors the
