@@ -9,7 +9,7 @@ Branch cut off the verified 11a tip (`a8191cf`; tag `zj/good-11a-crumb-crm-pipel
 - [x] 3. Define SO Pydantic schemas
 - [x] 4. Add SO_TRANSITIONS to _common.py
 - [x] 5. Add get_item_on_hand helper to SYERP inventory service
-- [ ] 6. Sales-orders service — generator, direct create, read/list, draft-only edits, status FSM
+- [x] 6. Sales-orders service — generator, direct create, read/list, draft-only edits, status FSM
 - [ ] 7. Sales-orders service — accepted-quote→SO conversion
 - [ ] 8. Sales-orders service — confirm (reserve, FOR UPDATE lock) + cancel (release) — THE crux
 - [ ] 9. Router endpoints + audit for sales orders + conversion

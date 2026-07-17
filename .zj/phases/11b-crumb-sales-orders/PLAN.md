@@ -207,3 +207,5 @@ None — all visible choices (non-stock line handling, direct-create-plus-conver
 
 ## Noticed
 <!-- Build-time observations, surprises, and follow-ups discovered during execution — append as you go. -->
+- **Task 6 — confirm/cancel seam:** `advance_sales_order_status` dispatches the two reservation-bearing moves (`draft→confirmed`, any `→cancelled`) to module-level `confirm_sales_order`/`cancel_sales_order` stubs that currently `raise NotImplementedError("… wired in Task 8")`. Task 8 fills those two bodies with the soft-reservation side-effects — no change needed to the FSM dispatch itself. Added a small private `_validate_line` helper (not named in the plan) for the item-existence 404, mirroring how quotes.py factors `_resolve_line_amounts`.
+- **Task 6 — line-editor name collision (for Task 7/wiring):** `sales_orders.py` defines `add_line`/`update_line`/`delete_line`/`_get_line` with the same names as `quotes.py`. Fine while both are imported from their submodules, but the CRUMB `service/__init__.py` cannot re-export both flat sets under those bare names — the router/wiring task must import from the submodules directly or alias (e.g. `add_so_line`).
