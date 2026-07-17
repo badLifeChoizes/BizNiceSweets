@@ -475,7 +475,7 @@ class SalesOrderStatusRequest(BaseModel):
 
 class QuoteToSalesOrderRequest(BaseModel):
     """
-    Convert-quote-to-sales-order payload (POST /crumb/quotes/{id}/sales-order).
+    Convert-quote-to-sales-order payload (POST /crumb/quotes/{id}/convert).
 
     Thin by design — the conversion pulls the ordered lines from the quote's
     priced lines, so no line payload is carried here. `order_date` and
