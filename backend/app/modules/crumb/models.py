@@ -13,6 +13,11 @@ Tables defined here (all prefixed `crumb_`, CRUMB-01):
                         opportunity, with a controlled status lifecycle.
   crumb_quote_line    — A priced line on a quote: a PLUM part or free-text item
                         with quantity, unit price and optional markup.
+  crumb_sales_order   — Sales order header issued to a partner, optionally tied
+                        to a source quote/opportunity, with a status lifecycle.
+  crumb_sales_order_line — An ordered line on a sales order: a SYERP stock item
+                        or non-stock free-text item with quantity, unit price
+                        and a reservation accumulator.
   crumb_interaction   — Append-only log of a customer touch (call/email/note/
                         meeting) against a partner and optional pipeline record.
 
@@ -305,3 +310,121 @@ class Interaction(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+
+# ---------------------------------------------------------------------------
+# SalesOrder — sales order header (CRUMB-01, Phase 11b)
+# ---------------------------------------------------------------------------
+
+
+class SalesOrder(Base):
+    """
+    Sales order — a confirmed order header issued to a SYERP partner.
+
+    Uses a String(36) uuid PK (mirrors the hub) because it is referenced by FKs
+    from sales order lines and is non-enumerable.
+
+    so_number is the human-facing unique identifier. partner_id is the SYERP
+    customer (required). source_quote_id / source_opportunity_id softly link the
+    quote / opportunity the order originated from (either may be NULL for a
+    directly-created order).
+
+    status walks draft → confirmed → fulfilling → closed | cancelled.
+    """
+
+    __tablename__ = "crumb_sales_order"
+
+    # --- Primary key — UUID string -----------------------------------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Identity ----------------------------------------------------------
+    so_number: Mapped[str] = mapped_column(
+        String(30), unique=True, nullable=False, index=True
+    )
+
+    # --- Links -------------------------------------------------------------
+    # partner_id: SYERP customer the order is for (required)
+    partner_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_partner.id"), nullable=False
+    )
+    # source_quote_id: quote this order was created from; NULL if standalone
+    source_quote_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("crumb_quote.id"), nullable=True
+    )
+    # source_opportunity_id: opportunity this order is against; NULL if standalone
+    source_opportunity_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("crumb_opportunity.id"), nullable=True
+    )
+
+    # status: order lifecycle — draft | confirmed | fulfilling | closed | cancelled
+    status: Mapped[str] = mapped_column(String(30), default="draft", nullable=False)
+
+    # --- Timing ------------------------------------------------------------
+    order_date: Mapped[date] = mapped_column(Date)
+    required_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # --- Provenance / audit ------------------------------------------------
+    actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+# ---------------------------------------------------------------------------
+# SalesOrderLine — ordered line on a sales order (CRUMB-01, Phase 11b)
+# ---------------------------------------------------------------------------
+
+
+class SalesOrderLine(Base):
+    """
+    Sales order line — one ordered line on a sales order.
+
+    Uses a String(36) uuid PK.
+
+    item_id FKs into syerp_inventory_item.id when the line orders a stock item;
+    it is NULL for a non-stock line (D-V3-16), in which case description carries
+    the free-text item. plum_part_id is a display FK into plum_part.id when the
+    line references a catalog part.
+
+    qty_ordered, unit_price and qty_reserved are fixed-point Numeric(18,6)
+    (never float — D-11). qty_reserved is the reservation accumulator
+    (D-V3-11), defaulting to zero. sort_order controls display order.
+    """
+
+    __tablename__ = "crumb_sales_order_line"
+
+    # --- Primary key — UUID string -----------------------------------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Links -------------------------------------------------------------
+    sales_order_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("crumb_sales_order.id"), nullable=False, index=True
+    )
+    # item_id: SYERP stock item ordered; NULL for a non-stock line (D-V3-16)
+    item_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("syerp_inventory_item.id"), nullable=True
+    )
+    # plum_part_id: catalog part referenced by this line (display); NULL if none
+    plum_part_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("plum_part.id"), nullable=True
+    )
+
+    # description: free-text / display item; carries the item for a non-stock line
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # --- Amounts (D-11) — fixed-point, never float -------------------------
+    qty_ordered: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False
+    )
+    unit_price: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False
+    )
+    # qty_reserved: reservation accumulator (D-V3-11); starts at zero
+    qty_reserved: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False, default=Decimal("0")
+    )
+    sort_order: Mapped[int] = mapped_column(Integer)
