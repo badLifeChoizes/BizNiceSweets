@@ -10,9 +10,9 @@ Branch cut off the verified 11a tip (`a8191cf`; tag `zj/good-11a-crumb-crm-pipel
 - [x] 4. Add SO_TRANSITIONS to _common.py
 - [x] 5. Add get_item_on_hand helper to SYERP inventory service
 - [x] 6. Sales-orders service — generator, direct create, read/list, draft-only edits, status FSM
-- [ ] 7. Sales-orders service — accepted-quote→SO conversion
-- [ ] 8. Sales-orders service — confirm (reserve, FOR UPDATE lock) + cancel (release) — THE crux
-- [ ] 9. Router endpoints + audit for sales orders + conversion
+- [x] 7. Sales-orders service — accepted-quote→SO conversion
+- [x] 8. Sales-orders service — confirm (reserve, FOR UPDATE lock) + cancel (release) — THE crux
+- [x] 9. Router endpoints + audit for sales orders + conversion
 - [ ] 10. verify_crumb_so.py — service-level live-Postgres verification
 - [ ] 11. verify_crumb_so_api.py — HTTP RBAC + audit verification
 - [ ] 12. Regression — all 15 existing verify_*.py + both 11a crumb scripts still exit 0
@@ -25,4 +25,4 @@ Branch cut off the verified 11a tip (`a8191cf`; tag `zj/good-11a-crumb-crm-pipel
 - [ ] 17. Frontend tests + build gate
 
 ## Adversarial review gate
-- [ ] Full adversarial review of Task 8 (reserve/lock/release) before /zj:verify — 11a keeper.
+- [x] Full adversarial review of Task 8 (reserve/lock/release) — VERDICT PASS (`REVIEW-task8.md`). Invariant holds under concurrency. Medium finding = D-V3-18 by-design (narrow lock; SYERP floor-guard deferred to Phase 12); two lows (SO router pending = Task 9/10; Closed-SO stale qty_reserved is cosmetic, Closed∉OPEN).
