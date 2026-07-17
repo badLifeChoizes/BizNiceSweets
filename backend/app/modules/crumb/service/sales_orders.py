@@ -100,30 +100,42 @@ async def generate_sales_order_number(db: AsyncSession) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def _validate_line(db: AsyncSession, line: "SalesOrderLineCreate") -> None:
+async def _resolve_and_validate_item_id(
+    db: AsyncSession, line: "SalesOrderLineCreate"
+) -> str | None:
     """
-    Validate one sales-order line before it is persisted.
+    Determine the SYERP stock item a sales-order line reserves against.
 
-    A line that supplies an `item_id` must reference an existing SYERP stock item
-    (404 via get_item). A NULL `item_id` line is a non-stock / free-text line
-    (D-V3-16) and needs no item lookup. Pricing is caller-supplied verbatim
-    (unlike quotes, sales-order lines carry an already-agreed unit_price).
+    An explicit `item_id` must reference an existing SYERP stock item (404 via
+    get_item) and is used as-is. Otherwise, when the line carries a display-only
+    `plum_part_id` (the shape the UI create/edit flow sends — it never supplies a
+    raw item_id), resolve the stock item through the advisory
+    InventoryItem.plum_part_id bridge — the SAME resolution conversion uses
+    (`_resolve_item_id_for_part`) — so a UI-created part line reserves stock on
+    confirm rather than silently persisting as a spurious non-stock line. A line
+    with neither an item_id nor a link that resolves to stock is a genuine
+    non-stock / free-text line (item_id NULL, D-V3-16). Pricing is caller-supplied
+    verbatim (unlike quotes, sales-order lines carry an already-agreed unit_price).
     """
     if line.item_id is not None:
         from app.modules.syerp.service import get_item
 
         await get_item(db, line.item_id)
+        return line.item_id
+
+    return await _resolve_item_id_for_part(db, line.plum_part_id)
 
 
 def _build_line_kwargs(
     sales_order_id: str,
     line: "SalesOrderLineCreate",
     sort_order: int,
+    item_id: str | None,
 ) -> dict:
-    """Build the SalesOrderLine constructor kwargs from a create line."""
+    """Build the SalesOrderLine constructor kwargs from a create line (item_id resolved)."""
     return {
         "sales_order_id": sales_order_id,
-        "item_id": line.item_id,
+        "item_id": item_id,
         "plum_part_id": line.plum_part_id,
         "description": line.description,
         "qty_ordered": line.qty_ordered,
@@ -157,11 +169,12 @@ async def create_sales_order(
 
     await _resolve_customer(db, data.partner_id)
 
-    # Validate stock-item references up front (404) so a bad item_id surfaces as a
-    # clean 4xx rather than a DB FK IntegrityError that the so_number retry below
-    # would misread and re-raise as a 500.
-    for line in data.lines:
-        await _validate_line(db, line)
+    # Resolve + validate each line's stock item up front (404 on a bad explicit
+    # item_id) so a bad reference surfaces as a clean 4xx rather than a DB FK
+    # IntegrityError that the so_number retry below would misread and re-raise as
+    # a 500. Resolution also bridges a plum_part_id-only line (the UI shape) to its
+    # stock item so it reserves on confirm rather than persisting as non-stock.
+    resolved_item_ids = [await _resolve_and_validate_item_id(db, line) for line in data.lines]
 
     order_date = data.order_date if data.order_date is not None else date.today()
 
@@ -194,7 +207,7 @@ async def create_sales_order(
         await db.flush()
 
     for index, line in enumerate(data.lines):
-        db.add(SalesOrderLine(**_build_line_kwargs(so.id, line, index)))
+        db.add(SalesOrderLine(**_build_line_kwargs(so.id, line, index, resolved_item_ids[index])))
 
     await db.commit()
     return await get_sales_order_detail(db, so.id)
@@ -416,12 +429,12 @@ async def add_line(
     from app.modules.crumb.models import SalesOrderLine
 
     await _get_draft_sales_order(db, so_id)
-    await _validate_line(db, line)
+    item_id = await _resolve_and_validate_item_id(db, line)
 
     existing = await _get_sales_order_lines(db, so_id)
     sort_order = max((ln.sort_order for ln in existing), default=-1) + 1
 
-    row = SalesOrderLine(**_build_line_kwargs(so_id, line, sort_order))
+    row = SalesOrderLine(**_build_line_kwargs(so_id, line, sort_order, item_id))
     db.add(row)
     await db.commit()
     await db.refresh(row)
@@ -457,9 +470,9 @@ async def update_line(
     """
     await _get_draft_sales_order(db, so_id)
     line = await _get_line(db, so_id, line_id)
-    await _validate_line(db, patch)
+    resolved_item_id = await _resolve_and_validate_item_id(db, patch)
 
-    line.item_id = patch.item_id
+    line.item_id = resolved_item_id
     line.plum_part_id = patch.plum_part_id
     line.description = patch.description
     line.qty_ordered = patch.qty_ordered

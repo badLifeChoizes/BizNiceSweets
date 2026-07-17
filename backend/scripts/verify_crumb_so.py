@@ -678,6 +678,50 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
         )
 
         # ===================================================================
+        # (D2) DIRECT CREATE RESOLVES item_id FROM plum_part_id (UI shape)
+        # ===================================================================
+        # The UI create/edit flow sends a part line as plum_part_id ONLY (never a
+        # raw item_id). create_sales_order MUST bridge that link to the stock item
+        # — the SAME resolution conversion uses — so the line reserves on confirm
+        # instead of silently persisting as non-stock. (Regression guard: the
+        # earlier harness passed item_id= directly and hid this path entirely.)
+        async with session_factory() as session:
+            so_d2 = await create_sales_order(
+                session,
+                SalesOrderCreate(
+                    partner_id=cust_id,
+                    lines=[
+                        # part-only line (no item_id) — must resolve to item_conv
+                        SalesOrderLineCreate(
+                            plum_part_id=part_conv, qty_ordered=Decimal("1"),
+                            unit_price=Decimal("25"),
+                        ),
+                        # part-less free-text line stays non-stock (item_id NULL)
+                        SalesOrderLineCreate(
+                            description="Rush", qty_ordered=Decimal("1"),
+                            unit_price=Decimal("5"),
+                        ),
+                    ],
+                ),
+                actor_id,
+            )
+        so_ids.add(so_d2.id)
+        d2_lines = sorted(so_d2.lines, key=lambda ln: ln.sort_order)
+        check(
+            "(D2/D-V3-16) a direct-create part line (plum_part_id only, no item_id — "
+            "the UI shape) resolves item_id from the InventoryItem link so it reserves "
+            "on confirm rather than persisting as spurious non-stock",
+            d2_lines[0].item_id == item_conv and d2_lines[0].plum_part_id == part_conv,
+            f"item_id={d2_lines[0].item_id!r} (expected {item_conv!r})",
+        )
+        check(
+            "(D2/D-V3-16) a direct-create part-less free-text line stays non-stock "
+            "(item_id NULL)",
+            d2_lines[1].item_id is None,
+            f"item_id={d2_lines[1].item_id!r}",
+        )
+
+        # ===================================================================
         # (E) RESERVATION MATH (D-V3-11, THE CRUX)
         # ===================================================================
         # One scarce item, on-hand 10. Three SOs contend for it in sequence.

@@ -173,6 +173,14 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **CRUMB quote→SO conversion has no idempotency guard** (Phase 11b verify Question, 2026-07-17)
+  — an Accepted quote can be converted to **unlimited duplicate sales orders**: `convert_quote_to_sales_order`
+  changes no quote state and takes no guard, yet `QuoteDetail.tsx` copy implies the quote "moves to
+  converted." Owner chose fix-blocker-only at verify, so this was left open. Fix when the quote
+  lifecycle post-conversion is specified — candidate: 422 on re-convert if an SO already stamps this
+  quote as `source_quote_id`, or add a `converted` quote status. Low risk single-shop (duplicate SOs
+  are visible + cancellable), but a data-hygiene trap. Revisit at Phase 13 (SYERP-13 invoicing) when
+  the quote→SO→invoice chain is firmed up.
 - [ ] **MOUSSE zero-cost lone-component issue is unpostable** (Phase 10 review Q2 / PLAN `## Noticed`,
   minor UX edge) — issuing ONLY a component whose `moving_avg_cost` is 0 makes `total_value == 0`, and
   the balanced-JE guard rejects an all-zero JE 422, so the component's stock is never consumed and it
