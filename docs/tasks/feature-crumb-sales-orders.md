@@ -4,8 +4,8 @@ Plan: `.zj/phases/11b-crumb-sales-orders/PLAN.md` — completes CRUMB-01 (all AC
 Branch cut off the verified 11a tip (`a8191cf`; tag `zj/good-11a-crumb-crm-pipeline` is docs-behind at `7c573d3`, code identical).
 
 ## Backend
-- [ ] 1. Add SalesOrder + SalesOrderLine ORM models
-- [ ] 2. Hand-author Alembic migration 0014 for the SO tables
+- [x] 1. Add SalesOrder + SalesOrderLine ORM models
+- [x] 2. Hand-author Alembic migration 0014 for the SO tables
 - [ ] 3. Define SO Pydantic schemas
 - [ ] 4. Add SO_TRANSITIONS to _common.py
 - [ ] 5. Add get_item_on_hand helper to SYERP inventory service
