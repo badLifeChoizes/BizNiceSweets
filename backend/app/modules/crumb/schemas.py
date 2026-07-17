@@ -1,9 +1,10 @@
 # ABOUTME: CRUMB (CRM) Pydantic request/response schemas — leads, opportunities,
-# ABOUTME: quotes with lines, and customer interactions, plus the pipeline
-# ABOUTME: conversion requests (link-customer, lead→opportunity, opp→quote) and
-# ABOUTME: the stage/status transition requests. Pure Pydantic (never imports the
-# ABOUTME: ORM); Read models fill from ORM via from_attributes, service-derived
-# ABOUTME: figures (line_total, total_value) are plain Decimal fields.
+# ABOUTME: quotes and sales orders (both with lines), and customer interactions,
+# ABOUTME: plus the pipeline conversion requests (link-customer, lead→opportunity,
+# ABOUTME: opp→quote, quote→sales-order) and the stage/status transition requests.
+# ABOUTME: Pure Pydantic (never imports the ORM); Read models fill from ORM via
+# ABOUTME: from_attributes, service-derived figures (line_total, shortage,
+# ABOUTME: total_value) are plain Decimal fields.
 """
 CRUMB Pydantic schemas (request/response models) — CRUMB-01.
 
@@ -19,9 +20,10 @@ All quantity/money fields are fixed-point `Decimal` (never float — D-11),
 matching the Numeric(18,6) columns in crumb/models.py. Positive-quantity guards
 (quote-line `quantity` > 0) are enforced at the boundary with `Field(gt=0)`.
 
-Two controlled lifecycles are walked by the *Request transition schemas:
-  opportunity `stage`  : qualify | proposal | won | lost
-  quote       `status` : draft | sent | accepted | rejected | expired
+Three controlled lifecycles are walked by the *Request transition schemas:
+  opportunity  `stage`  : qualify | proposal | won | lost
+  quote        `status` : draft | sent | accepted | rejected | expired
+  sales order  `status` : draft | confirmed | fulfilling | closed | cancelled
 """
 from __future__ import annotations
 
@@ -351,3 +353,135 @@ class InteractionRead(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Sales orders (CRUMB-01, Phase 11b)
+# ---------------------------------------------------------------------------
+
+
+class SalesOrderLineCreate(BaseModel):
+    """
+    One line of a sales-order-create request.
+
+    A line orders either a SYERP stock item (`item_id`) or a non-stock/free-text
+    item (`description`, with `item_id` NULL — D-V3-16); `plum_part_id` is an
+    optional display link to a PLUM catalog part. `qty_ordered` must be > 0 (a
+    zero/negative line is meaningless) — Field(gt=0). `unit_price` is the agreed
+    price per unit. All amounts are Decimal (never float — D-11). `qty_reserved`
+    is server-owned (the reservation accumulator) and so absent here.
+    """
+
+    item_id: Optional[str] = None
+    plum_part_id: Optional[str] = None
+    description: Optional[str] = None
+    qty_ordered: Decimal = Field(..., gt=0)
+    unit_price: Decimal
+
+
+class SalesOrderLineRead(BaseModel):
+    """
+    One ordered line of a sales order returned to API callers.
+
+    Serialized from a SalesOrderLine ORM instance (from_attributes=True) for the
+    stored fields — `qty_reserved` is the server-set reservation accumulator.
+    `line_total` (qty_ordered * unit_price) and `shortage` (qty_ordered −
+    qty_reserved) are DERIVED figures the service populates; they are not ORM
+    columns. All amounts are fixed-point Decimal (never float).
+    """
+
+    id: str
+    sales_order_id: str
+    item_id: Optional[str] = None
+    plum_part_id: Optional[str] = None
+    description: Optional[str] = None
+    qty_ordered: Decimal
+    unit_price: Decimal
+    qty_reserved: Decimal
+    sort_order: int
+
+    # Service-derived (not ORM columns) — filled by the detail loader.
+    line_total: Decimal = Decimal("0")
+    shortage: Decimal = Decimal("0")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SalesOrderCreate(BaseModel):
+    """
+    Sales order creation payload (POST /crumb/sales-orders).
+
+    `partner_id` is the SYERP customer the order is for (required). `order_date`
+    and `required_date` are optional timing; omitted `order_date` → the service
+    defaults it to today. `lines` are the ordered lines. `so_number` and `status`
+    (default draft) are server-owned, as is each line's `qty_reserved`.
+    """
+
+    partner_id: str
+    order_date: Optional[date] = None
+    required_date: Optional[date] = None
+    lines: list[SalesOrderLineCreate] = Field(default_factory=list)
+
+
+class SalesOrderRead(BaseModel):
+    """
+    Sales order header returned to API callers (list rows), serialized from a
+    SalesOrder ORM instance. `status` walks
+    draft | confirmed | fulfilling | closed | cancelled. `source_quote_id` /
+    `source_opportunity_id` softly link the quote / opportunity it originated
+    from (either may be NULL for a directly-created order).
+    """
+
+    id: str
+    so_number: str
+    partner_id: str
+    source_quote_id: Optional[str] = None
+    source_opportunity_id: Optional[str] = None
+    status: str
+    order_date: date
+    required_date: Optional[date] = None
+    actor_id: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SalesOrderDetailRead(SalesOrderRead):
+    """
+    Sales order detail — the header plus its ordered lines nested.
+
+    Extends SalesOrderRead with `lines` (each a SalesOrderLineRead carrying its
+    derived `line_total` and `shortage`) and `total_value`, a DERIVED figure the
+    service populates (SUM of the lines' line_total). Fixed-point Decimal.
+    """
+
+    lines: list[SalesOrderLineRead] = Field(default_factory=list)
+
+    # Service-derived (not an ORM column) — filled by the detail loader.
+    total_value: Decimal = Decimal("0")
+
+
+class SalesOrderStatusRequest(BaseModel):
+    """
+    Sales order status-transition payload (POST /crumb/sales-orders/{id}/status).
+
+    `target_status` is the status to move to; the service validates the move
+    against the controlled
+    draft → confirmed → fulfilling → closed | cancelled table.
+    """
+
+    target_status: str
+
+
+class QuoteToSalesOrderRequest(BaseModel):
+    """
+    Convert-quote-to-sales-order payload (POST /crumb/quotes/{id}/sales-order).
+
+    Thin by design — the conversion pulls the ordered lines from the quote's
+    priced lines, so no line payload is carried here. `order_date` and
+    `required_date` optionally seed the new order's timing; omitted `order_date`
+    → the service defaults it to today.
+    """
+
+    order_date: Optional[date] = None
+    required_date: Optional[date] = None
