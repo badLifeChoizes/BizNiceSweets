@@ -123,4 +123,33 @@ describe('QuoteDetail screen', () => {
     // The service-derived quote total_value (D-11 string) is shown.
     expect(screen.getByText('150.00')).toBeInTheDocument()
   })
+
+  it('shows "Convert to Sales Order" for an accepted quote', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.includes('/crumb/quotes/'))
+        return Promise.resolve({ data: { ...QUOTE, status: 'accepted' } })
+      if (url.includes('/syerp/partners')) return Promise.resolve({ data: [] })
+      if (url.includes('/plum/parts')) return Promise.resolve({ data: [] })
+      return Promise.resolve({ data: [] })
+    })
+
+    renderQuoteDetail()
+
+    expect(await screen.findByText('Q-000001')).toBeInTheDocument()
+    expect(screen.getByText('Accepted')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Convert to Sales Order' }),
+    ).toBeInTheDocument()
+  })
+
+  it('hides "Convert to Sales Order" for a draft quote', async () => {
+    mockGets()
+
+    renderQuoteDetail()
+
+    expect(await screen.findByText('Q-000001')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Convert to Sales Order' }),
+    ).not.toBeInTheDocument()
+  })
 })
