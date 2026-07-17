@@ -144,6 +144,27 @@ async def get_item_onhand(db: AsyncSession, item_id: str) -> "ItemOnHandRead":
     )
 
 
+async def get_item_on_hand(db: AsyncSession, item_id: str) -> Decimal:
+    """
+    Return the total signed on-hand quantity for an item across ALL locations.
+
+    Scalar counterpart to get_item_onhand: the single item-level SUM of every
+    InventoryTxn.quantity (positive receipts + negative issues), coalescing a
+    None result (item has no ledger rows) to Decimal("0"). This is the same
+    aggregate inlined by post_receipt for its qty_before, exposed as the reusable
+    public source so callers (e.g. CRUMB soft-reservation) do not duplicate it.
+
+    Unlike get_item / get_item_onhand this does NOT 404: a caller may probe a
+    non-stock or freshly-created item, and item existence is resolved separately.
+    """
+    from app.modules.syerp.models import InventoryTxn
+
+    result = await db.execute(
+        select(func.sum(InventoryTxn.quantity)).where(InventoryTxn.item_id == item_id)
+    )
+    return result.scalar() or Decimal("0")
+
+
 async def list_item_transactions(db: AsyncSession, item_id: str) -> "list[TransactionRead]":
     """
     Return an item's inventory-ledger rows, newest-first (Task 11 read half).
