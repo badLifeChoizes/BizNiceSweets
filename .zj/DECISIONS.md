@@ -108,6 +108,7 @@ at milestone close, never hand-edit it. 73 decisions.
 - **D-V3-17:** Phase 11b delivers BOTH direct SO creation (header+lines, editable while Draft) and accepted-quote→SO conversion — the SO is a first-class document (SRD AC4), not merely a conversion artifact
 - **D-V3-18:** Reservation locking is narrow — lock only the contended `InventoryItem` row(s) FOR UPDATE (sorted-id order) on confirm; the broader shared SYERP floor-guard ledger lock (BACKLOG p2) defers to Phase 12 when GELATO ship writes real issue txns
 - **D-V3-19:** Phase 11b branch = `feature-crumb-sales-orders` off the verified 11a tip (tag `zj/good-11a-crumb-crm-pipeline`, `efcf2e6`) — 11a is unmerged; 11b stacks on it (per-sub-phase branch precedent D-P10-8/D-P9b-8)
+- **D-V3-20:** Verify-11b fix loop — fix the reservation blocker (direct-create SO lines never resolved `plum_part_id→item_id` → UI orders reserved 0; fixed `fec334f`); defer the quote→SO convert idempotency guard (non-idempotent for now, BACKLOG p3, revisit at Phase 13 invoicing)
 
 ## Product & Architecture
 
@@ -770,3 +771,15 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   verified 11a tip** (tag `zj/good-11a-crumb-crm-pipeline`, commit `efcf2e6`). 11a is unmerged, so 11b
   stacks on it, extending the per-sub-phase branch precedent (D-P10-8 / D-P9b-8). *Why:* keeps the
   CRUMB sales-order build on the verified CRM base without waiting on a master merge.
+
+## v3.0 Phase 11b verify (2026-07-17)
+
+- **D-V3-20 (owner):** **Quote→SO conversion stays non-idempotent for now — fix the blocker only.** The
+  `/zj:verify 11b` fix loop surfaced two items: (1) a **blocker** — direct-create/edit SO lines never
+  resolved `plum_part_id→item_id` (the UI line-editor sends `plum_part_id` only), so UI-created orders
+  reserved 0 stock; and (2) an open **question** — an Accepted quote can convert to unlimited duplicate
+  SOs (no guard, no quote state change). Owner chose **fix the blocker, defer the convert guard.** *Why:*
+  the reservation bug is a broken headline feature (must fix); duplicate SOs are visible and cancellable
+  in a single-shop model, and the right guard depends on the quote→SO→invoice lifecycle that Phase 13
+  (SYERP-13 invoicing) will firm up. Blocker fixed `fec334f` + pinned by new `verify_crumb_so.py` (D2)
+  assertions; the convert-idempotency follow-up logged to BACKLOG p3.

@@ -1,9 +1,22 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-17 (**Phase 11b BUILD COMPLETE** — all 17 tasks + mandated Task-8 adversarial review done. Next action: `/zj:verify 11b`.)
+Updated: 2026-07-17 (**Phase 11b VERIFIED** — `/zj:verify 11b` PASS after a fix loop; CRUMB-01 complete. Next action: `/zj:retro 11b`.)
 
 ## Position
 
-- **Step:** **BUILD COMPLETE** — **Phase 11b (CRUMB sales orders + soft-reservation) built 2026-07-17.**
+- **Step:** **VERIFIED** — **Phase 11b (CRUMB sales orders + soft-reservation) verified 2026-07-17**,
+  tag `zj/good-11b-crumb-sales-orders` (`fec334f`). **CRUMB-01 now complete (all ACs).** Verifier +
+  reviewer ran in parallel: 17/17 verify_* green, concurrency crux load-bearing, TB nets zero — **but
+  the code review caught a BLOCKER the verify harness hid** (the 11a "green-but-broken" keeper): direct
+  SO create/add/update line paths never bridged `plum_part_id→item_id` (the UI line-editor sends
+  `plum_part_id` only), so every UI-created order reserved 0 stock and showed a false Non-stock badge.
+  **Fixed `fec334f`** (folded resolution into `_resolve_and_validate_item_id`, reusing conversion's
+  resolver) + pinned by new `verify_crumb_so.py` (D2) assertions; full suite re-run **17/17**. Owner
+  decision **D-V3-20:** fix-blocker-only — the quote→SO convert idempotency guard (unlimited duplicate
+  SOs) is deferred to Phase 13 (BACKLOG p3). Artifacts: VERIFICATION.md (+ manager fix-loop note),
+  REVIEW.md, REVIEW-task8.md. **Next action:** `/zj:retro 11b` (fix loop produced a keeper — the
+  code-review-catches-what-verify-misses lesson recurred and paid off again).
+
+- **(historical) Step:** **BUILD COMPLETE** — **Phase 11b (CRUMB sales orders + soft-reservation) built 2026-07-17.**
   All **17 tasks** shipped on branch `feature-crumb-sales-orders` (cut off the verified 11a code tip
   `a8191cf`; tag `zj/good-11a-crumb-crm-pipeline` is docs-behind at `7c573d3`, code identical — see PLAN
   Deviations). CRUMB-01 completed (all ACs): SO models + migration 0014; direct SO CRUD + `SO-####`
@@ -55,15 +68,22 @@ Updated: 2026-07-17 (**Phase 11b BUILD COMPLETE** — all 17 tasks + mandated Ta
   plan's doc edits. `master` at `35f9b66` carries all of Phases 8–10. **Phase 11a builds on a new
   `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
   master first.
-- **Last update:** 2026-07-16
-- **Next action:** `/zj:build 11b` — Phase 11b is planned (17 tasks, PLAN.md written, D-V3-16..19
-  recorded). First cut the branch `feature-crumb-sales-orders` off tag `zj/good-11a-crumb-crm-pipeline`
-  (D-V3-19), then build task-by-task.
+- **Last update:** 2026-07-17
+- **Next action:** `/zj:retro 11b` — Phase 11b is verified + tagged `zj/good-11b-crumb-sales-orders`
+  (`fec334f`); CRUMB-01 complete. Retro should bank the recurring keeper (code review caught a blocker
+  the 17 green verify assertions hid — the harness passed `item_id=` directly and bypassed the
+  `plum_part_id`-only UI shape), then set up Phase 12 (GELATO warehouse core — pick/pack/ship consumes
+  the reservation, posts the COGS JE).
 
 ## Next action (detail)
 
-**`/zj:verify 11b`** — Phase 11b build is complete (all 17 tasks + the mandated Task-8 adversarial
-review, VERDICT PASS). Verify goal-backward against the 6 SCs: SO model/migration/wiring (SC1); direct
+**`/zj:retro 11b`** — extract learnings, roll the roadmap forward, set up Phase 12. Then plan Phase 12
+(GELATO-01 warehouse core: bins → putaway → pick/pack/ship; ship relieves the 11b reservation + posts
+the sell-side COGS JE) → Phase 13 (SYERP-13 AR + invoicing from the SO). The DoD, not the phase count,
+is the contract.
+
+### (historical) Phase 11b verify target
+**`/zj:verify 11b`** verified goal-backward against the 6 SCs: SO model/migration/wiring (SC1); direct
 CRUD + FSM (SC2); accepted-quote→SO conversion (SC3); the soft-reservation invariant incl. the
 concurrency crux (SC4 — re-run `verify_crumb_so.py` scenario F, it is mutation-tested load-bearing);
 router audit + RBAC at HTTP level (SC5 — `verify_crumb_so_api.py`); FE + regression 17/17 + TB nets zero

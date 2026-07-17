@@ -532,15 +532,26 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Verification method:** live-Postgres `backend/scripts/verify_mousse.py` (34 assertions incl. the WIP-clears + 1130-subledger-tie + concurrency crux) and `verify_mousse_api.py` (HTTP RBAC + audit); frontend Vitest; full regression suite (13/13 verify_* exit 0). Verified at `/zj:verify 10` (2026-07-16).
 - **Verified:** 5cffeeb (AC1–AC7, materials-only slice; deferred clauses remain planned)
 
-## CRUMB-01: CRM core & sales orders  [traces: PRD-8]  **Status: partially verified (v3.0 — Phase 11a done; AC4 + AC3-tail pending Phase 11b)**
+## CRUMB-01: CRM core & sales orders  [traces: PRD-8]  **Status: verified (v3.0 — Phase 11a + 11b; all ACs)**
+- **Verified:** fec334f
 > New module `backend/app/modules/crumb/` + `frontend/src/routes/crumb/`; RBAC codes
 > `crumb:read`/`crumb:write` (mirror syerp, D-P10-6). References SYERP customers and PLUM parts.
 > Full lean chain, no email/analytics (D-V3-5). See the v3.0 scope preamble (D-V3-1..9).
+- **Verified (Phase 11b, AC4 + AC3 SO-conversion tail — CRUMB-01 now complete):** fec334f (2026-07-17
+  — sales-order FSM (Draft→Confirmed→Fulfilling→Closed, +Cancelled from Draft/Confirmed, server-enforced
+  4xx), `SO-####` numeric-safe numbering, accepted-quote→SO conversion copying lines with item_id
+  resolved from the PLUM-part link, and the **soft-reservation crux**: confirm reserves
+  `min(qty_ordered, available)` where `available = get_item_on_hand − Σ open reservations ≥ 0`, never
+  driven negative, over-order shows derived shortage (not blocked), cancel releases; `InventoryItem`
+  rows `FOR UPDATE`-locked in sorted-id order before the read — two concurrent confirms cannot
+  over-reserve (verify scenario F, load-bearing). Posts NO GL (TB nets zero). verify_crumb_so 27/27 +
+  verify_crumb_so_api 40 + 15/15 regression = 17/17; FE Vitest + build. **Verify fix loop caught a
+  blocker the harness hid:** direct-create/edit SO lines never bridged `plum_part_id→item_id` (the UI
+  line-editor shape) so UI-created lines reserved 0 — fixed `fec334f`, pinned by new (D2) assertions.)
 - **Verified (Phase 11a, AC1/2/3−/5/6/7):** efcf2e6 (2026-07-16 — leads → opportunities (stage FSM)
   → quotes (PLUM-derived line pricing + status FSM) + append-only communication log; server-enforced
   FSMs, router-layer audit, `crumb:read`/`crumb:write` RBAC proven at HTTP level. verify_crumb 22/22
-  + verify_crumb_api 54/54 + 13/13 regression + FE Vitest 4/4 + build. **AC4 (sales orders +
-  soft-reservation) and the AC3 accepted-quote→SO tail remain planned for Phase 11b**, D-V3-10.)
+  + verify_crumb_api 54/54 + 13/13 regression + FE Vitest 4/4 + build.)
 - **Statement:** The system shall support the sell-side pipeline against SYERP customers — **leads →
   opportunities (pipeline stages) → quotes → sales orders** — plus a **customer communication log**,
   where a confirmed sales order **soft-reserves inventory** and feeds GELATO fulfillment (GELATO-01)
