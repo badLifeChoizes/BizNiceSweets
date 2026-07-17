@@ -41,7 +41,7 @@ Recorded this planning session; the manager appends them to `DECISIONS.md` as D-
 
 ## Tasks
 
-### [ ] 1. Add SalesOrder + SalesOrderLine ORM models
+### [x] 1. Add SalesOrder + SalesOrderLine ORM models
 - **Files:** `backend/app/modules/crumb/models.py` (extend)
 - **Do:** Append two `crumb_`-prefixed models to the existing file, mirroring `Quote`/`QuoteLine` style (Decimal `Numeric(18,6)`, tz-aware `DateTime`, `actor_id: String(36)`, UUID `String(36)` PKs, all hub FKs `String(36)`):
   - `SalesOrder` (`crumb_sales_order`): `id`, `so_number` String(30) unique index NOT NULL, `partner_id` String(36) FK→`syerp_partner.id` NOT NULL, `source_quote_id` String(36) FK→`crumb_quote.id` nullable, `source_opportunity_id` String(36) FK→`crumb_opportunity.id` nullable, `status` String(30) default `"draft"` (draft | confirmed | fulfilling | closed | cancelled), `order_date` Date, `required_date` Date nullable, `actor_id`, `created_at`.
@@ -50,14 +50,14 @@ Recorded this planning session; the manager appends them to `DECISIONS.md` as D-
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.core import models as m; print([t for t in m.plum_models.Base.metadata.tables if t.startswith('crumb_sales')])"` → lists both tables.
 - **Parallel-ok:** no (foundation)
 
-### [ ] 2. Hand-author Alembic migration 0014 for the SO tables
+### [x] 2. Hand-author Alembic migration 0014 for the SO tables
 - **Files:** `backend/alembic/versions/0014_crumb_sales_orders.py` (new, hand-authored)
 - **Do:** Hand-author `revision="0014"`, `down_revision="0013"`. `create_table` for `crumb_sales_order` and `crumb_sales_order_line` matching Task-1 columns/types (String(36) FKs to `syerp_partner.id`, `crumb_quote.id`, `crumb_opportunity.id`, `syerp_inventory_item.id`, `plum_part.id`; unique index on `crumb_sales_order.so_number`; index on `crumb_sales_order_line.sales_order_id`). Downgrade drops both (line table first). Optionally run `alembic revision --autogenerate` against a live head-0013 DB to *read* the diff, but **EXCLUDE** the 7 spurious pre-existing unique-constraint drops (BACKLOG p2 drift — do not touch). Persist the file on the host (container cannot write the bind-mount, 11a Task-2 finding).
 - **Done when:** `alembic upgrade head` creates both tables and `alembic downgrade -1` drops them cleanly; head reports `0014`.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 alembic upgrade head && podman exec -e PYTHONPATH=/app compose_api_1 alembic current` → shows `0014 (head)`; then `alembic downgrade -1 && alembic upgrade head` round-trips clean.
 - **Parallel-ok:** no (depends on Task 1)
 
-### [ ] 3. Define SO Pydantic schemas
+### [x] 3. Define SO Pydantic schemas
 - **Files:** `backend/app/modules/crumb/schemas.py` (extend)
 - **Do:** Pure Pydantic (never import ORM), mirroring the quote schemas (`from_attributes=True` on Reads, `Field(gt=0)` guards, Decimal fields):
   - `SalesOrderLineCreate` (`item_id?`, `plum_part_id?`, `description?`, `qty_ordered: Field(gt=0)`, `unit_price`), `SalesOrderLineRead` (+ derived `qty_reserved`, `line_total = qty_ordered × unit_price`, and derived `shortage = qty_ordered − qty_reserved`).
@@ -67,14 +67,14 @@ Recorded this planning session; the manager appends them to `DECISIONS.md` as D-
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "import app.modules.crumb.schemas as s; print(s.SalesOrderLineRead.model_fields.keys(), s.SalesOrderCreate.model_fields.keys())"`
 - **Parallel-ok:** yes (with Tasks 4/5, after 1)
 
-### [ ] 4. Add SO_TRANSITIONS to _common.py
+### [x] 4. Add SO_TRANSITIONS to _common.py
 - **Files:** `backend/app/modules/crumb/service/_common.py` (extend)
 - **Do:** Add `SO_TRANSITIONS: dict[str, set[str]]` alongside `QUOTE_TRANSITIONS`: `"draft": {"confirmed", "cancelled"}`, `"confirmed": {"fulfilling", "cancelled"}`, `"fulfilling": {"closed"}`, `"closed": set()`, `"cancelled": set()`. (Cancel allowed from Draft/Confirmed only — NOT from Fulfilling/Closed, per AC4.) Add a brief banner comment mirroring the existing FSM tables.
 - **Done when:** `from app.modules.crumb.service._common import SO_TRANSITIONS` succeeds; `SO_TRANSITIONS["fulfilling"] == {"closed"}`; `"cancelled" not in SO_TRANSITIONS["fulfilling"]`.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.modules.crumb.service import _common as c; print(c.SO_TRANSITIONS)"`
 - **Parallel-ok:** yes (with Tasks 3/5, after 1)
 
-### [ ] 5. Add get_item_on_hand helper to SYERP inventory service
+### [x] 5. Add get_item_on_hand helper to SYERP inventory service
 - **Files:** `backend/app/modules/syerp/service/inventory.py` (extend), `backend/app/modules/syerp/service/__init__.py` (re-export)
 - **Do:** Add `async def get_item_on_hand(db, item_id: str) -> Decimal` returning `SUM(InventoryTxn.quantity)` for the item across all locations, `Decimal("0")` when None — the single item-level source already inlined at `inventory.py:277`. Do NOT 404 (a caller may probe a non-stock or freshly-created item); the SO service resolves item existence separately. Re-export `get_item_on_hand` from `syerp/service/__init__.py` so crumb imports the public surface. This satisfies the SC4 "do not duplicate the SUM logic" constraint. (Refactoring the 3 inline call sites to use the helper is optional and OUT of scope — additive only, to avoid touching verified SYERP paths.)
 - **Done when:** `from app.modules.syerp.service import get_item_on_hand` succeeds and returns a `Decimal` for a known item.
