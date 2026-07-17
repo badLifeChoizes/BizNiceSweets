@@ -532,19 +532,104 @@ async def advance_sales_order_status(
 # ---------------------------------------------------------------------------
 
 
+async def _reserved_by_other_open_sos(
+    db: AsyncSession, item_id: str, exclude_so_id: str
+) -> Decimal:
+    """
+    Sum qty_reserved for an item across all OPEN sales-order lines except one SO.
+
+    OPEN means the owning SO's status is in {confirmed, fulfilling} — the states
+    that actively hold a soft-reservation (draft has not reserved yet; closed and
+    cancelled have released). The confirming SO is excluded explicitly
+    (`exclude_so_id`) so its own still-Draft lines can never subtract from the
+    availability it is about to consume. Coalesces a None (no open reservers) to
+    Decimal("0").
+    """
+    from app.modules.crumb.models import SalesOrder, SalesOrderLine
+
+    result = await db.execute(
+        select(func.sum(SalesOrderLine.qty_reserved))
+        .join(SalesOrder, SalesOrder.id == SalesOrderLine.sales_order_id)
+        .where(
+            SalesOrderLine.item_id == item_id,
+            SalesOrder.id != exclude_so_id,
+            SalesOrder.status.in_(("confirmed", "fulfilling")),
+        )
+    )
+    return result.scalar() or Decimal("0")
+
+
 async def confirm_sales_order(
     db: AsyncSession, so_id: str, actor_id: str
 ) -> "SalesOrder":
     """Confirm a draft sales order, soft-reserving stock (draft → confirmed).
 
-    TODO(Task 8): implement the soft-reservation side-effects (per-line
-    qty_reserved against SYERP on-hand) and the status write. Left as an explicit
-    seam so advance_sales_order_status can dispatch here without carrying
-    reservation logic in the FSM router.
+    Loads the Draft SO (404 if missing; 422 if not Draft). Collects the distinct
+    non-NULL item_ids across its lines and locks those InventoryItem rows FOR
+    UPDATE in sorted-id order BEFORE any availability read (mirrors bills.py) —
+    the lock serializes concurrent confirms competing for the same scarce item so
+    their combined reservation can never exceed on-hand. For each item,
+    `available = get_item_on_hand(item) − Σ qty_reserved across OPEN SO lines for
+    that item, excluding this SO`. Lines are walked in sort_order and each reserves
+    `qty_reserved = min(qty_ordered, remaining_available)` clamped ≥ 0, decrementing
+    an in-memory per-item running remainder so multiple lines of the same item on
+    one SO cannot jointly over-reserve. A non-stock line (item_id NULL) reserves 0.
+    Shortage is derived (qty_ordered − qty_reserved), never stored, never blocks —
+    an over-ordered line confirms with a positive shortage. Sets status to
+    'confirmed'. The single db.commit() releases the locks.
     """
-    raise NotImplementedError(
-        "confirm_sales_order (soft-reservation) is wired in Task 8"
-    )
+    from app.modules.crumb.models import SalesOrder
+    from app.modules.syerp.models import InventoryItem
+    from app.modules.syerp.service import get_item_on_hand
+
+    so = await db.get(SalesOrder, so_id)
+    if so is None:
+        raise HTTPException(status_code=404, detail=f"Sales order '{so_id}' not found")
+    if so.status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Sales order '{so_id}' is '{so.status}'; "
+                "only a draft order can be confirmed."
+            ),
+        )
+
+    lines = await _get_sales_order_lines(db, so_id)
+
+    # Lock the distinct stock items FOR UPDATE in sorted-id order BEFORE reading
+    # availability (mirror bills.py). Locking after the read is the classic
+    # soft-reservation defect: two confirms would each read the same available and
+    # jointly over-reserve. Held until this function's single commit.
+    item_ids = sorted({ln.item_id for ln in lines if ln.item_id is not None})
+    for iid in item_ids:
+        await db.execute(
+            select(InventoryItem.id).where(InventoryItem.id == iid).with_for_update()
+        )
+
+    # Per-item availability, seeded once now that the locks are held: on-hand less
+    # everything already reserved by OTHER open SOs (this SO is still Draft, so its
+    # own lines are excluded and cannot subtract from what it is about to consume).
+    remaining: dict[str, Decimal] = {}
+    for iid in item_ids:
+        on_hand = await get_item_on_hand(db, iid)
+        reserved_elsewhere = await _reserved_by_other_open_sos(db, iid, so_id)
+        available = on_hand - reserved_elsewhere
+        remaining[iid] = available if available > Decimal("0") else Decimal("0")
+
+    for line in lines:
+        if line.item_id is None:
+            line.qty_reserved = Decimal("0")
+            continue
+        avail = remaining[line.item_id]
+        take = line.qty_ordered if line.qty_ordered < avail else avail
+        if take < Decimal("0"):
+            take = Decimal("0")
+        line.qty_reserved = take
+        remaining[line.item_id] = avail - take
+
+    so.status = "confirmed"
+    await db.commit()
+    return await get_sales_order_detail(db, so_id)
 
 
 async def cancel_sales_order(
@@ -552,11 +637,30 @@ async def cancel_sales_order(
 ) -> "SalesOrder":
     """Cancel a sales order, releasing any soft-reservations (→ cancelled).
 
-    TODO(Task 8): implement the reservation release (zero each line's
-    qty_reserved) and the status write. Left as an explicit seam so
-    advance_sales_order_status can dispatch here without carrying reservation
-    logic in the FSM router.
+    Allowed only from Draft or Confirmed (422 otherwise — SO_TRANSITIONS forbids
+    cancel from fulfilling/closed, AC4). If the order was Confirmed it holds
+    soft-reservations, so every line's qty_reserved is zeroed (release), freeing
+    that quantity back into `available` for other SOs; a Draft order holds none, so
+    the release is a no-op. Sets status to 'cancelled' and commits.
     """
-    raise NotImplementedError(
-        "cancel_sales_order (reservation release) is wired in Task 8"
-    )
+    from app.modules.crumb.models import SalesOrder
+
+    so = await db.get(SalesOrder, so_id)
+    if so is None:
+        raise HTTPException(status_code=404, detail=f"Sales order '{so_id}' not found")
+    if so.status not in ("draft", "confirmed"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Sales order '{so_id}' is '{so.status}'; "
+                "cancel is allowed only from draft or confirmed."
+            ),
+        )
+
+    if so.status == "confirmed":
+        for line in await _get_sales_order_lines(db, so_id):
+            line.qty_reserved = Decimal("0")
+
+    so.status = "cancelled"
+    await db.commit()
+    return await get_sales_order_detail(db, so_id)

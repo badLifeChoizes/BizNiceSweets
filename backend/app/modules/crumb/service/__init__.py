@@ -14,6 +14,7 @@ from __future__ import annotations
 from app.modules.crumb.service._common import (
     DEFAULT_MARKUP_PCT,
     QUOTE_TRANSITIONS,
+    SO_TRANSITIONS,
     STAGE_TRANSITIONS,
     _resolve_customer,
 )
@@ -50,10 +51,27 @@ from app.modules.crumb.service.quotes import (
     list_quotes,
     update_line,
 )
+# NOTE: sales_orders.py also defines add_line / update_line / delete_line (the
+# Draft-only SO line editors, mirroring quotes). Those three names collide with
+# the quotes editors already re-exported above, so they are intentionally NOT
+# re-exported here — the sales-order router imports them from the submodule
+# directly (from ...service.sales_orders import add_line as ...). Everything else
+# in the sales-order public surface is re-exported below.
+from app.modules.crumb.service.sales_orders import (
+    advance_sales_order_status,
+    cancel_sales_order,
+    confirm_sales_order,
+    convert_quote_to_sales_order,
+    create_sales_order,
+    generate_sales_order_number,
+    get_sales_order_detail,
+    list_sales_orders,
+)
 
 __all__ = [
     "DEFAULT_MARKUP_PCT",
     "QUOTE_TRANSITIONS",
+    "SO_TRANSITIONS",
     "STAGE_TRANSITIONS",
     "_resolve_customer",
     # interactions
@@ -84,4 +102,13 @@ __all__ = [
     "get_quote_detail",
     "list_quotes",
     "update_line",
+    # sales orders
+    "advance_sales_order_status",
+    "cancel_sales_order",
+    "confirm_sales_order",
+    "convert_quote_to_sales_order",
+    "create_sales_order",
+    "generate_sales_order_number",
+    "get_sales_order_detail",
+    "list_sales_orders",
 ]
