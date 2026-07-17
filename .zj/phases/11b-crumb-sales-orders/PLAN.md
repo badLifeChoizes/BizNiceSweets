@@ -203,6 +203,7 @@ None — all visible choices (non-stock line handling, direct-create-plus-conver
 
 ## Deviations
 <!-- Record any planned-vs-built divergences discovered during execution — append as you go. -->
+- **Branch base (trivial):** plan header cites the tag `zj/good-11a-crumb-crm-pipeline` at commit `efcf2e6`, but the tag actually sits at `7c573d3` and the branch tip `a8191cf` carries two docs-only commits on top (11a retro + this 11b plan). `git diff --name-only tag..HEAD` is entirely under `.zj/` — the verified 11a **code** is byte-identical at the tag and at HEAD. Cut `feature-crumb-sales-orders` off `a8191cf` (not the bare tag) so the branch carries the PLAN.md it executes; the D-V3-19 intent ("verified 11a tip") is preserved.
 
 ## Noticed
 <!-- Build-time observations, surprises, and follow-ups discovered during execution — append as you go. -->
