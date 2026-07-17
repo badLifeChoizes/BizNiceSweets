@@ -18,11 +18,11 @@ Branch cut off the verified 11a tip (`a8191cf`; tag `zj/good-11a-crumb-crm-pipel
 - [x] 12. Regression — all 15 existing verify_*.py + both 11a crumb scripts still exit 0 → 17/17 green
 
 ## Frontend
-- [ ] 13. SO hooks, routes, nav item
-- [ ] 14. Sales Orders list + create (Draft line editor)
-- [ ] 15. Sales Order detail (ordered/reserved/shortage + FSM actions)
-- [ ] 16. "Convert to SO" affordance on an Accepted quote
-- [ ] 17. Frontend tests + build gate
+- [x] 13. SO hooks, routes, nav item
+- [x] 14. Sales Orders list + create (Draft line editor)
+- [x] 15. Sales Order detail (ordered/reserved/shortage + FSM actions)
+- [x] 16. "Convert to SO" affordance on an Accepted quote
+- [x] 17. Frontend tests + build gate
 
 ## Adversarial review gate
 - [x] Full adversarial review of Task 8 (reserve/lock/release) — VERDICT PASS (`REVIEW-task8.md`). Invariant holds under concurrency. Medium finding = D-V3-18 by-design (narrow lock; SYERP floor-guard deferred to Phase 12); two lows (SO router pending = Task 9/10; Closed-SO stale qty_reserved is cosmetic, Closed∉OPEN).

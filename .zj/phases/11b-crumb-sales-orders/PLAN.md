@@ -148,35 +148,35 @@ Recorded this planning session; the manager appends them to `DECISIONS.md` as D-
 - **Verify:** `for s in inventory purchasing e2e_p8 gl ap reports gl_api ap_api reports_api mousse mousse_api part_numbering plum_vendor_paths crumb crumb_api; do podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_$s.py >/dev/null && echo "OK $s" || echo "FAIL $s"; done`
 - **Parallel-ok:** no (after 9–11)
 
-### [ ] 13. Frontend — SO hooks, routes, nav item
+### [x] 13. Frontend — SO hooks, routes, nav item
 - **Files:** `frontend/src/routes/crumb/hooks.ts` (extend), `frontend/src/App.tsx` (add routes), `frontend/src/routes/crumb/components/CrumbNav.tsx` (add "Sales Orders" link)
 - **Do:** Add TanStack Query hooks (`useSalesOrders`, `useSalesOrder`, mutations `useCreateSalesOrder`, `useAddSoLine`/`useUpdateSoLine`/`useDeleteSoLine`, `useAdvanceSalesOrderStatus`, `useConvertQuoteToSalesOrder`) hitting `/api/v1/crumb/sales-orders*` and `/crumb/quotes/{id}/convert` via `src/api/client.ts`, with query invalidation (invalidate SO lists/detail on mutate; the convert mutation also invalidates the source quote). Add `/crumb/sales-orders` and `/crumb/sales-orders/:id` routes in the `App.tsx` crumb block (`:92-100`). Add a "Sales Orders" link to `CrumbNav.tsx`. Nav gating (CRUMB enabled ∩ `crumb:read`) is automatic — no AppShell change.
 - **Done when:** with CRUMB enabled + `crumb:read`, the "Sales Orders" nav item appears and both routes resolve; `tsc -b` sees the new hooks.
 - **Verify:** `cd frontend && npx tsc -b` (full `npm run build` after pages land in Task 17).
 - **Parallel-ok:** no (pages depend on it)
 
-### [ ] 14. Frontend — Sales Orders list + create (Draft line editor)
+### [x] 14. Frontend — Sales Orders list + create (Draft line editor)
 - **Files:** `frontend/src/routes/crumb/SalesOrders.tsx` (new), `frontend/src/routes/crumb/components/SalesOrderCreateDialog.tsx` (new), `frontend/src/routes/crumb/components/SalesOrderLineEditor.tsx` (new)
 - **Do:** List view (columns: SO number, customer, status, order date, total) with a create dialog. Create dialog uses a line editor mirroring `QuoteLineEditor.tsx` — add item/part or free-text lines with qty + unit price. Mirror `Quotes.tsx`/`QuoteCreateDialog.tsx` structure and shadcn/ui primitives. Serves SC6.
 - **Done when:** can create an SO with lines through the UI against the running api and it appears in the list.
 - **Verify:** dev stack; colocated test in Task 17.
 - **Parallel-ok:** yes (with Task 15/16, after 13)
 
-### [ ] 15. Frontend — Sales Order detail (ordered/reserved/shortage + FSM actions)
+### [x] 15. Frontend — Sales Order detail (ordered/reserved/shortage + FSM actions)
 - **Files:** `frontend/src/routes/crumb/SalesOrderDetail.tsx` (new), `+ components/` as needed
 - **Do:** Detail page: header (customer, dates, status, source quote/opportunity links), a lines table with **ordered / reserved / shortage** columns (shortage highlighted, non-stock lines flagged), Draft-only line editing, and FSM action buttons (Confirm / Cancel / Fulfill / Close) that only offer valid `SO_TRANSITIONS` targets but let the server enforce (surface a 422 via toast). After Confirm, the reserved/shortage figures refresh (query invalidation). Mirror `QuoteDetail.tsx`. Serves SC4/SC6.
 - **Done when:** confirming an SO in the UI shows per-line reserved and any shortage; cancelling a Confirmed SO frees reservations; invalid transitions surface a toast.
 - **Verify:** dev stack; test in Task 17.
 - **Parallel-ok:** yes (with Task 14/16, after 13)
 
-### [ ] 16. Frontend — "Convert to SO" affordance on an Accepted quote
+### [x] 16. Frontend — "Convert to SO" affordance on an Accepted quote
 - **Files:** `frontend/src/routes/crumb/QuoteDetail.tsx` (extend)
 - **Do:** Add a "Convert to Sales Order" button shown **only when `quote.status === "accepted"`**, calling `useConvertQuoteToSalesOrder`; on success, toast + navigate to the new SO detail. Serves SC3/SC6.
 - **Done when:** an Accepted quote shows the button; converting creates an SO and navigates to it; a non-Accepted quote does not show the button.
 - **Verify:** dev stack; test in Task 17.
 - **Parallel-ok:** yes (with Task 14/15, after 13)
 
-### [ ] 17. Frontend tests + build gate
+### [x] 17. Frontend tests + build gate
 - **Files:** `frontend/src/routes/crumb/SalesOrders.test.tsx`, `SalesOrderDetail.test.tsx`, `QuoteDetail.test.tsx` (extend) (colocated), build
 - **Do:** Colocated Vitest mirroring `Quotes.test.tsx`/`QuoteDetail.test.tsx`: render + mocked-query assertions covering the SO list, the detail's ordered/reserved/shortage columns, the FSM action buttons, and the "Convert to SO" button visibility (accepted vs non-accepted). Then run the production build.
 - **Done when:** `npm run test` green for `routes/crumb/*`; `npm run build` (`tsc -b && vite build`) exits 0.
@@ -203,6 +203,7 @@ None — all visible choices (non-stock line handling, direct-create-plus-conver
 
 ## Deviations
 <!-- Record any planned-vs-built divergences discovered during execution — append as you go. -->
+- **SO list "total" column omitted (trivial, Task 14):** the plan's Task-14 column list names "total", but `GET /crumb/sales-orders` returns header-only `SalesOrderRead` (no `total_value`; that field is derived on the detail schema only). Rendering per-row totals would need an N+1 detail fetch or a backend schema+service change — disproportionate for a cosmetic column, and SC6's substantive requirement (the **detail** page's ordered/reserved/shortage) is unaffected. List columns: SO #, customer, status, order date. `total_value` is shown on the detail page (Task 15). Follow-up if desired: attach `total_value` to the list header schema in a later docs/UX pass.
 - **Branch base (trivial):** plan header cites the tag `zj/good-11a-crumb-crm-pipeline` at commit `efcf2e6`, but the tag actually sits at `7c573d3` and the branch tip `a8191cf` carries two docs-only commits on top (11a retro + this 11b plan). `git diff --name-only tag..HEAD` is entirely under `.zj/` — the verified 11a **code** is byte-identical at the tag and at HEAD. Cut `feature-crumb-sales-orders` off `a8191cf` (not the bare tag) so the branch carries the PLAN.md it executes; the D-V3-19 intent ("verified 11a tip") is preserved.
 
 ## Noticed

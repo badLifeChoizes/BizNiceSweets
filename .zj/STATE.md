@@ -1,27 +1,29 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-16 (**Phase 11b PLANNED** — PLAN.md written (17 tasks), 4 decisions recorded (D-V3-16..19). Next action: `/zj:build 11b`.)
+Updated: 2026-07-17 (**Phase 11b BUILD COMPLETE** — all 17 tasks + mandated Task-8 adversarial review done. Next action: `/zj:verify 11b`.)
 
 ## Position
 
-- **Step:** **PLAN COMPLETE** — **Phase 11b (CRUMB sales orders + soft-reservation) planned 2026-07-16.**
-  `.zj/phases/11b-crumb-sales-orders/PLAN.md` holds **17 tasks** (backend 1–12, frontend 13–17)
-  completing CRUMB-01 (all ACs): sales orders (Draft→Confirmed→Fulfilling→Closed FSM, +Cancelled from
-  Draft/Confirmed), accepted-quote→SO conversion (AC3 tail), and the **soft-reservation crux** (AC4,
-  D-V3-8/11) — `available(item) = on-hand − Σ open SO-line reservations ≥ 0`, `qty_reserved`
-  accumulator on the SO line, confirm reserves `min(qty_ordered, available)`, shortage indicator not
-  hard-blocked, cancel releases. **Task 8 is the isolated crux** (confirm/reserve/lock + cancel/release):
-  contended `InventoryItem` rows `SELECT … FOR UPDATE` in sorted-id order (bills.py template) BEFORE
-  the read-check-write; `verify_crumb_so.py` scenario F asserts two `asyncio.gather` concurrent confirms
-  cannot over-reserve — **and the 11a keeper is carried in: a full adversarial review of Task 8 is
-  mandated before verify** (20 green assertions missed a major in 11a). 11b posts **NO GL** (soft
-  quantity, no InventoryTxn/JE; TB still nets zero). Four decisions recorded **D-V3-16..19**: non-stock
-  lines confirm with reserve 0 (D-V3-16); both direct-create + conversion (D-V3-17); narrow lock scope,
-  broader ledger-floor unification stays BACKLOG p2 → Phase 12 (D-V3-18); branch
-  `feature-crumb-sales-orders` off the 11a tip tag (D-V3-19). Plan reviewed goal-backward — all 6 SCs
-  covered, `## Decisions needed` empty. **Next action:** `/zj:build 11b`.
+- **Step:** **BUILD COMPLETE** — **Phase 11b (CRUMB sales orders + soft-reservation) built 2026-07-17.**
+  All **17 tasks** shipped on branch `feature-crumb-sales-orders` (cut off the verified 11a code tip
+  `a8191cf`; tag `zj/good-11a-crumb-crm-pipeline` is docs-behind at `7c573d3`, code identical — see PLAN
+  Deviations). CRUMB-01 completed (all ACs): SO models + migration 0014; direct SO CRUD + `SO-####`
+  numeric-safe numbering + FSM (Draft→Confirmed→Fulfilling→Closed, +Cancelled from Draft/Confirmed);
+  accepted-quote→SO conversion (item_id resolved from `plum_part_id`, free-text→NULL, source_quote/opp
+  stamped); the **soft-reservation crux** — confirm reserves `min(qty_ordered, available)` with
+  `available = get_item_on_hand − Σ open (confirmed/fulfilling) reservations ≥ 0`, `InventoryItem` rows
+  `FOR UPDATE` locked in sorted-id order BEFORE the read (bills.py template), cancel releases; router
+  audit + `crumb:read`/`crumb:write` RBAC; SO list/create/detail (ordered/reserved/shortage) + Convert-to-SO
+  affordance. 11b posts **NO GL** (TB still nets zero). **Mandated Task-8 adversarial review → VERDICT
+  PASS** (`REVIEW-task8.md`): invariant holds under concurrency; Medium finding (reservation not
+  serialized vs raw stock write-offs) = **D-V3-18 by-design** (narrow lock; SYERP floor-guard deferred
+  to Phase 12). **Proof:** backend `verify_crumb_so.py` (25 asserts incl. concurrency scenario F,
+  mutation-tested load-bearing) + `verify_crumb_so_api.py` (40 asserts HTTP RBAC+audit) + all 15 existing
+  verify_* → **17/17 green**; FE full suite **35 files/100 tests**; `npm run build` exit 0. **Next
+  action:** `/zj:verify 11b`.
 
-- **Branch to cut (D-V3-19):** `feature-crumb-sales-orders` off tag `zj/good-11a-crumb-crm-pipeline`
-  (commit `efcf2e6`) — 11a is unmerged; 11b stacks on it. Checklist: `docs/tasks/feature-crumb-sales-orders.md`.
+- **Branch (D-V3-19):** `feature-crumb-sales-orders` — 11a is unmerged; 11b stacks on it. Checklist
+  (all ticked): `docs/tasks/feature-crumb-sales-orders.md`. Lint gates remain non-functional (BACKLOG
+  p1, known) — correctness rests on the verify_* suite + Vitest, per project convention.
 
 - **(historical) Step:** **RETRO'd** — **Phase 11a (CRUMB CRM & pipeline) verified + retro'd 2026-07-16.** Branch
   `feature-crumb-crm-pipeline` (cut off master `039c409`, D-V3-13), tip `efcf2e6`, tagged
@@ -60,13 +62,15 @@ Updated: 2026-07-16 (**Phase 11b PLANNED** — PLAN.md written (17 tasks), 4 dec
 
 ## Next action (detail)
 
-**`/zj:build 11b`** — `.zj/phases/11b-crumb-sales-orders/PLAN.md` holds 17 tasks completing CRUMB-01:
-sales orders (Draft→Confirmed→Fulfilling→Closed FSM), accepted-quote→SO conversion (AC3 tail), and the
-**soft-reservation crux** (`qty_reserved` accumulator D-V3-11; `available = on-hand − Σ reserved ≥ 0`
-D-V3-8). **Task 8 is the isolated crux** — carry the 11a keeper: a full adversarial review of the
-reserve/lock logic is mandated before verify; `verify_crumb_so.py` scenario F pins the concurrent
-over-reservation negative space. 11b posts no GL. Cut `feature-crumb-sales-orders` off tag
-`zj/good-11a-crumb-crm-pipeline` (`efcf2e6`, D-V3-19) first.
+**`/zj:verify 11b`** — Phase 11b build is complete (all 17 tasks + the mandated Task-8 adversarial
+review, VERDICT PASS). Verify goal-backward against the 6 SCs: SO model/migration/wiring (SC1); direct
+CRUD + FSM (SC2); accepted-quote→SO conversion (SC3); the soft-reservation invariant incl. the
+concurrency crux (SC4 — re-run `verify_crumb_so.py` scenario F, it is mutation-tested load-bearing);
+router audit + RBAC at HTTP level (SC5 — `verify_crumb_so_api.py`); FE + regression 17/17 + TB nets zero
+(SC6). Deviations to review: SO list omits a cosmetic "total" column (header schema has no `total_value`);
+branch cut off `a8191cf` not the bare tag (code-identical). Noticed follow-ups (all deferred, non-blocking):
+Closed-SO stale `qty_reserved` (cosmetic), item→InventoryItem ambiguity (single-shop OK), 422 deprecation
+sweep (BACKLOG p3).
 
 ### (historical) Phase 11a build — CRUMB-01 inventory-free portion
 **`/zj:build 11a`** built a new `crumb` module (mirrors the
