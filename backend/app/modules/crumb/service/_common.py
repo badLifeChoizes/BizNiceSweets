@@ -46,6 +46,16 @@ QUOTE_TRANSITIONS: dict[str, set[str]] = {
     "expired": set(),
 }
 
+# Sales-order status: draft → confirmed → fulfilling → closed (closed terminal).
+# Cancel is allowed only from draft/confirmed — never from fulfilling/closed (AC4).
+SO_TRANSITIONS: dict[str, set[str]] = {
+    "draft": {"confirmed", "cancelled"},
+    "confirmed": {"fulfilling", "cancelled"},
+    "fulfilling": {"closed"},
+    "closed": set(),
+    "cancelled": set(),
+}
+
 
 # ---------------------------------------------------------------------------
 # Default quote-line markup (D-V3-14)
