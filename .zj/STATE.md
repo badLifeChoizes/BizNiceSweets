@@ -1,9 +1,29 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-16 (**Phase 11a RETRO'd** — learnings captured, roadmap stamped `[done]`, deferred items homed. Next action: `/zj:plan 11b`.)
+Updated: 2026-07-16 (**Phase 11b PLANNED** — PLAN.md written (17 tasks), 4 decisions recorded (D-V3-16..19). Next action: `/zj:build 11b`.)
 
 ## Position
 
-- **Step:** **RETRO'd** — **Phase 11a (CRUMB CRM & pipeline) verified + retro'd 2026-07-16.** Branch
+- **Step:** **PLAN COMPLETE** — **Phase 11b (CRUMB sales orders + soft-reservation) planned 2026-07-16.**
+  `.zj/phases/11b-crumb-sales-orders/PLAN.md` holds **17 tasks** (backend 1–12, frontend 13–17)
+  completing CRUMB-01 (all ACs): sales orders (Draft→Confirmed→Fulfilling→Closed FSM, +Cancelled from
+  Draft/Confirmed), accepted-quote→SO conversion (AC3 tail), and the **soft-reservation crux** (AC4,
+  D-V3-8/11) — `available(item) = on-hand − Σ open SO-line reservations ≥ 0`, `qty_reserved`
+  accumulator on the SO line, confirm reserves `min(qty_ordered, available)`, shortage indicator not
+  hard-blocked, cancel releases. **Task 8 is the isolated crux** (confirm/reserve/lock + cancel/release):
+  contended `InventoryItem` rows `SELECT … FOR UPDATE` in sorted-id order (bills.py template) BEFORE
+  the read-check-write; `verify_crumb_so.py` scenario F asserts two `asyncio.gather` concurrent confirms
+  cannot over-reserve — **and the 11a keeper is carried in: a full adversarial review of Task 8 is
+  mandated before verify** (20 green assertions missed a major in 11a). 11b posts **NO GL** (soft
+  quantity, no InventoryTxn/JE; TB still nets zero). Four decisions recorded **D-V3-16..19**: non-stock
+  lines confirm with reserve 0 (D-V3-16); both direct-create + conversion (D-V3-17); narrow lock scope,
+  broader ledger-floor unification stays BACKLOG p2 → Phase 12 (D-V3-18); branch
+  `feature-crumb-sales-orders` off the 11a tip tag (D-V3-19). Plan reviewed goal-backward — all 6 SCs
+  covered, `## Decisions needed` empty. **Next action:** `/zj:build 11b`.
+
+- **Branch to cut (D-V3-19):** `feature-crumb-sales-orders` off tag `zj/good-11a-crumb-crm-pipeline`
+  (commit `efcf2e6`) — 11a is unmerged; 11b stacks on it. Checklist: `docs/tasks/feature-crumb-sales-orders.md`.
+
+- **(historical) Step:** **RETRO'd** — **Phase 11a (CRUMB CRM & pipeline) verified + retro'd 2026-07-16.** Branch
   `feature-crumb-crm-pipeline` (cut off master `039c409`, D-V3-13), tip `efcf2e6`, tagged
   `zj/good-11a-crumb-crm-pipeline`. Retro (`/zj:retro 11a`) appended LEARNINGS Phase 11a
   (new-module-as-a-package from day one; mirror the newest exemplar; the two-tier verify pair earns
@@ -34,18 +54,19 @@ Updated: 2026-07-16 (**Phase 11a RETRO'd** — learnings captured, roadmap stamp
   `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
   master first.
 - **Last update:** 2026-07-16
-- **Next action:** `/zj:plan 11b` — Phase 11a is verified, tagged, and retro'd; the good-tag gate is
-  closed until the next phase. Optionally `/zj:log phase 11a` for the formal work log.
+- **Next action:** `/zj:build 11b` — Phase 11b is planned (17 tasks, PLAN.md written, D-V3-16..19
+  recorded). First cut the branch `feature-crumb-sales-orders` off tag `zj/good-11a-crumb-crm-pipeline`
+  (D-V3-19), then build task-by-task.
 
 ## Next action (detail)
 
-**`/zj:plan 11b`** — Phase 11a (CRUMB CRM & pipeline) is verified + retro'd (Verdict PASS, tag
-`zj/good-11a-crumb-crm-pipeline`; LEARNINGS Phase 11a captured, roadmap `[done]`). Plan 11b: sales
-orders + accepted-quote→SO conversion (the AC3 tail) + the **soft-reservation crux** (`qty_reserved`
-accumulator on the SO line, D-V3-11; `available = on-hand − Σ reserved ≥ 0`, D-V3-8). Carry the
-11a keeper into 11b's plan — budget a full adversarial review of the reservation logic; the verify
-scripts alone will not cover its negative space (concurrent-writer over-reservation especially).
-Optional: `/zj:log phase 11a` for the record.
+**`/zj:build 11b`** — `.zj/phases/11b-crumb-sales-orders/PLAN.md` holds 17 tasks completing CRUMB-01:
+sales orders (Draft→Confirmed→Fulfilling→Closed FSM), accepted-quote→SO conversion (AC3 tail), and the
+**soft-reservation crux** (`qty_reserved` accumulator D-V3-11; `available = on-hand − Σ reserved ≥ 0`
+D-V3-8). **Task 8 is the isolated crux** — carry the 11a keeper: a full adversarial review of the
+reserve/lock logic is mandated before verify; `verify_crumb_so.py` scenario F pins the concurrent
+over-reservation negative space. 11b posts no GL. Cut `feature-crumb-sales-orders` off tag
+`zj/good-11a-crumb-crm-pipeline` (`efcf2e6`, D-V3-19) first.
 
 ### (historical) Phase 11a build — CRUMB-01 inventory-free portion
 **`/zj:build 11a`** built a new `crumb` module (mirrors the

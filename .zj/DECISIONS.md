@@ -104,6 +104,10 @@ at milestone close, never hand-edit it. 73 decisions.
 - **D-V3-13:** Phase 11a branch = `feature-crumb-crm-pipeline` off master (master is the working tip since v2.0 shipped via PR #2, D-P9a-2 discipline); the docs-only `chore-spec-v3-customer-logistics` spec branch fast-forwards to master first
 - **D-V3-14:** Quote-line markup default = a module constant `DEFAULT_MARKUP_PCT = Decimal("30")` in `crumb/service/_common.py`, per-line editable; no settings entity (D-V3-6 excludes a config/price-list surface)
 - **D-V3-15:** `spawn_quote` (opportunity→quote) requires the opportunity to be in stage `won` (else 422) — mirrors AC2's "a Won opportunity can spawn a quote"; qualify/proposal/lost cannot spawn
+- **D-V3-16:** Unlinked/free-text SO lines are non-stock — confirm with `qty_reserved=0` + a backorder indicator; the SO still confirms (D-V3-8 "not hard-blocked"), NOT a MOUSSE-D-P10-7-style hard reject
+- **D-V3-17:** Phase 11b delivers BOTH direct SO creation (header+lines, editable while Draft) and accepted-quote→SO conversion — the SO is a first-class document (SRD AC4), not merely a conversion artifact
+- **D-V3-18:** Reservation locking is narrow — lock only the contended `InventoryItem` row(s) FOR UPDATE (sorted-id order) on confirm; the broader shared SYERP floor-guard ledger lock (BACKLOG p2) defers to Phase 12 when GELATO ship writes real issue txns
+- **D-V3-19:** Phase 11b branch = `feature-crumb-sales-orders` off the verified 11a tip (tag `zj/good-11a-crumb-crm-pipeline`, `efcf2e6`) — 11a is unmerged; 11b stacks on it (per-sub-phase branch precedent D-P10-8/D-P9b-8)
 
 ## Product & Architecture
 
@@ -732,3 +736,37 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   "a Won opportunity can spawn a quote." *Rejected:* allowing any open stage (qualify/proposal) to
   spawn — defensible since a quote is the proposal document, but it loosens the pipeline's meaning;
   revisit if the shop wants to quote earlier.
+
+## v3.0 Phase 11b planning (2026-07-16)
+
+- **D-V3-16 (owner):** **Unlinked / free-text SO lines are non-stock.** A sales-order line whose PLUM
+  part has no linked `InventoryItem`, or a free-text line with no part, confirms with `qty_reserved=0`
+  and a visible non-stock / backorder indicator; the SO still confirms. *Why:* consistent with D-V3-8
+  ("a line whose ordered qty exceeds available is confirmed with a shortage indicator, not
+  hard-blocked" — single-shop). *Rejected:* a MOUSSE-D-P10-7-style hard reject of confirmation until
+  every line maps to a stock item — that contradicts the soft/backorder intent on the sell side.
+
+- **D-V3-17 (owner):** **Phase 11b delivers both direct SO creation and quote conversion.** A user can
+  create a sales order directly (header + lines, editable while Draft, mirroring the PO/quote create),
+  AND convert an Accepted quote to a Draft SO copying its lines (the AC3 tail). The SO is a
+  first-class document (SRD AC4), not merely a conversion artifact. *Why:* the SO-detail screen and
+  line editor are needed for the Draft-edit path regardless, so direct-create is cheap marginal scope;
+  users can raise ad-hoc orders without a prior quote. *Rejected:* conversion-only (smaller surface,
+  but forces every SO through a quote).
+
+- **D-V3-18 (owner):** **Reservation locking is narrow — the contended `InventoryItem` row(s) only.**
+  `confirm_sales_order` locks the distinct `InventoryItem` rows its stock lines reference `FOR UPDATE`
+  in sorted-id order BEFORE the `available = on-hand − Σ open reservations` read-check-write (the
+  `bills.py` template), which is sufficient to make the reservation invariant race-safe. The broader
+  standing BACKLOG p2 item — one shared floor-guard lock across every SYERP ledger-writing path
+  (issue/adjust/receive/transfer) — is **not** taken on in 11b; it defers to Phase 12, when GELATO
+  ship actually writes real `issue` `InventoryTxn`s and gains the ledger-floor race. *Why:* keeps the
+  small-but-hard phase focused on its one invariant; a soft reservation moves no stock, so it doesn't
+  touch the ledger floor guard. *Rejected:* unifying the shared ledger-floor lock now (bigger diff
+  over verified SYERP paths for a debt whose third writer isn't live until Phase 12). The reviewer
+  should read the narrow scope as intentional.
+
+- **D-V3-19 (manager, precedent-driven):** **Phase 11b branch = `feature-crumb-sales-orders` off the
+  verified 11a tip** (tag `zj/good-11a-crumb-crm-pipeline`, commit `efcf2e6`). 11a is unmerged, so 11b
+  stacks on it, extending the per-sub-phase branch precedent (D-P10-8 / D-P9b-8). *Why:* keeps the
+  CRUMB sales-order build on the verified CRM base without waiting on a master merge.
