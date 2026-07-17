@@ -26,7 +26,7 @@ import { QuoteStatusBadge } from './Quotes'
 import { QuoteLineEditor } from './components/QuoteLineEditor'
 import { useCustomers } from './components/lookups'
 import { getApiErrorMessage } from './components/apiError'
-import { useQuote, useAdvanceQuoteStatus } from './hooks'
+import { useQuote, useAdvanceQuoteStatus, useConvertQuoteToSalesOrder } from './hooks'
 
 // Allowed forward transitions per status. The server is the source of truth; this only
 // decides which buttons to render. Accepted / rejected / expired are terminal.
@@ -53,6 +53,7 @@ export function QuoteDetail() {
   const { data: customers = [] } = useCustomers()
 
   const advanceMutation = useAdvanceQuoteStatus()
+  const convertMutation = useConvertQuoteToSalesOrder()
 
   function handleAdvance(target: string) {
     if (!quote) return
@@ -62,6 +63,21 @@ export function QuoteDetail() {
         onSuccess: () => toast.success(`Quote ${STATUS_ACTION_LABEL[target] ?? target}.`),
         onError: (err) =>
           toast.error(getApiErrorMessage(err, 'Could not change the quote status.')),
+      }
+    )
+  }
+
+  function handleConvert() {
+    if (!quote) return
+    convertMutation.mutate(
+      { quoteId: quote.id },
+      {
+        onSuccess: (newSo) => {
+          toast.success(`Converted to ${newSo.so_number}.`)
+          navigate(`/crumb/sales-orders/${newSo.id}`)
+        },
+        onError: (err) =>
+          toast.error(getApiErrorMessage(err, 'Could not convert the quote to a sales order.')),
       }
     )
   }
@@ -89,6 +105,7 @@ export function QuoteDetail() {
   const customerName =
     customers.find((c) => c.id === quote.partner_id)?.name ?? quote.partner_id
   const isDraft = quote.status === 'draft'
+  const isAccepted = quote.status === 'accepted'
   const nextStatuses = NEXT_STATUSES[quote.status] ?? []
   const isMoving = advanceMutation.isPending
 
@@ -131,6 +148,16 @@ export function QuoteDetail() {
                   {STATUS_ACTION_LABEL[target] ?? target}
                 </Button>
               ))}
+              {isAccepted && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleConvert}
+                  disabled={convertMutation.isPending}
+                >
+                  Convert to Sales Order
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
