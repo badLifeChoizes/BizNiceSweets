@@ -37,8 +37,12 @@ from app.modules.crumb.service._common import (
 )
 
 if TYPE_CHECKING:
-    from app.modules.crumb.models import SalesOrder, SalesOrderLine
-    from app.modules.crumb.schemas import SalesOrderCreate, SalesOrderLineCreate
+    from app.modules.crumb.models import QuoteLine, SalesOrder, SalesOrderLine
+    from app.modules.crumb.schemas import (
+        QuoteToSalesOrderRequest,
+        SalesOrderCreate,
+        SalesOrderLineCreate,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +198,140 @@ async def create_sales_order(
 
     await db.commit()
     return await get_sales_order_detail(db, so.id)
+
+
+# ---------------------------------------------------------------------------
+# Conversion — accepted quote → sales order (AC3, AC6, D-V3-16)
+# ---------------------------------------------------------------------------
+
+
+async def _resolve_item_id_for_part(db: AsyncSession, plum_part_id: str | None) -> str | None:
+    """
+    Resolve a SYERP stock item_id from a quote line's PLUM part link.
+
+    A quote line prices a PLUM catalog part (`plum_part_id`); a sales-order line
+    orders a SYERP stock item (`item_id`). The bridge is the advisory
+    InventoryItem.plum_part_id link (nullable, no cascade — D-V3-16). Returns the
+    first matching InventoryItem.id ordered by id (deterministic — the link is
+    not unique, so pick stably), or None when the line carries no part or no
+    InventoryItem links that part (a non-stock line — item_id NULL, D-V3-16).
+    """
+    if plum_part_id is None:
+        return None
+
+    from app.modules.syerp.models import InventoryItem
+
+    result = await db.execute(
+        select(InventoryItem.id)
+        .where(InventoryItem.plum_part_id == plum_part_id)
+        .order_by(InventoryItem.id)
+        .limit(1)
+    )
+    return result.scalar()
+
+
+async def convert_quote_to_sales_order(
+    db: AsyncSession,
+    quote_id: str,
+    data: "QuoteToSalesOrderRequest",
+    actor_id: str,
+) -> "SalesOrder":
+    """
+    Convert an accepted quote into a draft sales order (AC3, AC6).
+
+    Loads the quote (404) and requires status == "accepted" (422 otherwise —
+    only an accepted quote may be ordered, AC3). Creates a Draft SO for the
+    quote's partner, stamping source_quote_id / source_opportunity_id for two-way
+    traceability (AC6). Each quote line is copied to an SO line: qty_ordered from
+    the quote line's `quantity`, unit_price verbatim, plum_part_id/description
+    carried for display, qty_reserved = 0. The line's item_id is resolved from
+    the PLUM part via the advisory InventoryItem link (first match, or NULL for a
+    part-less / unlinked free-text line — a non-stock line, D-V3-16). Reuses
+    generate_sales_order_number and the retry-once idiom (mirrors
+    create_sales_order). Commits and returns the detail view.
+    """
+    import sqlalchemy.exc
+
+    from app.modules.crumb.models import Quote, SalesOrder, SalesOrderLine
+
+    quote = await db.get(Quote, quote_id)
+    if quote is None:
+        raise HTTPException(status_code=404, detail=f"Quote '{quote_id}' not found")
+    if quote.status != "accepted":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Quote '{quote_id}' is '{quote.status}'; "
+                "only an accepted quote can be converted to a sales order."
+            ),
+        )
+
+    order_date = data.order_date if data.order_date is not None else date.today()
+
+    number = await generate_sales_order_number(db)
+    so = SalesOrder(
+        so_number=number,
+        partner_id=quote.partner_id,
+        source_quote_id=quote.id,
+        source_opportunity_id=quote.opportunity_id,
+        status="draft",
+        order_date=order_date,
+        required_date=data.required_date,
+        actor_id=actor_id,
+    )
+    db.add(so)
+
+    try:
+        await db.flush()
+    except sqlalchemy.exc.IntegrityError:
+        # Auto-generated SO number collided (race) — retry once with a fresh one.
+        await db.rollback()
+        number = await generate_sales_order_number(db)
+        so = SalesOrder(
+            so_number=number,
+            partner_id=quote.partner_id,
+            source_quote_id=quote.id,
+            source_opportunity_id=quote.opportunity_id,
+            status="draft",
+            order_date=order_date,
+            required_date=data.required_date,
+            actor_id=actor_id,
+        )
+        db.add(so)
+        await db.flush()
+
+    quote_lines = await _get_quote_lines_for_conversion(db, quote_id)
+    for index, ql in enumerate(quote_lines):
+        item_id = await _resolve_item_id_for_part(db, ql.plum_part_id)
+        db.add(
+            SalesOrderLine(
+                sales_order_id=so.id,
+                item_id=item_id,
+                plum_part_id=ql.plum_part_id,
+                description=ql.description,
+                qty_ordered=ql.quantity,
+                unit_price=ql.unit_price,
+                qty_reserved=Decimal("0"),
+                sort_order=index,
+            )
+        )
+
+    await db.commit()
+    return await get_sales_order_detail(db, so.id)
+
+
+async def _get_quote_lines_for_conversion(
+    db: AsyncSession, quote_id: str
+) -> list["QuoteLine"]:
+    """Load a quote's lines ordered by sort_order (for line-copy conversion)."""
+    from app.modules.crumb.models import QuoteLine
+
+    result = await db.execute(
+        select(QuoteLine)
+        .where(QuoteLine.quote_id == quote_id)
+        .order_by(QuoteLine.sort_order)
+    )
+    return list(result.scalars().all())
 
 
 async def _get_sales_order_lines(
