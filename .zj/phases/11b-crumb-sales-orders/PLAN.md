@@ -127,21 +127,21 @@ Recorded this planning session; the manager appends them to `DECISIONS.md` as D-
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.modules.crumb.router import router; print([r.path for r in router.routes if 'sales-order' in r.path or 'convert' in r.path])"` and `verify_crumb_so_api.py` (Task 11).
 - **Parallel-ok:** no (needs 6–8)
 
-### [ ] 10. verify_crumb_so.py — service-level live-Postgres verification
+### [x] 10. verify_crumb_so.py — service-level live-Postgres verification
 - **Files:** `backend/scripts/verify_crumb_so.py` (new)
 - **Do:** Mirror `verify_crumb.py`/`verify_mousse.py` (owns its async engine/session, builds fixtures — a customer, an InventoryItem with seeded on-hand via receipt txns, a PLUM part linked to that item, an Accepted quote — self-cleans in `finally`). Assert: (A) direct SO create + `SO-####` numeric-safe boundary (`SO-0009→SO-0010`) + survival of a non-`SO-[0-9]+` row; (B) draft-only line edit + 409 once Confirmed; (C) FSM valid walk `draft→confirmed→fulfilling→closed` + invalid-target 422 (incl. `fulfilling→cancelled`); (D) quote→SO conversion — accepted-only 422 guard, line-copy exactness, item_id resolution from `plum_part_id`, a non-stock (NULL item_id) line, both linkage ids stamped; (E) **reservation math** — `available = onhand − Σ reservations`, `min(qty_ordered, available)` cap, a shortage line (`shortage = qty_ordered − qty_reserved > 0`, still confirms), a non-stock line reserves 0, and cancelling a Confirmed SO releases (available frees back); (F) **concurrency crux** — two `asyncio.gather` concurrent confirms on the same scarce item cannot over-reserve (combined `qty_reserved ≤ on_hand`). Print PASS/FAIL; exit non-zero on any FAIL; leave no residual rows.
 - **Done when:** script exits 0 against the running DB and self-cleans.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_crumb_so.py`
 - **Parallel-ok:** no (needs 6–8)
 
-### [ ] 11. verify_crumb_so_api.py — HTTP RBAC + audit verification
+### [x] 11. verify_crumb_so_api.py — HTTP RBAC + audit verification
 - **Files:** `backend/scripts/verify_crumb_so_api.py` (new)
 - **Do:** Mirror `verify_crumb_api.py`/`verify_mousse_api.py` (stdlib `urllib`; mints throwaway `writer` = crumb:read+write, `reader` = crumb:read, `noperm` = none; tokens via `create_access_token`). For every SO mutation + the convert endpoint assert: mutation → 2xx writer, 403 reader, 401 anon; read → 200 reader, 403 noperm, 401 anon. After a successful SO create, a confirm, a cancel, and a quote→SO conversion over HTTP, assert the matching `AuditLog` row exists, is attributable (`actor_id`), and targets the SO (SC5). Self-clean in `finally` (crumb rows, audit rows, throwaway users/roles).
 - **Done when:** script exits 0; proves `crumb:read`/`crumb:write` gate SO endpoints at HTTP level and audit rows exist for create/confirm/cancel/convert.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_crumb_so_api.py`
 - **Parallel-ok:** no (needs 9 + a serving api)
 
-### [ ] 12. Regression — all 15 existing verify_*.py + both 11a crumb scripts still exit 0
+### [x] 12. Regression — all 15 existing verify_*.py + both 11a crumb scripts still exit 0
 - **Files:** none (assertion task)
 - **Do:** Run the full existing verify suite; 11b is additive (touches no SYERP/PLUM/MOUSSE *mutation* path — the only SYERP change is the additive read helper in Task 5), so this should hold — assert it anyway (SC6). Existing 15: `verify_inventory`, `verify_purchasing`, `verify_e2e_p8`, `verify_gl`, `verify_ap`, `verify_reports`, `verify_gl_api`, `verify_ap_api`, `verify_reports_api`, `verify_mousse`, `verify_mousse_api`, `verify_part_numbering`, `verify_plum_vendor_paths`, `verify_crumb`, `verify_crumb_api`. With the 2 new (`verify_crumb_so`, `verify_crumb_so_api`) → **17/17**.
 - **Done when:** all 15 existing exit 0; trial balance still nets zero (verify_gl/verify_reports); 11b posts no GL/InventoryTxn.

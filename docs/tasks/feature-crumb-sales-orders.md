@@ -13,9 +13,9 @@ Branch cut off the verified 11a tip (`a8191cf`; tag `zj/good-11a-crumb-crm-pipel
 - [x] 7. Sales-orders service — accepted-quote→SO conversion
 - [x] 8. Sales-orders service — confirm (reserve, FOR UPDATE lock) + cancel (release) — THE crux
 - [x] 9. Router endpoints + audit for sales orders + conversion
-- [ ] 10. verify_crumb_so.py — service-level live-Postgres verification
-- [ ] 11. verify_crumb_so_api.py — HTTP RBAC + audit verification
-- [ ] 12. Regression — all 15 existing verify_*.py + both 11a crumb scripts still exit 0
+- [x] 10. verify_crumb_so.py — service-level live-Postgres verification
+- [x] 11. verify_crumb_so_api.py — HTTP RBAC + audit verification
+- [x] 12. Regression — all 15 existing verify_*.py + both 11a crumb scripts still exit 0 → 17/17 green
 
 ## Frontend
 - [ ] 13. SO hooks, routes, nav item
