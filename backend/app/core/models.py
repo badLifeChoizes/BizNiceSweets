@@ -28,6 +28,6 @@ from app.modules.plum import models as plum_models  # noqa: F401
 # from app.modules.flan import models as flan_models    # noqa: F401
 from app.modules.mousse import models as mousse_models  # noqa: F401
 from app.modules.crumb import models as crumb_models  # noqa: F401
-# from app.modules.gelato import models as gelato_models  # noqa: F401
+from app.modules.gelato import models as gelato_models  # noqa: F401
 # from app.modules.crisp import models as crisp_models  # noqa: F401
 # -------------------------------------------------------------------------

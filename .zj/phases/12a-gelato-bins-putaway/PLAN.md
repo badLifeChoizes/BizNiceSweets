@@ -52,7 +52,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.core.models import *; from app.modules.gelato.models import Bin; from app.modules.syerp.models import InventoryTxn; print('bin_id' in InventoryTxn.__table__.c, Bin.__tablename__)"` → prints `True gelato_bin`.
 - **Parallel-ok:** no (foundation)
 
-### [ ] 2. Register GELATO models in the aggregator + wire module import
+### [x] 2. Register GELATO models in the aggregator + wire module import
 - **Files:** `backend/app/core/models.py` (edit), `backend/app/main.py` (edit)
 - **Do:** Add `from app.modules.gelato import models as gelato_models  # noqa: F401` to the Phase 4+ block in `core/models.py` (so Alembic sees `gelato_bin`). Add `importlib.import_module("app.modules.gelato")` to the import block in `main.py:79-83` (after crumb). Router does not exist yet — task 6 adds it; keep the `__init__` router import satisfied by a stub or land this after task 6. **Order note:** do this edit but the app won't boot until task 6's router exists; verify at task 6.
 - **Done when:** `core/models.py` and `main.py` both name `gelato`.

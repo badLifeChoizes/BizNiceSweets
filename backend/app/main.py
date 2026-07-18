@@ -80,6 +80,7 @@ importlib.import_module("app.modules.syerp")
 importlib.import_module("app.modules.plum")
 importlib.import_module("app.modules.mousse")
 importlib.import_module("app.modules.crumb")
+importlib.import_module("app.modules.gelato")
 importlib.import_module("app.modules.auth")
 
 # Wire all registered module routers under /api/v1
