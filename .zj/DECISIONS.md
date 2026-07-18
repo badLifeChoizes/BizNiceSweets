@@ -836,3 +836,60 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   `(location_id, code)` unique constraint + service 4xx pre-check), not auto-numbered — warehouse bin
   codes are physical labels the operator assigns; the D-P10-10 directed-putaway heuristic suggests a
   target bin (a bin already holding the item, else first active bin) but the user confirms/overrides.
+
+### Phase 12b — GELATO outbound (pick → pack → ship) — planned 2026-07-18
+
+- **D-P12b-1 (owner):** **Phase 12b is ONE phase**, not sub-split into a 12c. Pick + pack + ship + the
+  COGS JE + reservation relief all land together. *Why:* pick+pack alone deliver no shippable increment
+  (unlike 12a's usable inbound slice); the natural unit of value is order→ship. Sub-split at build only
+  if task count explodes.
+- **D-P12b-2 (owner):** **Fulfillment is a Shipment AGGREGATE + FSM**, not three separate PickList/Pack/
+  Shipment documents. One `Shipment` header (`gelato_shipment`) + `ShipmentLine` (`gelato_shipment_line`),
+  lifecycle **picking → packed → shipped** (+ `cancelled` from picking, D-P12b-11). Shipment → its SO;
+  ShipmentLine → the SO line + the from-bin picked + qty. `source_type="gelato_shipment"` on the ship's
+  ledger/JE rows. *Why:* mirrors how Bills/SOs were modeled (one header+lines+FSM); honors all three
+  verbs and the staging move (D-P12a-4) without three tables/FSMs.
+- **D-P12b-3 (owner):** **Ledger-consistency debt paydown = OUTBOUND PATH ONLY.** Pick reuses the
+  bin-aware `post_putaway`; ship gets a NEW bin-aware `post_issue` with a NARROW FOR-UPDATE lock (mirror
+  MOUSSE/CRUMB — lock contended `InventoryItem` rows sorted-id before the floor read). Do **NOT** retrofit
+  `post_adjustment`/`post_transfer`/MOUSSE `issue_components` to be bin-aware, and do **NOT** do the shared
+  cross-path lock refactor — both stay deferred (BACKLOG p2, the bin-blind-desync + cross-path-race item,
+  now **half-closed**). *Why:* the full retrofit touches SYERP core + MOUSSE with real regression risk and
+  is out of the outbound scope; consistent with every prior phase adding a narrow lock and deferring the
+  shared refactor. 12b MUST NOT be read as closing the p2 item.
+- **D-P12b-4 (owner):** **UI folded into the plan, no separate DESIGN.md** (D-P8-9 / D-V3-12 / D-P12a-6
+  precedent) — pick/ship screens spec'd inline in PLAN tasks despite the flow being novel.
+- **D-P12b-5 (author):** **`qty_picked` + `qty_shipped` accumulators added to `crumb_sales_order_line`**
+  (Numeric(18,6), server_default 0, mirror `qty_reserved`, D-V3-11 / D-P8-15). **Reservation relief
+  happens AT SHIP** (D-V3-11, SRD AC5): ship does `qty_reserved -= shipped_qty` (floored ≥ 0). Picking
+  stamps `qty_picked` only and does NOT touch `qty_reserved`. Cross-module edit to the CRUMB table by the
+  GELATO ship path is accepted (GELATO owns fulfillment, imports CRUMB models as MOUSSE imports SYERP).
+- **D-P12b-6 (author):** **New SYERP bin-aware `post_issue` primitive** in `syerp/service/inventory.py`,
+  cloning `post_putaway`'s lock+floor+cost scaffolding but posting a SINGLE signed `-qty` `issue` leg
+  carrying `bin_id`, with a `commit: bool = True` param so ship can call `commit=False`. *Why:* no reusable
+  draw primitive exists today (MOUSSE hand-rolls a negative `InventoryTxn`); GELATO imports this and never
+  writes the ledger directly (D-V3-9). Bin-aware from birth. MOUSSE is NOT refactored onto it (D-P12b-3).
+- **D-P12b-7 (author):** **The COGS JE mirrors MOUSSE `issue_components`**, swapping the Dr account
+  **1140→5100**: `Dr 5100 COGS / Cr 1130 Inventory` at moving-avg via `post_journal_entry(..., commit=False,
+  source_type="gelato_shipment")`, `db.flush()` the issue txns first, single `db.commit()` — atomic with
+  the issue (SYERP-13 AC1). No new CoA codes (both seeded).
+- **D-P12b-8 (author):** **Branch `feature-gelato-pick-pack-ship`** cut off the verified 12a tip (tag
+  `zj/good-12a-gelato-bins-putaway`, `52eb481`); 11a/11b/12a unmerged, 12b stacks (per-sub-phase branch
+  precedent D-P12a-5 / D-V3-19 / D-P10-8). Per the 12a precedent the branch may cut off the docs-on-top
+  HEAD (code-identical to the tag) so this PLAN.md isn't dropped.
+- **D-P12b-9 (author):** **Staging bin = `Shipment.staging_bin_id` FK**, operator-selected at pick time
+  from the location's active bins (suggestion offered); NO new `is_staging` flag on `gelato_bin` — any
+  active bin can serve (D-P12a-11). Pick moves pick-bin→`staging_bin_id` (net-zero); ship issues from it.
+- **D-P12b-10 (author):** **First pick auto-advances the SO `confirmed → fulfilling`** (a plain status
+  write the FSM permits) — the truthful state once an order is being worked. Ship does NOT auto-close.
+- **D-P12b-11 (author):** **Shipment FSM `picking → packed → shipped`, plus `cancelled` reachable only
+  from `picking`.** Cancel-from-picking reverses staged picks (staging→pick-bin net-zero, restores
+  `qty_picked`), mirroring SO cancel's release. A `packed`/`shipped` shipment cannot be cancelled — a
+  shipped issue+COGS is a posted GL fact; reversal/un-ship/RMA is a Phase-13+ concern.
+- **D-P12b-12 (owner, resolved at plan close):** **Ship never auto-closes the SO** — `fulfilling → closed`
+  stays a manual operator action. *Why:* partial/backorder shipments are normal and Phase-13 invoicing
+  keys off close, so the operator decides when the order is done; avoids coupling GELATO ship to the CRUMB
+  SO lifecycle. (Owner chose this over auto-close-on-full-ship.)
+- **D-P12b-13 (author):** **New `verify_gelato_ship_api.py`** (not extending `verify_gelato_api.py`) —
+  keeps the ship RBAC/audit surface self-contained (mirrors `verify_mousse_api.py`) and leaves the 12a
+  script an untouched regression baseline.

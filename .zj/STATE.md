@@ -1,7 +1,40 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-18 (**Phase 12a RETRO'D** — `/zj:retro 12a` done. Roadmap 12a `[done — verified + retro'd]`; LEARNINGS Phase 12a banked (new-dimension-on-a-shared-ledger corruption class; the value-clamp-breaks-the-invariant note; first int-PK audit-target coercion bug caught by the HTTP script; concurrency pre-empt clean a 3rd time; reverse-hub string FK). All deferred items homed (bin-split MAJOR → BACKLOG p2; int-PK audit sweep resolved by reviewer — no other int-PK target exists, folded to a LEARNINGS keeper; 422 sweep already BACKLOG p3). **Next action:** `/zj:plan 12b`.)
+Updated: 2026-07-18 (**Phase 12b PLANNED** — `/zj:plan 12b` done. PLAN.md at
+`.zj/phases/12b-gelato-pick-pack-ship/PLAN.md` = **15 tasks in 4 waves** (schema → backend logic →
+verify → frontend) for GELATO **outbound (pick → pack → ship)**. Four owner decisions set the shape
+(D-P12b-1..4, all recommendations taken): **(1) ONE phase** (no 12c split); **(2) Shipment aggregate +
+FSM** picking→packed→shipped (not three docs); **(3) ledger-debt paydown = OUTBOUND PATH ONLY** —
+pick/ship become bin-aware + a narrow ship FOR-UPDATE lock; the adjust/transfer/MOUSSE-issue retrofit +
+shared-lock refactor stay deferred (BACKLOG p2 now half-closed); **(4) UI folded into the plan**. Plus
+D-P12b-5..13 author calls (qty_picked/qty_shipped accumulators on the SO line; reservation relief AT
+ship; NEW SYERP bin-aware `post_issue`; COGS JE mirrors MOUSSE 1140→5100; staging = `Shipment.staging_bin_id`).
+D-P12b-12 resolved by owner at close: **ship never auto-closes the SO** (manual `fulfilling→closed`).
+Decisions D-P12b-1..13 appended to DECISIONS.md. No `## Decisions needed` open. Plan checked
+goal-backward at manager review (every SC → ≥1 task, every task → an SC + real files + runnable verify;
+GELATO-01 AC3/4/5/7/8 + SYERP-13 AC1 COGS clause traced). **Next action:** `/zj:build 12b`.)
 
 ## Position
+
+- **Step:** **PLAN COMPLETE** — **Phase 12b (GELATO outbound: pick → pack → ship) planned 2026-07-18.**
+  Closes the v3.0 DoD clause 2 (warehouse fulfillment outbound) and posts the sell-side **COGS** JE
+  (Dr 5100 / Cr 1130) — the first half of SYERP-13's sell-side books; invoice-from-shipment + AR stay
+  Phase 13. **15 tasks:** Wave A schema (Shipment + ShipmentLine models, `qty_picked`/`qty_shipped` on
+  `crumb_sales_order_line`, migration **0016**, schemas) → Wave B backend (NEW SYERP bin-aware
+  `post_issue` → GELATO `shipments.py` pick/pack/ship → router+boot) → Wave C verify
+  (`verify_gelato_ship.py` incl. the accounting crux + control-vs-subledger tie + reservation-relief +
+  partial-ship + the load-bearing Barrier; `verify_gelato_ship_api.py` HTTP RBAC/audit; full regression
+  + TB-nets-zero) → Wave D frontend (shipment hooks, a Fulfillment pick→pack→ship screen, an SO-detail
+  ship affordance, colocated Vitest asserting the real payload shape). Recurring keepers baked in: real
+  router/UI payload shape in verify + Vitest (11a/11b/12a trap); the non-optional HTTP audit/RBAC script
+  + `write_audit(target_id=str(shipment.id))` (12a int-PK bug — Shipment is int-PK); the pre-planned
+  FOR-UPDATE lock + `asyncio.Barrier` two-concurrent-ship scenario; a control-account-ties-to-subledger
+  assertion (not just TB nets zero — Phase 10 keeper). **Next action:** `/zj:build 12b`.
+
+- **Branch (D-P12b-8):** build 12b on a fresh `feature-gelato-pick-pack-ship` cut off the verified 12a
+  tip (tag `zj/good-12a-gelato-bins-putaway`, `52eb481`) — 11a/11b/12a unmerged; 12b stacks. Lint gates
+  remain non-functional (BACKLOG p1); correctness rests on verify_* + Vitest, per project convention.
+
+## (historical) Position
 
 - **Step:** **RETRO'D** — **Phase 12a (GELATO bins & directed putaway) closed 2026-07-18** (`/zj:retro 12a`),
   tag `zj/good-12a-gelato-bins-putaway` at `52eb481`. Roadmap marked `[done — verified + retro'd]`. Retro banked
