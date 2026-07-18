@@ -41,7 +41,12 @@ from app.modules.gelato.service.bins import get_bin, list_bins
 
 if TYPE_CHECKING:
     from app.modules.gelato.models import Shipment
-    from app.modules.gelato.schemas import PickListRead, PickRequest, ShipmentRead
+    from app.modules.gelato.schemas import (
+        PackRequest,
+        PickListRead,
+        PickRequest,
+        ShipmentRead,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -410,6 +415,96 @@ async def execute_pick(
     await db.commit()
 
     # (g) Return the shipment with its lines.
+    return await _load_shipment_read(db, shipment.id)
+
+
+# ---------------------------------------------------------------------------
+# Execute pack — FSM picking → packed, staged-qty record only (GELATO-02, SC3)
+# ---------------------------------------------------------------------------
+
+
+async def execute_pack(
+    db: AsyncSession, shipment_id: int, req: "PackRequest", actor_id: str
+) -> "ShipmentRead":
+    """
+    Pack a picked shipment — advance picking → packed and record the staged qty.
+
+    A pure state + staged-qty record: packing books NO ledger/GL movement (that is
+    ship's job) and does NOT touch the SO's qty_picked / qty_reserved — a partial
+    pack does not return stock to the pick bin (that reconciliation is out of scope
+    for this phase; ship relieves the reservation for the shipped qty only). The
+    packed/staged qty is what ship later issues, stored on ShipmentLine.qty (the
+    picked qty stamped at pick), so trimming it DOWN here is what a partial pack
+    means (SC3).
+
+      (a) Load the shipment (404).
+      (b) Gate on the shipment FSM: only a "picking" shipment can be packed —
+          "packed" must be in the current state's allowed set (409 otherwise),
+          mirroring SHIPMENT_TRANSITIONS.
+      (c) Apply any per-line staged-qty overrides (req.overrides): each must target
+          a ShipmentLine of THIS shipment (422 if foreign/nonexistent) and trim the
+          staged qty DOWN within (0, picked qty] — an override exceeding the picked
+          qty is rejected (422); qty > 0 is guaranteed at the boundary
+          (PackLineOverride.qty Field(gt=0)). With no overrides every line packs at
+          its picked qty as-is.
+      (d) Set status "packed"; single db.commit(); return the ShipmentRead.
+    """
+    from app.modules.gelato.models import Shipment, ShipmentLine
+
+    # (a) Load the shipment.
+    shipment = await db.get(Shipment, shipment_id)
+    if shipment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Shipment {shipment_id} not found",
+        )
+
+    # (b) FSM gate: only a shipment being picked can be packed. A non-picking
+    #     shipment (packed / shipped / cancelled) has no "packed" successor — 409.
+    if "packed" not in SHIPMENT_TRANSITIONS[shipment.status]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Shipment {shipment_id} is '{shipment.status}'; only a shipment "
+                "being picked can be packed."
+            ),
+        )
+
+    # (c) Apply per-line staged-qty overrides. Index THIS shipment's lines by id so
+    #     an override targeting a foreign / nonexistent line is rejected (422).
+    result = await db.execute(
+        select(ShipmentLine).where(ShipmentLine.shipment_id == shipment_id)
+    )
+    lines_by_id = {line.id: line for line in result.scalars().all()}
+
+    for override in req.overrides:
+        line = lines_by_id.get(override.shipment_line_id)
+        if line is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Shipment line {override.shipment_line_id} does not belong to "
+                    f"shipment {shipment_id}."
+                ),
+            )
+        # A pack override may only trim the staged qty DOWN — it cannot pack more
+        # than was picked (line.qty is the picked qty). qty > 0 is enforced at the
+        # boundary (PackLineOverride.qty Field(gt=0)).
+        if override.qty > line.qty:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Pack qty {override.qty} for shipment line "
+                    f"{override.shipment_line_id} exceeds the picked qty {line.qty}; "
+                    "packing can only trim the staged qty down."
+                ),
+            )
+        line.qty = override.qty
+
+    # (d) Advance to packed and commit once. No ledger/GL movement here.
+    shipment.status = "packed"
+    await db.commit()
+
     return await _load_shipment_read(db, shipment.id)
 
 

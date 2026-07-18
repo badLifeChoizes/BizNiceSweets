@@ -31,6 +31,7 @@ from app.modules.gelato.service.putaway import (
 from app.modules.gelato.service.shipments import (
     SHIPMENT_TRANSITIONS,
     build_pick_list,
+    execute_pack,
     execute_pick,
 )
 from app.modules.syerp.service import get_bin_on_hand
@@ -49,6 +50,7 @@ __all__ = [
     # shipments (pick/pack/ship)
     "SHIPMENT_TRANSITIONS",
     "build_pick_list",
+    "execute_pack",
     "execute_pick",
     # re-exported from the SYERP hub
     "get_bin_on_hand",
