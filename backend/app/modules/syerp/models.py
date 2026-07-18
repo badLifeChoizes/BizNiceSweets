@@ -269,6 +269,12 @@ class InventoryTxn(Base):
     location_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("syerp_stock_location.id"), nullable=False, index=True
     )
+    # bin_id: optional GELATO storage bin the movement was directed into
+    # (GELATO-01). String table-name FK so the hub needs no import of the
+    # GELATO package (D-P12a-3); NULL when the movement is not bin-directed.
+    bin_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("gelato_bin.id"), nullable=True, index=True
+    )
 
     # txn_type: receipt | issue | adjustment | transfer
     txn_type: Mapped[str] = mapped_column(String(20), nullable=False)

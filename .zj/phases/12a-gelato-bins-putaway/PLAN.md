@@ -45,7 +45,7 @@ Key real files and the patterns to mirror shape-for-shape:
 
 ## Tasks
 
-### [ ] 1. Author the GELATO ORM models (`gelato_bin`) + the `bin_id` mapped column on `InventoryTxn`
+### [x] 1. Author the GELATO ORM models (`gelato_bin`) + the `bin_id` mapped column on `InventoryTxn`
 - **Files:** `backend/app/modules/gelato/__init__.py` (new), `backend/app/modules/gelato/models.py` (new), `backend/app/modules/syerp/models.py` (edit — add `bin_id`)
 - **Do:** Create the `gelato` package. In `gelato/models.py` define `Bin(Base)` → `__tablename__ = "gelato_bin"`: `id` (Integer PK, mirror StockLocation int-PK style), `location_id` (Integer FK `syerp_stock_location.id`, not null, index), `code` (String, not null), `description` (String, nullable), `active` (Boolean default True), `created_at` (tz-aware). Add `UniqueConstraint("location_id", "code", name="uq_gelato_bin_location_code")`. In `syerp/models.py` `InventoryTxn`, add `bin_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("gelato_bin.id"), nullable=True, index=True)` — use the **string** table-name FK so no gelato import is needed (D-P12a-3). `gelato/__init__.py` mirrors `mousse/__init__.py`: `MODULE_NAME="gelato"`, import router, `registry.register`.
 - **Done when:** `python -c "from app.modules.gelato import models"` imports clean in-container; `InventoryTxn.bin_id` and `Bin` are visible on `Base.metadata`.
