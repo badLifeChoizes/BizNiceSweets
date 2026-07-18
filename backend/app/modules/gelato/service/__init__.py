@@ -34,6 +34,7 @@ from app.modules.gelato.service.shipments import (
     execute_pack,
     execute_pick,
     execute_ship,
+    get_shipment,
 )
 from app.modules.syerp.service import get_bin_on_hand
 
@@ -54,6 +55,7 @@ __all__ = [
     "execute_pack",
     "execute_pick",
     "execute_ship",
+    "get_shipment",
     # re-exported from the SYERP hub
     "get_bin_on_hand",
 ]

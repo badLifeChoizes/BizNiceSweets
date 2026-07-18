@@ -1,10 +1,11 @@
 # ABOUTME: GELATO (Warehouse Management) API router — bins CRUD + directed
-# ABOUTME: putaway (list/create/patch/archive bins, unbinned stock, target-bin
-# ABOUTME: suggestion, execute putaway). Thin: each delegates to gelato/service,
-# ABOUTME: gates on gelato:read (GET) / gelato:write (mutations), and writes an
-# ABOUTME: attributable audit row AFTER the service commit (write_audit self-commits).
+# ABOUTME: putaway + outbound pick/pack/ship (list/create/patch/archive bins,
+# ABOUTME: unbinned stock, target-bin suggestion, execute putaway; pick list,
+# ABOUTME: pick/pack/ship a shipment, shipment detail). Thin: each delegates to
+# ABOUTME: gelato/service, gates on gelato:read (GET) / gelato:write (mutations),
+# ABOUTME: and writes an attributable audit row AFTER the service commit.
 """
-GELATO API router — bins & directed putaway (GELATO-01).
+GELATO API router — bins & directed putaway (GELATO-01) + pick/pack/ship (GELATO-02).
 
 Endpoints (mount_all in registry.py adds the /api/v1 prefix — full paths are
 /api/v1/gelato/bins, etc.; this router carries no prefix and spells the
@@ -17,6 +18,11 @@ Endpoints (mount_all in registry.py adds the /api/v1 prefix — full paths are
   GET   /gelato/locations/{location_id}/unbinned  — list unbinned stock awaiting putaway (gelato:read)
   GET   /gelato/putaway/suggestion                — suggested target bin (gelato:read)
   POST  /gelato/putaway                           — execute a putaway (gelato:write)
+  GET   /gelato/sales-orders/{so_id}/pick-list    — build the pick list for a SO (gelato:read)
+  POST  /gelato/shipments/pick                    — pick a SO into staging (gelato:write)
+  POST  /gelato/shipments/{shipment_id}/pack      — pack a picked shipment (gelato:write)
+  POST  /gelato/shipments/{shipment_id}/ship      — ship a packed shipment (gelato:write)
+  GET   /gelato/shipments/{shipment_id}           — read one shipment + lines (gelato:read)
 
 Permission gating (D-P10-6, mirrors the MOUSSE router):
   - Every mutation (POST/PATCH) requires gelato:write; every read (GET) requires
@@ -31,7 +37,14 @@ own commit (write_audit self-commits, mirroring the SYERP/MOUSSE router order):
   - inventory.putaway on POST /gelato/putaway           (target_type="inventory_txn",
     target_id=result.out_leg.id — PutawayResult exposes no transfer-group id, so the
     OUT leg's txn id identifies the paired posting).
-GET routes are read-only and write no audit row.
+  - shipment.picked   on POST /gelato/shipments/pick         (target_type="shipment",
+    target_id=str(shipment.id))
+  - shipment.packed   on POST /gelato/shipments/{id}/pack    (target_type="shipment",
+    target_id=str(shipment_id))
+  - shipment.shipped  on POST /gelato/shipments/{id}/ship    (target_type="shipment",
+    target_id=str(shipment_id), detail names the posted COGS JE id)
+GET routes (bin lists, unbinned stock, suggestion, pick-list, shipment detail) are
+read-only and write no audit row.
 """
 from __future__ import annotations
 
@@ -45,14 +58,24 @@ from app.modules.gelato.schemas import (
     BinCreate,
     BinRead,
     BinUpdate,
+    PackRequest,
+    PickListRead,
+    PickRequest,
     PutawayRequest,
     PutawayResult,
+    ShipmentRead,
+    ShipRequest,
     UnbinnedStockRead,
 )
 from app.modules.gelato.service import (
     archive_bin,
+    build_pick_list,
     create_bin,
+    execute_pack,
+    execute_pick,
     execute_putaway,
+    execute_ship,
+    get_shipment,
     list_bins,
     list_unbinned_stock,
     suggest_target_bin,
@@ -240,3 +263,130 @@ async def execute_putaway_endpoint(
         ),
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Shipments — pick/pack/ship (GELATO-02)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/gelato/sales-orders/{so_id}/pick-list",
+    response_model=PickListRead,
+)
+async def build_pick_list_endpoint(
+    so_id: str,
+    current_user=Depends(require_permission("gelato:read")),
+    db: AsyncSession = Depends(get_db),
+) -> PickListRead:
+    """
+    Build the pick list for a sales order — the pick suggestion screen (SC2).
+
+    Per stock line, surfaces ordered/reserved/picked/shipped quantities plus the
+    fulfilling location's active bins holding the item (candidate sources) and a
+    suggested source bin. Rejects a missing SO (404) or an SO not in
+    {confirmed, fulfilling} (422). Read-only: no audit row. Requires gelato:read.
+    """
+    return await build_pick_list(db, so_id)
+
+
+@router.post("/gelato/shipments/pick", response_model=ShipmentRead)
+async def execute_pick_endpoint(
+    data: PickRequest,
+    current_user=Depends(require_permission("gelato:write")),
+    db: AsyncSession = Depends(get_db),
+) -> ShipmentRead:
+    """
+    Pick a sales order into its staging bin — bin-aware, net-zero (SC2).
+
+    Get-or-creates the SO's open picking shipment for the staging bin, moves each
+    pick line from its pick bin into staging via the SYERP hub, stamps qty_picked,
+    and advances the SO confirmed → fulfilling on the first pick — all in one
+    atomic commit. Requires gelato:write. Writes a shipment.picked audit row after
+    the pick commits.
+    """
+    shipment = await execute_pick(db, data, str(current_user.id))
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="shipment.picked",
+        target_type="shipment",
+        target_id=str(shipment.id),
+        detail=(
+            f"Pick: {len(data.lines)} line(s) of SO {data.sales_order_id} into "
+            f"staging bin {data.staging_bin_id} (shipment {shipment.id})"
+        ),
+    )
+    return shipment
+
+
+@router.post("/gelato/shipments/{shipment_id}/pack", response_model=ShipmentRead)
+async def execute_pack_endpoint(
+    shipment_id: int,
+    data: PackRequest,
+    current_user=Depends(require_permission("gelato:write")),
+    db: AsyncSession = Depends(get_db),
+) -> ShipmentRead:
+    """
+    Pack a picked shipment — advance picking → packed and record the staged qty.
+
+    A pure state + staged-qty record (no ledger/GL movement); optional per-line
+    overrides trim the staged qty down. Rejects a missing shipment (404) or a
+    non-picking shipment (409). Requires gelato:write. Writes a shipment.packed
+    audit row after the pack commits.
+    """
+    shipment = await execute_pack(db, shipment_id, data, str(current_user.id))
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="shipment.packed",
+        target_type="shipment",
+        target_id=str(shipment_id),
+        detail=f"Pack: shipment {shipment_id} packed ({len(data.overrides)} override(s))",
+    )
+    return shipment
+
+
+@router.post("/gelato/shipments/{shipment_id}/ship", response_model=ShipmentRead)
+async def execute_ship_endpoint(
+    shipment_id: int,
+    data: ShipRequest,
+    current_user=Depends(require_permission("gelato:write")),
+    db: AsyncSession = Depends(get_db),
+) -> ShipmentRead:
+    """
+    Ship a packed shipment — the accounting crux (GELATO-02, SC4; SYERP-13 AC1).
+
+    Issues each line out of the staging bin, relieves the SO reservation, stamps
+    qty_shipped, and posts ONE balanced COGS JE — all in one atomic commit.
+    Rejects a missing shipment (404), a non-packed shipment (409), an empty or
+    zero-value shipment (422). Requires gelato:write. Writes a shipment.shipped
+    audit row (naming the posted JE) after the ship commits.
+    """
+    shipment = await execute_ship(db, shipment_id, str(current_user.id))
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="shipment.shipped",
+        target_type="shipment",
+        target_id=str(shipment_id),
+        detail=(
+            f"Ship: shipment {shipment_id} shipped (SO {shipment.sales_order_id}, "
+            f"JE {shipment.journal_entry_id})"
+        ),
+    )
+    return shipment
+
+
+@router.get("/gelato/shipments/{shipment_id}", response_model=ShipmentRead)
+async def get_shipment_endpoint(
+    shipment_id: int,
+    current_user=Depends(require_permission("gelato:read")),
+    db: AsyncSession = Depends(get_db),
+) -> ShipmentRead:
+    """
+    Read one shipment with its lines (404 if it does not exist).
+
+    Read-only: no ledger movement, no audit row. Requires gelato:read permission.
+    """
+    return await get_shipment(db, shipment_id)

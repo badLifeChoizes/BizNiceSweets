@@ -692,6 +692,17 @@ async def execute_ship(
     return await _load_shipment_read(db, shipment.id)
 
 
+async def get_shipment(db: AsyncSession, shipment_id: int) -> "ShipmentRead":
+    """
+    Read one shipment with its lines as a ShipmentRead (404 if it does not exist).
+
+    A thin public wrapper over _load_shipment_read for the GET detail route — the
+    router stays thin and returns the identical shape the pick/pack/ship entry
+    points return. Read-only: no ledger movement, no audit row.
+    """
+    return await _load_shipment_read(db, shipment_id)
+
+
 async def _load_shipment_read(db: AsyncSession, shipment_id: int) -> "ShipmentRead":
     """
     Load a shipment with its lines and serialize it as a ShipmentRead.
