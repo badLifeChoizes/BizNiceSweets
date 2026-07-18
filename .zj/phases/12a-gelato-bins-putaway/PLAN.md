@@ -115,7 +115,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_gelato_api.py` exits 0.
 - **Parallel-ok:** no (depends on 8)
 
-### [ ] 11. Full backend regression (migration touches a SYERP core table — load-bearing)
+### [x] 11. Full backend regression (migration touches a SYERP core table — load-bearing)
 - **Files:** none (run existing scripts)
 - **Do:** Run every existing verify script + the two new ones against the fresh-migrated DB and confirm the Trial Balance still nets zero (12a posts NO GL).
 - **Done when:** all of `verify_inventory`, `verify_purchasing`, `verify_e2e_p8`, `verify_gl`, `verify_ap`, `verify_reports`, `verify_mousse`, `verify_crumb`, `verify_crumb_so` (+ their `_api` variants) exit 0, plus `verify_gelato` + `verify_gelato_api`.
@@ -163,6 +163,10 @@ Key real files and the patterns to mirror shape-for-shape:
 - Lot/serial tracking (D-V3-4, permanently out of v3.0).
 - Bin auto-numbering / slotting-optimization engine (D-P12a-9/10 — user-supplied codes, simple heuristic only).
 
+## Noticed (unrelated — surfaced during build, not fixed here)
+- **Integer-PK entities audited for the first time.** GELATO's `Bin` is the first int-PK entity written to `audit_log` (mousse/crumb/syerp audited entities all use uuid-string PKs), which is why the `target_id` int→str mismatch (see Deviations) had never surfaced before. Worth a quick repo-wide audit of `write_audit(target_id=...)` call sites for any other int-PK argument as more int-PK entities get audited. (candidate BACKLOG entry)
+- **`StarletteDeprecationWarning: HTTP_422_UNPROCESSABLE_ENTITY`** is emitted repo-wide (Starlette wants `HTTP_422_UNPROCESSABLE_CONTENT`). GELATO followed the existing convention. Already tracked as the 422 deprecation sweep (BACKLOG p3) — not new to this phase.
+
 ## Decisions needed
 None — the six owner-confirmed decisions (D-P12a-1..6) are fixed, and the four author calls (D-P12a-7..10, +11) are recorded with rationale and recommendations. No open question requires the manager before build starts.
 
@@ -170,3 +174,6 @@ None — the six owner-confirmed decisions (D-P12a-1..6) are fixed, and the four
 - **Branch cut off HEAD (`da9474e`), not the bare tag `fec334f`.** D-P12a-4 said cut off the verified 11b tip; the retro/plan doc commits (`de9e0f0`, `da9474e`) sit on top of that tag and include *this PLAN.md*. Cutting off the tag would drop the plan. HEAD is code-identical to the tag (docs only on top) — mirrors the 11b precedent (branch off code tip, not bare tag). (manager, build start)
 - **Task 1 — stub `router.py` created early.** `gelato/__init__.py` mirrors mousse and does `from app.modules.gelato.router import router` at package-import time, so the package (and task 1's own verify) can't import until a router module exists. Task 1 created a minimal `router = APIRouter()` stub; task 8 replaces it with the real routes. (The plan's task-2 note anticipated this and mis-numbered the router task as "6"; the real router is task 8.)
 - **Task 1 — commit subject shortened to satisfy `guard-commit-msg.sh` (72-char max).** No content change. String columns sized (`code String(50)`, `description String(255)`) to match SYERP/mousse conventions rather than bare `String`.
+- **Task 6 — lock target + bin-validation split, refining the plan.** (1) `post_putaway` locks `InventoryItem` FOR UPDATE (not `InventoryTxn` as the plan's prose implied) — the append-only ledger is not the contention point; the item-master row is, mirroring `sales_orders.py:619`. (2) SYERP `post_putaway` validates only item/location; bin existence + location-membership + archived-guard live in GELATO's `execute_putaway` (task 7), because SYERP must not import gelato models (D-P12a-3). DB FK is the backstop.
+- **Task 7 — `get_item_onhand` signature.** Plan referenced `get_item_onhand(db, item_id, location_id)`; the real helper is `get_item_onhand(db, item_id)` returning per-location rows. Service selects the matching location's quantity (0 when the location nets zero). Verified correct (location total unchanged by putaway).
+- **Task 8/10 — router audit `target_id` int→str bug (found by the HTTP script, fixed).** Task 8's bin routes passed the integer `Bin.id` to `write_audit(target_id=...)`, but `audit_log.target_id` is `VARCHAR(36)`; asyncpg raised `DataError`, so bin create/patch/archive committed the bin then **500'd on the audit write** — bins created with NO attributable audit row (audit-trail violation). `verify_gelato_api.py` (task 10) caught it — a service-level script structurally could not. Minimal fix `str(bin_.id)` on the three bin routes, committed separately as `136e98d` to keep the task-10 commit clean. Putaway route already used the str uuid out-leg id. **This is the 9a/11a keeper recurring: the paired HTTP script earns its place by catching the one router defect verify_gelato.py can't see.** Audit `target_id` for putaway = the OUT-leg txn id (plan said "group id", which `TransactionRead` doesn't expose).
