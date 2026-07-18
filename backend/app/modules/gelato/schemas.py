@@ -1,7 +1,8 @@
 # ABOUTME: GELATO (Warehouse Management) Pydantic request/response schemas —
 # ABOUTME: bin create/update/read, per-bin on-hand, the putaway request/result
 # ABOUTME: (its two inventory-ledger legs, resulting bin on-hand, location total),
-# ABOUTME: and the unbinned-stock read that drives the putaway suggestion screen.
+# ABOUTME: the unbinned-stock read that drives the putaway suggestion screen, and
+# ABOUTME: the outbound pick/pack/ship request+read schemas and pick-list read.
 # ABOUTME: Pure Pydantic (never imports the ORM); Read models fill from ORM via
 # ABOUTME: from_attributes, service-derived figures are plain Decimal fields.
 """
@@ -163,3 +164,172 @@ class UnbinnedStockRead(BaseModel):
     location_id: int
     unbinned_qty: Decimal
     suggested_bin_id: Optional[int] = None
+
+
+# ---------------------------------------------------------------------------
+# Shipment pick / pack / ship (GELATO-02)
+# ---------------------------------------------------------------------------
+
+
+class PickLineRequest(BaseModel):
+    """
+    One line of a pick payload — pick `qty` (> 0) of a sales-order line from a bin.
+
+    `sales_order_line_id` identifies the CRUMB sales-order line being fulfilled,
+    `from_bin_id` is the GELATO bin the stock is pulled from, and `qty` is the
+    quantity picked from that bin (a line may need several PickLineRequests when
+    its stock spans multiple bins). `qty` is a fixed-point Decimal (never float —
+    D-11) and must be > 0.
+    """
+
+    sales_order_line_id: str = Field(..., max_length=36)
+    from_bin_id: int
+    qty: Decimal = Field(..., gt=0)
+
+
+class PickRequest(BaseModel):
+    """
+    Pick payload (POST /gelato/shipments/pick) — pick a sales order into staging.
+
+    Picks the `lines` of sales order `sales_order_id`, moving each line's stock
+    out of its `from_bin_id` and into the `staging_bin_id` (the outbound staging
+    bin the whole shipment is assembled in). `lines` must be non-empty.
+    """
+
+    sales_order_id: str = Field(..., max_length=36)
+    staging_bin_id: int
+    lines: list[PickLineRequest] = Field(..., min_length=1)
+
+
+class PackLineOverride(BaseModel):
+    """
+    A per-line staged-qty override for packing — set the packed `qty` of one
+    already-picked shipment line to a value other than the picked quantity.
+
+    `shipment_line_id` is the shipment line being adjusted and `qty` (> 0) is the
+    quantity to pack for it. `qty` is a fixed-point Decimal (never float — D-11).
+    """
+
+    shipment_line_id: int
+    qty: Decimal = Field(..., gt=0)
+
+
+class PackRequest(BaseModel):
+    """
+    Pack payload (POST /gelato/shipments/{id}/pack) — confirm the staged shipment.
+
+    `overrides` optionally adjusts individual line quantities away from what was
+    picked; an empty list (the default) packs every picked line at its picked
+    quantity as-is.
+    """
+
+    overrides: list[PackLineOverride] = Field(default_factory=list)
+
+
+class ShipRequest(BaseModel):
+    """
+    Ship payload (POST /gelato/shipments/{id}/ship) — ship the packed shipment.
+
+    The shipment ships exactly as staged/packed, so the body carries no fields;
+    `shipment_id` comes from the path. Defined as an empty model to keep a
+    consistent JSON POST body across the pick/pack/ship endpoints.
+    """
+
+
+class ShipmentLineRead(BaseModel):
+    """
+    One shipment line returned to API callers, serialized from a ShipmentLine ORM
+    instance via from_attributes=True.
+
+    `sales_order_line_id` is the CRUMB line fulfilled, `item_id` the item shipped,
+    `from_bin_id` the bin it was picked from, and `qty` the shipped quantity (a
+    fixed-point Decimal — D-11). `inventory_txn_id` is the inventory-ledger leg
+    booked when the line shipped, NULL until the shipment is shipped.
+    """
+
+    id: int
+    sales_order_line_id: str
+    item_id: str
+    from_bin_id: int
+    qty: Decimal
+    inventory_txn_id: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ShipmentRead(BaseModel):
+    """
+    Shipment returned to API callers, serialized from a Shipment ORM instance via
+    from_attributes=True.
+
+    `sales_order_id` is the CRUMB order being fulfilled, `location_id` the stock
+    location it ships from, and `staging_bin_id` the outbound staging bin it is
+    assembled in. `status` is the shipment's FSM state (picked → packed →
+    shipped). `journal_entry_id` is the SYERP GL entry posted at ship time, NULL
+    until then. `lines` are its shipment lines; `created_at` is when it was
+    created.
+    """
+
+    id: int
+    sales_order_id: str
+    location_id: int
+    staging_bin_id: int
+    status: str
+    journal_entry_id: Optional[int] = None
+    lines: list[ShipmentLineRead]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Pick-list read — pick suggestion screen (GELATO-02)
+# ---------------------------------------------------------------------------
+
+
+class PickListBinRead(BaseModel):
+    """
+    One candidate source bin for a pick-list line — a service-CONSTRUCTED read.
+
+    Reports a `bin_id` (labelled `code`) holding the line's item and its current
+    `on_hand` in that bin (a fixed-point Decimal — D-11), so the picker can choose
+    where to pull from.
+    """
+
+    bin_id: int
+    code: str
+    on_hand: Decimal
+
+
+class PickListLineRead(BaseModel):
+    """
+    One pick-list line driving the pick screen — a service-CONSTRUCTED read.
+
+    For sales-order line `sales_order_line_id` (item `item_id`, `description`),
+    reports the ordered/reserved/picked/shipped quantities and the service's
+    `suggested_from_bin_id` (NULL when it has none to suggest), plus every
+    candidate `available_bins` holding the item. All quantities are fixed-point
+    Decimals (never float — D-11).
+    """
+
+    sales_order_line_id: str
+    item_id: str
+    description: str
+    qty_ordered: Decimal
+    qty_reserved: Decimal
+    qty_picked: Decimal
+    qty_shipped: Decimal
+    suggested_from_bin_id: Optional[int] = None
+    available_bins: list[PickListBinRead]
+
+
+class PickListRead(BaseModel):
+    """
+    Pick list for a sales order — a service-CONSTRUCTED read.
+
+    `sales_order_id` is the order being picked and `lines` are its per-line pick
+    suggestions (quantities and candidate source bins).
+    """
+
+    sales_order_id: str
+    lines: list[PickListLineRead]
