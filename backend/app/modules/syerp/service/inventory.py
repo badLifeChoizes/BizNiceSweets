@@ -677,6 +677,8 @@ async def post_putaway(
     to_bin_id: int | None,
     qty: Decimal,
     actor_id: str,
+    *,
+    commit: bool = True,
 ) -> "list[TransactionRead]":
     """
     Post a bin putaway: append the two paired `putaway` ledger legs.
@@ -784,7 +786,11 @@ async def post_putaway(
     db.add(in_leg)
     # moving_avg_cost is intentionally NOT touched — only receipts move it (AC10-5).
 
-    await db.commit()
+    # `commit=False` lets a caller (e.g. GELATO pick) batch several putaway legs
+    # plus its own rows into ONE atomic transaction; the caller owns the commit.
+    await db.flush()
+    if commit:
+        await db.commit()
     await db.refresh(out_leg)
     await db.refresh(in_leg)
 
