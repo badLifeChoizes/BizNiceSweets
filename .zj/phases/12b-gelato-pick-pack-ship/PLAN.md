@@ -42,84 +42,84 @@ Key real files and the exact shapes to mirror (all verified this session):
 
 ## Tasks
 
-### [ ] 1. Author the `Shipment` + `ShipmentLine` ORM models
+### [x] 1. Author the `Shipment` + `ShipmentLine` ORM models
 - **Files:** `backend/app/modules/gelato/models.py` (edit)
 - **Do:** Add two models beside `Bin`. `Shipment(Base)` → `__tablename__="gelato_shipment"`: `id` (Integer PK autoincrement, mirror `Bin`), `sales_order_id` (String(36) FK `crumb_sales_order.id`, not null, index), `location_id` (Integer FK `syerp_stock_location.id`, not null — the fulfilling location), `staging_bin_id` (Integer FK `gelato_bin.id`, not null — set at pick), `status` (String(20), default `"picking"`, not null), `journal_entry_id` (String(36) FK `syerp_journal_entry.id`, nullable — set at ship), `actor_id` (String(36) not null), `created_at` (tz-aware). `ShipmentLine(Base)` → `__tablename__="gelato_shipment_line"`: `id` (Integer PK), `shipment_id` (Integer FK `gelato_shipment.id`, not null, index), `sales_order_line_id` (String(36) FK `crumb_sales_order_line.id`, not null), `item_id` (String(36) FK `syerp_inventory_item.id`, not null), `from_bin_id` (Integer FK `gelato_bin.id`, not null — the bin picked from), `qty` (Numeric(18,6), not null), `inventory_txn_id` (String(36) FK `syerp_inventory_txn.id`, nullable — set at ship), `created_at`. Use string table-name FKs (no cross-module import). Reuse the `Bin` int-PK/tz-aware conventions already in the file.
 - **Done when:** `from app.modules.gelato.models import Shipment, ShipmentLine` imports clean in-container; both are visible on `Base.metadata`.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.core.models import *; from app.modules.gelato.models import Shipment, ShipmentLine; print(Shipment.__tablename__, ShipmentLine.__tablename__)"` → `gelato_shipment gelato_shipment_line`.
 - **Parallel-ok:** no (foundation)
 
-### [ ] 2. Add `qty_picked` + `qty_shipped` accumulators to `SalesOrderLine`
+### [x] 2. Add `qty_picked` + `qty_shipped` accumulators to `SalesOrderLine`
 - **Files:** `backend/app/modules/crumb/models.py` (edit, `SalesOrderLine` ~`:419-429`)
 - **Do:** Add two columns mirroring `qty_reserved` (`:426-429`): `qty_picked: Mapped[Decimal] = mapped_column(Numeric(18,6), nullable=False, default=Decimal("0"))` and the same for `qty_shipped`. Update the class docstring (`:391-393`) to name them alongside `qty_reserved` as the picked/shipped accumulators (D-P12b-5). No new relationship needed.
 - **Done when:** `SalesOrderLine.qty_picked` and `.qty_shipped` exist on the mapped table.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.modules.crumb.models import SalesOrderLine as L; print({'qty_picked','qty_shipped'} <= set(L.__table__.c.keys()))"` → `True`.
 - **Parallel-ok:** yes (independent of task 1)
 
-### [ ] 3. Hand-author migration 0016 (shipment tables + SO-line accumulators)
+### [x] 3. Hand-author migration 0016 (shipment tables + SO-line accumulators)
 - **Files:** `backend/alembic/versions/0016_gelato_shipments.py` (new)
 - **Do:** Author by hand on host (LEARNINGS 11a). `down_revision="0015"`. `upgrade()`: `op.create_table("gelato_shipment", ...)` then `op.create_table("gelato_shipment_line", ...)` with the columns + FKs from task 1 (parent table before child); then two `op.add_column("crumb_sales_order_line", sa.Column("qty_picked"/"qty_shipped", sa.Numeric(18,6), nullable=False, server_default="0"))` so existing rows backfill 0. `downgrade()`: drop the two columns, then `gelato_shipment_line`, then `gelato_shipment` (reverse order). Confirm `core/models.py` already imports gelato + crumb model modules (it does — no aggregator edit) so Alembic sees the new tables/columns.
 - **Done when:** `alembic upgrade head` runs clean 0001→0016 on a FRESH DB; `alembic downgrade -1` then `upgrade head` round-trips clean.
 - **Verify:** `podman exec compose_api_1 alembic upgrade head` exits 0 and logs `0016`; `podman exec compose_api_1 alembic downgrade -1 && podman exec compose_api_1 alembic upgrade head` both exit 0; psql `\d gelato_shipment` + `\d crumb_sales_order_line` show the tables/columns.
 - **Parallel-ok:** no (depends on 1, 2)
 
-### [ ] 4. Define GELATO shipment Pydantic schemas
+### [x] 4. Define GELATO shipment Pydantic schemas
 - **Files:** `backend/app/modules/gelato/schemas.py` (edit)
 - **Do:** Add, mirroring the existing bin/putaway schema style: `PickLineRequest` (sales_order_line_id: str, from_bin_id: int, qty: Decimal); `PickRequest` (sales_order_id: str, staging_bin_id: int, lines: list[PickLineRequest]); `PackRequest` (optional per-line staged-qty overrides — list of {shipment_line_id: int, qty: Decimal}, empty = pack picked qty as-is); `ShipRequest` (empty body / just the path shipment_id — ship the packed shipment as staged); `ShipmentLineRead` (id, sales_order_line_id, item_id, from_bin_id, qty, inventory_txn_id); `ShipmentRead` (id, sales_order_id, location_id, staging_bin_id, status, journal_entry_id, lines, created_at); `PickListRead` / `PickListLineRead` for the pick-list read (sales_order_line_id, item_id, description, qty_ordered, qty_reserved, qty_picked, qty_shipped, suggested_from_bin_id, available_bins: list of {bin_id, code, on_hand}). All qty/cost fields typed `Decimal`.
 - **Done when:** `from app.modules.gelato.schemas import PickRequest, ShipRequest, ShipmentRead, PickListRead` imports clean.
 - **Verify:** `podml … python -c "from app.modules.gelato.schemas import PickRequest, PackRequest, ShipRequest, ShipmentRead, PickListRead; print('ok')"` (`podml` = `podman exec -e PYTHONPATH=/app compose_api_1 python`).
 - **Parallel-ok:** yes (independent of 1-3 once package exists)
 
-### [ ] 5. Add the SYERP bin-aware `post_issue` primitive
+### [x] 5. Add the SYERP bin-aware `post_issue` primitive
 - **Files:** `backend/app/modules/syerp/service/inventory.py` (edit), `backend/app/modules/syerp/service/__init__.py` (export)
 - **Do:** Add `async def post_issue(db, item_id, location_id, bin_id, qty, actor_id, *, source_type, source_id, commit=True) -> tuple[InventoryTxn, Decimal]`, cloning `post_putaway`'s scaffolding (`:671-813`): (1) 422 if `qty <= 0`; (2) 404 via `get_item`/`get_location`; (3) **LOCK the item-master row FOR UPDATE before the floor read** (copy `:739-741`); (4) `source_onhand = await get_bin_on_hand(db, item_id, location_id, bin_id)`; (5) reject 422 via `_adjustment_violates_floor(source_onhand, -qty)` (over-issue drives the bin negative); (6) append EXACTLY ONE `txn_type="issue"` leg: `quantity=-qty`, `unit_cost=item.moving_avg_cost`, `bin_id=bin_id`, `source_type`, `source_id`, `actor_id` (MOUSSE issue shape `:715-725` + the bin dimension); (7) `line_value = (qty * item.moving_avg_cost).quantize(_COST_QUANTUM, ROUND_HALF_UP)`; (8) `await db.flush()`; `await db.commit()` only if `commit`; return `(txn, line_value)`. moving_avg_cost untouched (only receipts move it). Re-export from `service/__init__.py`.
 - **Done when:** `from app.modules.syerp.service import post_issue` imports; a standalone `commit=True` call from a seeded bin decrements that bin's `get_bin_on_hand` and the location total by `qty`.
 - **Verify:** `podml -c "from app.modules.syerp.service import post_issue; print('ok')"` (behavior proven in task 10).
 - **Parallel-ok:** no (depends on 3 for the migrated schema; independent of 4)
 
-### [ ] 6. GELATO shipment service — pick (bin-aware, net-zero to staging)
+### [x] 6. GELATO shipment service — pick (bin-aware, net-zero to staging)
 - **Files:** `backend/app/modules/gelato/service/shipments.py` (new), `backend/app/modules/gelato/service/__init__.py` (export)
 - **Do:** New `shipments.py`. `SHIPMENT_TRANSITIONS` dict (D-P12b-11) mirroring `SO_TRANSITIONS`. `build_pick_list(db, sales_order_id) -> PickListRead`: 404 if SO missing; 422 if SO status not in {confirmed, fulfilling}; per stock SO line (item_id not null) surface qty_ordered/reserved/picked/shipped + the location's active bins holding on-hand (reuse `list_bins` + `get_bin_on_hand`) + `suggested_from_bin_id` (first bin with on_hand ≥ remaining-to-pick, else the one with most on-hand). `execute_pick(db, req: PickRequest, actor_id) -> ShipmentRead`: (a) load SO (404), assert status confirmed/fulfilling (422); (b) validate `staging_bin_id` is an active bin in the SO/line location (422); (c) get-or-create the SO's open `Shipment` (status picking) with this staging bin; (d) per `PickLineRequest`: resolve the SO line (404 if not this SO), **reject 422 if `item_id is None`** (non-stock line cannot be bin-picked, SC2), guard `qty > 0`; delegate the move to SYERP `post_putaway(item_id, location, from_bin_id=line.from_bin_id, to_bin_id=staging_bin_id, qty, actor_id)` (its per-bin floor guard rejects over-pick 4xx); create a `ShipmentLine`; increment `SalesOrderLine.qty_picked += qty`; (e) first pick advances the SO `confirmed → fulfilling` (D-P12b-10); (f) single commit. Keep GELATO thin — the ledger legs are SYERP's `post_putaway`, never a direct `InventoryTxn` write.
 - **Done when:** `from app.modules.gelato.service import execute_pick, build_pick_list` import; a pick moves qty pick-bin→staging (location total unchanged), stamps `qty_picked`, creates a picking `Shipment` + `ShipmentLine`, and flips the SO to fulfilling.
 - **Verify:** `podml -c "from app.modules.gelato.service import execute_pick, build_pick_list; print('ok')"` (behavior in task 10).
 - **Parallel-ok:** no (depends on 4, and 5's package; uses `post_putaway` which already exists)
 
-### [ ] 7. GELATO shipment service — pack (FSM picking → packed)
+### [x] 7. GELATO shipment service — pack (FSM picking → packed)
 - **Files:** `backend/app/modules/gelato/service/shipments.py` (edit)
 - **Do:** `execute_pack(db, shipment_id, req: PackRequest, actor_id) -> ShipmentRead`: load the Shipment (404); assert `status == "picking"` (409 via `SHIPMENT_TRANSITIONS` check, else the FSM error); apply any per-line staged-qty overrides from `req` — each override must be `0 < qty ≤ ShipmentLine.qty` (the picked qty), a partial pack (SC3); reject 422 if an override exceeds the picked qty or targets a foreign shipment line; set `status = "packed"`; single commit; return `ShipmentRead`. No ledger/GL movement (packing is a state + staged-qty record only).
 - **Done when:** `execute_pack` flips a picking shipment to packed; an override qty ≤ picked is accepted, an override > picked is 422, packing a non-picking shipment is 409.
 - **Verify:** `podml -c "from app.modules.gelato.service import execute_pack; print('ok')"` (behavior in task 10).
 - **Parallel-ok:** no (depends on 6)
 
-### [ ] 8. GELATO shipment service — ship (issue + COGS JE + reservation relief, atomic)
+### [x] 8. GELATO shipment service — ship (issue + COGS JE + reservation relief, atomic)
 - **Files:** `backend/app/modules/gelato/service/shipments.py` (edit), `backend/app/modules/gelato/service/__init__.py` (export)
 - **Do:** `execute_ship(db, shipment_id, actor_id) -> ShipmentRead`, mirroring `issue_components` (`mousse/service.py:580-789`) end-to-end: (1) load Shipment (404); assert `status == "packed"` (409 — only a packed shipment ships; blocks double-ship / double-relief); load its ShipmentLines (422 if none). (2) **Lock the distinct `InventoryItem` rows FOR UPDATE in sorted-id order BEFORE any on-hand read** (`mousse:678-685`). (3) Per ShipmentLine, with per-(item,staging-bin) in-memory accumulation: derive staging-bin on-hand via `get_bin_on_hand`; call `post_issue(item_id, location_id, bin_id=shipment.staging_bin_id, qty=line.qty, actor_id, source_type="gelato_shipment", source_id=str(shipment.id), commit=False)` (its floor guard rejects staging-bin over-issue 4xx); **over-ship guard:** reject 422 if `SalesOrderLine.qty_shipped + line.qty > qty_ordered` (never ship beyond ordered); stamp `qty_shipped += line.qty`; **relieve the reservation** `qty_reserved = max(0, qty_reserved - line.qty)` (D-P12b-5, keeps `_reserved_by_other_open_sos` accurate); record `line.inventory_txn_id`; accumulate `total_value`. (4) 422 if `total_value <= 0` (mirror `mousse:731-738`). (5) `db.flush()` the issue txns. (6) ONE balanced JE: `cogs = _gl_account_id_by_code(db,"5100")`, `inv = _gl_account_id_by_code(db,"1130")`, `post_journal_entry(db, entry_date=<today/shipment date>, memo=f"Shipment {shipment.id} — SO {so.so_number} COGS", lines=[{account_id:cogs,debit:total_value,credit:0},{account_id:inv,debit:0,credit:total_value}], actor_id, source_type="gelato_shipment", source_id=str(shipment.id), commit=False)`; store `shipment.journal_entry_id = je.id`. (7) set `shipment.status = "shipped"`. (8) single `db.commit()`. Import CRUMB `SalesOrderLine` to edit `qty_shipped`/`qty_reserved` (D-P12b-5). Export `execute_ship`.
 - **Done when:** shipping a packed shipment posts negative `issue` legs from the staging bin (location total falls by shipped qty), one balanced Dr 5100 / Cr 1130 JE atomic with the issue, decrements `qty_reserved` + stamps `qty_shipped`, flips to `shipped`; re-shipping a shipped shipment is 409 (no double relief); over-order-ship is 422; staging over-issue is 422.
 - **Verify:** `podml -c "from app.modules.gelato.service import execute_ship; print('ok')"` (full behavior in task 10).
 - **Parallel-ok:** no (depends on 5, 6, 7)
 
-### [ ] 9. GELATO router: pick/pack/ship endpoints + boot (thin, RBAC-gated, audit-after-commit)
+### [x] 9. GELATO router: pick/pack/ship endpoints + boot (thin, RBAC-gated, audit-after-commit)
 - **Files:** `backend/app/modules/gelato/router.py` (edit)
 - **Do:** Add routes beside the bin/putaway ones, same convention (`require_permission` gate, `write_audit` AFTER the service commit): `GET /gelato/sales-orders/{so_id}/pick-list` (gelato:read → `build_pick_list`); `POST /gelato/shipments/pick` (gelato:write → `execute_pick`, audit `shipment.picked`); `POST /gelato/shipments/{shipment_id}/pack` (write → `execute_pack`, audit `shipment.packed`); `POST /gelato/shipments/{shipment_id}/ship` (write → `execute_ship`, audit `shipment.shipped`, detail naming the JE id); optional `GET /gelato/shipments/{shipment_id}` (read → detail). **Every `write_audit(target_id=...)` must pass `str(shipment.id)`** — Shipment is int-PK like Bin, the exact 12a int→VARCHAR(36) `DataError` bug (LEARNINGS 12a). `target_type="shipment"`. Import the new schemas/service fns. Boot the app.
 - **Done when:** app boots clean; the new `/api/v1/gelato/...` shipment routes appear in `/docs`; admin token → 200, no token → 401.
 - **Verify:** `podml -c "from app.main import app; print([r.path for r in app.routes if 'shipment' in r.path or 'pick-list' in r.path])"` lists the routes; `/health` 200.
 - **Parallel-ok:** no (depends on 8)
 
-### [ ] 10. `verify_gelato_ship.py` — service invariants (accounting crux + concurrency + negative space)
+### [x] 10. `verify_gelato_ship.py` — service invariants (accounting crux + concurrency + negative space)
 - **Files:** `backend/scripts/verify_gelato_ship.py` (new)
 - **Do:** Live-Postgres script mirroring `verify_mousse.py`/`verify_gelato.py`. Build inputs in the **real router/UI shape** — construct `PickRequest`/`PackRequest`/`ShipRequest` exactly as the endpoints receive them (11b/12a keeper), never a synthetic leg list. Scenarios (each a distinct assertion): (a) seed item + receipt (moves moving_avg), bins, staging bin; confirm an SO (reserves); pick → pack → ship the full order. (b) **Ship posts the balanced JE:** exactly one JE `source_type="gelato_shipment"`, Dr 5100 == Cr 1130 == Σ(qty×moving_avg), and the issue `InventoryTxn` + JE committed together. (c) **Reservation relief:** after ship, the SO line `qty_reserved` fell by shipped qty AND a SECOND open SO's availability (`_reserved_by_other_open_sos`) rose by exactly that — prove it accurate. (d) **Partial ship accumulation:** two shipments against one SO line accumulate `qty_shipped`; a ship that would push `qty_shipped > qty_ordered` raises 422. (e) **Negative space:** over-pick beyond bin on-hand 422; ship over-issuing the staging bin 422; picking a non-stock (item_id NULL) line 422; re-ship a shipped shipment 409 (no double relief). (f) **Control-vs-subledger tie:** after ship, the 1130 account balance (Σ debit−credit of its JournalLines) equals the inventory subledger valuation — mirror `verify_reports.py`'s inventory control-tie assertion (NOT merely TB nets zero). (g) **Concurrency Barrier:** two `execute_ship` (or two `execute_pick` on the same source bin) on independent sessions synchronized on `asyncio.Barrier(2)` + `asyncio.gather` (mirror `verify_mousse.py:1003`); assert exactly one succeeds / stock never over-issued, and prove load-bearing (passes with the FOR UPDATE lock, fails when removed — then restore).
 - **Done when:** script exits 0 with every assertion green; removing the `post_issue` item lock makes scenario (g) fail (proven once, then restored).
 - **Verify:** `podml scripts/verify_gelato_ship.py` exits 0.
 - **Parallel-ok:** no (depends on 9)
 
-### [ ] 11. `verify_gelato_ship_api.py` — HTTP-level RBAC + audit
+### [x] 11. `verify_gelato_ship_api.py` — HTTP-level RBAC + audit
 - **Files:** `backend/scripts/verify_gelato_ship_api.py` (new)
 - **Do:** Mirror `verify_mousse_api.py`/`verify_gelato_api.py` — drive real HTTP against the running API (D-P12b-13). Assert: no token → 401; a token WITHOUT `gelato:write` → 403 on pick/pack/ship; WITHOUT `gelato:read` → 403 on the pick-list; admin → 200 through a full pick→pack→ship. After a successful ship, assert the `AuditLog` rows (`shipment.picked`/`shipment.packed`/`shipment.shipped`) exist, are attributable (`actor_id` set), and that `target_id` round-trips as the shipment id string (regression-guards the int-PK→VARCHAR bug that a service script cannot reach — 9a/11a/12a keeper). Self-clean throwaway users/roles.
 - **Done when:** script exits 0; all 401/403/200 + audit assertions green.
 - **Verify:** `podml scripts/verify_gelato_ship_api.py` exits 0.
 - **Parallel-ok:** no (depends on 9)
 
-### [ ] 12. Full backend regression (migration touches CRUMB + SYERP-derived paths; ship posts GL)
+### [x] 12. Full backend regression (migration touches CRUMB + SYERP-derived paths; ship posts GL)
 - **Files:** none (run existing scripts)
 - **Do:** Run every existing verify script + the two new ones against the fresh-migrated DB; confirm the Trial Balance STILL nets zero WITH the ship JE present, and 1130 still ties to the inventory subledger (via `verify_reports.py`).
 - **Done when:** all of `verify_inventory verify_purchasing verify_e2e_p8 verify_gl verify_gl_api verify_ap verify_ap_api verify_reports verify_reports_api verify_mousse verify_mousse_api verify_crumb verify_crumb_api verify_crumb_so verify_crumb_so_api verify_gelato verify_gelato_api verify_gelato_ship verify_gelato_ship_api` exit 0.
@@ -168,6 +168,14 @@ Key real files and the exact shapes to mirror (all verified this session):
 - **Shipment reversal / un-ship / RMA** — a `shipped` shipment is terminal here; reversing a posted issue+COGS JE is a later concern (cancel is picking-only, D-P12b-11).
 - **Carrier/tracking/label integration, packing-slip PDF, multi-location single-shipment picks** — not in GELATO-01's pick→pack→ship crux.
 - **Auto-close of the SO on full shipment** (D-P12b-12 — `fulfilling→closed` stays manual).
+
+## Deviations
+- **Task 6 prerequisite (trivial, forced fix):** the plan assumed `post_putaway(..., commit=False)`, but `post_putaway` had NO `commit` param and committed unconditionally — so atomic pick (all putaway legs + SO status write in one commit) was not achievable as written. Added a backwards-compatible keyword-only `commit: bool = True` to `post_putaway` mirroring the `post_issue` change from Task 5 (flush-always, commit-if-True); existing caller `execute_putaway` passes nothing → `commit=True` → unchanged behavior (`verify_gelato` still PASS). Committed separately before Task 6. This is a mechanical enablement of the atomicity the plan already requires, not an approach change — no owner decision needed.
+- **Task 4 (trivial):** `ShipmentRead.journal_entry_id` / `ShipmentLineRead.inventory_txn_id` were initially typed `Optional[int]`; corrected to `Optional[str]` to match the `String(36)` FK columns from Task 1 (UUID PKs). Folded into a follow-up fix commit.
+
+## Noticed
+- **Redundant (belt-and-suspenders) locks on the ship path.** `execute_ship` locks the distinct `InventoryItem` rows FOR UPDATE up front (its own step-3), AND `post_issue` locks the item-master row again. Either lock alone serializes two concurrent ships — the task-10 mutation test had to remove BOTH to force an over-issue FAIL (removing only `post_issue`'s lock still passed). Not a bug; the ship concurrency guarantee actually rests on `execute_ship`'s up-front lock. Worth a note for the retro; no action.
+- **`HTTP_422_UNPROCESSABLE_ENTITY` deprecated** in the installed Starlette (prefer `_CONTENT`), emitted by shipments.py and pre-existing modules — cosmetic, already tracked as the 422 deprecation sweep (BACKLOG p3).
 
 ## Decisions needed
 None open. **D-P12b-12 resolved by the owner at plan close (2026-07-18): ship never auto-closes the SO — `fulfilling → closed` stays a manual operator action** (partial/backorder shipments are normal; Phase-13 invoicing keys off close). The plan already builds to this default, so no task changes. All other choices are fixed constraints (D-P12b-1..4 owner-confirmed) or author calls recorded with rationale (D-P12b-5..11, 13).
