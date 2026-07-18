@@ -129,7 +129,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `cd frontend && npm run build`.
 - **Parallel-ok:** no (depends on 8 for the API surface)
 
-### [ ] 13. Frontend: Bins screen (list/create/edit/archive within a location)
+### [x] 13. Frontend: Bins screen (list/create/edit/archive within a location)
 - **Files:** `frontend/src/routes/gelato/Bins.tsx` (new), `frontend/src/routes/gelato/components/BinSheet.tsx` (new), `frontend/src/routes/gelato/Bins.test.tsx` (new)
 - **Do:** Mirror `frontend/src/routes/syerp/StockLocations.tsx` + `components/InventoryItemSheet.tsx`. Location selector → bin table (code, description, active); create/edit via a sheet; archive action; archived hidden unless a "show archived" toggle. Surface the server 4xx (dup code / bad location) as a toast (sonner). Colocated Vitest covering list render, create, dup-code error surface, archive-hides.
 - **Done when:** `npm run test` for the file passes; `npm run build` clean.

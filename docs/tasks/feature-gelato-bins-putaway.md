@@ -16,5 +16,5 @@ Plan: `.zj/phases/12a-gelato-bins-putaway/PLAN.md` (14 tasks). Requirement: GELA
 - [x] 10. `verify_gelato_api.py` — HTTP-level RBAC + audit
 - [x] 11. Full backend regression (TB nets zero)
 - [x] 12. Frontend: GELATO API hooks + nav gating
-- [ ] 13. Frontend: Bins screen (list/create/edit/archive)
+- [x] 13. Frontend: Bins screen (list/create/edit/archive)
 - [ ] 14. Frontend: Putaway screen (unbinned → suggested bin → confirm)
