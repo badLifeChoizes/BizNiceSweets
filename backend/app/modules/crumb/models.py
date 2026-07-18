@@ -390,7 +390,9 @@ class SalesOrderLine(Base):
 
     qty_ordered, unit_price and qty_reserved are fixed-point Numeric(18,6)
     (never float — D-11). qty_reserved is the reservation accumulator
-    (D-V3-11), defaulting to zero. sort_order controls display order.
+    (D-V3-11), defaulting to zero. qty_picked and qty_shipped are the
+    picked/shipped accumulators (D-P12b-5), likewise Numeric(18,6) and
+    defaulting to zero. sort_order controls display order.
     """
 
     __tablename__ = "crumb_sales_order_line"
@@ -425,6 +427,14 @@ class SalesOrderLine(Base):
     )
     # qty_reserved: reservation accumulator (D-V3-11); starts at zero
     qty_reserved: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False, default=Decimal("0")
+    )
+    # qty_picked: picked accumulator (D-P12b-5); starts at zero
+    qty_picked: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False, default=Decimal("0")
+    )
+    # qty_shipped: shipped accumulator (D-P12b-5); starts at zero
+    qty_shipped: Mapped[Decimal] = mapped_column(
         Numeric(precision=18, scale=6), nullable=False, default=Decimal("0")
     )
     sort_order: Mapped[int] = mapped_column(Integer)
