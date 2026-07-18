@@ -21,6 +21,6 @@ Plan: `.zj/phases/12b-gelato-pick-pack-ship/PLAN.md` — 15 tasks, 4 waves.
 - [x] 12. Full backend regression + TB nets zero (19/19 verify scripts green)
 
 ## Wave D — frontend
-- [ ] 13. Frontend: shipment API hooks + Fulfillment nav link
-- [ ] 14. Frontend: Fulfillment screen (pick → pack → ship) + colocated test
-- [ ] 15. Frontend: Sales-order-detail ship affordance + colocated test
+- [x] 13. Frontend: shipment API hooks + Fulfillment nav link
+- [x] 14. Frontend: Fulfillment screen (pick → pack → ship) + colocated test
+- [x] 15. Frontend: Sales-order-detail ship affordance + colocated test

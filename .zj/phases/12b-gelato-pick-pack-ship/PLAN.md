@@ -126,21 +126,21 @@ Key real files and the exact shapes to mirror (all verified this session):
 - **Verify:** `for s in verify_inventory verify_purchasing verify_e2e_p8 verify_gl verify_gl_api verify_ap verify_ap_api verify_reports verify_reports_api verify_mousse verify_mousse_api verify_crumb verify_crumb_api verify_crumb_so verify_crumb_so_api verify_gelato verify_gelato_api verify_gelato_ship verify_gelato_ship_api; do podman exec -e PYTHONPATH=/app compose_api_1 python scripts/$s.py || echo "FAIL $s"; done` — no FAIL lines.
 - **Parallel-ok:** no (depends on 10, 11)
 
-### [ ] 13. Frontend: shipment API hooks + Fulfillment nav link
+### [x] 13. Frontend: shipment API hooks + Fulfillment nav link
 - **Files:** `frontend/src/routes/gelato/hooks.ts` (edit), `frontend/src/routes/gelato/components/GelatoNav.tsx` (edit), `frontend/src/App.tsx` (edit)
 - **Do:** Extend `hooks.ts` (mirror the existing bin/putaway hooks + query-key block `:90-98`): add TanStack Query types `Shipment`, `ShipmentLine`, `PickList` (quantities as exact STRINGS, D-11) mirroring the schemas; hooks `usePickList(soId)`, `useExecutePick`, `useExecutePack`, `useExecuteShip`, `useShipment(id)`. **Invalidation:** pick → bins + unbinned + item on-hand + the SO's reservation/shortage query (`['crumb','sales-orders',soId]`) + pick-list; ship → same set + the shipment + the SO detail (reserved/shipped figures). Add a `/gelato/fulfillment` route in `App.tsx` (`:110-113`) and a Fulfillment link in `GelatoNav`. Confirm nav still gates on module-enabled ∩ `gelato:read`.
 - **Done when:** `npm run build` clean; the new hooks type-check; the Fulfillment nav link renders for an admin with the module enabled.
 - **Verify:** `cd frontend && npm run build`.
 - **Parallel-ok:** no (depends on 9 for the API surface)
 
-### [ ] 14. Frontend: Fulfillment screen (pick → pack → ship) + colocated test
+### [x] 14. Frontend: Fulfillment screen (pick → pack → ship) + colocated test
 - **Files:** `frontend/src/routes/gelato/Fulfillment.tsx` (new), `frontend/src/routes/gelato/components/PickDialog.tsx` (new), `frontend/src/routes/gelato/Fulfillment.test.tsx` (new)
 - **Do:** SO selector (Confirmed/Fulfilling SOs) → pick list (`usePickList`): per line show ordered/reserved/picked/shipped + a bin picker defaulting to `suggested_from_bin_id`, qty defaulting to remaining-to-pick; a staging-bin selector for the shipment; "Pick" posts the `PickRequest`. Then a "Pack" action (picking→packed) and a "Ship" action (packed→shipped) with a confirmation. On success invalidate + toast; surface server 4xx (over-pick / over-ship / non-stock line / wrong FSM state) as an error toast. Colocated Vitest covering: pick-list render, suggestion pre-fill, **pick submit posts the EXACT `PickRequest` payload shape the endpoint receives** (11b/12a keeper — assert the posted body), and the ship action posts to the ship endpoint.
 - **Done when:** `npm run test -- Fulfillment` passes; `npm run build` clean.
 - **Verify:** `cd frontend && npm run test -- Fulfillment`.
 - **Parallel-ok:** yes (parallel with task 15 once 13 lands)
 
-### [ ] 15. Frontend: Sales-order-detail ship affordance + colocated test
+### [x] 15. Frontend: Sales-order-detail ship affordance + colocated test
 - **Files:** `frontend/src/routes/crumb/SalesOrderDetail.tsx` (edit), `frontend/src/routes/crumb/SalesOrderDetail.test.tsx` (edit)
 - **Do:** On a Confirmed/Fulfilling SO detail, add a "Fulfill / Ship" affordance (a link/button routing to `/gelato/fulfillment?so=<id>` — gated so it only shows when the GELATO module is enabled ∩ `gelato:read`, reusing the visible-modules signal). Surface each line's `qty_shipped` alongside the existing reserved/shortage figures (the new accumulator). Extend the colocated test to assert the affordance shows for a fulfilling SO with GELATO enabled and is hidden without the permission/module.
 - **Done when:** `npm run test -- SalesOrderDetail` passes; `npm run build` clean.
@@ -172,10 +172,12 @@ Key real files and the exact shapes to mirror (all verified this session):
 ## Deviations
 - **Task 6 prerequisite (trivial, forced fix):** the plan assumed `post_putaway(..., commit=False)`, but `post_putaway` had NO `commit` param and committed unconditionally — so atomic pick (all putaway legs + SO status write in one commit) was not achievable as written. Added a backwards-compatible keyword-only `commit: bool = True` to `post_putaway` mirroring the `post_issue` change from Task 5 (flush-always, commit-if-True); existing caller `execute_putaway` passes nothing → `commit=True` → unchanged behavior (`verify_gelato` still PASS). Committed separately before Task 6. This is a mechanical enablement of the atomicity the plan already requires, not an approach change — no owner decision needed.
 - **Task 4 (trivial):** `ShipmentRead.journal_entry_id` / `ShipmentLineRead.inventory_txn_id` were initially typed `Optional[int]`; corrected to `Optional[str]` to match the `String(36)` FK columns from Task 1 (UUID PKs). Folded into a follow-up fix commit.
+- **Task 15 (dead-through-UI catch — the recurring keeper):** the SO-detail "Shipped" column rendered from `qty_shipped`, but backend `SalesOrderLineRead` (crumb/schemas.py) did NOT serialize `qty_shipped`/`qty_picked` — the column would have been blank in the running app (the 11a/11b/12a trap). Added both accumulators to `SalesOrderLineRead` (from_attributes picks them up from the existing ORM columns; CRUMB suite stays green). Separate fix commit "fix(crumb): serialize qty_picked/qty_shipped on SalesOrderLineRead".
 
 ## Noticed
 - **Redundant (belt-and-suspenders) locks on the ship path.** `execute_ship` locks the distinct `InventoryItem` rows FOR UPDATE up front (its own step-3), AND `post_issue` locks the item-master row again. Either lock alone serializes two concurrent ships — the task-10 mutation test had to remove BOTH to force an over-issue FAIL (removing only `post_issue`'s lock still passed). Not a bug; the ship concurrency guarantee actually rests on `execute_ship`'s up-front lock. Worth a note for the retro; no action.
 - **`HTTP_422_UNPROCESSABLE_ENTITY` deprecated** in the installed Starlette (prefer `_CONTENT`), emitted by shipments.py and pre-existing modules — cosmetic, already tracked as the 422 deprecation sweep (BACKLOG p3).
+- **Dev-only `--reload` FK-race (pre-existing, from 12a's D-P12a-3 hub-inversion FK).** During the wrap-up full regression, an in-flight uvicorn `--reload` (triggered by editing `crumb/schemas.py` mid-run) caused ONE transient `NoReferencedTableError: syerp_inventory_txn.bin_id could not find table 'gelato_bin'` → MOUSSE issue 500. Re-run after the worker settled → clean 19/19. The `syerp_inventory_txn.bin_id → gelato_bin` FK means InventoryTxn mapper configuration needs gelato models imported; under hot-reload there's a window where a request hits a partially-registered metadata. **Production is unaffected** (entrypoint imports `app.core.models` fully before serving, no `--reload`). Worth a BACKLOG note but not a 12b defect — do NOT edit backend files during a live regression run.
 
 ## Decisions needed
 None open. **D-P12b-12 resolved by the owner at plan close (2026-07-18): ship never auto-closes the SO — `fulfilling → closed` stays a manual operator action** (partial/backorder shipments are normal; Phase-13 invoicing keys off close). The plan already builds to this default, so no task changes. All other choices are fixed constraints (D-P12b-1..4 owner-confirmed) or author calls recorded with rationale (D-P12b-5..11, 13).

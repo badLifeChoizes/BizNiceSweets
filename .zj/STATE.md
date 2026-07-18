@@ -1,19 +1,40 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-18 (**Phase 12b PLANNED** — `/zj:plan 12b` done. PLAN.md at
-`.zj/phases/12b-gelato-pick-pack-ship/PLAN.md` = **15 tasks in 4 waves** (schema → backend logic →
-verify → frontend) for GELATO **outbound (pick → pack → ship)**. Four owner decisions set the shape
-(D-P12b-1..4, all recommendations taken): **(1) ONE phase** (no 12c split); **(2) Shipment aggregate +
-FSM** picking→packed→shipped (not three docs); **(3) ledger-debt paydown = OUTBOUND PATH ONLY** —
-pick/ship become bin-aware + a narrow ship FOR-UPDATE lock; the adjust/transfer/MOUSSE-issue retrofit +
-shared-lock refactor stay deferred (BACKLOG p2 now half-closed); **(4) UI folded into the plan**. Plus
-D-P12b-5..13 author calls (qty_picked/qty_shipped accumulators on the SO line; reservation relief AT
-ship; NEW SYERP bin-aware `post_issue`; COGS JE mirrors MOUSSE 1140→5100; staging = `Shipment.staging_bin_id`).
-D-P12b-12 resolved by owner at close: **ship never auto-closes the SO** (manual `fulfilling→closed`).
-Decisions D-P12b-1..13 appended to DECISIONS.md. No `## Decisions needed` open. Plan checked
-goal-backward at manager review (every SC → ≥1 task, every task → an SC + real files + runnable verify;
-GELATO-01 AC3/4/5/7/8 + SYERP-13 AC1 COGS clause traced). **Next action:** `/zj:build 12b`.)
+Updated: 2026-07-18 (**Phase 12b BUILD COMPLETE** — `/zj:build 12b` done on branch
+`feature-gelato-pick-pack-ship` (cut off the 12a docs-on-top tip `bde5b77`, code-identical to tag
+`zj/good-12a-gelato-bins-putaway`, D-P12b-8). **All 15 tasks shipped**, GELATO outbound pick → pack →
+ship end-to-end. Wave A: migration **0016** (Shipment + ShipmentLine tables, `qty_picked`/`qty_shipped`
+on `crumb_sales_order_line`) round-trips clean; shipment schemas. Wave B: NEW SYERP bin-aware
+`post_issue` (single signed `issue` leg, item-master FOR-UPDATE before floor read); GELATO
+`service/shipments.py` pick (net-zero pick-bin→staging via `post_putaway`, stamps qty_picked, SO
+confirmed→fulfilling) / pack (FSM picking→packed, partial-pack trims staged qty) / **ship** (bin-aware
+`post_issue` from staging + ONE balanced **Dr 5100 COGS / Cr 1130 Inventory** JE atomic via single
+`db.commit()`, relieves qty_reserved + stamps qty_shipped, FSM→shipped); thin RBAC-gated router with
+`write_audit(target_id=str(shipment.id))`. Wave C: `verify_gelato_ship.py` **22 asserts green**
+(accounting crux Decimal-exact, reservation relief, partial-ship, negative space, control↔subledger tie,
+**load-bearing concurrency Barrier — mutation-proven**) + `verify_gelato_ship_api.py` **23 asserts**
+(HTTP 401/403/200 + attributable audit + int-PK target_id string guard); **full regression 19/19 green,
+TB nets zero WITH the ship COGS JE, 1130 ties to subledger**. Wave D: shipment hooks + Fulfillment
+pick→pack→ship screen + SO-detail Fulfill/Ship affordance; FE **38 files / 116 tests green**, `npm run
+build` exit 0. **Three material handlings:** (1) `post_putaway` had no `commit` param → added
+backwards-compatible `commit=True` so pick batches atomically (engineer correctly STOPPED, forced fix,
+Deviations); (2) task-4 shipment FK schema fields mistyped `Optional[int]` → `Optional[str]` (String(36));
+(3) **the recurring dead-through-UI trap CAUGHT** — SO-detail `qty_shipped` column rendered from a field
+`SalesOrderLineRead` did not serialize → added `qty_picked`/`qty_shipped` to the read schema. Lint gates
+remain non-functional (BACKLOG p1); correctness rests on verify_* (19/19) + Vitest (116), per project
+convention. Noticed (non-blocking): belt-and-suspenders redundant ship locks; a dev-only `--reload`
+FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **Next action:**
+`/zj:verify 12b`.)
 
 ## Position
+
+- **Step:** **BUILD COMPLETE** — **Phase 12b (GELATO outbound: pick → pack → ship) built 2026-07-18.**
+  All **15 tasks** on branch `feature-gelato-pick-pack-ship`. Closes the v3.0 DoD clause 2 (warehouse
+  fulfillment outbound) and posts the sell-side **COGS** JE (Dr 5100 / Cr 1130). Proof: `verify_gelato_ship.py`
+  22 asserts + `verify_gelato_ship_api.py` 23 asserts + **19/19** full regression (TB nets zero with the
+  new JE, 1130↔subledger tie) + FE **38 files/116 tests** + `npm run build` exit 0. Checklist (all 15
+  ticked): `docs/tasks/feature-gelato-pick-pack-ship.md`. **Next action:** `/zj:verify 12b`.
+
+## (historical) Position
 
 - **Step:** **PLAN COMPLETE** — **Phase 12b (GELATO outbound: pick → pack → ship) planned 2026-07-18.**
   Closes the v3.0 DoD clause 2 (warehouse fulfillment outbound) and posts the sell-side **COGS** JE
