@@ -1,5 +1,7 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-16 (Phase 10 retro — MOUSSE now writes the inventory ledger so the p2
+Updated: 2026-07-18 (Phase 12a verify — bin split desyncs after bin-blind movement → p2,
+folds into the cross-path inventory-ledger race item; durable fix is the 12b bin-aware pick/issue)
+Prior: 2026-07-16 (Phase 10 retro — MOUSSE now writes the inventory ledger so the p2
 inventory-ledger race item's "revisit when MOUSSE writes this" trigger is live; zero-cost
 lone-component issue → p3; 422 sweep + placeholder-dir prune now include mousse)
 Prior: 2026-07-12 (Phase 9c retro — balance-sheet fiscal-close-gated defects → p2,
@@ -106,6 +108,23 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   The narrow phase invariant ("two concurrent issues can't overdraw") holds; the ledger-wide floor
   guarantee does not. Fix is the shared lock across every floor-guarded path (issue/adjust/receive/
   transfer), not a MOUSSE-only lock. Still accepted-risk single-shop.
+- [ ] **Bin split desyncs after any bin-blind movement** (Phase 12a review MAJOR, 2026-07-18) —
+  12a made ONLY putaway bin-aware. The pre-existing draw primitives — `post_transfer`,
+  `post_adjustment` (`syerp/service/inventory.py`), and MOUSSE `issue_components` — all write
+  `bin_id=NULL` and floor-guard **per-location**, not per-bin. So once stock is put into a bin,
+  a bin-blind draw out of that location leaves the bin figure **overstated** and the unbinned
+  pool **negative**, even single-threaded (not a race — a sequential-correctness gap): receive
+  10 → putaway into bin A → adjust/transfer/issue −10 ⇒ bin A still reports 10, unbinned = −10,
+  location total = 0 (correct). Every bin figure 12a surfaces (`get_bin_on_hand`,
+  `PutawayResult.bin_on_hand`, the putaway screen) silently rots in normal operation; the
+  `list_unbinned_stock` `>0` filter hides the negative rather than flagging it. **Location/total
+  on-hand and the Σ(bins)+unbinned==location roll-up (SC3) stay exact** — only the split lies.
+  Documented (get_bin_on_hand docstring trust-boundary note) and **pinned by `verify_gelato.py`
+  scenario (E)** so the durable fix visibly changes it. Durable fix = make pick/issue/transfer/
+  adjust bin-aware (draw from a chosen bin) so the ledger's bin dimension stays consistent —
+  this is exactly the **Phase 12b** bin-aware pick→pack→ship work (GELATO-01 AC3/AC5); 12b MUST
+  NOT assume 12a already closed it. Folds into the cross-path row-lock item above (same
+  primitives, same ledger). Accepted boundary for the 12a inbound-only slice.
 - [ ] **Alembic autogenerate never exits clean** (Phase 9a verify, 2026-07-11) — `alembic check`
   reports spurious drift on **7 pre-existing unnamed `unique=True` constraints** (plum_part.part_number,
   uq_plum_part_one_released, syerp_gl_account/inventory_item/partner.code, purchase_order.po_number,

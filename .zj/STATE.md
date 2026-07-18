@@ -1,9 +1,29 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-17 (**Phase 12a BUILD COMPLETE** — GELATO bins & directed putaway built on `feature-gelato-bins-putaway`; all 14 tasks shipped, backend verify 19/19 + TB nets zero, FE 37 files/108 tests + build clean. Next action: `/zj:verify 12a`.)
+Updated: 2026-07-18 (**Phase 12a VERIFIED** — `/zj:verify 12a` PASS, `52eb481`, tag `zj/good-12a-gelato-bins-putaway`. Verifier PASS + reviewer 0-blocker/1-MAJOR merged; the MAJOR (bin split desyncs after any bin-blind draw) fails no SC — documented as the 12a→12b boundary, pinned by verify scenario E, logged BACKLOG p2. Full 17/17 regression + TB nets zero on re-run. Next action: `/zj:retro 12a` then `/zj:plan 12b`.)
 
 ## Position
 
-- **Step:** **BUILD COMPLETE** — **Phase 12a (GELATO bins & directed putaway) built 2026-07-17.**
+- **Step:** **VERIFIED** — **Phase 12a (GELATO bins & directed putaway) verified 2026-07-18** (`/zj:verify 12a`,
+  **Verdict PASS**, tag `zj/good-12a-gelato-bins-putaway` at `52eb481`). Ran verifier + reviewer in parallel:
+  verifier PASS on all 6 SCs (fresh 0001→0015 migration proven, roll-up Decimal-exact, Barrier concurrency
+  load-bearing, `str(bin_.id)` audit fix holds, real-`PutawayRequest` shape asserted, FE build + Vitest clean),
+  reviewer **0 blocker / 1 MAJOR / 0 minor** — the concurrency crux came back CLEAN (`InventoryItem` FOR UPDATE
+  is genuinely load-bearing under READ COMMITTED). The **MAJOR** (bin on-hand desyncs after any bin-blind draw —
+  `post_transfer`/`post_adjustment`/MOUSSE-issue write `bin_id=NULL`, per-location floor guard, so a bin
+  overstates and the unbinned pool goes negative even single-threaded) **fails no success criterion** — SC3's
+  Σ(bins)+unbinned==location-total identity and location on-hand stay Decimal-exact; only the split lies. Owner
+  chose cheap-mitigation-now: `get_bin_on_hand` TRUST BOUNDARY docstring + **`verify_gelato.py` scenario (E)**
+  pinning the boundary (proves the roll-up survives a bin-blind draw) + BACKLOG p2 entry + PLAN Risk sharpened
+  (concurrency→sequential-correctness); durable fix = 12b bin-aware pick/issue (12b told not to assume 12a
+  closed it). Docs synced (owner chose): SRD GELATO-01 → "partial — 12a inbound VERIFIED (AC1/AC2/AC8 +
+  putaway-side AC6/AC7)" + `Verified: 52eb481`; requirements-progress GELATO row added; ROADMAP 12a `[verified]`.
+  **Re-verification after the fix-loop source change: full 17/17 regression GREEN, `verify_gelato` 11/11 (incl.
+  E), `verify_gelato_api` 29/29, TB `in_balance` True** (one first-run `verify_mousse_api` failure was a uvicorn
+  `--reload` worker-restart race from `podman cp` mid-loop — clean in isolation + on the settled re-run).
+  Artifacts: `.zj/phases/12a-gelato-bins-putaway/{VERIFICATION,REVIEW}.md`. **Next action:** `/zj:retro 12a`
+  (banks the bin-blind-boundary + reload-race keepers) then `/zj:plan 12b`.
+
+- **(historical) Step:** **BUILD COMPLETE** — **Phase 12a (GELATO bins & directed putaway) built 2026-07-17.**
   All **14 tasks** shipped on a fresh `feature-gelato-bins-putaway` branch (cut off HEAD `da9474e` = the
   verified 11b code tip + plan docs; see PLAN Deviations — bare tag `fec334f` would have dropped the plan).
   Delivered: `gelato` module self-registers (mirrors mousse/crumb new-module package shape); migration

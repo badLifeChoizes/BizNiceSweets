@@ -593,7 +593,16 @@ future scope (expanded via `/zj:spec` when their milestones near).
   `verify_crumb_api.py` (HTTP RBAC + audit); FE Vitest + `npm run build`; nav gated on CRUMB enabled
   ∩ `crumb:read`. Flow-level human UAT at the v3.0 milestone.
 
-## GELATO-01: Warehouse core  [traces: PRD-8]  **Status: planned (v3.0 — Phase 12)**
+## GELATO-01: Warehouse core  [traces: PRD-8]  **Status: partial — 12a inbound foundation VERIFIED (AC1/AC2/AC8 + putaway-side AC6/AC7); outbound pick→pack→ship (AC3/AC4/AC5 + ship-side AC7) pending Phase 12b**
+> **12a delivered & verified** (`/zj:verify 12a`, 2026-07-18): bins CRUD (AC1), directed
+> putaway netting zero at location grain (AC2), per-bin on-hand derives + rolls up Decimal-exact
+> to the location total (AC1), quantities-only (AC6), putaway floor guard 4xx (AC7 putaway side),
+> audit + RBAC (AC8). NO GL posted (Trial Balance nets zero). Known boundary (BACKLOG p2, does not
+> block the inbound slice): only putaway is bin-aware, so a bin-blind draw
+> (transfer/adjust/MOUSSE-issue) staled the bin split until the 12b bin-aware pick/issue lands —
+> the location roll-up stays exact. **Pending 12b:** pick (AC3), pack (AC4), ship + COGS JE +
+> reservation relief (AC5), ship-side over-ship guard (AC7).
+> - **Verified (12a subset):** 52eb481
 > New module `backend/app/modules/gelato/` + `frontend/src/routes/gelato/`; RBAC codes
 > `gelato:read`/`gelato:write`. Writes the **SYERP inventory ledger** and posts GL JEs via imported
 > SYERP service functions (D-V3-9 / D-P10-6). Quantities + cost only — **lot/serial deferred**

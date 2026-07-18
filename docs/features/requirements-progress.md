@@ -74,7 +74,29 @@ Tracks completed requirements by phase, with implementing plans and evidence.
 
 ---
 
-*Last updated: 2026-07-17 — Phase 11b verified (`/zj:verify 11b`, `fec334f`, tag
+## GELATO Module
+
+> **Evidence caveat (D-P7-4):** as with SYERP/MOUSSE/CRUMB, the backend live-DB pytest harness is still
+> broken (pytest is not installed in the api container — BACKLOG p1), so GELATO truth comes from
+> **standalone async scripts run against live Postgres** (`verify_gelato.py`, `verify_gelato_api.py`)
+> plus the frontend Vitest suite. No status below rests on an unrun live pytest.
+
+| Requirement | Description | Phase | Plans | Evidence | Status |
+|-------------|-------------|-------|-------|----------|--------|
+| GELATO-01 (inbound foundation — bins + directed putaway; AC1/AC2/AC6 + putaway-side AC7/AC8) | New `gelato` module (mirrors MOUSSE/CRUMB new-module package shape) self-registering at `/api/v1/gelato`; migration **0015** adds a `gelato_bin` table (int PK) + a nullable `bin_id` column on the SYERP-core `syerp_inventory_txn` ledger via a **string table-name FK** (hub-direction inversion, no import cycle — D-P12a-3). **Bins CRUD** scoped to a SYERP stock location (unique-within-location, archive-hides). **Per-bin on-hand derives** from the shared ledger (`get_bin_on_hand` = Σ signed qty for `(item, location, bin_id)`, null-aware for the unbinned pool) and **rolls up Decimal-exact** to the SYERP per-location total (existing on-hand SUMs never filter `bin_id`, so the roll-up is automatic — SC3). **Directed putaway** (`post_putaway`, a SYERP-owned bin-aware clone of `post_transfer`, D-P12a-7) moves qty unbinned→bin / bin→bin as two paired `txn_type="putaway"` legs sharing a fresh `transfer_group_id`, **net-zero at location grain**; source-pool floor guard 4xx; **`InventoryItem` FOR UPDATE-locked** in sorted-id order before the floor read so two concurrent putaways cannot over-draw (D-P12a-6). Directed target-bin suggestion (heuristic, user-confirmable). Router-layer audit + `gelato:read`/`gelato:write` RBAC. **Posts NO GL** (inbound-only — TB nets zero). **(Pick/pack/ship + COGS JE + reservation relief = AC3/AC4/AC5 + ship-side AC7, deferred to 12b — D-P12a-1.)** | Phase 12a | 12a | New `backend/app/modules/gelato/` module: `Bin` model + `bin_id` ledger column + package (`b0b0dcd`), module wiring + model aggregation (`2cc1161`), migration `0015_gelato_bins.py` (`7449fb4`), `gelato:read`/`gelato:write` perms (`57745e5`), schemas (`24c47ed`), SYERP `post_putaway`+`get_bin_on_hand` primitives (`5de6ea6`), GELATO bin-CRUD+putaway-orchestration service (`f548f2e`), router+RBAC+audit (`f8dd454`), **audit `target_id` int→str fix** for the first int-PK audited entity (`136e98d`), `verify_gelato.py` (`b77b781`) + `verify_gelato_api.py` (`6417e48`), full regression (`cd911e5`); FE hooks/nav/routes (`f46bce4`), Bins screen (`7ab258c`), Putaway screen (`82e37c5`). **Verify fix loop (`/zj:verify 12a`)**: review MAJOR — bin split desyncs after any bin-blind draw (transfer/adjust/MOUSSE-issue) — documented as the known 12a→12b boundary (`get_bin_on_hand` trust-boundary docstring + BACKLOG p2), and **pinned by `verify_gelato.py` scenario (E)** which proves the SC3 location roll-up survives a bin-blind draw exactly (split lies, location truth intact). **Live-DB: `verify_gelato.py` 11/11 PASS** (net-zero across putaways, **roll-up equality Decimal-exact**, over-draw 422 + no rows, **concurrency Barrier load-bearing** — FOR UPDATE, mutation-proven, scenario D, **bin-blind boundary** scenario E); **`verify_gelato_api.py` 29/29 PASS** (401/403/200 RBAC + attributable audit incl. the `str(bin_.id)` fix). Regression: full **17/17** verify_* exit 0, TB `in_balance` True. FE: `routes/gelato/` nav+hooks+routes, Bins + Putaway screens + colocated Vitest, `npm run build` exit 0. | **Inbound foundation VERIFIED (`/zj:verify 12a`, 2026-07-18, `52eb481`, tag `zj/good-12a-gelato-bins-putaway`)** — 11/11 + 29/29 + 17/17 regression + FE Vitest/build; TB nets zero. AC3/AC4/AC5 (pick/pack/ship + COGS JE + reservation relief) + ship-side AC7 deferred to Phase 12b; bin-split-after-bin-blind-movement is the documented 12a boundary (BACKLOG p2, closed by 12b bin-aware pick/issue); UI flow UAT pending (v3.0 milestone) |
+
+---
+
+*Last updated: 2026-07-18 — Phase 12a verified (`/zj:verify 12a`, `52eb481`, tag
+`zj/good-12a-gelato-bins-putaway`): GELATO inbound foundation — bins CRUD + directed putaway, per-bin
+on-hand rolls up Decimal-exact to the location total, putaway nets zero at location grain, FOR UPDATE
+concurrency crux load-bearing (GELATO-01 AC1/AC2/AC6 + putaway-side AC7/AC8). 11/11 verify_gelato (incl.
+bin-blind boundary scenario E) + 29/29 verify_gelato_api + 17/17 regression + FE Vitest/build; TB nets zero
+(no GL). Verify fix loop documented + pinned the one review MAJOR (bin split desyncs after a bin-blind
+draw) as the known 12a→12b boundary (BACKLOG p2). Pick/pack/ship + COGS JE = Phase 12b. Live pytest
+harness still broken (D-P7-4, BACKLOG p1) — no criterion depends on it.*
+
+*Prior: 2026-07-17 — Phase 11b verified (`/zj:verify 11b`, `fec334f`, tag
 `zj/good-11b-crumb-sales-orders`): CRUMB sales orders + soft-reservation + accepted-quote→SO conversion
 (CRUMB-01 AC4 + AC3 tail) — **CRUMB-01 now complete (all ACs)**. 17/17 verify_* (incl. concurrency
 scenario F) + FE Vitest/build; TB nets zero (no GL). Verify fix loop caught + fixed a blocker the harness
