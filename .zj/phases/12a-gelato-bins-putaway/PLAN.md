@@ -94,7 +94,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.modules.gelato.service import create_bin, execute_putaway, list_bins; print('ok')"`.
 - **Parallel-ok:** no (depends on 5, 6)
 
-### [ ] 8. GELATO router + self-register (thin, RBAC-gated, audit-after-commit)
+### [x] 8. GELATO router + self-register (thin, RBAC-gated, audit-after-commit)
 - **Files:** `backend/app/modules/gelato/router.py` (new)
 - **Do:** Mirror `mousse/router.py` head convention. Routes (no prefix; spell `/gelato/...`): `GET /gelato/locations/{loc}/bins` (gelato:read), `POST /gelato/bins` (write), `PATCH /gelato/bins/{id}` (write), `POST /gelato/bins/{id}/archive` (write), `GET /gelato/locations/{loc}/unbinned` (read), `GET /gelato/putaway/suggestion` (read), `POST /gelato/putaway` (write). Each mutation gates via `require_permission("gelato:write")`, reads via `gelato:read`, and writes ONE `write_audit` row AFTER the service commit: `bin.created` / `bin.updated` / `bin.archived` (target_type="bin") and `inventory.putaway` (target_type="inventory_txn", target_id = group id). Now boot the app (task 2 wiring becomes live).
 - **Done when:** `podman-compose ... up` boots clean; `GET /api/v1/gelato/...` routes appear in `/docs`; `curl` with admin token returns 200, no token 401.
