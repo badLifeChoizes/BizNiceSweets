@@ -252,7 +252,7 @@ class ShipmentLineRead(BaseModel):
     item_id: str
     from_bin_id: int
     qty: Decimal
-    inventory_txn_id: Optional[int] = None
+    inventory_txn_id: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -275,7 +275,7 @@ class ShipmentRead(BaseModel):
     location_id: int
     staging_bin_id: int
     status: str
-    journal_entry_id: Optional[int] = None
+    journal_entry_id: Optional[str] = None
     lines: list[ShipmentLineRead]
     created_at: datetime
 
