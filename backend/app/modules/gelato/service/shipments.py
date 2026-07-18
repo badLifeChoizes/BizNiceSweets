@@ -30,6 +30,7 @@ guard (over-pick), self-move guard, and item/location 404s propagate unchanged.
 """
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -503,6 +504,189 @@ async def execute_pack(
 
     # (d) Advance to packed and commit once. No ledger/GL movement here.
     shipment.status = "packed"
+    await db.commit()
+
+    return await _load_shipment_read(db, shipment.id)
+
+
+# ---------------------------------------------------------------------------
+# Execute ship — issue out of staging + COGS JE + reservation relief (SC4)
+# ---------------------------------------------------------------------------
+
+
+async def execute_ship(
+    db: AsyncSession, shipment_id: int, actor_id: str
+) -> "ShipmentRead":
+    """
+    Ship a packed shipment — the accounting crux (GELATO-02, SC4; SYERP-13 AC1).
+
+    The whole ship is ONE atomic unit of work (a single db.commit at the end),
+    mirroring MOUSSE issue_components: every guard rejects (404/409/422) with
+    NOTHING persisted, and a successful ship lands its issue ledger legs, ONE
+    balanced COGS JE, the SO's qty_shipped / qty_reserved stamps, and the
+    shipment's shipped status together — never partially.
+
+    Flow:
+      1. Load the shipment (404). Gate on the shipment FSM: only a 'packed'
+         shipment can ship — 'shipped' must be in the current state's allowed set
+         (409 otherwise). This blocks double-ship / double reservation relief.
+      2. Load its ShipmentLines (422 if none — an empty shipment has nothing to
+         issue and no balanced JE to post).
+      3. **Lock the DISTINCT contended InventoryItem rows FOR UPDATE in sorted-id
+         order BEFORE any on-hand read** (copies the issue_components template): a
+         concurrent ship / issue against the same item blocks until this
+         transaction commits and then re-reads the true on-hand, so two ships can
+         never drive the staging bin negative or double-consume.
+      4. Per line: delegate the physical draw to SYERP post_issue (from the
+         shipment's staging bin at its location, commit=False). post_issue flushes
+         each leg, so its per-bin floor guard is CUMULATIVE across lines — two
+         lines of the same item from the staging bin cannot jointly overdraw the
+         staging on-hand (a staging over-issue is rejected 4xx). Then, on the SAME
+         SalesOrderLine:
+           * over-ship guard — reject 422 if qty_shipped + line.qty > qty_ordered
+             (never ship beyond ordered);
+           * qty_shipped += line.qty;
+           * relieve the reservation: qty_reserved = max(0, qty_reserved - line.qty)
+             (D-P12b-5 — keeps _reserved_by_other_open_sos accurate);
+           * soft-link the ShipmentLine to its issue leg (inventory_txn_id);
+           * accumulate the issue's extended cost into total_value.
+      5. 422 if total_value <= 0 (a zero-value ship cannot post a balanced Dr/Cr
+         and has no COGS meaning) — mirrors the issue_components zero-value guard.
+      6. ONE balanced JE Dr 5100 COGS / Cr 1130 Inventory for the total shipped
+         value, source-linked to the shipment (post_journal_entry(commit=False)).
+      7. Set status 'shipped'; single db.commit(); return the ShipmentRead.
+
+    GELATO never writes InventoryTxn itself — the ledger legs are SYERP's
+    post_issue and the JE is SYERP's post_journal_entry; both ride this
+    transaction's single commit (commit=False) so the whole ship is atomic
+    (SYERP-13 AC1). Because each post_issue flushes its leg, the SO line objects
+    loaded per line share the session identity map, so repeated draws of the same
+    SO line accumulate qty_shipped / relieve qty_reserved without lost updates.
+    """
+    from app.modules.crumb.models import SalesOrder, SalesOrderLine
+    from app.modules.gelato.models import Shipment, ShipmentLine
+    from app.modules.syerp.models import InventoryItem
+    from app.modules.syerp.service import (
+        _gl_account_id_by_code,
+        post_issue,
+        post_journal_entry,
+    )
+
+    # (1) Load the shipment and gate on the shipment FSM. Only 'packed' has
+    #     'shipped' in its allowed set, so this alone enforces the packed guard.
+    shipment = await db.get(Shipment, shipment_id)
+    if shipment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Shipment {shipment_id} not found",
+        )
+    if "shipped" not in SHIPMENT_TRANSITIONS[shipment.status]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Shipment {shipment_id} is '{shipment.status}'; only a packed "
+                "shipment can be shipped."
+            ),
+        )
+
+    # (2) Load the shipment's lines (422 if none — nothing to issue, no JE).
+    result = await db.execute(
+        select(ShipmentLine)
+        .where(ShipmentLine.shipment_id == shipment_id)
+        .order_by(ShipmentLine.id)
+    )
+    lines = list(result.scalars().all())
+    if not lines:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Shipment {shipment_id} has no lines to ship.",
+        )
+
+    # (3) Lock the DISTINCT contended InventoryItem rows FOR UPDATE in sorted-id
+    #     order BEFORE any on-hand read (issue_components template). post_issue
+    #     re-locks each item, but taking the locks up front in a stable order is
+    #     the deadlock-free serialization point for a concurrent ship.
+    for locked_id in sorted({line.item_id for line in lines}):
+        await db.execute(
+            select(InventoryItem.id).where(InventoryItem.id == locked_id).with_for_update()
+        )
+
+    # The COGS memo names the SO the shipment fulfils (FK guarantees it exists).
+    so = await db.get(SalesOrder, shipment.sales_order_id)
+
+    # (4) Per line: delegate the staging-bin draw to post_issue (commit=False, so
+    #     each leg flushes and its per-bin floor guard is CUMULATIVE across lines),
+    #     then stamp qty_shipped / relieve the reservation on the SAME SO line.
+    total_value = Decimal("0")
+    for line in lines:
+        txn, line_value = await post_issue(
+            db,
+            item_id=line.item_id,
+            location_id=shipment.location_id,
+            bin_id=shipment.staging_bin_id,
+            qty=line.qty,
+            actor_id=actor_id,
+            source_type="gelato_shipment",
+            source_id=str(shipment.id),
+            commit=False,
+        )
+
+        so_line = await db.get(SalesOrderLine, line.sales_order_line_id)
+        # Over-ship guard: never ship beyond the ordered qty (422). Checked on the
+        # live (identity-mapped) SO line, so accumulated qty_shipped is respected.
+        if so_line.qty_shipped + line.qty > so_line.qty_ordered:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Shipping {line.qty} of sales order line {so_line.id} would "
+                    f"exceed its ordered qty {so_line.qty_ordered} (already shipped "
+                    f"{so_line.qty_shipped})."
+                ),
+            )
+        so_line.qty_shipped = so_line.qty_shipped + line.qty
+        # Relieve the reservation for the shipped qty (D-P12b-5) — never below zero.
+        so_line.qty_reserved = max(Decimal("0"), so_line.qty_reserved - line.qty)
+        # Soft-link the ShipmentLine to its issue ledger leg.
+        line.inventory_txn_id = txn.id
+        total_value += line_value
+
+    # (5) Zero-value guard: a balanced COGS JE needs a strictly positive total
+    #     (mirrors the issue_components zero-value guard).
+    if total_value <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Shipment has no material value (items have zero moving-average "
+                "cost); nothing to post to COGS."
+            ),
+        )
+
+    # post_issue already flushed each issue leg (materializing the txn.id soft-links
+    # above); a defensive flush keeps the shape identical to issue_components.
+    await db.flush()
+
+    # (6) ONE balanced JE: Dr 5100 COGS / Cr 1130 Inventory for the shipped value,
+    #     source-linked to the shipment. Rides this transaction's single commit.
+    cogs_account_id = await _gl_account_id_by_code(db, "5100")
+    inventory_account_id = await _gl_account_id_by_code(db, "1130")
+    je = await post_journal_entry(
+        db,
+        entry_date=date.today(),
+        memo=f"Shipment {shipment.id} — SO {so.so_number} COGS",
+        lines=[
+            {"account_id": cogs_account_id, "debit": total_value, "credit": 0},
+            {"account_id": inventory_account_id, "debit": 0, "credit": total_value},
+        ],
+        actor_id=actor_id,
+        source_type="gelato_shipment",
+        source_id=str(shipment.id),
+        commit=False,
+    )
+    shipment.journal_entry_id = je.id
+
+    # (7) Advance to shipped and take the single atomic commit (every post_issue
+    #     and the JE used commit=False, so they land together — SYERP-13 AC1).
+    shipment.status = "shipped"
     await db.commit()
 
     return await _load_shipment_read(db, shipment.id)
