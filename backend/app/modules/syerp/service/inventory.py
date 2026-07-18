@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         BillLine,
         GLAccount,
         InventoryItem,
+        InventoryTxn,
         JournalEntry,
         JournalLine,
         Partner,
@@ -811,3 +812,128 @@ async def post_putaway(
             created_at=in_leg.created_at,
         ),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Bin-aware issue (Phase 12b, GELATO — bin-dimensioned stock-out primitive)
+# ---------------------------------------------------------------------------
+#
+# An issue draws quantity OUT of a single BIN at a single stock location: one
+# `-qty` `issue` InventoryTxn leg valued at the item's CURRENT moving_avg_cost.
+# It is the bin-aware counterpart of the MOUSSE issue leg (mousse/service.py):
+# same signed `-qty` / txn_type='issue' shape, but with a concrete bin_id and a
+# per-BIN floor guard instead of MOUSSE's per-location one. This is the pick/ship
+# stock-out primitive GELATO composes over (Phase 12b) — receipts still own the
+# moving average (AC10-5); an issue never moves it.
+#
+# The per-bin floor + item-master lock mirror post_putaway exactly: bin_id=None
+# draws the location's UNBINNED pool, a concrete bin_id draws that single bin.
+# Bin existence + location-membership is GELATO's domain and is validated by the
+# caller before this primitive runs (D-P12a-3); the DB FK on bin_id is the
+# backstop. commit=False lets a GELATO caller fold the issue leg into one atomic
+# transaction with its own writes.
+
+
+async def post_issue(
+    db: AsyncSession,
+    item_id: str,
+    location_id: int,
+    bin_id: int | None,
+    qty: Decimal,
+    actor_id: str,
+    *,
+    source_type: str,
+    source_id: str,
+    commit: bool = True,
+) -> "tuple[InventoryTxn, Decimal]":
+    """
+    Post a bin-aware issue: append ONE `-qty` `issue` ledger leg and value it.
+
+    In a single transaction (AC10-4,6; D-P8-7; D-P12a-3):
+      1. Reject with 422 if qty <= 0 (an issue is a positive draw) — NO row.
+      2. 404 if the item or location does not exist (via get_item / get_location).
+         The BIN is NOT validated here: bin existence + location-membership is
+         GELATO's domain (it owns gelato_bin) and is checked by the caller before
+         this call — SYERP must not import gelato models (D-P12a-3). The DB FK on
+         bin_id is the backstop.
+      3. LOCK the item-master row FOR UPDATE *before* the floor read (mirrors
+         post_putaway). The append-only InventoryTxn rows cannot be locked to
+         serialize concurrent inserts — the item-master row is the correct single
+         contention point. Held until this function's single commit.
+      4. Derive `source_onhand` = the item's on-hand in the SOURCE bin at this
+         location (get_bin_on_hand). Reject with 422 if the `-qty` draw would drive
+         that bin pool below zero (over-issue, _adjustment_violates_floor) — NO row.
+      5. Append EXACTLY ONE immutable `issue` InventoryTxn: `-qty` on bin_id at
+         location_id, valued at the item's CURRENT moving_avg_cost, with the soft
+         source_type / source_id provenance link.
+
+    The item's moving_avg_cost is deliberately left UNTOUCHED — only receipts move
+    it (AC10-5). `line_value` is the positive extended cost of the draw
+    (qty * moving_avg_cost) quantized to scale 6, ROUND_HALF_UP, mirroring the
+    MOUSSE issue leg's valuation.
+
+    `commit` (default True) controls whether this function commits the unit of
+    work itself. A standalone issue commits (True); a GELATO caller that folds the
+    issue into a larger atomic write passes commit=False, so the row is flushed
+    (PK/timestamp exist) but the single commit is owned by the caller.
+
+    Returns `(txn, line_value)` — the created InventoryTxn and its positive
+    extended cost. The router / GELATO caller writes the audit row.
+    """
+    from app.modules.syerp.models import InventoryItem, InventoryTxn
+
+    if qty <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Issue quantity must be greater than zero.",
+        )
+
+    # 404s if the item or location does not exist. The bin is NOT validated here —
+    # that is GELATO's responsibility (D-P12a-3); the DB FK is the backstop.
+    item = await get_item(db, item_id)
+    await get_location(db, location_id)
+
+    # LOCK the item-master row FOR UPDATE *before* the floor read (mirror
+    # post_putaway). Locking the append-only ledger rows would not serialize
+    # concurrent inserts; the item-master row is the single contention point.
+    await db.execute(
+        select(InventoryItem.id).where(InventoryItem.id == item_id).with_for_update()
+    )
+
+    # Per-bin source on-hand: signed SUM of this item's txns in the source bin.
+    source_onhand = await get_bin_on_hand(db, item_id, location_id, bin_id)
+
+    # The `-qty` draw is a negative adjustment of the source bin, so the over-issue
+    # guard is the same per-bin floor (source_onhand - qty < 0 ⟺ source_onhand <
+    # qty). Reject BEFORE any mutation — no row on reject.
+    if _adjustment_violates_floor(source_onhand, -qty):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Issue of {qty} exceeds bin {bin_id} on-hand "
+                f"(current {source_onhand})."
+            ),
+        )
+
+    unit_cost = item.moving_avg_cost
+    line_value = (qty * unit_cost).quantize(_COST_QUANTUM, rounding=ROUND_HALF_UP)
+
+    txn = InventoryTxn(
+        item_id=item_id,
+        location_id=location_id,
+        txn_type="issue",
+        quantity=-qty,
+        unit_cost=unit_cost,
+        actor_id=actor_id,
+        bin_id=bin_id,
+        source_type=source_type,
+        source_id=source_id,
+    )
+    db.add(txn)
+    # moving_avg_cost is intentionally NOT touched — only receipts move it (AC10-5).
+
+    await db.flush()
+    if commit:
+        await db.commit()
+
+    return (txn, line_value)
