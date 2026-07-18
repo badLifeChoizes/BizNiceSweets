@@ -101,7 +101,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `podman exec compose_api_1 python -c "from app.main import app; print([r.path for r in app.routes if 'gelato' in r.path])"` lists all 7 routes; app boots (`/health` 200).
 - **Parallel-ok:** no (depends on 7)
 
-### [ ] 9. `verify_gelato.py` — service-level invariants (roll-up + net-zero + floor + concurrency)
+### [x] 9. `verify_gelato.py` — service-level invariants (roll-up + net-zero + floor + concurrency)
 - **Files:** `backend/scripts/verify_gelato.py` (new)
 - **Do:** Live-Postgres script mirroring `scripts/verify_mousse.py`/`verify_crumb_so.py`. Build inputs in the **real router/UI shape** (11b keeper): construct `PutawayRequest` exactly as `POST /gelato/putaway` receives it and drive the service through that shape — not a synthetic hand-fed leg list. Assertions: (a) create bins; receive stock unbinned; putaway unbinned→bin then bin→bin; assert `get_item_onhand` location total is UNCHANGED across putaways (net-zero, SC4); (b) **roll-up equality Decimal-exact** — Σ `get_bin_on_hand` over the location's bins + unbinned == `get_item_onhand` per-location total (SC3); (c) a putaway exceeding source-pool on-hand raises 422, no rows written (SC4/AC7); (d) **concurrency Barrier scenario** — two `execute_putaway` calls on the SAME source pool fired via `asyncio.gather` synchronized on an `asyncio.Barrier(2)` (mirror `verify_mousse.py:1003`); assert exactly one succeeds / total never over-draws, AND prove it load-bearing (documented: passes with FOR UPDATE, fails when the lock is removed — D-P12a-6).
 - **Done when:** script exits 0 with all assertions green; removing the lock in `post_putaway` makes the Barrier assertion fail (proven once, then lock restored).
