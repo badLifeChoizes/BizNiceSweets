@@ -384,10 +384,11 @@ class SalesOrderLineRead(BaseModel):
     One ordered line of a sales order returned to API callers.
 
     Serialized from a SalesOrderLine ORM instance (from_attributes=True) for the
-    stored fields — `qty_reserved` is the server-set reservation accumulator.
-    `line_total` (qty_ordered * unit_price) and `shortage` (qty_ordered −
-    qty_reserved) are DERIVED figures the service populates; they are not ORM
-    columns. All amounts are fixed-point Decimal (never float).
+    stored fields — `qty_reserved`/`qty_picked`/`qty_shipped` are the server-set
+    reservation/picked/shipped accumulators (D-P12b-5; qty_shipped is stamped by
+    the GELATO ship path). `line_total` (qty_ordered * unit_price) and `shortage`
+    (qty_ordered − qty_reserved) are DERIVED figures the service populates; they
+    are not ORM columns. All amounts are fixed-point Decimal (never float).
     """
 
     id: str
@@ -398,6 +399,8 @@ class SalesOrderLineRead(BaseModel):
     qty_ordered: Decimal
     unit_price: Decimal
     qty_reserved: Decimal
+    qty_picked: Decimal
+    qty_shipped: Decimal
     sort_order: int
 
     # Service-derived (not ORM columns) — filled by the detail loader.
