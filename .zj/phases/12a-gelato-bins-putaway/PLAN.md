@@ -59,7 +59,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `grep -n gelato backend/app/core/models.py backend/app/main.py` shows both lines. (Boot verified in task 6.)
 - **Parallel-ok:** no (depends on 1)
 
-### [ ] 3. Hand-author migration 0015 (create `gelato_bin`, add `bin_id`)
+### [x] 3. Hand-author migration 0015 (create `gelato_bin`, add `bin_id`)
 - **Files:** `backend/alembic/versions/0015_gelato_bins.py` (new)
 - **Do:** Author by hand on the host (LEARNINGS 11a — no in-container autogenerate). `down_revision = "0014"`. `upgrade()`: `op.create_table("gelato_bin", ...)` with the columns from task 1 + the `(location_id, code)` unique constraint + FK to `syerp_stock_location.id`; then `op.add_column("syerp_inventory_txn", sa.Column("bin_id", sa.Integer(), nullable=True))`, create the index, and `op.create_foreign_key("fk_inventory_txn_bin", "syerp_inventory_txn", "gelato_bin", ["bin_id"], ["id"])`. `downgrade()`: drop FK/column then drop table. Table-create-order matters (bin table before the FK).
 - **Done when:** `alembic upgrade head` runs clean 0001→0015 on a fresh DB; `alembic downgrade -1` then `upgrade head` round-trips clean.
