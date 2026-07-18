@@ -1,27 +1,27 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-18 (**Phase 12a VERIFIED** — `/zj:verify 12a` PASS, `52eb481`, tag `zj/good-12a-gelato-bins-putaway`. Verifier PASS + reviewer 0-blocker/1-MAJOR merged; the MAJOR (bin split desyncs after any bin-blind draw) fails no SC — documented as the 12a→12b boundary, pinned by verify scenario E, logged BACKLOG p2. Full 17/17 regression + TB nets zero on re-run. Next action: `/zj:retro 12a` then `/zj:plan 12b`.)
+Updated: 2026-07-18 (**Phase 12a RETRO'D** — `/zj:retro 12a` done. Roadmap 12a `[done — verified + retro'd]`; LEARNINGS Phase 12a banked (new-dimension-on-a-shared-ledger corruption class; the value-clamp-breaks-the-invariant note; first int-PK audit-target coercion bug caught by the HTTP script; concurrency pre-empt clean a 3rd time; reverse-hub string FK). All deferred items homed (bin-split MAJOR → BACKLOG p2; int-PK audit sweep resolved by reviewer — no other int-PK target exists, folded to a LEARNINGS keeper; 422 sweep already BACKLOG p3). **Next action:** `/zj:plan 12b`.)
 
 ## Position
 
-- **Step:** **VERIFIED** — **Phase 12a (GELATO bins & directed putaway) verified 2026-07-18** (`/zj:verify 12a`,
-  **Verdict PASS**, tag `zj/good-12a-gelato-bins-putaway` at `52eb481`). Ran verifier + reviewer in parallel:
-  verifier PASS on all 6 SCs (fresh 0001→0015 migration proven, roll-up Decimal-exact, Barrier concurrency
-  load-bearing, `str(bin_.id)` audit fix holds, real-`PutawayRequest` shape asserted, FE build + Vitest clean),
-  reviewer **0 blocker / 1 MAJOR / 0 minor** — the concurrency crux came back CLEAN (`InventoryItem` FOR UPDATE
-  is genuinely load-bearing under READ COMMITTED). The **MAJOR** (bin on-hand desyncs after any bin-blind draw —
-  `post_transfer`/`post_adjustment`/MOUSSE-issue write `bin_id=NULL`, per-location floor guard, so a bin
-  overstates and the unbinned pool goes negative even single-threaded) **fails no success criterion** — SC3's
-  Σ(bins)+unbinned==location-total identity and location on-hand stay Decimal-exact; only the split lies. Owner
-  chose cheap-mitigation-now: `get_bin_on_hand` TRUST BOUNDARY docstring + **`verify_gelato.py` scenario (E)**
-  pinning the boundary (proves the roll-up survives a bin-blind draw) + BACKLOG p2 entry + PLAN Risk sharpened
-  (concurrency→sequential-correctness); durable fix = 12b bin-aware pick/issue (12b told not to assume 12a
-  closed it). Docs synced (owner chose): SRD GELATO-01 → "partial — 12a inbound VERIFIED (AC1/AC2/AC8 +
-  putaway-side AC6/AC7)" + `Verified: 52eb481`; requirements-progress GELATO row added; ROADMAP 12a `[verified]`.
-  **Re-verification after the fix-loop source change: full 17/17 regression GREEN, `verify_gelato` 11/11 (incl.
-  E), `verify_gelato_api` 29/29, TB `in_balance` True** (one first-run `verify_mousse_api` failure was a uvicorn
-  `--reload` worker-restart race from `podman cp` mid-loop — clean in isolation + on the settled re-run).
-  Artifacts: `.zj/phases/12a-gelato-bins-putaway/{VERIFICATION,REVIEW}.md`. **Next action:** `/zj:retro 12a`
-  (banks the bin-blind-boundary + reload-race keepers) then `/zj:plan 12b`.
+- **Step:** **RETRO'D** — **Phase 12a (GELATO bins & directed putaway) closed 2026-07-18** (`/zj:retro 12a`),
+  tag `zj/good-12a-gelato-bins-putaway` at `52eb481`. Roadmap marked `[done — verified + retro'd]`. Retro banked
+  **LEARNINGS Phase 12a**, five keepers: (1) **the headline lesson — adding a new dimension (`bin_id`) to a
+  shared ledger silently corrupts it for every existing writer that ignores the dimension, and it's a
+  SEQUENTIAL-correctness bug, not a race** (bin-blind `post_transfer`/`post_adjustment`/MOUSSE-issue leave the
+  bin overstated + unbinned pool negative even single-threaded; the SC3 roll-up identity stays exact so every
+  green assertion missed it — same shape as the 09c/10 zero-sum-identity blindness, now on a physical
+  dimension); (2) **a value clamp that hides the symptom can break the invariant you just proved** — clamping
+  `get_bin_on_hand` would have broken SC3, so the mitigation surfaced-and-pinned the boundary (scenario E)
+  instead; (3) **the paired HTTP script earned its keep a 3rd suite running — GELATO's `Bin` is the first
+  int-PK audited entity and its int→`VARCHAR(36)` `target_id` coercion bug 500'd the mutation after commit;
+  keeper: `write_audit(target_id=...)` must `str()` the id** (reviewer confirmed no other int-PK target exists,
+  so no repo sweep owed); (4) **concurrency pre-empted by design → clean review on that axis, the 9b rule
+  paying off a 3rd time**; (5) **reverse-hub string table-name FK** avoids the import cycle when a hub-core
+  table must reference a satellite table. Deferred items all homed: bin-split MAJOR → BACKLOG p2 (added at
+  verify); int-PK audit sweep resolved (folded to LEARNINGS, no backlog entry); 422 sweep already BACKLOG p3.
+  Artifacts: `.zj/phases/12a-gelato-bins-putaway/{PLAN,VERIFICATION,REVIEW}.md`, `.zj/LEARNINGS.md` Phase 12a.
+  **Next action:** `/zj:plan 12b`. Optional: `/zj:log phase 12a` (formal work log); `/zj:ship` to merge the
+  11a+11b+12a stack.
 
 - **(historical) Step:** **BUILD COMPLETE** — **Phase 12a (GELATO bins & directed putaway) built 2026-07-17.**
   All **14 tasks** shipped on a fresh `feature-gelato-bins-putaway` branch (cut off HEAD `da9474e` = the
@@ -140,23 +140,24 @@ Updated: 2026-07-18 (**Phase 12a VERIFIED** — `/zj:verify 12a` PASS, `52eb481`
   plan's doc edits. `master` at `35f9b66` carries all of Phases 8–10. **Phase 11a builds on a new
   `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
   master first.
-- **Last update:** 2026-07-17
-- **Next action:** `/zj:verify 12a` — verify Phase 12a goal-backward against the 6 SCs on branch
-  `feature-gelato-bins-putaway`. Emphases for the verifier: **SC3** roll-up Decimal-exact (Σ bins +
-  unbinned == per-location total) and **SC4** the Barrier two-concurrent-putaway crux (re-run
-  `verify_gelato.py` — it is mutation-tested load-bearing); **SC5** the HTTP audit/RBAC gate
-  (`verify_gelato_api.py`, and confirm the `str(bin_.id)` audit fix `136e98d` holds); **SC6** FE +
-  regression 19/19 + TB nets zero. Deviations to review are in PLAN `## Deviations` (lock target,
-  bin-validation split, router int→str audit bug, branch-off-HEAD). Run verifier + reviewer in
-  parallel and let a reviewer BLOCKER override a verifier PASS (11b keeper). Then `/zj:plan 12b`
-  (pick/pack/ship + reservation relief + COGS JE crux).
+- **Last update:** 2026-07-18
+- **Next action:** `/zj:plan 12b` — plan the GELATO outbound crux: **pick → pack → ship + reservation
+  relief + the sell-side COGS JE** (GELATO-01 AC3/AC4/AC5 + ship-side AC7/AC8). Carries the durable fix
+  for the 12a MAJOR: **make pick/issue (and ideally transfer/adjust) bin-aware** so the ledger's `bin_id`
+  dimension stays consistent — 12b MUST NOT assume 12a closed it (BACKLOG p2). Emphases the plan should
+  bake in: the shared FOR-UPDATE floor lock across every draw path (issue/adjust/receive/transfer/**ship**),
+  not a per-module lock, since ship makes GELATO a third writer of the inventory ledger; ship posts the
+  COGS JE (imports SYERP GL fns, D-V3-9) so `verify_reports` TB must still net zero with the new JE;
+  staging-bin moves land here (D-P12a-11). Keep the three recurring keepers: real router/UI payload shape
+  in verify, the non-optional HTTP audit/RBAC script, and a load-bearing `asyncio.Barrier` concurrency
+  scenario. Branch stacks on `feature-gelato-bins-putaway` (12a) per the per-sub-phase precedent.
 
 ## Next action (detail)
 
-**`/zj:retro 11b`** — extract learnings, roll the roadmap forward, set up Phase 12. Then plan Phase 12
-(GELATO-01 warehouse core: bins → putaway → pick/pack/ship; ship relieves the 11b reservation + posts
-the sell-side COGS JE) → Phase 13 (SYERP-13 AR + invoicing from the SO). The DoD, not the phase count,
-is the contract.
+**`/zj:plan 12b`** — GELATO outbound (pick/pack/ship). Then Phase 13 (SYERP-13 AR + invoicing from the
+shipment/SO). The DoD, not the phase count, is the contract. **Alternative — pay down infra debt first:**
+the BACKLOG **p1** items (CI, live-DB pytest harness repair, both lint gates) are now two milestones old; a
+debt-paydown phase is reasonable if the owner wants it (raise at `/zj:ideate`).
 
 ### (historical) Phase 11b verify target
 **`/zj:verify 11b`** verified goal-backward against the 6 SCs: SO model/migration/wiring (SC1); direct

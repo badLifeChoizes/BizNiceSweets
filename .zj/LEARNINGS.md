@@ -3,6 +3,88 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 12a — GELATO bins & directed putaway (verified 2026-07-18)
+
+First GELATO phase: a new `gelato` module (bins + directed inbound putaway) that added a
+`bin_id` *dimension* to the shared SYERP inventory ledger. The cleanest new-suite build to
+date on the concurrency axis — the pre-planned lock + Barrier came back CLEAN from review.
+The one MAJOR was a genuinely new class, and the most instructive lesson of the phase:
+adding a dimension to a ledger that other writers ignore.
+
+### Surprises (assumptions wrong → corrected truth)
+
+- **Adding a new dimension to a shared ledger silently corrupts that dimension for every
+  existing writer that ignores it — and it is a SEQUENTIAL-correctness bug, not a race.**
+  12a added `bin_id` to `syerp_inventory_txn` and made ONLY putaway bin-aware; the
+  pre-existing draw primitives (`post_transfer`, `post_adjustment`, MOUSSE `issue_components`)
+  keep writing `bin_id=NULL` and floor-guard per-*location*. So the moment a bin-blind draw
+  leaves a location that holds binned stock, the bin it "left" overstates and the unbinned
+  pool goes negative — receive 10 → putaway to bin A → adjust −10 ⇒ bin A still 10, unbinned
+  −10, location total 0 (correct). The plan under-framed this as a *partial concurrency race*
+  (cross-path lock deferred); the reviewer sharpened it to single-threaded rot in normal
+  operation. **The location roll-up and the SC3 `Σ(bins)+unbinned==location` identity stay
+  Decimal-exact — only the split lies**, which is exactly why every green assertion missed it
+  (the same shape as the 09c/10 "a zero-sum identity can't see a subledger break" lessons,
+  now on a physical dimension rather than a GL control account). Corrected truth / keeper:
+  **when you add a dimension to a shared ledger, either make every writer of that ledger
+  dimension-aware in the same phase, or explicitly scope the new dimension as trustworthy
+  only until the first dimension-blind write — and pin that boundary with a test so the
+  durable fix visibly changes it.** 12b (bin-aware pick/issue) is the durable fix and was
+  told in writing not to assume 12a closed it.
+
+- **A value clamp that hides the symptom can break the invariant you just proved.** The
+  obvious mitigation for the negative unbinned pool was to clamp `get_bin_on_hand` at zero.
+  Rejected — clamping would break the very SC3 `Σ(bins)+unbinned==location` identity that was
+  this phase's crux (a clamped bin figure no longer sums to the location total). The chosen
+  mitigation *preserved* the identity: a TRUST BOUNDARY docstring + `verify_gelato.py`
+  scenario (E) that **pins** the stale-bin/negative-pool behavior AND re-proves the roll-up
+  survives a bin-blind draw Decimal-exact. Keeper: **before clamping/suppressing a
+  wrong-looking derived value, check whether the "wrong" value is load-bearing for a proven
+  invariant — surface-and-pin the boundary rather than clamp it away.**
+
+### Patterns that worked (repeat these)
+
+- **The paired HTTP verify script earned its keep a THIRD consecutive suite — this time on a
+  type-coercion defect only an int-PK entity could expose.** GELATO's `Bin` is the first
+  int-PK entity ever written to `audit_log` (every previously-audited entity in mousse/crumb/
+  syerp carries a uuid-string PK). The bin routes passed the integer `Bin.id` to
+  `write_audit(target_id=...)`, but `audit_log.target_id` is `VARCHAR(36)`; asyncpg raised
+  `DataError`, so each bin route **committed the bin then 500'd on the audit write — a bin
+  created with no attributable audit row** (a traceability violation). `verify_gelato.py`
+  (service-level) structurally could not see it; `verify_gelato_api.py` (real HTTP) caught it
+  immediately (`str(bin_.id)` fix, `136e98d`). The reviewer then confirmed **no other int-PK
+  audit target exists today**, so no repo sweep is owed — but the keeper for any future int-PK
+  audited entity is concrete: **`write_audit(target_id=...)` must `str()` the id; the column
+  is `VARCHAR(36)` and a raw int PK 500s the mutation *after* it commits.** The 9a/11a rule
+  holds a third time — the HTTP script is non-optional because a service script cannot reach
+  the router's audit/RBAC layer.
+
+- **Concurrency pre-empted by design → clean review on that axis (the 9b rule paying off a
+  third time, after Phase 10).** The FOR-UPDATE lock (on the `InventoryItem` master row —
+  deviation-corrected from the plan's `InventoryTxn` prose, since the append-only ledger isn't
+  the contention point) + a genuine `asyncio.Barrier(2)` two-putaway scenario, proven
+  load-bearing, were planned in the *same task breath* as the mutation. The reviewer found the
+  putaway↔putaway crux CLEAN. Continued confirmation: plan the row lock + a forced-interleave
+  verify scenario with any invariant-guarding mutation and the recurring post-hoc concurrency
+  major becomes a non-event. (The reviewer's only concurrency note was the *cross-path*
+  putaway↔transfer/issue edge — the standing BACKLOG p2 ledger-race item, not a 12a regression.)
+
+### Process notes
+
+- **Reverse-hub FK works cleanly via a string table-name FK.** 12a needed a SYERP-*core* table
+  (`syerp_inventory_txn`) to reference a GELATO-owned table (`gelato_bin`) — the reverse of the
+  normal hub direction (satellites reference the hub, not vice-versa). `ForeignKey("gelato_bin.id")`
+  as a **string** (SQLAlchemy resolves lazily by table name, so no Python import of gelato models
+  into syerp) avoided the import cycle; migration 0015 creates `gelato_bin` before the FK. No boot
+  or Alembic-resolution issues. Reusable whenever a future satellite module must be referenced by a
+  hub-owned table.
+- **9th consecutive DB-touching phase paying the same two taxes:** in-container verify needs
+  `PYTHONPATH=/app`; neither lint gate runs (both BACKLOG p1). Continued evidence only, not
+  re-litigated. (One transient `verify_mousse_api` failure this phase was a uvicorn `--reload`
+  worker-restart race from `podman cp` of a source file mid-loop — not a code defect; clean on the
+  settled re-run. Note for future in-container fix-loops: let `--reload` settle before re-running the
+  full suite.)
+
 ## Phase 11b — CRUMB sales orders + soft-reservation (verified 2026-07-17)
 
 CRUMB-01 completed: SO FSM, accepted-quote→SO conversion, and the soft-reservation crux
