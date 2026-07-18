@@ -66,7 +66,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `podman exec compose_api_1 alembic upgrade head` exits 0 and logs `0015`; `podman exec compose_api_1 python -c "import sqlalchemy as sa; from app.core.db import engine; ..."` or a psql `\d gelato_bin` shows the table + `syerp_inventory_txn.bin_id`.
 - **Parallel-ok:** no (depends on 1)
 
-### [ ] 4. Seed `gelato:read` / `gelato:write` permissions
+### [x] 4. Seed `gelato:read` / `gelato:write` permissions
 - **Files:** `backend/app/modules/auth/seed.py` (edit)
 - **Do:** Add `("gelato:read", "Read access to GELATO (warehouse management)")` and `("gelato:write", "Write access to GELATO")` to the permission catalog (mirroring the `mousse:`/`crumb:` entries at lines 38-41), and add both to the admin default-grant list (lines 51-54). Idempotent (seed inserts only if absent).
 - **Done when:** After boot, both permissions exist and admin holds them.
@@ -165,3 +165,8 @@ Key real files and the patterns to mirror shape-for-shape:
 
 ## Decisions needed
 None — the six owner-confirmed decisions (D-P12a-1..6) are fixed, and the four author calls (D-P12a-7..10, +11) are recorded with rationale and recommendations. No open question requires the manager before build starts.
+
+## Deviations
+- **Branch cut off HEAD (`da9474e`), not the bare tag `fec334f`.** D-P12a-4 said cut off the verified 11b tip; the retro/plan doc commits (`de9e0f0`, `da9474e`) sit on top of that tag and include *this PLAN.md*. Cutting off the tag would drop the plan. HEAD is code-identical to the tag (docs only on top) — mirrors the 11b precedent (branch off code tip, not bare tag). (manager, build start)
+- **Task 1 — stub `router.py` created early.** `gelato/__init__.py` mirrors mousse and does `from app.modules.gelato.router import router` at package-import time, so the package (and task 1's own verify) can't import until a router module exists. Task 1 created a minimal `router = APIRouter()` stub; task 8 replaces it with the real routes. (The plan's task-2 note anticipated this and mis-numbered the router task as "6"; the real router is task 8.)
+- **Task 1 — commit subject shortened to satisfy `guard-commit-msg.sh` (72-char max).** No content change. String columns sized (`code String(50)`, `description String(255)`) to match SYERP/mousse conventions rather than bare `String`.
