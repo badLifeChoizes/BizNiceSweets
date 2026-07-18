@@ -112,7 +112,7 @@ async def create_bin_endpoint(
         actor_id=str(current_user.id),
         action="bin.created",
         target_type="bin",
-        target_id=bin_.id,
+        target_id=str(bin_.id),
         detail=f"Bin created: {bin_.code} in location {bin_.location_id}",
     )
     return bin_
@@ -139,7 +139,7 @@ async def update_bin_endpoint(
         actor_id=str(current_user.id),
         action="bin.updated",
         target_type="bin",
-        target_id=bin_.id,
+        target_id=str(bin_.id),
         detail=f"Bin updated: {bin_.code} (active={bin_.active})",
     )
     return bin_
@@ -162,7 +162,7 @@ async def archive_bin_endpoint(
         actor_id=str(current_user.id),
         action="bin.archived",
         target_type="bin",
-        target_id=bin_.id,
+        target_id=str(bin_.id),
         detail=f"Bin archived: {bin_.code} in location {bin_.location_id}",
     )
     return bin_
