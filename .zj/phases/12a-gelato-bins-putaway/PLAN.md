@@ -87,7 +87,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.modules.syerp.service.inventory import post_putaway, get_bin_on_hand; print('ok')"` (behavior proven in task 9).
 - **Parallel-ok:** no (depends on 1, 3)
 
-### [ ] 7. GELATO service package: bin CRUD + putaway orchestration
+### [x] 7. GELATO service package: bin CRUD + putaway orchestration
 - **Files:** `backend/app/modules/gelato/service/__init__.py` (new), `backend/app/modules/gelato/service/bins.py` (new), `backend/app/modules/gelato/service/putaway.py` (new)
 - **Do:** Mirror `crumb/service/` package layout (`__init__.py` re-exports the public surface). `bins.py`: `create_bin` (422 on dup `(location,code)` pre-check + 404 on missing location), `update_bin`, `archive_bin` (set active=False), `get_bin`, `list_bins(location_id, include_archived=False)` (archived hidden by default — Partner precedent). `putaway.py`: `suggest_target_bin(db, item_id, location_id)` (D-P12a-10 heuristic), `list_unbinned_stock(db, location_id)` (items with `bin_id IS NULL` on-hand > 0), and `execute_putaway(...)` which validates the bins belong to the location then delegates to SYERP `post_putaway` (D-P12a-7) and returns `PutawayResult`. Keep GELATO thin — no direct `InventoryTxn` writes.
 - **Done when:** `from app.modules.gelato.service import create_bin, execute_putaway, suggest_target_bin, get_bin_on_hand` (re-exported) all import.

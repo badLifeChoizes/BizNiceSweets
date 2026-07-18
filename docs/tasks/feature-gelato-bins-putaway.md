@@ -10,7 +10,7 @@ Plan: `.zj/phases/12a-gelato-bins-putaway/PLAN.md` (14 tasks). Requirement: GELA
 - [x] 4. Seed `gelato:read` / `gelato:write` permissions
 - [x] 5. Define GELATO Pydantic schemas
 - [x] 6. SYERP bin-aware primitives: `post_putaway` + `get_bin_on_hand`
-- [ ] 7. GELATO service package: bin CRUD + putaway orchestration
+- [x] 7. GELATO service package: bin CRUD + putaway orchestration
 - [ ] 8. GELATO router + self-register (RBAC-gated, audit-after-commit)
 - [ ] 9. `verify_gelato.py` — service invariants (roll-up + net-zero + floor + concurrency)
 - [ ] 10. `verify_gelato_api.py` — HTTP-level RBAC + audit
