@@ -1,7 +1,37 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-17 (**Phase 12a PLANNED** — GELATO-01 split into 12a (bins + directed putaway) + 12b (pick/pack/ship + COGS JE); 12a PLAN.md written, 14 tasks. Next action: `/zj:build 12a`.)
+Updated: 2026-07-17 (**Phase 12a BUILD COMPLETE** — GELATO bins & directed putaway built on `feature-gelato-bins-putaway`; all 14 tasks shipped, backend verify 19/19 + TB nets zero, FE 37 files/108 tests + build clean. Next action: `/zj:verify 12a`.)
 
 ## Position
+
+- **Step:** **BUILD COMPLETE** — **Phase 12a (GELATO bins & directed putaway) built 2026-07-17.**
+  All **14 tasks** shipped on a fresh `feature-gelato-bins-putaway` branch (cut off HEAD `da9474e` = the
+  verified 11b code tip + plan docs; see PLAN Deviations — bare tag `fec334f` would have dropped the plan).
+  Delivered: `gelato` module self-registers (mirrors mousse/crumb new-module package shape); migration
+  **0015** adds `gelato_bin` + nullable `bin_id` on `syerp_inventory_txn` (hub-inversion string FK,
+  D-P12a-3), round-trips clean; `gelato:read`/`gelato:write` seeded; bin CRUD (unique-within-location,
+  archive-hides) + directed putaway. The **SYERP-owned bin-aware primitive** `post_putaway`/`get_bin_on_hand`
+  (D-P12a-7) clones `post_transfer` intra-location + bin-dimensioned, **locks `InventoryItem` FOR UPDATE
+  before the floor read** (corrected from the plan's "InventoryTxn" prose — the append-only ledger isn't the
+  contention point); GELATO's thin `service/` validates bins-belong-to-location then delegates. Router thin,
+  RBAC-gated, audit-after-commit. **Proof:** `verify_gelato.py` (roll-up Decimal-exact + net-zero + floor +
+  the **Barrier two-concurrent-putaway scenario, proven load-bearing** — lock removed → 2 successes → FAIL,
+  restored → green) + `verify_gelato_api.py` (30 asserts, HTTP 401/403/200 + attributable audit) + all 17
+  existing verify_* → **19/19 green**, Trial Balance `in_balance` True (12a posts **NO GL**); FE full suite
+  **37 files/108 tests**, `npm run build` exit 0; nav gating data-driven (enabled ∩ `gelato:read`).
+  **Two material findings, both handled:** (1) the paired HTTP script **caught a real router-audit bug** —
+  bin routes passed integer `Bin.id` to `write_audit(target_id=...)` (VARCHAR col) → asyncpg `DataError`,
+  bins committed then 500'd on the audit write (audit-trail violation); fixed `str(bin_.id)`, commit
+  `136e98d` (the 9a/11a keeper recurring — GELATO's `Bin` is the **first int-PK audited entity**, worth a
+  repo-wide `write_audit(target_id=)` sweep, logged under PLAN `## Noticed`); (2) the 11b dead-through-UI
+  trap pre-empted — verify + the Putaway Vitest both assert the **real `PutawayRequest` payload shape**.
+  **Next action:** `/zj:verify 12a`.
+
+- **Branch (D-P12a-4, amended):** `feature-gelato-bins-putaway` off HEAD `da9474e` (code-identical to tag
+  `zj/good-11b-crumb-sales-orders`/`fec334f`, docs on top). 11a/11b unmerged; 12a stacks. Checklist (all 14
+  ticked): `docs/tasks/feature-gelato-bins-putaway.md`. Lint gates remain non-functional (BACKLOG p1) —
+  correctness rests on verify_* (19/19) + Vitest (108), per project convention.
+
+## (historical) Position
 
 - **Step:** **PLAN COMPLETE** — **Phase 12a (GELATO bins & directed putaway) planned 2026-07-17.**
   Phase 12 (GELATO-01, 8 ACs) **split 12a/12b at plan** (D-P12a-1, owner — mirrors 9a/b/c + 11a/b):
@@ -91,12 +121,15 @@ Updated: 2026-07-17 (**Phase 12a PLANNED** — GELATO-01 split into 12a (bins + 
   `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
   master first.
 - **Last update:** 2026-07-17
-- **Next action:** `/zj:build 12a` — build the 14-task Phase 12a plan
-  (`.zj/phases/12a-gelato-bins-putaway/PLAN.md`) on a fresh `feature-gelato-bins-putaway` branch off
-  the 11b tip (`fec334f`). Wave order: schema (models → migration 0015 → perms → schemas) → backend
-  (SYERP `post_putaway`/`get_bin_on_hand` → thin GELATO service → router+boot) → verify (`verify_gelato`
-  + `verify_gelato_api` → full regression, TB nets zero) → frontend (nav → Bins ‖ Putaway). Then
-  `/zj:verify 12a`, and `/zj:plan 12b` for the pick/pack/ship + COGS JE crux.
+- **Next action:** `/zj:verify 12a` — verify Phase 12a goal-backward against the 6 SCs on branch
+  `feature-gelato-bins-putaway`. Emphases for the verifier: **SC3** roll-up Decimal-exact (Σ bins +
+  unbinned == per-location total) and **SC4** the Barrier two-concurrent-putaway crux (re-run
+  `verify_gelato.py` — it is mutation-tested load-bearing); **SC5** the HTTP audit/RBAC gate
+  (`verify_gelato_api.py`, and confirm the `str(bin_.id)` audit fix `136e98d` holds); **SC6** FE +
+  regression 19/19 + TB nets zero. Deviations to review are in PLAN `## Deviations` (lock target,
+  bin-validation split, router int→str audit bug, branch-off-HEAD). Run verifier + reviewer in
+  parallel and let a reviewer BLOCKER override a verifier PASS (11b keeper). Then `/zj:plan 12b`
+  (pick/pack/ship + reservation relief + COGS JE crux).
 
 ## Next action (detail)
 
