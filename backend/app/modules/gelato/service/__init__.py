@@ -28,6 +28,11 @@ from app.modules.gelato.service.putaway import (
     list_unbinned_stock,
     suggest_target_bin,
 )
+from app.modules.gelato.service.shipments import (
+    SHIPMENT_TRANSITIONS,
+    build_pick_list,
+    execute_pick,
+)
 from app.modules.syerp.service import get_bin_on_hand
 
 __all__ = [
@@ -41,6 +46,10 @@ __all__ = [
     "execute_putaway",
     "list_unbinned_stock",
     "suggest_target_bin",
+    # shipments (pick/pack/ship)
+    "SHIPMENT_TRANSITIONS",
+    "build_pick_list",
+    "execute_pick",
     # re-exported from the SYERP hub
     "get_bin_on_hand",
 ]
