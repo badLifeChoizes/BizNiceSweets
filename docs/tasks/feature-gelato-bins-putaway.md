@@ -8,7 +8,7 @@ Plan: `.zj/phases/12a-gelato-bins-putaway/PLAN.md` (14 tasks). Requirement: GELA
 - [ ] 2. Register GELATO models in aggregator + wire module import
 - [ ] 3. Hand-author migration 0015 (create `gelato_bin`, add `bin_id`)
 - [x] 4. Seed `gelato:read` / `gelato:write` permissions
-- [ ] 5. Define GELATO Pydantic schemas
+- [x] 5. Define GELATO Pydantic schemas
 - [ ] 6. SYERP bin-aware primitives: `post_putaway` + `get_bin_on_hand`
 - [ ] 7. GELATO service package: bin CRUD + putaway orchestration
 - [ ] 8. GELATO router + self-register (RBAC-gated, audit-after-commit)

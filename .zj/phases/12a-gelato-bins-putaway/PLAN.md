@@ -73,7 +73,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "import asyncio; ...select Permission where code like 'gelato:%'"` returns 2 rows. (Or exercised by `verify_gelato_api.py` in task 8.)
 - **Parallel-ok:** yes (independent of 1-3)
 
-### [ ] 5. Define GELATO Pydantic schemas
+### [x] 5. Define GELATO Pydantic schemas
 - **Files:** `backend/app/modules/gelato/schemas.py` (new)
 - **Do:** Mirror `crumb/schemas.py`/`mousse/schemas.py` style. Define `BinCreate` (location_id, code, description?), `BinUpdate` (description?, active?), `BinRead` (id, location_id, code, description, active, created_at), `BinOnHandRead` (bin_id, code, quantity: Decimal), `PutawayRequest` (item_id, location_id, to_bin_id, qty: Decimal, from_bin_id: int|None=None → None means the unbinned pool), `PutawayResult` (the two `TransactionRead` legs + resulting bin on-hand + location total), and a `PutawaySuggestion`/`UnbinnedStockRead` for the screen (item_id, location_id, unbinned_qty, suggested_bin_id). Decimals typed `Decimal`.
 - **Done when:** `from app.modules.gelato.schemas import PutawayRequest, BinRead` imports clean.
