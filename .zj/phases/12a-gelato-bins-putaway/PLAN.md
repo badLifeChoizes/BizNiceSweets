@@ -108,7 +108,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_gelato.py` exits 0.
 - **Parallel-ok:** no (depends on 8)
 
-### [ ] 10. `verify_gelato_api.py` — HTTP-level RBAC + audit
+### [x] 10. `verify_gelato_api.py` — HTTP-level RBAC + audit
 - **Files:** `backend/scripts/verify_gelato_api.py` (new)
 - **Do:** Mirror `scripts/verify_mousse_api.py`/`verify_crumb_api.py` — drive real HTTP against the running API. Assert: no token → 401; a token WITHOUT `gelato:write` → 403 on bin create + putaway; WITHOUT `gelato:read` → 403 on list; admin → 200. After a successful bin create/edit/archive and a putaway, assert the corresponding `AuditLog` rows exist and are attributable (actor_id set). This is the non-optional paired HTTP script (a service script structurally cannot prove router audit/RBAC — 9a/11a keeper).
 - **Done when:** script exits 0; all 401/403/200 + audit assertions green.
