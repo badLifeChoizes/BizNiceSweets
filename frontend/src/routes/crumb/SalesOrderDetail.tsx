@@ -30,6 +30,12 @@ import { SalesOrderDetailLines } from './components/SalesOrderDetailLines'
 import { useCustomers } from './components/lookups'
 import { getApiErrorMessage } from './components/apiError'
 import { useSalesOrder, useAdvanceSalesOrderStatus } from './hooks'
+import { useAuth } from '@/hooks/useAuth'
+import { useModules } from '@/hooks/useModules'
+import { useVisibleModules } from '@/components/AppShell'
+
+// SO statuses that can be handed off to GELATO fulfillment (stock reserved / picking).
+const FULFILLABLE_STATUSES = new Set(['confirmed', 'fulfilling'])
 
 // Allowed forward transitions per status. The server is the source of truth; this only
 // decides which buttons to render. Closed / cancelled are terminal.
@@ -54,6 +60,12 @@ export function SalesOrderDetail() {
 
   const { data: so, isLoading, isError } = useSalesOrder(id)
   const { data: customers = [] } = useCustomers()
+
+  // GELATO fulfillment affordance gating: reuse the app-wide visible-modules signal
+  // (module enabled ∩ gelato:read) — the same intersection AppShell/Sidebar nav uses.
+  const { user } = useAuth()
+  const { data: modules = [] } = useModules()
+  const gelatoVisible = useVisibleModules(user, modules).some((m) => m.key === 'gelato')
 
   const advanceMutation = useAdvanceSalesOrderStatus()
 
@@ -93,6 +105,9 @@ export function SalesOrderDetail() {
   const isDraft = so.status === 'draft'
   const nextStatuses = NEXT_STATUSES[so.status] ?? []
   const isMoving = advanceMutation.isPending
+  // Show the Fulfill / Ship hand-off only when GELATO is visible to this user and the
+  // order is in a fulfillable state (stock reserved / already picking).
+  const canFulfill = gelatoVisible && FULFILLABLE_STATUSES.has(so.status)
 
   return (
     <div className="p-8 space-y-6">
@@ -122,6 +137,11 @@ export function SalesOrderDetail() {
             </div>
             {/* Status FSM actions */}
             <div className="flex items-center gap-2 shrink-0">
+              {canFulfill && (
+                <Button asChild variant="secondary" size="sm">
+                  <Link to={`/gelato/fulfillment?so=${so.id}`}>Fulfill / Ship</Link>
+                </Button>
+              )}
               {nextStatuses.map((target) => (
                 <Button
                   key={target}

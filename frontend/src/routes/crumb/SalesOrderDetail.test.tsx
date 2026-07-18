@@ -45,6 +45,24 @@ const mockGet = vi.mocked(apiClient.get)
 const CUSTOMERS = [{ id: 'c1', name: 'Acme Corp' }]
 const PARTS = [{ id: 'p1', part_number: 'PN-001' }]
 
+// The signed-in user (GET /auth/me). gelato:read gates the Fulfill / Ship affordance.
+function authUser(hasGelatoRead: boolean) {
+  return {
+    id: 'u1',
+    email: 'user@example.com',
+    full_name: 'Test User',
+    is_active: true,
+    roles: [] as Array<{ name: string }>,
+    permissions: hasGelatoRead ? ['crumb:read', 'gelato:read'] : ['crumb:read'],
+  }
+}
+
+// The module registry (GET /core/modules). enabled ∩ gelato:read is what the app-wide
+// useVisibleModules signal intersects to gate GELATO — reused by the affordance.
+function moduleList(gelatoEnabled: boolean) {
+  return [{ key: 'gelato', display_name: 'GELATO', enabled: gelatoEnabled, always_on: false, sort_order: 6 }]
+}
+
 // A shortage line (stock part PN-001, ordered 8 / reserved 6 / shortage 2) and a non-stock
 // free-text line (item_id null → Non-stock flag, no shortage).
 function salesOrder(status: string) {
@@ -70,6 +88,7 @@ function salesOrder(status: string) {
         qty_ordered: '8',
         unit_price: '10.00',
         qty_reserved: '6',
+        qty_shipped: '4',
         sort_order: 0,
         line_total: '80.00',
         shortage: '2',
@@ -83,6 +102,7 @@ function salesOrder(status: string) {
         qty_ordered: '1',
         unit_price: '50.00',
         qty_reserved: '0',
+        qty_shipped: '0',
         sort_order: 1,
         line_total: '50.00',
         shortage: '0',
@@ -91,9 +111,15 @@ function salesOrder(status: string) {
   }
 }
 
-// Route every GET by URL so query order does not matter.
-function mockGets(status: string) {
+// Route every GET by URL so query order does not matter. GELATO visibility is tunable
+// (module enabled ∩ gelato:read) so the Fulfill / Ship affordance can be exercised both ways.
+function mockGets(
+  status: string,
+  { gelatoEnabled = true, hasGelatoRead = true }: { gelatoEnabled?: boolean; hasGelatoRead?: boolean } = {},
+) {
   mockGet.mockImplementation((url: string) => {
+    if (url.includes('/auth/me')) return Promise.resolve({ data: authUser(hasGelatoRead) })
+    if (url.includes('/core/modules')) return Promise.resolve({ data: moduleList(gelatoEnabled) })
     if (url.includes('/crumb/sales-orders/')) return Promise.resolve({ data: salesOrder(status) })
     if (url.includes('/syerp/partners')) return Promise.resolve({ data: CUSTOMERS })
     if (url.includes('/plum/parts')) return Promise.resolve({ data: PARTS })
@@ -164,5 +190,45 @@ describe('SalesOrderDetail screen', () => {
     expect(screen.getByRole('button', { name: 'Fulfill' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument()
+  })
+
+  it("surfaces each line's shipped accumulator alongside reserved/shortage", async () => {
+    mockGets('fulfilling')
+
+    renderSalesOrderDetail()
+
+    expect(await screen.findByText('SO-000001')).toBeInTheDocument()
+    // The Shipped column header renders and the first line's shipped qty (4) shows.
+    expect(screen.getByText('Shipped')).toBeInTheDocument()
+    expect(screen.getByText('4')).toBeInTheDocument()
+  })
+
+  it('shows Fulfill / Ship when GELATO is enabled ∩ gelato:read on a fulfilling SO', async () => {
+    mockGets('fulfilling', { gelatoEnabled: true, hasGelatoRead: true })
+
+    renderSalesOrderDetail()
+
+    // The affordance links to the GELATO fulfillment screen, preselecting this SO.
+    const link = await screen.findByRole('link', { name: 'Fulfill / Ship' })
+    expect(link).toHaveAttribute('href', '/gelato/fulfillment?so=so1')
+  })
+
+  it('hides Fulfill / Ship when the GELATO module is disabled', async () => {
+    mockGets('fulfilling', { gelatoEnabled: false, hasGelatoRead: true })
+
+    renderSalesOrderDetail()
+
+    // Wait for the SO (and its FSM buttons) to settle, then assert the affordance is absent.
+    expect(await screen.findByRole('button', { name: 'Close' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Fulfill / Ship' })).not.toBeInTheDocument()
+  })
+
+  it('hides Fulfill / Ship when the user lacks gelato:read', async () => {
+    mockGets('fulfilling', { gelatoEnabled: true, hasGelatoRead: false })
+
+    renderSalesOrderDetail()
+
+    expect(await screen.findByRole('button', { name: 'Close' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Fulfill / Ship' })).not.toBeInTheDocument()
   })
 })
