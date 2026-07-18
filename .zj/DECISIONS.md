@@ -783,3 +783,56 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   in a single-shop model, and the right guard depends on the quote→SO→invoice lifecycle that Phase 13
   (SYERP-13 invoicing) will firm up. Blocker fixed `fec334f` + pinned by new `verify_crumb_so.py` (D2)
   assertions; the convert-idempotency follow-up logged to BACKLOG p3.
+
+## v3.0 Phase 12a planning — GELATO bins & directed putaway (2026-07-17)
+
+- **D-P12a-1 (owner):** **Phase 12 (GELATO-01) splits into 12a + 12b**, each planned/built/verified
+  independently on its own branch. **12a** = bins + directed putaway (inbound foundation; NO GL, NO
+  sales-order/reservation dependency, NO pick/pack/ship). **12b** = pick → pack → ship + COGS JE +
+  reservation relief (the outbound + GL crux). *Why:* the inbound-vs-outbound seam is clean and mirrors
+  the 9a/b/c and 11a/b precedents the roadmap anticipated; it isolates the GL/reservation crux into its
+  own verify pass rather than burying it in one large diff — exactly the "big green verify hides one
+  blocker" shape that bit 11a and 11b. `/zj:plan 12` produced 12a first (11a precedent).
+- **D-P12a-2 (owner):** **Bin-aware movements live on the EXISTING SYERP ledger** via a nullable `bin_id`
+  FK column on `syerp_inventory_txn` — one ledger, one bin dimension, single source of truth. Per-bin
+  on-hand = Σ txns for `(item, location, bin)`; location total = Σ over all bins incl. NULL (unchanged
+  from SYERP-10.3). Existing/PO receipts land `bin_id=NULL` (unbinned); putaway assigns them to a bin.
+  *Why:* AC1 requires per-bin on-hand to roll up exactly to the location total — a single ledger with a
+  bin dimension guarantees that roll-up *by construction*, where a separate GELATO bin-ledger would be a
+  second source of truth that can drift and must be reconciled. Chosen over the separate-ledger option.
+- **D-P12a-3 (owner-implied / author):** **Hub-direction inversion accepted.** The `bin_id` FK points a
+  SYERP-owned ledger row → a GELATO-owned `gelato_bin` table (the reverse of the usual "modules FK into
+  SYERP" direction). GELATO owns the bin table + putaway workflow + screen; SYERP owns the ledger + the
+  bin-aware posting primitive GELATO imports (D-V3-9 / D-P10-6). To avoid a Python import cycle the
+  mapped column uses a **string table-name FK** `ForeignKey("gelato_bin.id")` (SQLAlchemy resolves lazily
+  by name); both the `bin_id` column and `gelato_bin` are created by GELATO's migration **0015**. *Why:*
+  the single-ledger roll-up (D-P12a-2) requires the ledger to carry the bin dimension; the inversion is a
+  cosmetic coupling in a modular *monolith* (one codebase, one DB, all migrations always run), not a real
+  deployability constraint.
+- **D-P12a-4 (owner):** **Full staging-bin moves in 12b** — pick moves pick-bin→staging-bin (net-zero at
+  location) and ship issues from the staging bin, matching AC3 literally (chosen over a lightweight
+  pick=allocation model that would have amended AC3). Recorded now to bind 12b; **out of 12a scope**, but
+  12a's bin model (any `gelato_bin` can be a putaway source/target; `bin_id` nullable) already admits a
+  staging bin with no further schema change.
+- **D-P12a-5 (author):** **12a branch = `feature-gelato-bins-putaway`**, cut off the verified 11b tip
+  (tag `zj/good-11b-crumb-sales-orders`, commit `fec334f`). 11a/11b remain unmerged; 12a stacks on them
+  (per-sub-phase branch precedent D-V3-19 / D-P10-8).
+- **D-P12a-6 (author):** **UI folded into the plan, no separate DESIGN.md** (D-P8-9 / D-V3-12 precedent);
+  Bins reuse the SYERP list/create/edit/archive template, Putaway is a new directed-move screen.
+- **D-P12a-7 (author):** **Concurrency pre-empted from the start** (Phase 10 rule): putaway's source-pool
+  floor guard locks the contended row(s) FOR UPDATE in sorted-id order BEFORE the guard read (D-P9b /
+  D-V3-18 template), and `verify_gelato.py` includes an `asyncio.gather`+`Barrier` two-concurrent-putaway
+  scenario proven load-bearing (fails when the lock is removed). *Note:* 12a closes only
+  putaway-vs-putaway; the full cross-path shared ledger lock (issue/adjust/receive/transfer/ship, the
+  standing BACKLOG p2 race) lands with 12b ship.
+- **D-P12a-8 (author):** **The bin-aware ledger primitive lives in SYERP, not GELATO.** `post_putaway(...)`
+  + `get_bin_on_hand(...)` are added to `syerp/service/inventory.py` alongside `post_transfer`; GELATO's
+  service imports them and stays thin (bin CRUD + orchestration only, never writing the SYERP model
+  directly). *Why:* the primitive writes the SYERP-owned `InventoryTxn` and reuses SYERP-private ledger
+  invariants (`_adjustment_violates_floor`, moving-avg cost) — mirrors MOUSSE importing SYERP inventory
+  fns (D-P10-6).
+- **D-P12a-9 (author):** `txn_type = "putaway"` (a new distinct type, not reusing `"transfer"`), two legs
+  sharing a fresh `transfer_group_id`; **bin code is user-supplied, unique-within-location** (composite
+  `(location_id, code)` unique constraint + service 4xx pre-check), not auto-numbered — warehouse bin
+  codes are physical labels the operator assigns; the D-P10-10 directed-putaway heuristic suggests a
+  target bin (a bin already holding the item, else first active bin) but the user confirms/overrides.

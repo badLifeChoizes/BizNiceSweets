@@ -1,7 +1,28 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-17 (**Phase 11b RETRO'D** — CRUMB-01 complete; learnings banked, roadmap trued up. Next action: `/zj:plan 12` (GELATO warehouse core).)
+Updated: 2026-07-17 (**Phase 12a PLANNED** — GELATO-01 split into 12a (bins + directed putaway) + 12b (pick/pack/ship + COGS JE); 12a PLAN.md written, 14 tasks. Next action: `/zj:build 12a`.)
 
 ## Position
+
+- **Step:** **PLAN COMPLETE** — **Phase 12a (GELATO bins & directed putaway) planned 2026-07-17.**
+  Phase 12 (GELATO-01, 8 ACs) **split 12a/12b at plan** (D-P12a-1, owner — mirrors 9a/b/c + 11a/b):
+  **12a** = bins CRUD + directed putaway (inbound foundation; covers GELATO-01 AC1/AC2 + the putaway
+  portion of AC7/AC8; **NO GL, NO sales-order/reservation, NO pick/pack/ship**); **12b** = pick → pack
+  → ship + reservation relief + COGS JE (the outbound + GL crux; AC3/4/5 + ship-side AC7/AC8). Three
+  owner decisions set the shape: (1) **split 12a/12b, plan 12a now**; (2) **bin_id on the existing
+  `syerp_inventory_txn` ledger** — one ledger, one bin dimension, roll-up to the location total
+  guaranteed by construction (D-P12a-2); (3) **full staging-bin moves in 12b** (D-P12a-4, binds 12b).
+  PLAN.md = **14 tasks** in 4 waves (models → migration 0015 [`gelato_bin` + `bin_id` col] → perms →
+  schemas → SYERP `post_putaway`/`get_bin_on_hand` primitive → thin GELATO `service/` package → router
+  + self-register → `verify_gelato.py` + `verify_gelato_api.py` → full regression → FE nav/Bins/Putaway/
+  tests). Recurring keepers baked in: verify inputs built in the **real router/UI payload shape** (the
+  11a/11b dead-through-UI trap), the non-optional **HTTP-level audit/RBAC** script, and a **load-bearing
+  `asyncio.Barrier` concurrency** scenario on putaway-vs-putaway (FOR UPDATE, D-V3-18). Decisions
+  D-P12a-1..9 recorded; no `## Decisions needed` open. Plan checked goal-backward at manager review
+  (every SC → ≥1 task, every task → an SC, real files + runnable verify). **Next action:** `/zj:build 12a`.
+
+- **Branch (D-P12a-5):** build 12a on a fresh `feature-gelato-bins-putaway` cut off the verified 11b
+  tip (tag `zj/good-11b-crumb-sales-orders`, `fec334f`) — 11a/11b unmerged; 12a stacks. Lint gates
+  remain non-functional (BACKLOG p1, known); correctness rests on the verify_* suite + Vitest.
 
 - **Step:** **RETRO'D** — **Phase 11b (CRUMB sales orders + soft-reservation) closed 2026-07-17**,
   tag `zj/good-11b-crumb-sales-orders` (`fec334f`). **CRUMB-01 complete (all ACs).** Roadmap marked
@@ -70,11 +91,12 @@ Updated: 2026-07-17 (**Phase 11b RETRO'D** — CRUMB-01 complete; learnings bank
   `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
   master first.
 - **Last update:** 2026-07-17
-- **Next action:** `/zj:retro 11b` — Phase 11b is verified + tagged `zj/good-11b-crumb-sales-orders`
-  (`fec334f`); CRUMB-01 complete. Retro should bank the recurring keeper (code review caught a blocker
-  the 17 green verify assertions hid — the harness passed `item_id=` directly and bypassed the
-  `plum_part_id`-only UI shape), then set up Phase 12 (GELATO warehouse core — pick/pack/ship consumes
-  the reservation, posts the COGS JE).
+- **Next action:** `/zj:build 12a` — build the 14-task Phase 12a plan
+  (`.zj/phases/12a-gelato-bins-putaway/PLAN.md`) on a fresh `feature-gelato-bins-putaway` branch off
+  the 11b tip (`fec334f`). Wave order: schema (models → migration 0015 → perms → schemas) → backend
+  (SYERP `post_putaway`/`get_bin_on_hand` → thin GELATO service → router+boot) → verify (`verify_gelato`
+  + `verify_gelato_api` → full regression, TB nets zero) → frontend (nav → Bins ‖ Putaway). Then
+  `/zj:verify 12a`, and `/zj:plan 12b` for the pick/pack/ship + COGS JE crux.
 
 ## Next action (detail)
 
