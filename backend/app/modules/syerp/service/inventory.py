@@ -595,3 +595,209 @@ async def post_transfer(
             created_at=in_leg.created_at,
         ),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Bin-aware putaway (Phase 12a, GELATO — bin-dimensioned intra-location move)
+# ---------------------------------------------------------------------------
+#
+# A putaway relocates quantity between two BINS inside the SAME stock location
+# WITHOUT changing the item's total on-hand, its per-LOCATION on-hand, or its
+# moving-average cost (putaways never move the average — only receipts do,
+# AC10-5). It is recorded as TWO paired InventoryTxn legs sharing a freshly
+# generated transfer_group_id: a `-qty` leg on the source bin and a `+qty` leg
+# on the destination bin, both txn_type='putaway', both at the SAME location, and
+# both valued at the item's CURRENT moving_avg_cost. Because both legs carry the
+# same location_id the signed pair nets to exactly zero at LOCATION grain — the
+# location total is unchanged and only the per-bin split shifts.
+#
+# bin_id is nullable: bin_id=None is the location's UNBINNED pool (stock received
+# straight to a location, not yet put away). A putaway moves from that pool (or
+# another bin) into a target bin. The bin dimension is GELATO's domain — SYERP
+# stores bin_id as an integer FK (gelato_bin.id) but deliberately does NOT import
+# gelato models (D-P12a-3). Bin existence + location-membership is validated by
+# GELATO's execute_putaway BEFORE it calls this primitive; the DB FK on bin_id is
+# the backstop. This function's contract is the same per-BIN floor and net-zero
+# ledger pair that post_transfer gives per-location.
+
+
+async def get_bin_on_hand(
+    db: AsyncSession,
+    item_id: str,
+    location_id: int,
+    bin_id: int | None,
+) -> Decimal:
+    """
+    Return the signed on-hand quantity for an item in one bin of one location.
+
+    Scalar per-bin counterpart to get_item_on_hand / get_item_onhand: the signed
+    SUM of every InventoryTxn.quantity for the item WHERE location_id matches AND
+    the row's bin matches, coalescing a None result (no ledger rows in that bin)
+    to Decimal("0").
+
+    The bin match is null-aware: `bin_id is None` selects the UNBINNED pool via
+    `InventoryTxn.bin_id.is_(None)` (SQL `IS NULL`, since `= NULL` never matches);
+    a concrete `bin_id` selects that single bin via equality. This distinction is
+    load-bearing — the unbinned pool is a real, drawable location of stock.
+
+    A pure derivation like get_item_on_hand — it takes NO lock. Callers that must
+    serialize a bin draw (post_putaway) lock the item-master row themselves first.
+    """
+    from app.modules.syerp.models import InventoryTxn
+
+    bin_match = (
+        InventoryTxn.bin_id.is_(None) if bin_id is None else InventoryTxn.bin_id == bin_id
+    )
+    result = await db.execute(
+        select(func.sum(InventoryTxn.quantity)).where(
+            InventoryTxn.item_id == item_id,
+            InventoryTxn.location_id == location_id,
+            bin_match,
+        )
+    )
+    return result.scalar() or Decimal("0")
+
+
+async def post_putaway(
+    db: AsyncSession,
+    item_id: str,
+    location_id: int,
+    from_bin_id: int | None,
+    to_bin_id: int | None,
+    qty: Decimal,
+    actor_id: str,
+) -> "list[TransactionRead]":
+    """
+    Post a bin putaway: append the two paired `putaway` ledger legs.
+
+    In a single transaction (AC10-4,6; D-P8-7; D-P12a-3):
+      1. Reject with 422 if from_bin_id == to_bin_id (a no-op move — including the
+         None→None unbinned self-move) or qty <= 0 — NO rows.
+      2. 404 if the item or location does not exist (via get_item / get_location).
+         The BINS are NOT validated here: bin existence + location-membership is
+         GELATO's domain (it owns gelato_bin) and is checked by execute_putaway
+         before this call — SYERP must not import gelato models (D-P12a-3). The DB
+         FK on bin_id is the backstop.
+      3. LOCK the item-master row FOR UPDATE *before* the floor read (mirrors the
+         soft-reservation lock in crumb/service/sales_orders.py). The append-only
+         InventoryTxn rows cannot be locked to serialize concurrent inserts — the
+         item-master row is the correct single contention point. One item, so the
+         sorted-id ordering is trivial, but the lock must precede the read.
+      4. Derive `source_onhand` = the item's on-hand in the SOURCE bin at this
+         location (get_bin_on_hand). Reject with 422 if the `-qty` leg would drive
+         that source pool below zero (over-draw, _adjustment_violates_floor) — NO
+         rows are appended.
+      5. Append EXACTLY TWO immutable `putaway` InventoryTxn rows sharing a fresh
+         transfer_group_id, BOTH at location_id: `-qty` on from_bin_id, `+qty` on
+         to_bin_id, both valued at the item's CURRENT moving_avg_cost.
+
+    Both legs carry the SAME location_id, so the signed pair nets to zero at the
+    location grain — the item's total and per-location on-hand are unchanged; only
+    the per-bin split moves. The item's moving_avg_cost is deliberately left
+    UNTOUCHED (only receipts move it, AC10-5). The 422 status mirrors the
+    receipt/adjustment/transfer guards.
+
+    Returns the two created rows as TransactionRead (joined location name — both
+    the same location), out leg first then in leg. The router / GELATO caller
+    writes the audit row.
+    """
+    import uuid
+
+    from app.modules.syerp.models import InventoryItem, InventoryTxn
+    from app.modules.syerp.schemas import TransactionRead
+
+    if from_bin_id == to_bin_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Putaway source and destination bins must differ.",
+        )
+    if qty <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Putaway quantity must be greater than zero.",
+        )
+
+    # 404s if the item or location does not exist. Bins are NOT validated here —
+    # that is GELATO's responsibility (D-P12a-3); the DB FK is the backstop.
+    item = await get_item(db, item_id)
+    location = await get_location(db, location_id)
+
+    # LOCK the item-master row FOR UPDATE *before* the floor read (mirror the
+    # soft-reservation lock in sales_orders.py). Locking the append-only ledger
+    # rows would not serialize concurrent inserts; the item-master row is the
+    # single contention point. Held until this function's single commit.
+    await db.execute(
+        select(InventoryItem.id).where(InventoryItem.id == item_id).with_for_update()
+    )
+
+    # Per-bin source on-hand: signed SUM of this item's txns in the source bin.
+    source_onhand = await get_bin_on_hand(db, item_id, location_id, from_bin_id)
+
+    # The `-qty` source leg is a negative adjustment of the source bin, so the
+    # over-draw guard is the same per-bin floor (source_onhand - qty < 0 ⟺
+    # source_onhand < qty). Reject BEFORE any mutation — no rows on reject.
+    if _adjustment_violates_floor(source_onhand, -qty):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Putaway of {qty} exceeds bin {from_bin_id} on-hand "
+                f"(current {source_onhand})."
+            ),
+        )
+
+    # Both legs share one freshly-generated group id and the CURRENT average cost.
+    transfer_group_id = str(uuid.uuid4())
+    unit_cost = item.moving_avg_cost
+
+    out_leg = InventoryTxn(
+        item_id=item_id,
+        location_id=location_id,
+        txn_type="putaway",
+        quantity=-qty,
+        unit_cost=unit_cost,
+        actor_id=actor_id,
+        bin_id=from_bin_id,
+        transfer_group_id=transfer_group_id,
+    )
+    in_leg = InventoryTxn(
+        item_id=item_id,
+        location_id=location_id,
+        txn_type="putaway",
+        quantity=qty,
+        unit_cost=unit_cost,
+        actor_id=actor_id,
+        bin_id=to_bin_id,
+        transfer_group_id=transfer_group_id,
+    )
+    db.add(out_leg)
+    db.add(in_leg)
+    # moving_avg_cost is intentionally NOT touched — only receipts move it (AC10-5).
+
+    await db.commit()
+    await db.refresh(out_leg)
+    await db.refresh(in_leg)
+
+    return [
+        TransactionRead(
+            id=out_leg.id,
+            item_id=out_leg.item_id,
+            location_id=out_leg.location_id,
+            location_name=location.name,
+            txn_type=out_leg.txn_type,
+            quantity=out_leg.quantity,
+            unit_cost=out_leg.unit_cost,
+            reason=out_leg.reason,
+            created_at=out_leg.created_at,
+        ),
+        TransactionRead(
+            id=in_leg.id,
+            item_id=in_leg.item_id,
+            location_id=in_leg.location_id,
+            location_name=location.name,
+            txn_type=in_leg.txn_type,
+            quantity=in_leg.quantity,
+            unit_cost=in_leg.unit_cost,
+            reason=in_leg.reason,
+            created_at=in_leg.created_at,
+        ),
+    ]
