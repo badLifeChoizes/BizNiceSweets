@@ -47,9 +47,10 @@ import { SalesOrders } from '@/routes/crumb/SalesOrders'
 import { SalesOrderDetail } from '@/routes/crumb/SalesOrderDetail'
 import { Communications } from '@/routes/crumb/Communications'
 
-// GELATO routes (Phase 12a)
+// GELATO routes (Phase 12a + 12b)
 import { Bins } from '@/routes/gelato/Bins'
 import { Putaway } from '@/routes/gelato/Putaway'
+import Fulfillment from '@/routes/gelato/Fulfillment'
 
 export function App() {
   return (
@@ -111,6 +112,7 @@ export function App() {
         <Route path="/gelato" element={<Navigate to="/gelato/bins" replace />} />
         <Route path="/gelato/bins" element={<Bins />} />
         <Route path="/gelato/putaway" element={<Putaway />} />
+        <Route path="/gelato/fulfillment" element={<Fulfillment />} />
 
         {/* Catch-all: unknown protected paths fall back to Home instead of a blank screen */}
         <Route path="*" element={<Navigate to="/" replace />} />

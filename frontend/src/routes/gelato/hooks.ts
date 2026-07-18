@@ -66,6 +66,56 @@ export interface PutawaySuggestion {
   suggested_bin_id: number | null
 }
 
+// ─── Shipment pick/pack/ship types (mirror ShipmentRead / PickListRead) ───────
+
+/** One shipment line (ShipmentLineRead). qty is a STRING (D-11). */
+export interface ShipmentLine {
+  id: number
+  sales_order_line_id: string
+  item_id: string
+  from_bin_id: number
+  qty: string
+  inventory_txn_id: string | null
+}
+
+/** A shipment (ShipmentRead) — the outbound pick→pack→ship FSM record. */
+export interface Shipment {
+  id: number
+  sales_order_id: string
+  location_id: number
+  staging_bin_id: number
+  status: string
+  journal_entry_id: string | null
+  lines: ShipmentLine[]
+  created_at: string
+}
+
+/** One candidate source bin for a pick-list line (PickListBinRead). on_hand is a STRING (D-11). */
+export interface PickListBin {
+  bin_id: number
+  code: string
+  on_hand: string
+}
+
+/** One pick-list line (PickListLineRead) — all quantities are STRINGS (D-11). */
+export interface PickListLine {
+  sales_order_line_id: string
+  item_id: string
+  description: string
+  qty_ordered: string
+  qty_reserved: string
+  qty_picked: string
+  qty_shipped: string
+  suggested_from_bin_id: number | null
+  available_bins: PickListBin[]
+}
+
+/** The pick list for a sales order (PickListRead). */
+export interface PickList {
+  sales_order_id: string
+  lines: PickListLine[]
+}
+
 // ─── Request payload types (mirror the Create/Update/Request schemas) ─────────
 
 export interface BinCreatePayload {
@@ -87,6 +137,31 @@ export interface PutawayPayload {
   from_bin_id?: number | null
 }
 
+/** One line of a pick payload (PickLineRequest) — pick qty of a SO line from a bin. */
+export interface PickLinePayload {
+  sales_order_line_id: string
+  from_bin_id: number
+  qty: string
+}
+
+/** Pick payload (PickRequest) — pick a whole SO into a staging bin. */
+export interface PickPayload {
+  sales_order_id: string
+  staging_bin_id: number
+  lines: PickLinePayload[]
+}
+
+/** One per-line staged-qty override for packing (PackLineOverride). */
+export interface PackLineOverride {
+  shipment_line_id: number
+  qty: string
+}
+
+/** Pack payload (PackRequest) — confirm the staged shipment; overrides default to []. */
+export interface PackPayload {
+  overrides?: PackLineOverride[]
+}
+
 // ─── Query keys ───────────────────────────────────────────────────────────────
 
 export const binsKey = (locationId: number) => ['gelato', 'bins', locationId] as const
@@ -96,6 +171,10 @@ export const suggestionKey = (itemId: string, locationId: number) =>
 /** SYERP item on-hand key — invalidated after a putaway moves the item's ledger legs. */
 const itemOnHandKey = (itemId: string) =>
   ['syerp', 'inventory', 'items', itemId, 'onhand'] as const
+export const pickListKey = (soId: string) => ['gelato', 'pick-list', soId] as const
+export const shipmentKey = (id: number) => ['gelato', 'shipments', id] as const
+/** CRUMB sales-order detail key — invalidated when reserved/picked/shipped figures move. */
+const soDetailKey = (soId: string) => ['crumb', 'sales-orders', soId] as const
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
@@ -119,6 +198,16 @@ function fetchSuggestion(itemId: string, locationId: number): Promise<PutawaySug
       params: { item_id: itemId, location_id: locationId },
     })
     .then((r) => r.data)
+}
+
+function fetchPickList(soId: string): Promise<PickList> {
+  return apiClient
+    .get<PickList>(`/api/v1/gelato/sales-orders/${soId}/pick-list`)
+    .then((r) => r.data)
+}
+
+function fetchShipment(id: number): Promise<Shipment> {
+  return apiClient.get<Shipment>(`/api/v1/gelato/shipments/${id}`).then((r) => r.data)
 }
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -147,6 +236,24 @@ export function usePutawaySuggestion(itemId: string, locationId: number) {
     queryKey: suggestionKey(itemId, locationId),
     queryFn: () => fetchSuggestion(itemId, locationId),
     enabled: !!itemId && !!locationId,
+  })
+}
+
+/** The pick list for a sales order — per-line pick suggestions + candidate bins (SC2). */
+export function usePickList(soId: string) {
+  return useQuery<PickList, Error>({
+    queryKey: pickListKey(soId),
+    queryFn: () => fetchPickList(soId),
+    enabled: !!soId,
+  })
+}
+
+/** One shipment with its lines (pick→pack→ship FSM record). */
+export function useShipment(id: number) {
+  return useQuery<Shipment, Error>({
+    queryKey: shipmentKey(id),
+    queryFn: () => fetchShipment(id),
+    enabled: !!id,
   })
 }
 
@@ -201,6 +308,71 @@ export function useExecutePutaway() {
       qc.invalidateQueries({ queryKey: binsKey(location_id) })
       qc.invalidateQueries({ queryKey: unbinnedKey(location_id) })
       qc.invalidateQueries({ queryKey: itemOnHandKey(item_id) })
+    },
+  })
+}
+
+/**
+ * Pick a sales order into staging (POST /gelato/shipments/pick). Invalidates the
+ * location's bins + unbinned stock, each picked item's SYERP on-hand, the SO's
+ * detail (reservation/shortage figures) and its pick list.
+ */
+export function useExecutePick() {
+  const qc = useQueryClient()
+  return useMutation<Shipment, Error, PickPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<Shipment>('/api/v1/gelato/shipments/pick', payload).then((r) => r.data),
+    onSuccess: (shipment, { sales_order_id }) => {
+      qc.invalidateQueries({ queryKey: binsKey(shipment.location_id) })
+      qc.invalidateQueries({ queryKey: unbinnedKey(shipment.location_id) })
+      for (const line of shipment.lines) {
+        qc.invalidateQueries({ queryKey: itemOnHandKey(line.item_id) })
+      }
+      qc.invalidateQueries({ queryKey: soDetailKey(sales_order_id) })
+      qc.invalidateQueries({ queryKey: pickListKey(sales_order_id) })
+    },
+  })
+}
+
+/**
+ * Pack a picked shipment (POST /gelato/shipments/{id}/pack). A pure state + staged-qty
+ * record (no ledger movement), so it only invalidates the shipment and its pick list.
+ */
+export function useExecutePack() {
+  const qc = useQueryClient()
+  return useMutation<Shipment, Error, { shipmentId: number; payload: PackPayload }>({
+    mutationFn: ({ shipmentId, payload }) =>
+      apiClient
+        .post<Shipment>(`/api/v1/gelato/shipments/${shipmentId}/pack`, payload)
+        .then((r) => r.data),
+    onSuccess: (shipment) => {
+      qc.invalidateQueries({ queryKey: shipmentKey(shipment.id) })
+      qc.invalidateQueries({ queryKey: pickListKey(shipment.sales_order_id) })
+    },
+  })
+}
+
+/**
+ * Ship a packed shipment (POST /gelato/shipments/{id}/ship, empty body). Invalidates
+ * the same set as pick (bins, unbinned, each item's on-hand, SO detail, pick list)
+ * PLUS the shipment itself — shipping issues stock and posts the COGS JE.
+ */
+export function useExecuteShip() {
+  const qc = useQueryClient()
+  return useMutation<Shipment, Error, number>({
+    mutationFn: (shipmentId) =>
+      apiClient
+        .post<Shipment>(`/api/v1/gelato/shipments/${shipmentId}/ship`, {})
+        .then((r) => r.data),
+    onSuccess: (shipment) => {
+      qc.invalidateQueries({ queryKey: binsKey(shipment.location_id) })
+      qc.invalidateQueries({ queryKey: unbinnedKey(shipment.location_id) })
+      for (const line of shipment.lines) {
+        qc.invalidateQueries({ queryKey: itemOnHandKey(line.item_id) })
+      }
+      qc.invalidateQueries({ queryKey: soDetailKey(shipment.sales_order_id) })
+      qc.invalidateQueries({ queryKey: pickListKey(shipment.sales_order_id) })
+      qc.invalidateQueries({ queryKey: shipmentKey(shipment.id) })
     },
   })
 }

@@ -1,5 +1,5 @@
 // ABOUTME: GELATO sub-navigation tab strip (copies MousseNav) — lets users move
-// ABOUTME: between the module's screens: Bins and Putaway.
+// ABOUTME: between the module's screens: Bins, Putaway and Fulfillment.
 
 /**
  * GelatoNav — sub-navigation tab strip for the GELATO (warehouse management)
@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 const TABS: Array<{ to: string; label: string; end?: boolean }> = [
   { to: '/gelato/bins', label: 'Bins' },
   { to: '/gelato/putaway', label: 'Putaway' },
+  { to: '/gelato/fulfillment', label: 'Fulfillment' },
 ]
 
 export function GelatoNav() {
