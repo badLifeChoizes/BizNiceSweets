@@ -122,7 +122,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** loop: `for s in verify_inventory verify_purchasing verify_e2e_p8 verify_gl verify_gl_api verify_ap verify_ap_api verify_reports verify_reports_api verify_mousse verify_mousse_api verify_crumb verify_crumb_api verify_crumb_so verify_crumb_so_api verify_gelato verify_gelato_api; do podman exec -e PYTHONPATH=/app compose_api_1 python scripts/$s.py || echo "FAIL $s"; done` — no FAIL lines.
 - **Parallel-ok:** no (depends on 9, 10)
 
-### [ ] 12. Frontend: GELATO API hooks + nav gating
+### [x] 12. Frontend: GELATO API hooks + nav gating
 - **Files:** `frontend/src/routes/gelato/hooks.ts` (new), `frontend/src/routes/gelato/components/GelatoNav.tsx` (new), `frontend/src/App.tsx` (edit), `frontend/src/components/AppShell.tsx` / `Sidebar.tsx` (verify only — nav is data-driven by `useVisibleModules` = enabled ∩ perms, gelato already in modules catalog)
 - **Do:** Mirror `frontend/src/routes/mousse/hooks.ts` — TanStack Query hooks: `useBins(locationId)`, `useCreateBin`, `useUpdateBin`, `useArchiveBin`, `useUnbinnedStock(locationId)`, `usePutawaySuggestion`, `useExecutePutaway` (invalidate bins + unbinned + item on-hand on success). Add routes in `App.tsx` (mirror `:89-92`): `/gelato` → redirect to `/gelato/bins`, `/gelato/bins`, `/gelato/putaway`. `GelatoNav` mirrors `MousseNav`. Confirm sidebar shows GELATO only when the module is enabled AND user has `gelato:read`.
 - **Done when:** `npm run build` clean; nav shows GELATO for an admin with the module enabled, hidden when disabled or without `gelato:read`.

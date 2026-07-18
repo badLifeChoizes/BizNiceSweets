@@ -47,6 +47,10 @@ import { SalesOrders } from '@/routes/crumb/SalesOrders'
 import { SalesOrderDetail } from '@/routes/crumb/SalesOrderDetail'
 import { Communications } from '@/routes/crumb/Communications'
 
+// GELATO routes (Phase 12a)
+import { Bins } from '@/routes/gelato/Bins'
+import { Putaway } from '@/routes/gelato/Putaway'
+
 export function App() {
   return (
     <Routes>
@@ -102,6 +106,11 @@ export function App() {
         <Route path="/crumb/sales-orders" element={<SalesOrders />} />
         <Route path="/crumb/sales-orders/:id" element={<SalesOrderDetail />} />
         <Route path="/crumb/communications" element={<Communications />} />
+
+        {/* GELATO module routes — Sidebar nav lands on /gelato → redirect to bins */}
+        <Route path="/gelato" element={<Navigate to="/gelato/bins" replace />} />
+        <Route path="/gelato/bins" element={<Bins />} />
+        <Route path="/gelato/putaway" element={<Putaway />} />
 
         {/* Catch-all: unknown protected paths fall back to Home instead of a blank screen */}
         <Route path="*" element={<Navigate to="/" replace />} />
