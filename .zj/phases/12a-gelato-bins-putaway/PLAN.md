@@ -136,7 +136,7 @@ Key real files and the patterns to mirror shape-for-shape:
 - **Verify:** `cd frontend && npm run test -- Bins`.
 - **Parallel-ok:** yes (parallel with task 14 once 12 lands)
 
-### [ ] 14. Frontend: Putaway screen (unbinned → suggested bin → confirm)
+### [x] 14. Frontend: Putaway screen (unbinned → suggested bin → confirm)
 - **Files:** `frontend/src/routes/gelato/Putaway.tsx` (new), `frontend/src/routes/gelato/components/PutawayDialog.tsx` (new), `frontend/src/routes/gelato/Putaway.test.tsx` (new)
 - **Do:** Mirror `frontend/src/routes/syerp/components/StockTransferDialog.tsx`. Location selector → list of unbinned stock (item, unbinned qty); per row a "Put away" action opening a dialog pre-filled with the suggested target bin (from `usePutawaySuggestion`), qty input (default = full unbinned qty), user can override the target bin; submit → `useExecutePutaway`. On success invalidate + toast; surface 422 (over-draw / bad bin) as an error toast. Colocated Vitest covering: list render, suggestion pre-fill, confirm posts the request shape the endpoint expects (11b keeper — assert the payload), over-draw error surface.
 - **Done when:** `npm run test` for the file passes; `npm run build` clean.
