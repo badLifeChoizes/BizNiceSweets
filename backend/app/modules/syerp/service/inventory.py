@@ -642,6 +642,16 @@ async def get_bin_on_hand(
 
     A pure derivation like get_item_on_hand — it takes NO lock. Callers that must
     serialize a bin draw (post_putaway) lock the item-master row themselves first.
+
+    TRUST BOUNDARY (Phase 12a): the per-bin split is only trustworthy until the
+    first BIN-BLIND movement of the item at this location. As of 12a ONLY putaway
+    is bin-aware; post_transfer / post_adjustment / the MOUSSE issue path all write
+    bin_id=NULL and floor-guard per-LOCATION. After stock is put into a bin, such a
+    draw overstates the bin it left and drives the unbinned pool NEGATIVE, while the
+    per-location total (get_item_onhand) and Σ(bins)+unbinned stay correct. Bin-aware
+    pick/issue that keeps the split consistent lands in Phase 12b (BACKLOG p2). Do
+    not treat a single bin's figure as authoritative for picking across a location
+    that has also seen bin-blind draws until then.
     """
     from app.modules.syerp.models import InventoryTxn
 
