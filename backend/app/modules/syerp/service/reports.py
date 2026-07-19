@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from app.modules.syerp.schemas import (
         AccountRegisterRead,
         ApAgingReport,
+        ArAgingReport,
         BalanceSheetReport,
         BillLineCreate,
         BillRead,
@@ -231,6 +232,171 @@ async def ap_aging_report(db: AsyncSession, as_of: date | None = None) -> "ApAgi
     return ApAgingReport(
         as_of=as_of,
         vendors=vendors,
+        grand_total=grand_total,
+        control_balance=control_balance,
+        in_balance=(grand_total_amt == control_balance),
+    )
+
+
+async def ar_aging_report(db: AsyncSession, as_of: date | None = None) -> "ArAgingReport":
+    """
+    Accounts-receivable aging schedule as of a date, tied out to the 1120 control.
+
+    The sell-side mirror of ap_aging_report. For every invoice that is POSTED to 1120
+    (status in ('posted','paid') and invoice_date <= as_of) the still-open balance is
+    invoice-line total − Σ ReceiptAllocation.amount for receipts dated on/before as_of,
+    each side coalesced independently (D-P8-4). DRAFT invoices are excluded — a draft is
+    not posted to 1120, so including it would break the tie-out. Invoices with a
+    non-positive open balance are dropped. Each remaining balance is bucketed by age =
+    (as_of − invoice_date).days — current 0–30, d31_60 31–60, d61_90 61–90, d90_plus
+    90+ — and rolled up per customer and into a grand total.
+
+    control_balance is the date-filtered 1120 derived balance (Σdebit − Σcredit over
+    JournalLine ⋈ JournalEntry where entry_date <= as_of), taken WITHOUT negation: 1120
+    is debit-normal (an asset), so the raw Σdr − Σcr is already the positive outstanding
+    receivable (the AP version negates because 2110 is credit-normal — that negation is
+    removed here). in_balance is True when the aging grand total equals that control to
+    the cent — the AR subledger vs. GL tie-out. Exact Decimal.
+    """
+    from app.modules.syerp.models import (
+        Invoice,
+        InvoiceLine,
+        JournalEntry,
+        JournalLine,
+        Partner,
+        Receipt,
+        ReceiptAllocation,
+    )
+    from app.modules.syerp.schemas import ArAgingBucketRow, ArAgingReport, ArAgingTotals
+
+    if as_of is None:
+        as_of = date.today()
+
+    # Invoices posted to 1120 and dated on/before as_of — DRAFT invoices are NOT posted
+    # to 1120 and MUST be excluded (the divergence guard).
+    invoices_result = await db.execute(
+        select(Invoice.id, Invoice.customer_id, Invoice.invoice_date).where(
+            Invoice.status.in_(("posted", "paid")),
+            Invoice.invoice_date <= as_of,
+        )
+    )
+    invoices = list(invoices_result.all())
+    if not invoices:
+        invoice_meta: dict[str, tuple[str, date]] = {}
+        invoice_ids: list[str] = []
+    else:
+        invoice_meta = {iid: (cid, idate) for iid, cid, idate in invoices}
+        invoice_ids = list(invoice_meta.keys())
+
+    # Invoice-line totals per invoice (Σ line.amount), coalesced to 0 (D-P8-4).
+    totals_by_invoice: dict[str, Decimal] = {iid: Decimal("0") for iid in invoice_ids}
+    if invoice_ids:
+        totals_result = await db.execute(
+            select(InvoiceLine.invoice_id, func.coalesce(func.sum(InvoiceLine.amount), 0))
+            .where(InvoiceLine.invoice_id.in_(invoice_ids))
+            .group_by(InvoiceLine.invoice_id)
+        )
+        for iid, amount in totals_result.all():
+            totals_by_invoice[iid] = Decimal(amount)
+
+    # Collected (received) per invoice, filtered to receipts dated on/before as_of — join
+    # ReceiptAllocation → Receipt for the receipt_date bound (each side coalesced).
+    received_by_invoice: dict[str, Decimal] = {iid: Decimal("0") for iid in invoice_ids}
+    if invoice_ids:
+        received_result = await db.execute(
+            select(
+                ReceiptAllocation.invoice_id,
+                func.coalesce(func.sum(ReceiptAllocation.amount), 0),
+            )
+            .select_from(ReceiptAllocation)
+            .join(Receipt, ReceiptAllocation.receipt_id == Receipt.id)
+            .where(
+                ReceiptAllocation.invoice_id.in_(invoice_ids),
+                Receipt.receipt_date <= as_of,
+            )
+            .group_by(ReceiptAllocation.invoice_id)
+        )
+        for iid, amount in received_result.all():
+            received_by_invoice[iid] = Decimal(amount)
+
+    # Bucket each open balance per customer. buckets[customer_id] = [cur, 31, 61, 90+].
+    buckets: dict[str, list[Decimal]] = {}
+    for iid in invoice_ids:
+        customer_id, invoice_date_ = invoice_meta[iid]
+        open_balance = totals_by_invoice[iid] - received_by_invoice[iid]
+        if open_balance <= 0:
+            continue
+        age = (as_of - invoice_date_).days
+        if age <= 30:
+            idx = 0
+        elif age <= 60:
+            idx = 1
+        elif age <= 90:
+            idx = 2
+        else:
+            idx = 3
+        row = buckets.setdefault(customer_id, [Decimal("0")] * 4)
+        row[idx] += open_balance
+
+    # Resolve customer names for the customers that have an open receivable.
+    names_by_customer: dict[str, str] = {}
+    if buckets:
+        names_result = await db.execute(
+            select(Partner.id, Partner.name).where(Partner.id.in_(list(buckets.keys())))
+        )
+        names_by_customer = {cid: name for cid, name in names_result.all()}
+
+    customers: list[ArAgingBucketRow] = []
+    grand = [Decimal("0")] * 4
+    for customer_id, row in buckets.items():
+        customer_total = row[0] + row[1] + row[2] + row[3]
+        customers.append(
+            ArAgingBucketRow(
+                customer_id=customer_id,
+                customer_name=names_by_customer.get(customer_id, ""),
+                current=row[0],
+                d31_60=row[1],
+                d61_90=row[2],
+                d90_plus=row[3],
+                total=customer_total,
+            )
+        )
+        for i in range(4):
+            grand[i] += row[i]
+    customers.sort(key=lambda c: c.customer_name)
+
+    grand_total_amt = grand[0] + grand[1] + grand[2] + grand[3]
+    grand_total = ArAgingTotals(
+        current=grand[0],
+        d31_60=grand[1],
+        d61_90=grand[2],
+        d90_plus=grand[3],
+        total=grand_total_amt,
+    )
+
+    # control_balance = date-filtered 1120 derived balance, taken WITHOUT negation (1120
+    # is debit-normal → raw Σdr−Σcr is already the positive outstanding receivable; the
+    # AP version's negation for credit-normal 2110 is deliberately removed here).
+    ar_account_id = await _gl_account_id_by_code(db, "1120")
+    control_raw = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(JournalLine.debit), 0)
+                - func.coalesce(func.sum(JournalLine.credit), 0)
+            )
+            .select_from(JournalLine)
+            .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+            .where(
+                JournalLine.account_id == ar_account_id,
+                JournalEntry.entry_date <= as_of,
+            )
+        )
+    ).scalar() or Decimal("0")
+    control_balance = Decimal(control_raw)
+
+    return ArAgingReport(
+        as_of=as_of,
+        customers=customers,
         grand_total=grand_total,
         control_balance=control_balance,
         in_balance=(grand_total_amt == control_balance),

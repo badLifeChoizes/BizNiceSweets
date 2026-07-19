@@ -144,6 +144,7 @@ from app.modules.syerp.service.ar import (
 )
 from app.modules.syerp.service.reports import (
     ap_aging_report,
+    ar_aging_report,
     balance_sheet,
     profit_loss,
     trial_balance,
@@ -158,6 +159,7 @@ __all__ = [
     "advance_invoice_status",
     "advance_po_status",
     "ap_aging_report",
+    "ar_aging_report",
     "archive_partner",
     "balance_sheet",
     "compute_new_moving_avg",
