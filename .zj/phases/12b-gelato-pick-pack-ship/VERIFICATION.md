@@ -1,6 +1,6 @@
 # Verification: Phase 12b — GELATO warehouse outbound (pick → pack → ship)
 Date: 2026-07-18 (verify) / 2026-07-19 (fix loop) | Commits: bde5b77..553bcfb (code 61a695e..553bcfb)
-Verdict: **PASS** (after fix loop — one BLOCKER found by review, fixed, and re-verified)
+Verdict: PASS (after fix loop — one BLOCKER found by review, fixed, and re-verified)
 
 All six success criteria verified empirically against the running stack (`compose_api_1`).
 Every claim below was observed — verify scripts run, migration round-tripped, frontend built
