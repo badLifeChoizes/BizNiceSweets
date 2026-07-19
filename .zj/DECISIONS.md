@@ -893,3 +893,40 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
 - **D-P12b-13 (author):** **New `verify_gelato_ship_api.py`** (not extending `verify_gelato_api.py`) —
   keeps the ship RBAC/audit surface self-contained (mirrors `verify_mousse_api.py`) and leaves the 12a
   script an untouched regression baseline.
+
+## v3.0 Phase 13 planning — SYERP-13 AR & sell-side books (2026-07-19)
+
+- **D-P13-1 (owner):** **Phase 13 stays a single phase** (not sub-split 13a/13b like every prior v3.0
+  phase). *Why:* AR aging is a near-mechanical copy of the shipped AP aging (1120 vs 2110) and TB/P&L/BS
+  already exist from 9c (AR is already an asset in the BS derivation), so a "13b" would be a thin
+  single-report phase with nothing to stand on. Scale (~18 tasks) is in range of 11b (17) / 12b (15).
+- **D-P13-2 (owner):** **Invoice line price LOCKS to the sales-order line's agreed `unit_price`**
+  (`crumb_sales_order_line.unit_price`, PLUM-derived + markup set at quote/order time); NOT editable at
+  invoice time. Revenue (Cr 4110) = Σ(invoiced_qty × SO-line unit_price). *Why:* "bill what shipped at
+  the agreed price" — deterministic revenue, no new pricing surface; the sell side has no clearing
+  account to reconcile against (D-V3-2), so no exact-match constraint is needed. (Chosen over editable
+  line price at invoice time.)
+- **D-P13-3 (author):** **AC1's COGS-on-ship JE (Dr 5100 / Cr 1130) is already delivered** in
+  `gelato/service/shipments.py::execute_ship` (Phase 12b). Phase 13 does NOT rebuild it — it adds only
+  the invoice JE (Dr 1120 / Cr 4110) and receipt JE (Dr cash / Cr 1120), and asserts the existing ship
+  JE in the end-to-end AR-control tie-out.
+- **D-P13-4 (author):** **`qty_invoiced` accumulator lives on `crumb_sales_order_line`** (mirror
+  `qty_shipped`, D-P8-15) and is **stamped by SYERP's `create_invoice`** — a cross-module write (SYERP →
+  CRUMB column), the mirror direction of GELATO's `execute_ship` stamping `qty_shipped` (D-V3-9 justifies:
+  AR invoices reference CRUMB SO lines rather than duplicating). uninvoiced = qty_shipped − qty_invoiced
+  at SO-line grain (the D-P9b-1 unbilled-receipt match, sell side).
+- **D-P13-5 (author):** **`qty_invoiced` increments at draft invoice CREATE, not at post** — mirrors AP
+  `create_bill` counting draft+posted against received qty, and makes the two-concurrent-draft
+  double-invoice guard safe. Consequence: with no invoice cancellation/void in v3.0 (out of scope), a
+  mistaken draft permanently claims its shipped qty; accepted for single-shop, revisit with credit
+  memos. The aging control-tie is unaffected — drafts post no JE and are excluded from the 1120 tie.
+- **D-P13-6 (author):** **Branch `feature-syerp-ar-invoicing` off the verified 12b tip** (tag
+  `zj/good-12b-gelato-pick-pack-ship`, `553bcfb`); 11a/11b/12a/12b unmerged, 13 stacks (per-sub-phase
+  branch precedent D-V3-19 / D-P9b-8 / D-P10-8). **Migration 0017** (head 0016). AR extends `syerp`
+  with a new `service/ar.py` submodule (the service is already split — do NOT bloat `bills.py`); router
+  paths mirror AP: `/syerp/ar/{uninvoiced-shipments,invoices,invoices/{id}/post,receipts,aging}`
+  (D-P9b-7). UI folds into the plan, no separate DESIGN.md (D-P9c-2 / D-V3-12).
+- **D-P13-7 (author):** **AR aging control-tie has NO sign negation** — `ar_aging_report` copies
+  `ap_aging_report` but 1120 is **debit-normal** (`control_balance = Σdr − Σcr`, positive receivable)
+  whereas 2110 is credit-normal (negated). Removing the copied negation is the top plan risk, pinned by
+  `verify_ar.py` scenario B (`in_balance` False on a mistake).
