@@ -146,7 +146,7 @@ None. All architecture choices are pinned by the owner (single phase; price lock
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_ar_api.py; echo $?`
 - **Parallel-ok:** no
 
-### [ ] 14. Full regression suite + Trial Balance nets zero with AR JEs
+### [x] 14. Full regression suite + Trial Balance nets zero with AR JEs
 - **Files:** none (runs existing scripts)
 - **Do:** Run the full `verify_*` suite AFTER the AR chain has posted invoice + receipt JEs; every script exits 0 and the SYERP-12 Trial Balance still nets zero. Suite: `verify_gelato_ship`, `verify_gelato_ship_api`, `verify_ap`, `verify_ap_api`, `verify_reports`, `verify_reports_api`, `verify_gl` (if present), `verify_mousse`, `verify_inventory`, `verify_purchasing`, `verify_crumb`, `verify_crumb_so`, `verify_e2e_p8` (whichever exist under `backend/scripts/`), plus `verify_ar` + `verify_ar_api`. Cite AC5.
 - **Done when:** every script exits 0; `reports/trial-balance` `in_balance == True` and balance sheet balances with AR present.

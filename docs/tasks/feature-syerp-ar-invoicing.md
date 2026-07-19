@@ -21,7 +21,7 @@ Branch cut off the verified 12b tip (code-identical to tag `zj/good-12b-gelato-p
 ## Wave C — verify
 - [x] 12. `verify_ar.py` — service-level tie-out + match + reject + COGS tie + concurrency
 - [x] 13. `verify_ar_api.py` — HTTP RBAC + attributable audit rows
-- [ ] 14. Full regression suite + Trial Balance nets zero with AR JEs
+- [x] 14. Full regression suite + Trial Balance nets zero with AR JEs (23/23 green)
 
 ## Wave D — frontend
 - [ ] 15. Invoices list + create-from-shipment dialog
