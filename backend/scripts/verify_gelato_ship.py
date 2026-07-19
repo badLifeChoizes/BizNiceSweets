@@ -324,6 +324,34 @@ async def _so_line_reserved(session_factory, line_id: str) -> Decimal:
         ).scalar()
 
 
+async def _so_line_shipped(session_factory, line_id: str) -> Decimal:
+    """The live qty_shipped on one SO line (oracle for double-stamp detection)."""
+    async with session_factory() as session:
+        return (
+            await session.execute(
+                select(SalesOrderLine.qty_shipped).where(SalesOrderLine.id == line_id)
+            )
+        ).scalar()
+
+
+async def _shipment_je_count(session_factory, shipment_id: int) -> int:
+    """Count the COGS journal entries source-linked to one shipment (oracle for
+    double-post detection — a shipment must post EXACTLY one Dr 5100 / Cr 1130 JE)."""
+    async with session_factory() as session:
+        return len(
+            (
+                await session.execute(
+                    select(JournalEntry.id).where(
+                        JournalEntry.source_type == "gelato_shipment",
+                        JournalEntry.source_id == str(shipment_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+
 async def _seed_confirmed_order(
     session_factory,
     reg: Registry,
@@ -918,6 +946,14 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
         # ===================================================================
         await run_concurrency(session_factory, reg, unique, actor_id, main_id, cust_id)
 
+        # ===================================================================
+        # (h) SAME-SHIPMENT DOUBLE-SHIP — one shipment shipped twice concurrently
+        #     against an AMPLE staging bin must post COGS exactly once
+        # ===================================================================
+        await run_same_shipment_double_ship(
+            session_factory, reg, unique, actor_id, main_id, cust_id
+        )
+
     finally:
         await _cleanup(session_factory, reg)
         await engine.dispose()
@@ -1064,6 +1100,143 @@ async def run_concurrency(
         "iterations",
         all_ok,
         detail,
+    )
+
+
+# ---------------------------------------------------------------------------
+# (h) Same-shipment double-ship — the shipment-row FOR UPDATE lock is what holds
+# ---------------------------------------------------------------------------
+#
+# Scenario (g) proves two DIFFERENT shipments cannot jointly over-issue a scarce
+# staging bin — but that guard is post_issue's per-bin floor read, which only bites
+# when the bin is scarce. It does NOT catch shipping the SAME shipment twice against
+# an AMPLE staging bin (a reused outbound-staging bin, or a partial-pack residual):
+# there the floor read passes for both, and only the packed→shipped FSM gate stands
+# between them and a double COGS post. execute_ship gates on shipment.status; if the
+# shipment row is not locked, two concurrent ships both read 'packed' (READ COMMITTED),
+# both pass the gate, and the second — after blocking on the item lock — proceeds on
+# its stale status and double-issues + posts a SECOND Dr 5100 / Cr 1130 JE + double-
+# relieves qty_reserved + double-stamps qty_shipped. execute_ship loading the shipment
+# `select(Shipment).with_for_update()` before the gate serializes the two: the loser
+# blocks, Postgres re-reads the row after the lock, it sees 'shipped', and the FSM gate
+# 409s it. Delete the `.with_for_update()` on that load and this scenario FAILS
+# (2 JEs, qty_shipped == 10, staging drawn twice) — mutation-proven, like (g).
+
+
+async def run_same_shipment_double_ship(
+    session_factory, reg: Registry, unique: str, actor_id: str, main_id: int, cust_id: str
+) -> None:
+    """
+    A single packed shipment that PARTIALLY fulfils its SO (order 10, this shipment
+    ships 5) picked into an AMPLE staging bin holding 20, fired at execute_ship TWICE
+    concurrently on INDEPENDENT sessions, barrier-synced. The partial order is
+    deliberate: with qty_ordered (10) > ship qty (5), execute_ship's over-ship guard
+    (qty_shipped + qty > qty_ordered) canNOT incidentally reject the duplicate — so the
+    ONLY thing standing between two concurrent ships and a persistent double COGS post
+    is the shipment-row FOR UPDATE lock. Proves EXACTLY one ship succeeds and the
+    duplicate is rejected 409, and — the real oracle — the shipment posts EXACTLY ONE
+    COGS JE, stamps qty_shipped exactly once (== 5, not 10), and draws the staging bin
+    exactly once (20 → 15, never 10). Without the lock this regresses to 2 JEs /
+    qty_shipped 10 / staging 10 (a persistent double-post — money booked twice).
+    """
+    item_id = await _make_item(session_factory, unique, "H")
+    reg.item_ids.add(item_id)
+    async with session_factory() as session:
+        await post_receipt(session, item_id, main_id, Decimal("20"), Decimal("7"), actor_id)
+    pick_bin = await _make_bin(session_factory, main_id, f"H-PICK-{unique}")
+    staging_bin = await _make_bin(session_factory, main_id, f"H-STAGE-{unique}")
+    reg.bin_ids.update({pick_bin, staging_bin})
+    async with session_factory() as session:
+        await execute_putaway(
+            session,
+            PutawayRequest(
+                item_id=item_id, location_id=main_id, to_bin_id=pick_bin,
+                qty=Decimal("20"), from_bin_id=None,
+            ),
+            actor_id,
+        )
+
+    async with session_factory() as session:
+        so = await create_sales_order(
+            session,
+            SalesOrderCreate(
+                partner_id=cust_id,
+                lines=[SalesOrderLineCreate(
+                    item_id=item_id, qty_ordered=Decimal("10"), unit_price=Decimal("20")
+                )],
+            ),
+            actor_id,
+        )
+    reg.so_ids.add(so.id)
+    async with session_factory() as session:
+        conf = await confirm_sales_order(session, so.id, actor_id)
+    so_line_id = conf.lines[0].id
+    # Pick 5 into the AMPLE staging bin (which keeps 15 spare on-hand after the move),
+    # then pack — so the staging floor read can NEVER be what rejects the duplicate ship.
+    async with session_factory() as session:
+        sh = await execute_pick(
+            session,
+            PickRequest(
+                sales_order_id=so.id, staging_bin_id=staging_bin,
+                lines=[PickLineRequest(
+                    sales_order_line_id=so_line_id, from_bin_id=pick_bin, qty=Decimal("5")
+                )],
+            ),
+            actor_id,
+        )
+    reg.shipment_ids.add(sh.id)
+    async with session_factory() as session:
+        await execute_pack(session, sh.id, PackRequest(), actor_id)
+    # Top the staging bin back up to 20 so it holds 4x the ship qty — an ample/reused
+    # staging bin the per-bin floor guard cannot police.
+    async with session_factory() as session:
+        await execute_putaway(
+            session,
+            PutawayRequest(
+                item_id=item_id, location_id=main_id, to_bin_id=staging_bin,
+                qty=Decimal("15"), from_bin_id=pick_bin,
+            ),
+            actor_id,
+        )
+    async with session_factory() as session:
+        staging_before = await get_bin_on_hand(session, item_id, main_id, staging_bin)
+
+    barrier = asyncio.Barrier(2)
+
+    async def _ship_same():
+        from sqlalchemy import text
+
+        async with session_factory() as session:
+            await session.execute(text("SELECT 1"))  # pre-warm the connection
+            await barrier.wait()
+            return await execute_ship(session, sh.id, actor_id)
+
+    results = await asyncio.gather(_ship_same(), _ship_same(), return_exceptions=True)
+    successes = [r for r in results if not isinstance(r, Exception)]
+    conflicts = [
+        r for r in results if isinstance(r, HTTPException) and r.status_code == 409
+    ]
+
+    je_count = await _shipment_je_count(session_factory, sh.id)
+    shipped = await _so_line_shipped(session_factory, so_line_id)
+    async with session_factory() as session:
+        staging_after = await get_bin_on_hand(session, item_id, main_id, staging_bin)
+
+    check(
+        "(h/BLOCKER-REGRESSION) shipping ONE packed shipment TWICE concurrently against an "
+        "AMPLE staging bin posts COGS EXACTLY once: one ship succeeds + one is rejected 409, "
+        "the shipment has exactly ONE gelato_shipment JE, qty_shipped stamped once (==5 not "
+        "10), and the staging bin drawn once (20 -> 15, never 10). Removing execute_ship's "
+        "shipment-row FOR UPDATE lock regresses this to 2 JEs / qty_shipped 10 / staging 10.",
+        len(successes) == 1
+        and len(conflicts) == 1
+        and je_count == 1
+        and shipped == Decimal("5")
+        and staging_before == Decimal("20")
+        and staging_after == Decimal("15"),
+        f"successes={len(successes)} conflicts={len(conflicts)} je_count={je_count} "
+        f"qty_shipped={shipped!r} staging {staging_before!r}->{staging_after!r} "
+        f"results={[type(r).__name__ for r in results]}",
     )
 
 

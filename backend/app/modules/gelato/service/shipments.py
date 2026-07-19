@@ -572,9 +572,18 @@ async def execute_ship(
         post_journal_entry,
     )
 
-    # (1) Load the shipment and gate on the shipment FSM. Only 'packed' has
-    #     'shipped' in its allowed set, so this alone enforces the packed guard.
-    shipment = await db.get(Shipment, shipment_id)
+    # (1) Load the shipment FOR UPDATE and gate on the shipment FSM. Locking the
+    #     shipment row first (before the item locks below — one row, sorted-single,
+    #     deadlock-free) serializes two concurrent ships of the SAME shipment: the
+    #     loser blocks here, and Postgres re-reads the row after the lock is granted,
+    #     so it sees the winner's 'shipped' status and 409s at the gate instead of
+    #     double-issuing + double-posting COGS. Only 'packed' has 'shipped' in its
+    #     allowed set, so this gate alone enforces the packed guard.
+    shipment = (
+        await db.execute(
+            select(Shipment).where(Shipment.id == shipment_id).with_for_update()
+        )
+    ).scalar_one_or_none()
     if shipment is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
