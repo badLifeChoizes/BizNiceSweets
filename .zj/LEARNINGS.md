@@ -3,6 +3,87 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 13 — SYERP-13 AR & sell-side books (verified 2026-07-19)
+
+The final v3.0 phase: invoice-from-shipment (Dr 1120 / Cr 4110) → receipt (Dr cash / Cr 1120)
+→ AR aging tied Decimal-exact to the debit-normal 1120, TB still nets zero, BS balances.
+Built by mirroring the AP side (`create_bill` / payments / `ap_aging_report`) shape-for-shape.
+Verifier returned PASS (17/17 + 29/29 + 23/23 regression); the parallel reviewer found the one
+MAJOR that mattered — the **fifth consecutive phase (11a/11b/12a/12b/13) where the code review,
+not the verify suite, caught the defect that mattered.** The recurring signal is now a fact of
+this project's process, not a coincidence: the verify suite proves the happy path and the
+targeted concurrency/tie-out cruxes; the adversarial review finds the input the plan never
+imagined. Budget both, every phase.
+
+### Surprises (assumptions wrong → corrected truth)
+
+- **Mirroring an exemplar's broad `except IntegrityError → retry` is only sound if the mirrored
+  function cannot raise a *different* IntegrityError than the one being retried — and adding a
+  nullable FK the exemplar lacks silently breaks that invariant.** `create_bill` retries on an
+  `INV-####`/`BILL-####` unique-number collision by catching *any* `IntegrityError`, rolling
+  back, and re-running — sound there because a number collision is the **only** IntegrityError
+  that path can produce. `create_invoice` copied that block verbatim but also accepts an
+  `Optional[str] sales_order_id` — a real FK to `crumb_sales_order` that `create_bill` has no
+  analogue for — and passed it into the header **unvalidated** (unlike `customer_id` and each
+  line's `sales_order_line_id`, both SELECT-gated). A bogus `sales_order_id` makes `flush()`
+  raise an **FK** IntegrityError; the broad except misreads it as a number collision, rolls back,
+  and recurses with the identical bad id → deterministic unbounded recursion → `RecursionError`/
+  500 after ~1000 round-trips (a self-inflicted mild DoS), nothing persisting, no clean 422.
+  **Keeper: when you mirror a retry-on-IntegrityError block, the retry is only safe if you (a)
+  narrow the `except` to the *specific* constraint (inspect the constraint name / `orig`) and
+  bound it (retry-once, like `create_bill` actually does), AND (b) validate up front every FK the
+  mirrored function accepts that the exemplar didn't — a new nullable FK is exactly the surface
+  the copied error-handling was never written to cover.** Fixed in `7610e63`: SELECT-gate
+  `sales_order_id` → 422 when absent (mirroring the customer gate), plus a bounded retry; pinned
+  by new `verify_ar` scenario (D2) — bogus id → clean 404/422, persists nothing. This is the
+  AP-mirror cousin of 12b's "the exemplar's safety rested on a property your use case doesn't
+  share" — there it was repeatable-vs-terminal; here it's a-FK-surface-the-exemplar-lacks. The
+  mirror is a strong *default*, but every field the mirror doesn't have is un-audited by the copy.
+
+### Patterns that worked (repeat these)
+
+- **A mandated regression assertion against the *adjacent untouched* surface caught a real
+  production-boot 500 that the phase which introduced it had mislabeled.** Task 13's plan required
+  asserting the pre-existing costed inventory-receipt endpoint still accepts its body after AR
+  landed. That assertion returned 500 on a **fresh** app process: GELATO imports its models lazily
+  (D-P12a-3), so `importlib` module registration left `gelato_bin` out of `Base.metadata` and the
+  cross-module string FK `syerp_inventory_txn.bin_id → gelato_bin` was unresolvable until some
+  gelato call happened to load the models — order-dependent, which is exactly why 12a's Noticed
+  mis-diagnosed it as a "dev-only `--reload` race." Fixed (`ea2f2cb`) by importing the central
+  `app.core.models` aggregator at boot — the same metadata contract Alembic and every verify
+  script already rely on — with D-P12a-3 preserved (SYERP still never imports gelato). **Keeper:
+  the "assert the neighbouring feature you *didn't* touch still works" task is not busywork — it
+  is the only gate that exercises a cold process the way production boots, and it caught a latent
+  cross-module metadata defect that all of 12a/12b's own green suites sailed past because their
+  fixtures had already warmed the models. Keep writing the adjacent-surface regression assertion
+  into every phase that shares a table/FK with a prior one.**
+
+- **The dead-through-UI trap was caught in-build for the SECOND straight phase — the counter-measure
+  is now reliable, not lucky.** `qty_invoiced` was added to the SO line model and had to reach the
+  read schema + FE type + render or go invisible (the 11a/11b/12a blank-column trap). Because the
+  plan's FE task said "render the accumulator" AND the Vitest asserted the value renders, the full
+  contract (backend serialization included) was driven end-to-end and the field shipped live. Same
+  outcome as 12b's `qty_shipped`: writing "assert the column actually renders its value" into the
+  frontend task converts the recurring trap into a non-event.
+
+- **Latent schema-shadow bug caught at build by the same-file naming discipline.** The new AR
+  `ReceiptCreate` schema shadowed the pre-existing inventory costed-receipt `ReceiptCreate` in the
+  shared `schemas.py`, silently rebinding `POST /inventory/items/{id}/receipts` to the wrong body.
+  Renamed to `ArReceiptCreate` (zero prior refs) at build. Cheap catch, but a reminder that a flat
+  shared `schemas.py` across a growing module makes name collisions a live hazard — prefer a
+  module/feature prefix on new request schemas when the file is already crowded.
+
+### Deferred (each has a home)
+
+- **Invoice void / credit memos** — no decrement path for `qty_invoiced`; out-of-scope for v3.0,
+  filed to BACKLOG as a real functional gap so it isn't lost.
+- **`partially_paid` phantom status** — never emitted by the API (real FSM is `draft|posted|paid`;
+  a partial receipt stays `posted`). Backend docstrings corrected at build; a harmless dead FE
+  badge variant remains as defensive rendering — drop in a future FE tidy (BACKLOG p3).
+- **COGS/revenue period split on late invoices** — `execute_ship` ages COGS on ship date, the
+  invoice ages AR on invoice date; correct, but the two can land in different periods. Acceptable
+  for v3.0; noted for any future revenue-recognition matching work (BACKLOG p3).
+
 ## Phase 12b — GELATO outbound pick → pack → ship + COGS JE (verified 2026-07-19)
 
 The outbound crux: pick (bin-aware net-zero to staging) → pack (FSM) → ship (bin-aware

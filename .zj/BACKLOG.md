@@ -1,5 +1,7 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-18 (Phase 12a verify — bin split desyncs after bin-blind movement → p2,
+Updated: 2026-07-19 (Phase 13 retro — invoice void/credit-memo functional gap, dead
+`partially_paid` FE badge, and late-invoice COGS/revenue period split → p3)
+Prior: 2026-07-18 (Phase 12a verify — bin split desyncs after bin-blind movement → p2,
 folds into the cross-path inventory-ledger race item; durable fix is the 12b bin-aware pick/issue)
 Prior: 2026-07-16 (Phase 10 retro — MOUSSE now writes the inventory ledger so the p2
 inventory-ledger race item's "revisit when MOUSSE writes this" trigger is live; zero-cost
@@ -206,6 +208,19 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **Invoice void / credit memos** (Phase 13 retro, 2026-07-19) — AR has no reversal path:
+  `qty_invoiced` only ever increments (matches Phase 13 out-of-scope), so a mistaken invoice
+  cannot be voided and an over-bill cannot be credited back. A real functional gap for any
+  operator, deferred from v3.0. Fix needs a decrement path for `qty_invoiced` + a void/credit
+  FSM state + the reversing JE (Dr 4110 / Cr 1120). Sequence with the sell-side lifecycle work.
+- [ ] **`partially_paid` phantom badge in AR FE** (Phase 13 retro, 2026-07-19) — the real invoice
+  FSM is `draft|posted|paid` (a partial receipt stays `posted`); the API never emits
+  `partially_paid`. Backend docstrings were corrected at build, but the AR FE carries a dead
+  `partially_paid` badge variant as defensive rendering. Cosmetic — drop it in a future FE tidy.
+- [ ] **COGS/revenue period split on late invoices** (Phase 13 retro, 2026-07-19) — `execute_ship`
+  ages COGS on ship date while the invoice ages AR/revenue on invoice date, so a late invoice
+  lands revenue in a different period than its COGS. Correct and accepted for v3.0; note for any
+  future revenue-recognition matching work (there is no matching layer today).
 - [ ] **Migration 0016 downgrade path has no automated test** (Phase 12b verify, 2026-07-19) — the
   `0016→0015` drop of `gelato_shipment`/`gelato_shipment_line` + the SO-line accumulator columns is
   exercised only by the manual `alembic downgrade -1 && upgrade head` round-trip command, not asserted

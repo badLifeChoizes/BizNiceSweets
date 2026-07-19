@@ -1,5 +1,27 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-19 (**Phase 13 VERIFIED** — `/zj:verify 13`, tag `zj/good-13-syerp-ar-invoicing`.
+Updated: 2026-07-19 (**Phase 13 RETRO'D** — `/zj:retro 13`. Roadmap already marked
+`[done — verified 2026-07-19]`; no future phase resized. **LEARNINGS Phase 13 banked (1 surprise +
+3 patterns):** (1) **the headline — mirroring a broad `except IntegrityError → retry` is only sound
+if the mirrored fn can't raise a *different* IntegrityError, and adding a nullable FK the exemplar
+lacks silently breaks that** (`create_invoice` copied `create_bill`'s number-collision retry but also
+took an unvalidated `sales_order_id` FK → a bad id raised an FK error the retry misread as a collision
+→ unbounded recursion/500; keeper = narrow the except to the specific constraint + bound it, AND
+up-front-validate every FK the mirror doesn't have); (2) **a mandated adjacent-untouched-surface
+regression assertion caught a real production-boot 500** the phase that introduced it (12a) had
+mislabeled a "dev-only `--reload` race" — the `syerp_inventory_txn.bin_id→gelato_bin` metadata gap,
+fixed by importing `app.core.models` at boot; keeper = the "assert the neighbour still works" task is
+the only gate that exercises a cold process like production; (3) **dead-through-UI trap caught in-build
+a 2nd straight phase** (`qty_invoiced`) — counter-measure now reliable; (4) **5th consecutive phase
+where the review, not the verify suite, caught the defect that mattered** — budget both every phase.
+Deferred items homed → BACKLOG p3: invoice void/credit-memo functional gap, dead `partially_paid` FE
+badge, late-invoice COGS/revenue period split. **Phase 13 was the FINAL v3.0 phase (DoD clause 3
+closed) — v3.0 milestone is now complete pending close-out.** Artifacts:
+`.zj/phases/13-syerp-ar-invoicing/{PLAN,VERIFICATION,REVIEW}.md`, `.zj/LEARNINGS.md` Phase 13.
+**Next action:** `/zj:milestone` (audit the v3.0 DoD, tag the release, archive phases 11–13, roll the
+roadmap to the next milestone). Optional: `/zj:log phase 13` (formal work log); `/zj:ship` to merge the
+11a+11b+12a+12b+13 stack to master.)
+
+Prior: 2026-07-19 (**Phase 13 VERIFIED** — `/zj:verify 13`, tag `zj/good-13-syerp-ar-invoicing`.
 Both checks ran in parallel; all 7 SYERP-13 success criteria PASS empirically — `verify_ar.py` 17/17
 + `verify_ar_api.py` 29/29 + **23/23 full regression**, aging ties Decimal-exact to the debit-normal
 1120 (no negation), TB nets zero WITH AR posted, BS balances, RBAC 401/403/200 on all 8 routes,
@@ -132,14 +154,22 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
-- **Step:** **BUILD COMPLETE** — **Phase 13 (SYERP-13 AR & sell-side books — the FINAL v3.0 phase)
+- **Step:** **RETRO'D** — **Phase 13 (SYERP-13 AR & sell-side books — the FINAL v3.0 phase) closed
+  2026-07-19** (`/zj:retro 13`), tag `zj/good-13-syerp-ar-invoicing`. Roadmap marked
+  `[done — verified 2026-07-19]`; **v3.0 DoD clause 3 closed → v3.0 milestone complete pending close-out.**
+  LEARNINGS Phase 13 banked (mirror-a-retry-only-safe-if-no-new-FK headline; adjacent-surface regression
+  caught a real boot 500; in-build dead-through-UI catch a 2nd phase; review-caught-the-defect 5 phases
+  running). Deferred → BACKLOG p3: invoice void/credit-memo, dead `partially_paid` badge, late-invoice
+  COGS/revenue period split. **Next action:** `/zj:milestone` (v3.0 close). Optional: `/zj:log phase 13`;
+  `/zj:ship` to merge the 11a+11b+12a+12b+13 stack.
+
+- **(historical) Step:** **BUILD COMPLETE** — **Phase 13 (SYERP-13 AR & sell-side books — the FINAL v3.0 phase)
   built 2026-07-19** (`/zj:build 13`) on branch `feature-syerp-ar-invoicing`. All 18 tasks, **v3.0 DoD
   clause 3 closed**. Delivers the invoice (Dr 1120/Cr 4110) + receipt (Dr cash/Cr 1120) JEs + AR aging
   tying Decimal-exactly to the 1120 control (the COGS-on-ship JE was asserted, not rebuilt — D-P13-3).
   Proof: `verify_ar.py` 16 asserts (both concurrency locks mutation-proven) + `verify_ar_api.py` 29 asserts
   + **23/23** full regression (TB nets zero, BS balances) + FE **44 files / 131 tests** + `npm run build`
   exit 0. Decisions D-P13-1..8 (D-P13-8 = the app.core.models boot import). Plan + checklist all ticked.
-  **Next action:** `/zj:verify 13`.
 
 - **(historical) Step:** **RETRO'D** — **Phase 12b (GELATO outbound: pick → pack → ship) closed 2026-07-19**
   (`/zj:retro 12b`), tag `zj/good-12b-gelato-pick-pack-ship` at `553bcfb`. Roadmap marked
@@ -313,22 +343,23 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
   plum_part PKs are UUIDs, not int).
 
 - **Project:** BizNiceSweets
-- **Milestone:** v3.0 Customer & logistics — **IN PROGRESS** (Phase 11a verified; 11b–13 pending). v2.0
+- **Milestone:** v3.0 Customer & logistics — **ALL PHASES DONE** (11a/11b/12a/12b/13 verified + retro'd;
+  DoD clauses 1–3 closed) — **pending `/zj:milestone` close-out** (tag + archive + roadmap roll). v2.0
   CLOSED + tagged `v2.0`; v1.0 closed + tagged 2026-07-11.
 - **Branch (planning artifacts):** `chore-spec-v3-customer-logistics` — carries the v3.0 spec + this
   plan's doc edits. `master` at `35f9b66` carries all of Phases 8–10. **Phase 11a builds on a new
   `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
   master first.
 - **Last update:** 2026-07-19
-- **Next action:** `/zj:plan 13` — the final v3.0 phase: **SYERP-13 AR & sell-side books** (7 ACs).
-  Invoice-from-shipment (Dr AR 1120 / Cr Revenue), customer receipts (Dr Cash / Cr AR 1120), and an
-  **AR aging report tying Decimal-exactly to the 1120 control account** with the Trial Balance still
-  netting zero — closing v3.0 DoD clause 3. Builds on the shipments 12b posts (invoices key off a
-  shipped shipment) + the SYERP-12 GL engine ✓. Keep the recurring keepers: the subledger↔control
-  same-date-basis tie-out (09c), the control-ties-to-subledger assertion not just TB-nets-zero (Phase 10),
-  the row-lock + `asyncio.Barrier` concurrency scenario on any receipt/allocation guard, the non-optional
-  HTTP audit/RBAC script, and the real router/UI payload shape in verify + Vitest. Likely to sub-split at
-  plan (mirrors 9a/b/c, 11a/b, 12a/b) — the DoD, not the phase count, is the contract.
+- **Next action:** `/zj:milestone` — **close v3.0 (Customer & logistics).** All three DoD clauses are
+  met and their phases verified + retro'd (11a/11b CRUMB CRM→SO+reservation, 12a/12b GELATO bins→pick/
+  pack/ship+COGS, 13 SYERP-13 AR & sell-side books). Close-out: audit the v3.0 DoD, generate the records,
+  tag the release, archive phases 11–13, and roll the roadmap to the next milestone (candidates unordered
+  in ROADMAP: FLAN port, PLUM advanced, CRISP/offline/license-audit + public open-source release prep).
+  Also weigh the carried **BACKLOG p1** infra debt (CI, live-DB pytest harness, both lint gates — now
+  three milestones old) and the **p2** shared cross-path inventory-ledger row-lock before a multi-writer
+  deploy. Optional first: `/zj:log phase 13` (formal work log); `/zj:ship` to merge the
+  11a+11b+12a+12b+13 stack to master.
 
 ## Next action (detail)
 
