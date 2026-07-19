@@ -24,7 +24,7 @@ Branch cut off the verified 12b tip (code-identical to tag `zj/good-12b-gelato-p
 - [x] 14. Full regression suite + Trial Balance nets zero with AR JEs (23/23 green)
 
 ## Wave D — frontend
-- [ ] 15. Invoices list + create-from-shipment dialog
-- [ ] 16. Invoice detail — Post action + Paid status + open balance
-- [ ] 17. Receipts — record receipt against posted invoices
-- [ ] 18. AR Aging screen + nav + routes + build
+- [x] 15. Invoices list + create-from-shipment dialog
+- [x] 16. Invoice detail — Post action + Paid status + open balance
+- [x] 17. Receipts — record receipt against posted invoices
+- [x] 18. AR Aging screen + nav + routes + build

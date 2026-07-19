@@ -155,28 +155,28 @@ None. All architecture choices are pinned by the owner (single phase; price lock
 
 ### Wave D — frontend
 
-### [ ] 15. Invoices list + create-from-shipment dialog
+### [x] 15. Invoices list + create-from-shipment dialog
 - **Files:** `frontend/src/routes/syerp/Invoices.tsx` (+ `.test.tsx`); `frontend/src/routes/syerp/components/InvoiceCreateDialog.tsx` (+ `.test.tsx`); `frontend/src/api/` hook (mirror Bills hooks)
 - **Do:** Mirror `Bills.tsx` + `BillCreateDialog.tsx`. List invoices with number/customer/date/status/total/open_balance. Create dialog: pick a customer (reuse Customers source), fetch `/syerp/ar/uninvoiced-shipments?customer_id=`, select lines + qty (price shown read-only, locked to SO `unit_price`), POST `/syerp/ar/invoices`. Vitest asserts the picker renders `uninvoiced_qty` and the read-only locked price from the **real payload shape**. Cite AC2.
 - **Done when:** Vitest passes; dialog builds the real create payload.
 - **Verify:** `cd frontend && npx vitest run src/routes/syerp/Invoices.test.tsx src/routes/syerp/components/InvoiceCreateDialog.test.tsx`
 - **Parallel-ok:** yes (after Task 11)
 
-### [ ] 16. Invoice detail — Post action + Paid status + open balance
+### [x] 16. Invoice detail — Post action + Paid status + open balance
 - **Files:** `frontend/src/routes/syerp/InvoiceDetail.tsx` (+ `.test.tsx`)
 - **Do:** Mirror `BillDetail.tsx`. Header + lines + derived total/open_balance; a Post button (draft only) calling `/syerp/ar/invoices/{id}/post`; status badge draft/posted/paid. Vitest asserts open_balance renders and Post is hidden once posted. Cite AC2.
 - **Done when:** Vitest passes.
 - **Verify:** `cd frontend && npx vitest run src/routes/syerp/InvoiceDetail.test.tsx`
 - **Parallel-ok:** yes (after Task 11)
 
-### [ ] 17. Receipts — record receipt against posted invoices
+### [x] 17. Receipts — record receipt against posted invoices
 - **Files:** `frontend/src/routes/syerp/Receipts.tsx` (+ `.test.tsx`); `frontend/src/routes/syerp/components/RecordReceiptDialog.tsx` (+ `.test.tsx`)
 - **Do:** Mirror the `PayBillDialog` pattern. Dialog: pick cash/bank account (default 1110), allocate amounts across one or more posted invoices, POST `/syerp/ar/receipts`. List receipts with allocations. Vitest asserts the allocation payload shape and account default. Cite AC3.
 - **Done when:** Vitest passes; payload matches `ReceiptCreate`.
 - **Verify:** `cd frontend && npx vitest run src/routes/syerp/Receipts.test.tsx src/routes/syerp/components/RecordReceiptDialog.test.tsx`
 - **Parallel-ok:** yes (after Task 11)
 
-### [ ] 18. AR Aging screen + nav + routes + build
+### [x] 18. AR Aging screen + nav + routes + build
 - **Files:** `frontend/src/routes/syerp/ArAging.tsx` (+ `.test.tsx`); `frontend/src/routes/syerp/components/SyerpNav.tsx`; `frontend/src/App.tsx`
 - **Do:** Mirror `ApAging.tsx` — buckets per customer + grand total + control-balance tie / `in_balance` badge, `as_of` picker. Add nav items (Invoices, Receipts, AR Aging) near the existing AP items in `SyerpNav`; register routes `/syerp/ar/invoices`, `/syerp/ar/invoices/:id`, `/syerp/ar/receipts`, `/syerp/ar/aging` in `App.tsx`. Vitest asserts the aging table + tie badge render. Cite AC4/AC5.
 - **Done when:** `npm run build` (`tsc -b && vite build`) succeeds; ArAging Vitest passes; nav shows the three AR items.
@@ -210,3 +210,6 @@ None. All architecture choices are pinned by the owner (single phase; price lock
 - `list_payments_endpoint` (router 1268-1274) still lazy-imports its service read with a P9b workaround note; when mirroring for `list_receipts` prefer the top-of-module import (the `ar.py` read exists by Task 9) — cleaner than repeating the workaround.
 - `execute_ship` posts the COGS JE with `entry_date=date.today()`, while the invoice JE uses `invoice_date`. That is correct (COGS ages on ship date, AR on invoice date) but means COGS and revenue can land in different periods for a late invoice — acceptable for v3.0; note for any future revenue-recognition matching work.
 - Lint gates are non-functional (BACKLOG p1); correctness rests on `verify_*` + Vitest. No ruff/eslint task added.
+- **`partially_paid` phantom status.** Several Wave-B backend docstrings (models/router/schemas) wrongly listed a `partially_paid` status; the real FSM is `draft | posted | paid` (a partial receipt stays `posted`, per `INVOICE_TRANSITIONS` and verify_ar scenario B). Docstrings corrected at build. The Task-16/18 FE carries a harmless dead `partially_paid` badge variant (that status never arrives from the API) — cosmetic, left in as defensive rendering; drop it in a future FE tidy if desired.
+- Frontend bundle is a single ~859 kB chunk (Vite >500 kB advisory). Pre-existing, unrelated to AR — flagged only.
+- Starlette `HTTP_422_UNPROCESSABLE_ENTITY` is deprecated (use `_CONTENT`); surfaced repo-wide by the AR verify run — already the BACKLOG p3 422 sweep, not re-filed.
