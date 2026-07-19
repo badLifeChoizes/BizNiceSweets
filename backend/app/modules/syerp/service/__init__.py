@@ -136,6 +136,7 @@ from app.modules.syerp.service.ar import (
     get_invoice,
     list_invoices,
     list_uninvoiced_shipments,
+    post_invoice,
 )
 from app.modules.syerp.service.reports import (
     ap_aging_report,
@@ -193,6 +194,7 @@ __all__ = [
     "list_uninvoiced_shipments",
     "post_adjustment",
     "post_bill",
+    "post_invoice",
     "post_issue",
     "post_journal_entry",
     "post_putaway",

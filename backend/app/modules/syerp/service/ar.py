@@ -531,3 +531,74 @@ async def list_invoices(
         )
         for invoice in invoices
     ]
+
+
+# ---------------------------------------------------------------------------
+# AR invoice posting (Phase 13, SYERP-13)
+# ---------------------------------------------------------------------------
+
+
+async def post_invoice(db: AsyncSession, invoice_id: str, actor_id: str) -> "InvoiceRead":
+    """
+    Post a draft AR invoice to the GL, flipping it draft -> posted (Phase 13).
+
+    The sell-side mirror of post_bill. Loads the invoice (404 if missing) and rejects a
+    non-draft invoice with 422 via the INVOICE_TRANSITIONS FSM guard (a posted/paid
+    invoice cannot be re-posted). Builds ONE balanced journal entry from the invoice's
+    lines and posts it through post_journal_entry with commit=False, then stamps
+    status='posted' + posted_at and takes the SINGLE commit — the JE, the status flip,
+    and the timestamp share one atomic transaction: an invoice can never flip to Posted
+    without its balanced GL entry, and if the JE raises nothing persists.
+
+    The journal entry (the revenue-recognition posting):
+      - Dr 1120 Accounts Receivable for the whole invoice total (Σ line.amount),
+      - Cr 4110 Product Revenue for the same total.
+
+    entry_date = invoice.invoice_date (NOT today) so the 1120 control account's
+    entry_date-aged balance ties out to the AR subledger's invoice_date aging — the
+    aging tie-out crux (mirrors post_bill's bill_date choice).
+
+    Returns the posted invoice as an InvoiceRead. Audit (invoice.posted) is the
+    router's job; this service NEVER writes audit and takes exactly one commit.
+    """
+    invoice = await _get_invoice_row(db, invoice_id)
+
+    # FSM guard: only a draft invoice may be posted (422 otherwise).
+    if not _invoice_transition_allowed(invoice.status, "posted"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Cannot post invoice {invoice.invoice_number}: it is "
+                f"'{invoice.status}', only a 'draft' invoice can be posted."
+            ),
+        )
+
+    lines = await _load_invoice_lines(db, invoice_id)
+
+    ar_account_id = await _gl_account_id_by_code(db, "1120")
+    revenue_account_id = await _gl_account_id_by_code(db, "4110")
+
+    invoice_total = sum((line.amount for line in lines), Decimal("0"))
+
+    # One balanced JE: Dr 1120 AR / Cr 4110 Revenue for the whole total. commit=False:
+    # the JE rides THIS transaction's single commit alongside the status flip below —
+    # no partial post.
+    await post_journal_entry(
+        db,
+        entry_date=invoice.invoice_date,
+        memo=f"AR invoice {invoice.invoice_number}",
+        lines=[
+            {"account_id": ar_account_id, "debit": invoice_total, "credit": 0},
+            {"account_id": revenue_account_id, "debit": 0, "credit": invoice_total},
+        ],
+        actor_id=actor_id,
+        source_type="ar_invoice",
+        source_id=invoice.id,
+        commit=False,
+    )
+
+    invoice.status = "posted"
+    invoice.posted_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    return await get_invoice(db, invoice.id)
