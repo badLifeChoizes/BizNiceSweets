@@ -23,6 +23,9 @@ const TABS: Array<{ to: string; label: string; end?: boolean }> = [
   { to: '/syerp/gl/register', label: 'Account Register' },
   { to: '/syerp/ap/bills', label: 'Bills' },
   { to: '/syerp/ap/aging', label: 'AP Aging' },
+  { to: '/syerp/ar/invoices', label: 'Invoices' },
+  { to: '/syerp/ar/receipts', label: 'Receipts' },
+  { to: '/syerp/ar/aging', label: 'AR Aging' },
   { to: '/syerp/reports', label: 'Financial Reports' },
 ]
 

@@ -25,6 +25,10 @@ import { AccountRegister } from '@/routes/syerp/AccountRegister'
 import { Bills } from '@/routes/syerp/Bills'
 import { BillDetail } from '@/routes/syerp/BillDetail'
 import { ApAging } from '@/routes/syerp/ApAging'
+import { Invoices } from '@/routes/syerp/Invoices'
+import { InvoiceDetail } from '@/routes/syerp/InvoiceDetail'
+import { Receipts } from '@/routes/syerp/Receipts'
+import { ArAging } from '@/routes/syerp/ArAging'
 import { FinancialReports } from '@/routes/syerp/FinancialReports'
 
 // PLUM routes (Phase 5 + 6)
@@ -83,6 +87,11 @@ export function App() {
         <Route path="/syerp/ap/bills" element={<Bills />} />
         <Route path="/syerp/ap/bills/:id" element={<BillDetail />} />
         <Route path="/syerp/ap/aging" element={<ApAging />} />
+        {/* Keep the static list route BEFORE the `/:id` detail route. */}
+        <Route path="/syerp/ar/invoices" element={<Invoices />} />
+        <Route path="/syerp/ar/invoices/:id" element={<InvoiceDetail />} />
+        <Route path="/syerp/ar/receipts" element={<Receipts />} />
+        <Route path="/syerp/ar/aging" element={<ArAging />} />
         <Route path="/syerp/reports" element={<FinancialReports />} />
 
         {/* PLUM module routes — Sidebar nav lands on /plum → redirect to parts list */}
