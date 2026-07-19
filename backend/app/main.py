@@ -83,6 +83,17 @@ importlib.import_module("app.modules.crumb")
 importlib.import_module("app.modules.gelato")
 importlib.import_module("app.modules.auth")
 
+# Fully populate Base.metadata before serving. Module __init__ imports only the
+# router, and GELATO's service imports its models LAZILY inside functions (so SYERP
+# never imports gelato models — D-P12a-3). That leaves cross-module string FKs (e.g.
+# syerp_inventory_txn.bin_id -> gelato_bin) unresolvable on a fresh process until some
+# gelato service call happens to load the models, so the first InventoryTxn ORM flush
+# 500s on mapper configuration. Importing the central aggregator here registers every
+# module's tables up front — the same metadata contract Alembic and the verify_*.py
+# scripts already rely on. importlib (not a bare import) avoids shadowing the `app`
+# FastAPI instance with the `app` package, exactly as the module imports above do.
+importlib.import_module("app.core.models")
+
 # Wire all registered module routers under /api/v1
 mount_all(app)
 
