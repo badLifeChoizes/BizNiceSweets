@@ -1185,7 +1185,7 @@ class ArAgingBucketRow(BaseModel):
 
 class ArAgingReport(BaseModel):
     """
-    Accounts-receivable aging as of a date, with the 1200 subledger tie-out.
+    Accounts-receivable aging as of a date, with the 1120 subledger tie-out.
 
     `customers` lists each customer with an open receivable, bucketed by age;
     `grand_total` is the column roll-up across customers. `control_balance` is the

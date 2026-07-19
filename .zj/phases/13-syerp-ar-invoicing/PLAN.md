@@ -88,42 +88,42 @@ None. All architecture choices are pinned by the owner (single phase; price lock
 
 ### Wave B — backend service
 
-### [ ] 6. Create `service/ar.py` — pure helpers + uninvoiced-shipments query
+### [x] 6. Create `service/ar.py` — pure helpers + uninvoiced-shipments query
 - **Files:** `backend/app/modules/syerp/service/ar.py` (new); `backend/app/modules/syerp/service/__init__.py` (re-export)
 - **Do:** Pure helpers mirroring bills: `_INVOICE_NUMBER_RE = ^INV-[0-9]+$`, `_next_invoice_number`, `INVOICE_TRANSITIONS = {"draft":{"posted"},"posted":{"paid"},"paid":set()}`, `_invoice_transition_allowed`, `_uninvoiced_qty(qty_shipped, qty_invoiced)`. `async generate_invoice_number(db)` — regex filter then `cast(func.substring(invoice_number, 5), Integer)` (INV- is 4 chars). `async list_uninvoiced_shipments(db, customer_id)` — join `SalesOrderLine`→`SalesOrder` where `SalesOrder.partner_id == customer_id` and `qty_shipped - qty_invoiced > 0`; return `UninvoicedShipmentRead` rows carrying the locked `unit_price`. Re-export the public surface from `service/__init__.py`. Cite AC2.
 - **Done when:** `from app.modules.syerp.service import list_uninvoiced_shipments, generate_invoice_number` works; `_next_invoice_number(["INV-9","INV-10"]) == "INV-0011"` (numeric, not lexicographic).
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.modules.syerp.service.ar import _next_invoice_number; assert _next_invoice_number(['INV-9','INV-10'])=='INV-0011'; print('ok')"`
 - **Parallel-ok:** no (foundation for Tasks 7-9)
 
-### [ ] 7. `create_invoice` + invoice read layer (get_invoice / list_invoices)
+### [x] 7. `create_invoice` + invoice read layer (get_invoice / list_invoices)
 - **Files:** `backend/app/modules/syerp/service/ar.py`
 - **Do:** Mirror `create_bill` + `get_bill`/`list_bills`/`_bill_to_read`. `create_invoice(db, *, customer_id, sales_order_id, invoice_date, lines, actor_id)`: (1) customer gate — Partner exists AND `is_customer` (422 else); (2) **lock target SO-line rows FOR UPDATE in sorted id order BEFORE the read** (copy `create_bill` 352-360); (3) per line validate-before-write: load SO line (404), confirm it belongs to a SO with `partner_id == customer_id` (422 else), dup-line guard (422), compute `uninvoiced = qty_shipped − qty_invoiced`, reject `invoiced_qty > uninvoiced` (422, the negative-open guard D-P8-7), lock `unit_price = so_line.unit_price`, `amount = invoiced_qty * unit_price`; (4) `so_line.qty_invoiced += invoiced_qty`; (5) persist `Invoice` (`INV-####`, retry-once on IntegrityError) + `InvoiceLine`s, status 'draft', `invoice_date or date.today()`; single commit; return `get_invoice`. `get_invoice`/`list_invoices` derive `total = Σ line.amount`, `open_balance = total − Σ ReceiptAllocation.amount` (each side coalesced, D-P8-4). Cite AC2.
 - **Done when:** creating an invoice against a shipped SO line returns an `InvoiceRead` with `INV-0001`, correct `total`, and bumps `so_line.qty_invoiced`; over-invoicing a line returns 422.
 - **Verify:** exercised by `verify_ar.py` Task 12 (invoice-from-shipment match).
 - **Parallel-ok:** no
 
-### [ ] 8. `post_invoice` — Dr 1120 / Cr 4110 JE + FSM
+### [x] 8. `post_invoice` — Dr 1120 / Cr 4110 JE + FSM
 - **Files:** `backend/app/modules/syerp/service/ar.py`
 - **Do:** Mirror `post_bill` (684-758). Load invoice (404); FSM guard — only 'draft' posts (422 via `_invoice_transition_allowed`); build ONE balanced JE `[{1120, debit=total}, {4110, credit=total}]` where `total = Σ InvoiceLine.amount`; `post_journal_entry(commit=False, entry_date=invoice.invoice_date, source_type="ar_invoice", source_id=invoice.id)`; set `status='posted'`, `posted_at=now`; **single commit**. `entry_date = invoice_date` is the aging tie-out crux (D-P9c-1). Cite AC1/AC2.
 - **Done when:** posting a draft invoice flips it to 'posted', writes a balanced JE that raises the 1120 balance by `total`; re-posting a posted invoice → 422.
 - **Verify:** exercised by `verify_ar.py` (control-tie + TB nets zero).
 - **Parallel-ok:** no
 
-### [ ] 9. `record_receipt` — allocations + FOR-UPDATE guard + Dr cash / Cr 1120 JE + auto-Paid
+### [x] 9. `record_receipt` — allocations + FOR-UPDATE guard + Dr cash / Cr 1120 JE + auto-Paid
 - **Files:** `backend/app/modules/syerp/service/ar.py`
 - **Do:** Mirror `record_payment` (761-953). `record_receipt(db, *, receipt_date, cash_account_id, reference, allocations, actor_id)`: guard cash account is ASSET (422); every allocation amount > 0 and Σ > 0 (422); **lock target invoice rows FOR UPDATE in sorted id order BEFORE the guard read**; per invoice: exists (404), status == 'posted' (422 for draft/paid), live `open_balance = total − Σ prior ReceiptAllocation` (coalesced), reject overpayment via reused `bills._is_overpayment` with per-invoice accumulation for same-invoice allocations; persist `Receipt` (`amount = Σ allocations`) + `ReceiptAllocation`s; ONE balanced JE `[{cash_account_id, debit=total},{1120, credit=total}]` (`commit=False`, `source_type="ar_receipt"`); re-derive each touched invoice open balance, flip 'posted'→'paid' at exactly zero via the FSM; **single commit**; return `ReceiptRead`. Cite AC1/AC3.
 - **Done when:** a full receipt drives the invoice to 'paid' and 1120 down by the amount; an over-allocation returns 422 with nothing persisted; a partial receipt leaves 'posted' with reduced open balance.
 - **Verify:** exercised by `verify_ar.py` (overpayment reject + concurrency scenario).
 - **Parallel-ok:** no
 
-### [ ] 10. `ar_aging_report` in reports.py
+### [x] 10. `ar_aging_report` in reports.py
 - **Files:** `backend/app/modules/syerp/service/reports.py`; `service/__init__.py` (re-export)
 - **Do:** Copy `ap_aging_report` (77-237). Substitute `Bill→Invoice`, `Payment→Receipt`, `PaymentAllocation→ReceiptAllocation`, `vendor_id→customer_id`, `bill_date→invoice_date`, `2110→1120`. Include only invoices with `status in ('posted','paid')` and `invoice_date <= as_of` (drafts excluded — not on 1120). Bucket `open_balance = Σ line.amount − Σ ReceiptAllocation.amount` (receipts dated ≤ as_of). **`control_balance = Σdr − Σcr` over 1120, NO negation** (1120 is debit-normal). `in_balance = grand_total == control_balance`. Cite AC4.
 - **Done when:** `ar_aging_report` returns buckets per customer + grand total; `in_balance` is True in a mixed shipped/invoiced/partially-received scenario.
 - **Verify:** exercised by `verify_ar.py` (Decimal-exact control tie).
 - **Parallel-ok:** no (after Tasks 8-9)
 
-### [ ] 11. AR router endpoints — RBAC-gated, audit-after-commit
+### [x] 11. AR router endpoints — RBAC-gated, audit-after-commit
 - **Files:** `backend/app/modules/syerp/router.py`
 - **Do:** Mirror the AP endpoints (1107-1298). Add: `GET /syerp/ar/uninvoiced-shipments?customer_id=` (read); `POST /syerp/ar/invoices` (write, 201, audit `invoice.created`); `GET /syerp/ar/invoices` (+`customer_id`/`status`) and `GET /syerp/ar/invoices/{id}` (read); `POST /syerp/ar/invoices/{id}/post` (write, audit `invoice.posted`); `POST /syerp/ar/receipts` (write, 201, audit `receipt.recorded`); `GET /syerp/ar/receipts` (read); `GET /syerp/ar/aging?as_of=` (read, no audit). All writes `Depends(require_permission("syerp:write"))`, reads `syerp:read`. `write_audit(..., target_id=str(x.id))` AFTER each service commit. Cite AC2/AC3/AC6/AC7.
 - **Done when:** the 8 routes appear in OpenAPI (`/api/v1/syerp/ar/...`); a write route with a read-only token → 403, no token → 401.
@@ -182,6 +182,12 @@ None. All architecture choices are pinned by the owner (single phase; price lock
 - **Done when:** `npm run build` (`tsc -b && vite build`) succeeds; ArAging Vitest passes; nav shows the three AR items.
 - **Verify:** `cd frontend && npx vitest run src/routes/syerp/ArAging.test.tsx && npm run build`
 - **Parallel-ok:** no (touches shared App.tsx / SyerpNav — sequence after 15-17)
+
+## Deviations
+- **Task 5/11 — `ReceiptCreate` name collision (latent bug fixed).** The AR `ReceiptCreate` schema added in Task 5 shadowed the pre-existing inventory costed-receipt `ReceiptCreate` in `schemas.py`, silently rebinding `POST /syerp/inventory/items/{id}/receipts` to the wrong request body. Renamed the AR schema to `ArReceiptCreate` (zero prior references — minimal blast radius) and wired the AR receipt route to it; inventory `ReceiptCreate` unchanged. Verified: inventory schema fields `{location_id, qty, unit_cost, source_type, source_id}`, AR schema fields `{receipt_date, cash_account_id, reference, allocations}`. Task 13 will regression-assert the inventory receipt endpoint still accepts its costed body. (Fix rides Task 11 commit `f06ec78`.)
+- **Task 6/9 — commit-subject length + new-file header hooks.** Repo hooks cap commit subjects at 72 chars and require an `ABOUTME:` header on new source files. Task 6/9 subjects were trimmed to fit; `ar.py` got an ABOUTME block matching the gelato/crumb convention. Cosmetic, no behavior change.
+- **Task 7 — `create_invoice` collision-retry re-invokes the full function.** On an `INV-####` IntegrityError the rollback also discards the `qty_invoiced` accumulator bump, so the retry re-runs `create_invoice` end-to-end (re-locks, re-validates, re-applies) rather than bills' inline re-insert (bills has no accumulator to re-apply). Correct mirror; the concurrent-create path is proven in Task 12 scenario F.
+- **Task 11 — verify command adapted.** The plan's `from app.main import create_app` is wrong (`main.py` exposes a module-level `app`, and re-importing it under-populates `app.routes` because routers mount via `importlib`+`mount_all`); routes were proven against the running server's authoritative `/openapi.json` (all 8 AR ops present). Added a `get_receipt` single-read for symmetry with the AP payment read.
 
 ## Risks
 - **Aging sign flip (control tie):** copying `ap_aging_report` verbatim keeps the 2110 negation — 1120 is debit-normal and must NOT be negated. Early warning: `verify_ar.py` scenario B `in_balance == False` or a negative `control_balance`. Fix is the single line at reports.py ~229.
