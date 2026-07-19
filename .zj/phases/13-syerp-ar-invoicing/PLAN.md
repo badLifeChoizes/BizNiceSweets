@@ -132,14 +132,14 @@ None. All architecture choices are pinned by the owner (single phase; price lock
 
 ### Wave C — verify
 
-### [ ] 12. `verify_ar.py` — service-level tie-out + match + reject + COGS tie + concurrency
+### [x] 12. `verify_ar.py` — service-level tie-out + match + reject + COGS tie + concurrency
 - **Files:** `backend/scripts/verify_ar.py` (new)
 - **Do:** Mirror `verify_ap.py`. Build inputs in **real router/payload shape**. Scenarios: (A) preflight — assert 1110/1111/1120/1130/4110/5100 resolve; (B) end-to-end tie-out — receive→ship (asserts the 12b COGS-on-ship Dr 5100/Cr 1130 moving-avg JE exists) → create_invoice from the shipped SO line (assert uninvoiced match, price locked to SO `unit_price`) → post_invoice → record partial + full receipt → assert AR aging **grand_total == 1120 control balance Decimal-exactly** on one date basis (invoice_date), and invoice auto-Paid at zero; (C) over-invoice rejected 422; (D) over-receipt rejected 422; (E) **load-bearing concurrency** — two `asyncio.gather` receipts against one invoice whose combined amount exceeds open balance: exactly one succeeds, one 422s; construct the fixture so ONLY the over-allocation guard can reject (give amount/FSM guards slack), and mutation-prove (revert the FOR-UPDATE lock → two successes); (F) second concurrency scenario — two concurrent `create_invoice` against one shipped SO line cannot jointly over-invoice. Exit non-zero on any failure. Cite AC1/AC2/AC3/AC4.
 - **Done when:** `verify_ar.py` exits 0 on the built stack; reverting either FOR-UPDATE lock makes scenario E or F fail (load-bearing proof recorded).
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_ar.py; echo $?`
 - **Parallel-ok:** no
 
-### [ ] 13. `verify_ar_api.py` — HTTP RBAC + attributable audit rows
+### [x] 13. `verify_ar_api.py` — HTTP RBAC + attributable audit rows
 - **Files:** `backend/scripts/verify_ar_api.py` (new)
 - **Do:** Mirror `verify_ap_api.py`. Over HTTP: each write route with no token → 401, read-only token → 403, `syerp:write` → 200/201; each read route gated `syerp:read`. After a successful invoice create/post and receipt, assert an attributable audit row (`invoice.created` / `invoice.posted` / `receipt.recorded`) exists with the actor id. Cite AC6/AC7.
 - **Done when:** script exits 0; every AR route proves the 401/403/200 triad and audit rows are present.
@@ -188,6 +188,8 @@ None. All architecture choices are pinned by the owner (single phase; price lock
 - **Task 6/9 — commit-subject length + new-file header hooks.** Repo hooks cap commit subjects at 72 chars and require an `ABOUTME:` header on new source files. Task 6/9 subjects were trimmed to fit; `ar.py` got an ABOUTME block matching the gelato/crumb convention. Cosmetic, no behavior change.
 - **Task 7 — `create_invoice` collision-retry re-invokes the full function.** On an `INV-####` IntegrityError the rollback also discards the `qty_invoiced` accumulator bump, so the retry re-runs `create_invoice` end-to-end (re-locks, re-validates, re-applies) rather than bills' inline re-insert (bills has no accumulator to re-apply). Correct mirror; the concurrent-create path is proven in Task 12 scenario F.
 - **Task 11 — verify command adapted.** The plan's `from app.main import create_app` is wrong (`main.py` exposes a module-level `app`, and re-importing it under-populates `app.routes` because routers mount via `importlib`+`mount_all`); routes were proven against the running server's authoritative `/openapi.json` (all 8 AR ops present). Added a `get_receipt` single-read for symmetry with the AP payment read.
+
+- **Task 13 — fixed a pre-existing (Phase 12a) production boot defect.** The mandated inventory-receipt regression assertion surfaced that `POST /syerp/inventory/items/{id}/receipts` returned **500** on a fresh app process: GELATO imports its models lazily (D-P12a-3), and module registration via `importlib` on packages left `gelato_bin` out of `Base.metadata`, so the cross-module string FK `syerp_inventory_txn.bin_id → gelato_bin` was unresolvable until some gelato service call happened to load the models — order-dependent, which is why 12a's Noticed mislabelled it a "dev-only `--reload` race". Fixed in `backend/app/main.py` by importing the central `app.core.models` aggregator at boot (the exact metadata contract Alembic + all verify scripts already rely on); D-P12a-3 preserved (SYERP still does not import gelato). Committed separately `ea2f2cb fix(core): import model aggregator at startup so FKs resolve`. Regression assertion (costed body → 201, AR body → 422) locks it in. See DECISIONS D-P13-8.
 
 ## Risks
 - **Aging sign flip (control tie):** copying `ap_aging_report` verbatim keeps the 2110 negation — 1120 is debit-normal and must NOT be negated. Early warning: `verify_ar.py` scenario B `in_balance == False` or a negative `control_balance`. Fix is the single line at reports.py ~229.

@@ -930,3 +930,11 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   `ap_aging_report` but 1120 is **debit-normal** (`control_balance = Σdr − Σcr`, positive receivable)
   whereas 2110 is credit-normal (negated). Removing the copied negation is the top plan risk, pinned by
   `verify_ar.py` scenario B (`in_balance` False on a mistake).
+- **D-P13-8 (build, forced by Task 13):** **The running app depends on `app.core.models` being imported
+  at boot.** Module `__init__` imports only the router, and GELATO imports its models lazily (D-P12a-3),
+  so `importlib`-based module registration left cross-module string FKs (e.g.
+  `syerp_inventory_txn.bin_id → gelato_bin`) unresolvable on a fresh process → the first `InventoryTxn`
+  flush 500'd order-dependently (mislabelled a dev-only `--reload` race at 12a verify). Fix: `main.py`
+  imports the central `app.core.models` aggregator after module registration — the same metadata contract
+  Alembic and every `verify_*.py` already rely on. D-P12a-3 intact (SYERP never imports gelato; the
+  aggregator does). Any new cross-module FK must keep its model reachable via that aggregator.

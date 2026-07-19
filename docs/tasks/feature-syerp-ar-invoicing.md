@@ -19,8 +19,8 @@ Branch cut off the verified 12b tip (code-identical to tag `zj/good-12b-gelato-p
 - [x] 11. AR router endpoints — RBAC-gated, audit-after-commit
 
 ## Wave C — verify
-- [ ] 12. `verify_ar.py` — service-level tie-out + match + reject + COGS tie + concurrency
-- [ ] 13. `verify_ar_api.py` — HTTP RBAC + attributable audit rows
+- [x] 12. `verify_ar.py` — service-level tie-out + match + reject + COGS tie + concurrency
+- [x] 13. `verify_ar_api.py` — HTTP RBAC + attributable audit rows
 - [ ] 14. Full regression suite + Trial Balance nets zero with AR JEs
 
 ## Wave D — frontend
