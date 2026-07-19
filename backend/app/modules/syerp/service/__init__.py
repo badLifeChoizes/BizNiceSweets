@@ -120,6 +120,15 @@ from app.modules.syerp.service.bills import (
     post_bill,
     record_payment,
 )
+from app.modules.syerp.service.ar import (
+    INVOICE_TRANSITIONS,
+    _INVOICE_NUMBER_RE,
+    _invoice_transition_allowed,
+    _next_invoice_number,
+    _uninvoiced_qty,
+    generate_invoice_number,
+    list_uninvoiced_shipments,
+)
 from app.modules.syerp.service.reports import (
     ap_aging_report,
     balance_sheet,
@@ -129,6 +138,7 @@ from app.modules.syerp.service.reports import (
 
 __all__ = [
     "BILL_TRANSITIONS",
+    "INVOICE_TRANSITIONS",
     "PO_TRANSITIONS",
     "add_line",
     "advance_bill_status",
@@ -144,6 +154,7 @@ __all__ = [
     "create_po",
     "derive_account_balance",
     "generate_bill_number",
+    "generate_invoice_number",
     "generate_item_code",
     "generate_partner_code",
     "generate_po_number",
@@ -168,6 +179,7 @@ __all__ = [
     "list_payments",
     "list_pos",
     "list_unbilled_receipts",
+    "list_uninvoiced_shipments",
     "post_adjustment",
     "post_bill",
     "post_issue",
