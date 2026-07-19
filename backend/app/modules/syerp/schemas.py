@@ -935,13 +935,16 @@ class UninvoicedShipmentRead(BaseModel):
     A sales order line that has been shipped but not yet fully invoiced:
     `uninvoiced_qty` is the still-billable quantity at the line's `unit_price`.
     `item_id` FKs a SYERP stock item on a stock line; `description` carries the
-    free-text item on a non-stock line. Quantities/prices are fixed-point Decimals
-    (never float — D-11).
+    free-text item on a non-stock line. `item_label` is the resolved "code — name"
+    of that stock item for display (None on a non-stock line — the picker then shows
+    `description`), so the UI never renders a bare UUID. Quantities/prices are
+    fixed-point Decimals (never float — D-11).
     """
 
     sales_order_line_id: str
     so_number: str
     item_id: Optional[str] = None
+    item_label: Optional[str] = None
     description: Optional[str] = None
     uninvoiced_qty: Decimal
     unit_price: Decimal

@@ -158,11 +158,21 @@ async def list_uninvoiced_shipments(
     line's sort_order for a stable presentation.
     """
     from app.modules.crumb.models import SalesOrder, SalesOrderLine
+    from app.modules.syerp.models import InventoryItem
     from app.modules.syerp.schemas import UninvoicedShipmentRead
 
+    # LEFT JOIN the stock item so a stock line carries a human "code — name" label
+    # (GAP-2 fix) instead of the UI rendering a bare item UUID; non-stock lines
+    # (item_id NULL) leave item_code/item_name NULL and fall back to `description`.
     result = await db.execute(
-        select(SalesOrderLine, SalesOrder.so_number)
+        select(
+            SalesOrderLine,
+            SalesOrder.so_number,
+            InventoryItem.code,
+            InventoryItem.name,
+        )
         .join(SalesOrder, SalesOrder.id == SalesOrderLine.sales_order_id)
+        .outerjoin(InventoryItem, InventoryItem.id == SalesOrderLine.item_id)
         .where(
             SalesOrder.partner_id == customer_id,
             SalesOrderLine.qty_shipped - SalesOrderLine.qty_invoiced > 0,
@@ -176,11 +186,12 @@ async def list_uninvoiced_shipments(
             sales_order_line_id=line.id,
             so_number=so_number,
             item_id=line.item_id,
+            item_label=(f"{item_code} — {item_name}" if item_code else None),
             description=line.description,
             uninvoiced_qty=_uninvoiced_qty(line.qty_shipped, line.qty_invoiced),
             unit_price=line.unit_price,
         )
-        for line, so_number in rows
+        for line, so_number, item_code, item_name in rows
     ]
 
 

@@ -59,6 +59,7 @@ interface UninvoicedShipmentRead {
   sales_order_line_id: string
   so_number: string
   item_id: string | null
+  item_label: string | null
   description: string | null
   uninvoiced_qty: string
   unit_price: string
@@ -328,10 +329,10 @@ export function InvoiceCreateDialog({
                       />
                       <span className="text-sm">
                         {s.so_number}
-                        {s.item_id || s.description ? (
+                        {s.item_label || s.description ? (
                           <span className="text-muted-foreground">
                             {' '}
-                            · {s.item_id ?? s.description}
+                            · {s.item_label ?? s.description}
                           </span>
                         ) : null}
                       </span>

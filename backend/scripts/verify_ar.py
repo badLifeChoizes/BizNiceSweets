@@ -80,7 +80,7 @@ import asyncio
 import os
 import sys
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import HTTPException
@@ -775,6 +775,108 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             and await _so_line_invoiced(session_factory, c["so_line_id"]) == Decimal("0"),
             f"status={bad_so_status!r} rows={bad_so_rows!r} "
             f"invoiced={await _so_line_invoiced(session_factory, c['so_line_id'])!r}",
+        )
+
+        # ===================================================================
+        # (G) PREPAYMENT DATE-SEAM — aging tie-out holds when receipt_date < invoice_date
+        # ===================================================================
+        # Milestone-audit GAP-1 regression. A receipt dated on/before as_of allocated to an
+        # invoice dated AFTER as_of (a customer prepayment / future-dated invoice) used to
+        # orphan the receipt's Cr-1120 leg in the control balance — the paying invoice's
+        # Dr-1120 leg is not yet recognized and the subledger drops both — so the tie-out
+        # falsely tripped with a NEGATIVE 1120 control. ar_aging_report now adds those
+        # allocation amounts back (prepayment reclassification), so the tie-out holds for
+        # EVERY date ordering. LOAD-BEARING: delete the prepay_adjust block in
+        # service/reports.py::ar_aging_report and the as_of=today assertion FAILS
+        # (control undershoots grand_total by the receipt amount, in_balance False).
+        g = await _seed_shipped_line(
+            session_factory, reg, unique, "G", actor_id, main_id, cust_id,
+            receipts=[(Decimal("20"), Decimal("5"))],
+            into_bin_qty=Decimal("10"), order_qty=Decimal("5"), ship_qty=Decimal("5"),
+        )
+        # GAP-2 companion (checked here while the line is still uninvoiced): the
+        # uninvoiced-shipments picker labels a stock line with a human "code — name",
+        # never a bare item UUID.
+        async with session_factory() as session:
+            g_pick = await list_uninvoiced_shipments(session, cust_id)
+        g_pick_row = next((r for r in g_pick if r.item_id == g["item_id"]), None)
+        check(
+            "(G) list_uninvoiced_shipments labels a stock line with 'code — name' "
+            "(item_label set, not a bare UUID)",
+            g_pick_row is not None
+            and g_pick_row.item_label is not None
+            and " — " in g_pick_row.item_label
+            and g_pick_row.item_label != g_pick_row.item_id,
+            f"row={g_pick_row!r}",
+        )
+        future = today + timedelta(days=10)
+        # Baseline control at as_of=today BEFORE the future invoice exists.
+        async with session_factory() as session:
+            report_g0 = await ar_aging_report(session, as_of=today)
+        base_g = report_g0.control_balance
+        async with session_factory() as session:
+            g_inv = await create_invoice(
+                session,
+                customer_id=cust_id,
+                sales_order_id=g["so_id"],
+                invoice_date=future,
+                lines=[
+                    InvoiceLineCreate(
+                        sales_order_line_id=g["so_line_id"], invoiced_qty=Decimal("5")
+                    )
+                ],
+                actor_id=actor_id,
+            )
+        reg.invoice_ids.add(g_inv.id)
+        async with session_factory() as session:
+            await post_invoice(session, g_inv.id, actor_id)
+        # Prepayment: receipt dated TODAY (before the invoice_date) — the reachable path.
+        async with session_factory() as session:
+            g_rcpt = await record_receipt(
+                session,
+                receipt_date=today,
+                cash_account_id=cash_1110_id,
+                reference=f"RCPT-{unique}-prepay",
+                allocations=[
+                    ReceiptAllocationCreate(invoice_id=g_inv.id, amount=Decimal("40"))
+                ],
+                actor_id=actor_id,
+            )
+        reg.receipt_ids.add(g_rcpt.id)
+        # as_of=today: the future invoice is NOT yet recognized, the prepayment is
+        # reclassified out of the control, so the tie-out holds and the control is
+        # UNCHANGED from baseline (no false negative receivable).
+        async with session_factory() as session:
+            report_g_today = await ar_aging_report(session, as_of=today)
+        check(
+            "(G) with a receipt dated before its invoice_date (prepayment), the aging "
+            "as_of=today still ties the 1120 control Decimal-exact, in_balance is True, and "
+            "the control is unchanged from baseline (no phantom negative receivable)",
+            report_g_today.grand_total.total == report_g_today.control_balance
+            and report_g_today.in_balance
+            and report_g_today.control_balance == base_g,
+            f"grand={report_g_today.grand_total.total!r} "
+            f"control={report_g_today.control_balance!r} baseline={base_g!r} "
+            f"in_balance={report_g_today.in_balance}",
+        )
+        # as_of=future: the invoice is now recognized, receipt already counted — the open
+        # 60 receivable (100 invoice - 40 prepaid) ties normally. Compared against the
+        # as_of=today report (identical DB state, only as_of differs) the control rises by
+        # exactly G's open 60 — isolating G's recognition from the other scenarios' shared
+        # customer balances.
+        async with session_factory() as session:
+            report_g_future = await ar_aging_report(session, as_of=future)
+        check(
+            "(G) as_of the invoice_date the receivable is recognized: aging ties the 1120 "
+            "control Decimal-exact (in_balance), and the control rises by exactly the open "
+            "60 (100 invoice - 40 prepaid) between as_of=today and as_of=invoice_date",
+            report_g_future.grand_total.total == report_g_future.control_balance
+            and report_g_future.in_balance
+            and report_g_future.control_balance - report_g_today.control_balance
+            == Decimal("60"),
+            f"grand={report_g_future.grand_total.total!r} "
+            f"control={report_g_future.control_balance!r} "
+            f"Δ(future-today)={report_g_future.control_balance - report_g_today.control_balance!r}",
         )
 
         # ===================================================================

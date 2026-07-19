@@ -394,6 +394,30 @@ async def ar_aging_report(db: AsyncSession, as_of: date | None = None) -> "ArAgi
     ).scalar() or Decimal("0")
     control_balance = Decimal(control_raw)
 
+    # Prepayment reclassification (GAP-1 fix): control_raw sums every 1120 leg by its own
+    # entry_date, but a receipt dated on/before as_of that is allocated to an invoice dated
+    # AFTER as_of leaves its Cr-1120 leg orphaned — the paying invoice's Dr-1120 leg is not
+    # yet recognized (invoice_date > as_of), and the subledger drops both. Left uncorrected
+    # the control reads a nonsensical NEGATIVE receivable and the tie-out badge falsely trips
+    # (a customer prepayment / future-dated invoice is really an unearned deposit, not a
+    # negative AR). Add those allocation amounts back so the control counts only receipts
+    # against invoices recognized as of this date — the tie-out then holds for every date
+    # ordering while control_balance stays GL-sourced. Exact Decimal.
+    prepay_adjust = (
+        await db.execute(
+            select(func.coalesce(func.sum(ReceiptAllocation.amount), 0))
+            .select_from(ReceiptAllocation)
+            .join(Receipt, ReceiptAllocation.receipt_id == Receipt.id)
+            .join(Invoice, ReceiptAllocation.invoice_id == Invoice.id)
+            .where(
+                Receipt.receipt_date <= as_of,
+                Invoice.invoice_date > as_of,
+                Invoice.status.in_(("posted", "paid")),
+            )
+        )
+    ).scalar() or Decimal("0")
+    control_balance = control_balance + Decimal(prepay_adjust)
+
     return ArAgingReport(
         as_of=as_of,
         customers=customers,

@@ -57,6 +57,7 @@ const SHIPMENTS = [
     sales_order_line_id: 'sol1',
     so_number: 'SO-2001',
     item_id: 'i1',
+    item_label: 'ITEM-0001 — Reservoir Cartridge',
     description: null,
     uninvoiced_qty: '4',
     unit_price: '18.50',
@@ -111,6 +112,10 @@ describe('InvoiceCreateDialog', () => {
 
     // The uninvoiced shipped qty renders from the real payload.
     expect(await screen.findByText('4')).toBeInTheDocument()
+
+    // The item renders its human "code — name" label, NEVER the bare item UUID (GAP-2).
+    expect(screen.getByText(/ITEM-0001 — Reservoir Cartridge/)).toBeInTheDocument()
+    expect(screen.queryByText(/·\s*i1/)).not.toBeInTheDocument()
 
     // The unit price is READ-ONLY — a span locked to the SO line price, never an input.
     const priceCell = screen.getByLabelText('Unit price SO-2001')

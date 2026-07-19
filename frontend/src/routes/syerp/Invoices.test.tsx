@@ -57,6 +57,7 @@ const SHIPMENTS = [
     sales_order_line_id: 'sol1',
     so_number: 'SO-2001',
     item_id: 'i1',
+    item_label: 'ITEM-0001 — Reservoir Cartridge',
     description: null,
     uninvoiced_qty: '4',
     unit_price: '18.50',
