@@ -1,5 +1,33 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-19 (**Phase 13 PLAN COMPLETE** — `/zj:plan 13` on branch
+Updated: 2026-07-19 (**Phase 13 BUILD COMPLETE** — `/zj:build 13` on fresh branch
+`feature-syerp-ar-invoicing` (cut off the code-identical 12b tip carrying the plan; a bare-tag branch
+would have dropped the plan — 12a/12b precedent). **All 18 tasks shipped**, SYERP-13 AR & sell-side
+books end-to-end; **v3.0 DoD clause 3 closed**. Wave A: Invoice/InvoiceLine + Receipt/ReceiptAllocation
+models + `qty_invoiced` accumulator on `crumb_sales_order_line` (dead-through-UI keeper: model→schema→FE
+render→Vitest) + migration **0017** (clean up/down round-trip) + AR schemas. Wave B: `service/ar.py`
+(`create_invoice` FOR-UPDATE lock on SO-line rows + price locked to SO `unit_price` + stamps qty_invoiced;
+`post_invoice` → **Dr 1120 / Cr 4110** JE `entry_date=invoice_date`; `record_receipt` FOR-UPDATE lock on
+invoice rows + reused `bills._is_overpayment` + **Dr cash / Cr 1120** JE + auto-Paid at zero) + `ar_aging_report`
+(**NO negation** — 1120 debit-normal) + thin RBAC router `/syerp/ar/*` audit-after-commit. Wave C:
+`verify_ar.py` **16 asserts green** — end-to-end tie-out (asserts the 12b COGS-on-ship JE, does not rebuild),
+aging **grand_total == 1120 control Decimal-exact**, over-invoice/over-receipt 422, and **BOTH concurrency
+locks mutation-proven** (revert record_receipt lock → 120-vs-100 over-collect; revert create_invoice lock →
+joint 12-vs-10 over-invoice + qty_invoiced lost-update; restore → one success/one 422) — the 12b "only the
+guard under test can reject" discipline honored; `verify_ar_api.py` **29 asserts** (HTTP 401/403/200 triad on
+all 8 routes + attributable audit + inventory-receipt regression lock); **full regression 23/23 green**, TB
+nets zero, BS balances. Wave D: Invoices list/create-from-shipment/detail + Receipts + AR Aging screen + nav +
+routes; FE **44 files / 131 tests green**, `npm run build` exit 0. **Two material handlings, both fixed:**
+(1) the AR `ReceiptCreate` schema (Task 5) **shadowed** the inventory costed-receipt `ReceiptCreate`, silently
+breaking `POST /inventory/items/{id}/receipts` → renamed to `ArReceiptCreate`, regression-locked in
+verify_ar_api; (2) the Task-13 regression assertion surfaced a **pre-existing 12a production 500** —
+`syerp_inventory_txn.bin_id → gelato_bin` FK unresolvable on a fresh process (lazy gelato model imports +
+importlib registration) → fixed in `main.py` by importing the `app.core.models` aggregator at boot
+(**D-P13-8**; D-P12a-3 preserved). Plus a phantom-`partially_paid` docstring corrected (real FSM is
+draft→posted→paid). Lint gates still non-functional (BACKLOG p1); correctness rests on verify_* (23/23) +
+Vitest (131). Checklist (all 18 ticked): `docs/tasks/feature-syerp-ar-invoicing.md`. **Next action:**
+`/zj:verify 13`.)
+
+Prior: 2026-07-19 (**Phase 13 PLAN COMPLETE** — `/zj:plan 13` on branch
 `feature-gelato-pick-pack-ship` (planning artifacts; build branches fresh). **Phase 13 = SYERP-13 AR &
 sell-side books, the FINAL v3.0 phase** — closes v3.0 DoD clause 3. **Single phase** (owner, D-P13-1 — not
 sub-split; AR aging is a thin copy of AP aging, TB/P&L/BS already exist from 9c). **18 tasks in 4 waves**
@@ -89,12 +117,14 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
-- **Step:** **PLAN COMPLETE** — **Phase 13 (SYERP-13 AR & sell-side books — the FINAL v3.0 phase)
-  planned 2026-07-19** (`/zj:plan 13`). Single phase (D-P13-1), 18 tasks, closes v3.0 DoD clause 3.
-  Delivers the invoice (Dr 1120/Cr 4110) + receipt (Dr cash/Cr 1120) JEs + AR aging tying Decimal-exactly
-  to the 1120 control account (the COGS-on-ship JE already shipped in 12b, D-P13-3). Plan:
-  `.zj/phases/13-syerp-ar-invoicing/PLAN.md`; decisions D-P13-1..7. **Next action:** `/zj:build 13`
-  (branch fresh `feature-syerp-ar-invoicing` off tag `zj/good-12b-gelato-pick-pack-ship`, migration 0017).
+- **Step:** **BUILD COMPLETE** — **Phase 13 (SYERP-13 AR & sell-side books — the FINAL v3.0 phase)
+  built 2026-07-19** (`/zj:build 13`) on branch `feature-syerp-ar-invoicing`. All 18 tasks, **v3.0 DoD
+  clause 3 closed**. Delivers the invoice (Dr 1120/Cr 4110) + receipt (Dr cash/Cr 1120) JEs + AR aging
+  tying Decimal-exactly to the 1120 control (the COGS-on-ship JE was asserted, not rebuilt — D-P13-3).
+  Proof: `verify_ar.py` 16 asserts (both concurrency locks mutation-proven) + `verify_ar_api.py` 29 asserts
+  + **23/23** full regression (TB nets zero, BS balances) + FE **44 files / 131 tests** + `npm run build`
+  exit 0. Decisions D-P13-1..8 (D-P13-8 = the app.core.models boot import). Plan + checklist all ticked.
+  **Next action:** `/zj:verify 13`.
 
 - **(historical) Step:** **RETRO'D** — **Phase 12b (GELATO outbound: pick → pack → ship) closed 2026-07-19**
   (`/zj:retro 12b`), tag `zj/good-12b-gelato-pick-pack-ship` at `553bcfb`. Roadmap marked
