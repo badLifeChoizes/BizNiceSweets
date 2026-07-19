@@ -602,3 +602,322 @@ async def post_invoice(db: AsyncSession, invoice_id: str, actor_id: str) -> "Inv
 
     await db.commit()
     return await get_invoice(db, invoice.id)
+
+
+# ---------------------------------------------------------------------------
+# AR cash receipts (Phase 13, SYERP-13)
+# ---------------------------------------------------------------------------
+
+
+async def advance_invoice_status(
+    db: AsyncSession, invoice_id: str, target: str, actor_id: str
+) -> "InvoiceRead":
+    """
+    Advance an AR invoice through the FSM (Phase 13).
+
+    The sell-side mirror of advance_bill_status. Validates the invoice exists (404) and
+    that `target` is an allowed successor of the current status per INVOICE_TRANSITIONS
+    (draft -> posted -> paid, paid terminal) — 422 if not. Sets invoice.status = target
+    and flushes (NOT commits): the caller owns the single commit so the transition can
+    ride the same unit of work as its side effects — record_receipt rolls an invoice to
+    'paid' inside the receipt's own transaction. Returns the updated invoice as an
+    InvoiceRead (header + nested lines).
+    """
+    invoice = await _get_invoice_row(db, invoice_id)
+
+    if not _invoice_transition_allowed(invoice.status, target):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Cannot transition invoice from '{invoice.status}' to '{target}'. "
+                f"Allowed transitions: "
+                f"{sorted(INVOICE_TRANSITIONS.get(invoice.status, set()))}"
+            ),
+        )
+
+    invoice.status = target
+    await db.flush()
+
+    return await get_invoice(db, invoice_id)
+
+
+async def record_receipt(
+    db: AsyncSession,
+    *,
+    receipt_date: date,
+    cash_account_id: int,
+    reference: str | None,
+    allocations: "Iterable[object]",
+    actor_id: str,
+) -> "ReceiptRead":
+    """
+    Record a cash receipt against one or more posted AR invoices (Phase 13).
+
+    The sell-side mirror of record_payment. `allocations` is the ReceiptCreate payload's
+    list of (invoice_id, amount) items — each a ReceiptAllocationCreate (or any object
+    exposing `.invoice_id` / `.amount`). The whole collection is ONE atomic unit of
+    work: a single ``db.commit`` at the very end, so every guard below rejects (422/404)
+    with NOTHING persisted, and a successful receipt lands its header, allocations, the
+    balanced GL entry, and any auto-Paid transition together — never partially.
+
+    Guard order — each rejection mutates nothing:
+      1. `cash_account_id` must resolve to a GL account of type ASSET (422 else) — the
+         funds land in a cash/bank asset (default 1110; 1111 is ASSET too).
+      2. Σ allocation amounts must be > 0, and every individual amount > 0 (422 else).
+      3. For each allocation the invoice must exist (404) and be 'posted' (422 for a
+         'draft' or 'paid' invoice). The invoice's LIVE open_balance is total invoiced
+         (Σ line.amount, folded from Decimal("0")) minus the coalesced Σ of PRIOR
+         ReceiptAllocation.amount (_invoice_received_amount, D-P8-4) — each side
+         coalesced independently. Overpayment is rejected via the pure, REUSED
+         bills._is_overpayment (receipt > open_balance; the == boundary fully collects).
+         When the SAME invoice appears in several allocations of this one receipt they
+         must not JOINTLY overpay: the claimed amount is accumulated per invoice_id and
+         the running total checked against the live open_balance.
+
+    On success, in that single transaction:
+      - persist a Receipt header (amount = Σ allocations) + one ReceiptAllocation row
+        per allocation;
+      - post ONE balanced JE (commit=False): Dr the cash account / Cr 1120 Accounts
+        Receivable, for the receipt total — the funds arrive in cash, the receivable
+        drops;
+      - for each touched invoice, re-derive open_balance INCLUDING the just-added
+        allocations; when it hits EXACTLY zero, advance the invoice 'posted' -> 'paid'
+        via advance_invoice_status (auto-Paid). A partial receipt leaves the invoice
+        'posted' with a reduced open_balance.
+
+    The target invoice rows are locked FOR UPDATE up-front in sorted id order
+    (deadlock-safe) BEFORE the guard read — the overpayment guard is read-then-write, so
+    a second concurrent receipt blocks until the first commits and re-reads the true
+    received sum (mirrors record_payment). Audit (receipt.recorded) is the router's job;
+    this service NEVER writes audit and takes exactly one commit. Returns the receipt as
+    a ReceiptRead (constructed explicitly; allocations loaded via an ordered SELECT — no
+    ORM relationship).
+    """
+    from app.modules.syerp.models import Receipt, ReceiptAllocation
+    from app.modules.syerp.schemas import ReceiptAllocationRead, ReceiptRead
+
+    alloc_list = list(allocations)
+
+    # Guard 1: the cash side must be an ASSET account (422 otherwise).
+    cash_account = await _require_gl_account(db, cash_account_id)  # 404 if unknown.
+    if cash_account.account_type != "ASSET":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"GL account {cash_account.code} is {cash_account.account_type}; a "
+                f"receipt must land in an ASSET (cash/bank) account."
+            ),
+        )
+
+    # Guard 2: a receipt is cash IN — the total and every leg must be positive.
+    total = Decimal("0")
+    for alloc in alloc_list:
+        amount = Decimal(str(alloc.amount))
+        if amount <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Each receipt allocation amount must be greater than zero.",
+            )
+        total += amount
+    if total <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Receipt total (sum of allocations) must be greater than zero.",
+        )
+
+    # Serialize concurrent receipts against the same invoice: lock each target invoice
+    # row FOR UPDATE up-front, in sorted id order (deadlock-safe), so a second receipt
+    # blocks until the first commits and then re-reads the true received sum. Locks are
+    # held until this function's single db.commit() (mirrors record_payment).
+    for locked_invoice_id in sorted({alloc.invoice_id for alloc in alloc_list}):
+        await _get_invoice_row(db, locked_invoice_id, for_update=True)
+
+    # Guard 3: resolve/validate each invoice and reject overpayment BEFORE any write.
+    # open_balance = total invoiced - coalesced prior received (each side coalesced).
+    # Same-invoice allocations accumulate so they cannot jointly overpay one balance.
+    invoice_rows: dict[str, "Invoice"] = {}
+    invoice_total_by_id: dict[str, Decimal] = {}
+    open_balance_by_id: dict[str, Decimal] = {}
+    claimed_by_id: dict[str, Decimal] = {}
+    for alloc in alloc_list:
+        invoice_id = alloc.invoice_id
+        amount = Decimal(str(alloc.amount))
+        if invoice_id not in invoice_rows:
+            invoice = await _get_invoice_row(db, invoice_id)  # 404 if unknown.
+            if invoice.status != "posted":
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"Cannot collect invoice {invoice.invoice_number}: it is "
+                        f"'{invoice.status}', only a 'posted' invoice can be collected."
+                    ),
+                )
+            lines = await _load_invoice_lines(db, invoice_id)
+            invoice_total = sum((line.amount for line in lines), Decimal("0"))
+            received = await _invoice_received_amount(db, invoice_id)
+            invoice_rows[invoice_id] = invoice
+            invoice_total_by_id[invoice_id] = invoice_total
+            open_balance_by_id[invoice_id] = invoice_total - received
+            claimed_by_id[invoice_id] = Decimal("0")
+        claimed_by_id[invoice_id] += amount
+        if _is_overpayment(open_balance_by_id[invoice_id], claimed_by_id[invoice_id]):
+            invoice = invoice_rows[invoice_id]
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Receipt of {claimed_by_id[invoice_id]} overpays invoice "
+                    f"{invoice.invoice_number} (open balance "
+                    f"{open_balance_by_id[invoice_id]})."
+                ),
+            )
+
+    # Persist the receipt header first so its id is available for the allocations' FK,
+    # the JE source link, and the read-back.
+    receipt = Receipt(
+        receipt_date=receipt_date,
+        cash_account_id=cash_account_id,
+        amount=total,
+        reference=reference,
+        actor_id=actor_id,
+    )
+    db.add(receipt)
+    await db.flush()  # materialize receipt.id.
+
+    for alloc in alloc_list:
+        db.add(
+            ReceiptAllocation(
+                receipt_id=receipt.id,
+                invoice_id=alloc.invoice_id,
+                amount=Decimal(str(alloc.amount)),
+            )
+        )
+
+    # One balanced JE (commit=False): Dr the cash account / Cr 1120 AR for the total —
+    # rides THIS transaction's single commit alongside the allocations and any auto-Paid
+    # flip, so a receipt can never persist without its balanced GL entry.
+    ar_account_id = await _gl_account_id_by_code(db, "1120")
+    await post_journal_entry(
+        db,
+        entry_date=receipt_date,
+        memo=f"AR receipt {receipt.id}",
+        lines=[
+            {"account_id": cash_account_id, "debit": total, "credit": 0},
+            {"account_id": ar_account_id, "debit": 0, "credit": total},
+        ],
+        actor_id=actor_id,
+        source_type="ar_receipt",
+        source_id=receipt.id,
+        commit=False,
+    )
+
+    # Re-derive each touched invoice's open_balance INCLUDING the just-added allocations
+    # (autoflushed above); an invoice settled to EXACTLY zero flips 'posted' -> 'paid'
+    # (auto-Paid). A partial receipt leaves it 'posted'.
+    for invoice_id in invoice_rows:
+        received = await _invoice_received_amount(db, invoice_id)
+        if invoice_total_by_id[invoice_id] - received == 0:
+            await advance_invoice_status(db, invoice_id, "paid", actor_id)
+
+    await db.commit()
+
+    # Read the allocations back in a stable order (no ORM relationship — Pitfall 2).
+    alloc_result = await db.execute(
+        select(ReceiptAllocation)
+        .where(ReceiptAllocation.receipt_id == receipt.id)
+        .order_by(ReceiptAllocation.id)
+    )
+    saved_allocations = list(alloc_result.scalars().all())
+    return ReceiptRead(
+        id=receipt.id,
+        receipt_date=receipt.receipt_date,
+        cash_account_id=receipt.cash_account_id,
+        amount=receipt.amount,
+        reference=receipt.reference,
+        allocations=[ReceiptAllocationRead.model_validate(a) for a in saved_allocations],
+        created_at=receipt.created_at,
+    )
+
+
+async def get_receipt(db: AsyncSession, receipt_id: str) -> "ReceiptRead":
+    """
+    Load a single cash receipt (header + nested allocations) by id.
+
+    Raises HTTP 404 if no receipt with the given id exists. Allocations are read in a
+    stable order (ReceiptAllocation.id — no ORM relationship, Pitfall 2). The sell-side
+    mirror of the AP payment read.
+    """
+    from app.modules.syerp.models import Receipt, ReceiptAllocation
+    from app.modules.syerp.schemas import ReceiptAllocationRead, ReceiptRead
+
+    result = await db.execute(select(Receipt).where(Receipt.id == receipt_id))
+    receipt = result.scalars().first()
+    if receipt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Receipt {receipt_id} not found.",
+        )
+
+    alloc_result = await db.execute(
+        select(ReceiptAllocation)
+        .where(ReceiptAllocation.receipt_id == receipt_id)
+        .order_by(ReceiptAllocation.id)
+    )
+    allocations = list(alloc_result.scalars().all())
+    return ReceiptRead(
+        id=receipt.id,
+        receipt_date=receipt.receipt_date,
+        cash_account_id=receipt.cash_account_id,
+        amount=receipt.amount,
+        reference=receipt.reference,
+        allocations=[ReceiptAllocationRead.model_validate(a) for a in allocations],
+        created_at=receipt.created_at,
+    )
+
+
+async def list_receipts(db: AsyncSession) -> "list[ReceiptRead]":
+    """
+    List all recorded cash receipts (Phase 13), each with its allocations nested.
+
+    The sell-side mirror of list_payments. Receipts are an append-only ledger; rows are
+    returned in creation order (created_at, then id as a stable tie-break). For each
+    receipt the allocations are loaded in the SAME stable order record_receipt reads
+    them back (ReceiptAllocation.id — no ORM relationship, Pitfall 2) and grouped in
+    memory over all receipt ids (no per-receipt N+1). Each ReceiptRead is constructed
+    explicitly, money as Decimal (D-11).
+    """
+    from app.modules.syerp.models import Receipt, ReceiptAllocation
+    from app.modules.syerp.schemas import ReceiptAllocationRead, ReceiptRead
+
+    result = await db.execute(select(Receipt).order_by(Receipt.created_at, Receipt.id))
+    receipts = list(result.scalars().all())
+    if not receipts:
+        return []
+
+    receipt_ids = [receipt.id for receipt in receipts]
+
+    alloc_result = await db.execute(
+        select(ReceiptAllocation)
+        .where(ReceiptAllocation.receipt_id.in_(receipt_ids))
+        .order_by(ReceiptAllocation.id)
+    )
+    allocations_by_receipt: dict[str, list[ReceiptAllocation]] = {
+        receipt_id: [] for receipt_id in receipt_ids
+    }
+    for allocation in alloc_result.scalars().all():
+        allocations_by_receipt[allocation.receipt_id].append(allocation)
+
+    return [
+        ReceiptRead(
+            id=receipt.id,
+            receipt_date=receipt.receipt_date,
+            cash_account_id=receipt.cash_account_id,
+            amount=receipt.amount,
+            reference=receipt.reference,
+            allocations=[
+                ReceiptAllocationRead.model_validate(a)
+                for a in allocations_by_receipt[receipt.id]
+            ],
+            created_at=receipt.created_at,
+        )
+        for receipt in receipts
+    ]
