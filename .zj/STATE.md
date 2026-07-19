@@ -1,5 +1,20 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-19 (**Phase 13 BUILD COMPLETE** — `/zj:build 13` on fresh branch
+Updated: 2026-07-19 (**Phase 13 VERIFIED** — `/zj:verify 13`, tag `zj/good-13-syerp-ar-invoicing`.
+Both checks ran in parallel; all 7 SYERP-13 success criteria PASS empirically — `verify_ar.py` 17/17
++ `verify_ar_api.py` 29/29 + **23/23 full regression**, aging ties Decimal-exact to the debit-normal
+1120 (no negation), TB nets zero WITH AR posted, BS balances, RBAC 401/403/200 on all 8 routes,
+attributable audit rows; verifier mutation-proved the record_receipt lock (revert `for_update` →
+over-collected 120/100). **Fix loop landed 1 REVIEW MAJOR + 3 doc gaps:** `create_invoice` took a
+client-supplied nullable `sales_order_id` FK **unvalidated** → a bad id failed only on the header flush,
+was misread as an invoice-number collision, and **recursed forever** (RecursionError/500); fixed with
+up-front 404 validation + a one-attempt-bounded retry (`7610e63`), pinned by new `verify_ar.py` scenario
+**(D2)** (bogus id → clean 404, persists nothing); doc gaps closed — SYERP-13 row added to
+`requirements-progress.md`, SRD:478 flipped `planned`→`verified` (stamped `7610e63`), MAP migration head
+refreshed `0012`/`0014`→`0017`. Closes v3.0 DoD clause 3 (the FINAL v3.0 phase). Artifacts:
+`.zj/phases/13-syerp-ar-invoicing/{VERIFICATION,REVIEW}.md`. **Next action:** `/zj:retro 13` (banks the
+mirror-exemplar-shares-no-FK-surface + unvalidated-FK→unbounded-retry learnings), then v3.0 milestone.)
+
+Prior: 2026-07-19 (**Phase 13 BUILD COMPLETE** — `/zj:build 13` on fresh branch
 `feature-syerp-ar-invoicing` (cut off the code-identical 12b tip carrying the plan; a bare-tag branch
 would have dropped the plan — 12a/12b precedent). **All 18 tasks shipped**, SYERP-13 AR & sell-side
 books end-to-end; **v3.0 DoD clause 3 closed**. Wave A: Invoice/InvoiceLine + Receipt/ReceiptAllocation

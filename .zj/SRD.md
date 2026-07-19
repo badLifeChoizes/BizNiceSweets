@@ -475,7 +475,8 @@ future scope (expanded via `/zj:spec` when their milestones near).
 >
 > IDs are append-only and unchanged. CRISP-01 remains a coarse placeholder.
 
-## SYERP-13: Accounts receivable & sell-side books  [traces: PRD-7, PRD-8]  **Status: planned (v3.0 — Phase 13)**
+## SYERP-13: Accounts receivable & sell-side books  [traces: PRD-7, PRD-8]  **Status: verified (v3.0 — Phase 13)**
+- **Verified:** 7610e63
 - **Statement:** The system shall support customer **invoices, receipts (customer payments), and
   AR aging**, with sell-side activity **auto-posting balanced journal entries to the GL** on the
   existing SYERP-12 posting engine — **shipment** (GELATO-01.5) posts Dr 5100 COGS / Cr 1130
