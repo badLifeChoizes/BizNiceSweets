@@ -702,3 +702,117 @@ class PaymentAllocation(Base):
 
     # --- Amount (D-11) — fixed-point, never float --------------------------
     amount: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Invoice — accounts-receivable customer invoice header (Phase 13, SYERP-13)
+# ---------------------------------------------------------------------------
+
+
+class Invoice(Base):
+    """
+    Accounts-receivable customer invoice header — a customer's demand to pay us.
+
+    The sell-side mirror of Bill: an FSM *document* (not a ledger row) carrying a
+    MUTABLE `status` that walks a controlled lifecycle (draft | posted |
+    partially_paid | paid). Posting the invoice to the GL is a separate,
+    append-only act (a JournalEntry); the invoice itself is a working document
+    whose status advances as it is posted and collected.
+
+    customer_id is an FK into syerp_partner.id (the customer being billed).
+    sales_order_id optionally ties the invoice to the CRUMB sales order it was
+    raised from (NULL for a standalone invoice). Money amounts live on the child
+    InvoiceLine rows as fixed-point Numeric(18,6) (never float — D-11).
+
+    invoice_date is the date AR aging buckets from (0/30/60/90+), distinct from
+    created_at (when the row was entered); it is always supplied by the service
+    (defaulting to today server-side).
+    """
+
+    __tablename__ = "syerp_invoice"
+
+    # --- Primary key — UUID string (mirrors syerp_bill.id) -----------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Identity ----------------------------------------------------------
+    invoice_number: Mapped[str] = mapped_column(
+        String(30), unique=True, nullable=False, index=True
+    )
+    # customer_id: FK into syerp_partner.id (the customer being billed)
+    customer_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_partner.id"), nullable=False, index=True
+    )
+    # sales_order_id: FK into the CRUMB sales order this invoice was raised from;
+    # NULL for a standalone invoice
+    sales_order_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("crumb_sales_order.id"), nullable=True
+    )
+    # invoice_date: the invoice date AR aging buckets from
+    invoice_date: Mapped[date] = mapped_column(Date, nullable=False)
+
+    # status: MUTABLE FSM column (mirrors Bill.status) — draft | posted |
+    # partially_paid | paid ... walked forward by the service layer; NOT immutable
+    status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
+    memo: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # posted_at: set when the invoice is posted to the GL; NULL until posted
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # --- Provenance / audit ------------------------------------------------
+    actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# InvoiceLine — accounts-receivable customer invoice line (Phase 13, SYERP-13)
+# ---------------------------------------------------------------------------
+
+
+class InvoiceLine(Base):
+    """
+    Invoice line — one charge on an Invoice.
+
+    Append-only like the bill lines: rows are never updated or deleted;
+    corrections are made by amending the invoice before posting or by a
+    compensating entry after (mirrors BillLine).
+
+    sales_order_line_id links the invoiced quantity back to the CRUMB sales
+    order line it draws off (the sell-side analogue of BillLine.po_line_id);
+    invoiced_qty * unit_price is the line's booked value. Money amounts are
+    fixed-point Numeric(18,6) (never float — D-11).
+    """
+
+    __tablename__ = "syerp_invoice_line"
+
+    # --- Primary key — UUID string -----------------------------------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Links -------------------------------------------------------------
+    invoice_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_invoice.id"), nullable=False, index=True
+    )
+    line_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    # sales_order_line_id: FK into the CRUMB sales order line being invoiced
+    sales_order_line_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("crumb_sales_order_line.id"), nullable=False
+    )
+
+    # --- Quantities / amount (D-11) — fixed-point, never float -------------
+    invoiced_qty: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False
+    )
+    unit_price: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
