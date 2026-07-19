@@ -1,5 +1,22 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-18 (**Phase 12b BUILD COMPLETE** — `/zj:build 12b` done on branch
+Updated: 2026-07-19 (**Phase 12b VERIFIED** — `/zj:verify 12b` PASS on branch
+`feature-gelato-pick-pack-ship`, tag `zj/good-12b-gelato-pick-pack-ship` over `553bcfb`. Verifier +
+reviewer ran in parallel; the **reviewer caught a BLOCKER the verifier's concurrency test masked**:
+`execute_ship` gated on an UNLOCKED shipment status and locked only the `InventoryItem` rows, so two
+concurrent ships of ONE packed shipment could both pass the FSM gate → **double inventory issue +
+double Dr 5100 / Cr 1130 COGS JE + double reservation relief**. Scenario g missed it (its staging bin
+held exactly the ship qty, so `post_issue`'s floor guard incidentally rejected the duplicate). **Fixed**
+(`553bcfb`): load the shipment `SELECT … FOR UPDATE` before the FSM gate. **New durable test**
+`verify_gelato_ship.py` scenario (h) — one packed shipment partially fulfilling its SO (order 10, ship 5)
+shipped twice concurrently; mutation-proven (reverting the lock → 2 JEs / qty_shipped 10 / staging drawn
+twice). Full regression re-run **21/21 verify_* exit 0**, TB nets zero WITH the ship COGS JE, 1130 ties
+to subledger; `verify_gelato_ship.py` **21/21**, `verify_gelato_ship_api.py` **23/23**. Two lower-severity
+pick-path shipment-header races (review Q1/Q2) → BACKLOG p2; migration-downgrade automated-test gap → p3;
+all recorded in PLAN `## Noticed`. Closes v3.0 DoD clause 2 (warehouse fulfillment outbound). Artifacts:
+VERIFICATION.md + REVIEW.md in the phase dir. **Next action:** `/zj:retro 12b` (banks the "review catches
+what the verifier's own test masks" keeper + the same-shipment-lock class) then `/zj:plan 13`.)
+
+Prior: 2026-07-18 (**Phase 12b BUILD COMPLETE** — `/zj:build 12b` done on branch
 `feature-gelato-pick-pack-ship` (cut off the 12a docs-on-top tip `bde5b77`, code-identical to tag
 `zj/good-12a-gelato-bins-putaway`, D-P12b-8). **All 15 tasks shipped**, GELATO outbound pick → pack →
 ship end-to-end. Wave A: migration **0016** (Shipment + ShipmentLine tables, `qty_picked`/`qty_shipped`

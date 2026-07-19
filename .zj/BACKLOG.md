@@ -125,6 +125,20 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   this is exactly the **Phase 12b** bin-aware pick→pack→ship work (GELATO-01 AC3/AC5); 12b MUST
   NOT assume 12a already closed it. Folds into the cross-path row-lock item above (same
   primitives, same ledger). Accepted boundary for the 12a inbound-only slice.
+  **Update (Phase 12b, 2026-07-19):** the OUTBOUND half is now closed — ship uses the new bin-aware
+  `post_issue` (draws from the chosen staging bin), and pick uses bin-aware `post_putaway`, so the
+  pick→ship path keeps the bin dimension consistent. Still open on the INBOUND/adjust side:
+  `post_transfer`, `post_adjustment`, and MOUSSE `issue_components` remain bin-blind.
+- [ ] **GELATO pick-path shipment-header races** (Phase 12b review Q1/Q2, 2026-07-19) — the
+  *ship* path is now hardened (shipment row `SELECT … FOR UPDATE` before the FSM gate — no double
+  COGS post; `verify_gelato_ship.py` scenario h), but the *pick* path takes no shipment/SO lock:
+  (Q1) two concurrent first-picks of one SO each get-or-create a shipment → two open `picking`
+  shipments for the SO (breaks the "≤1 open pick per SO" assumption `_resolve_fulfilling_location`
+  relies on); (Q2) a pick can append a line to a shipment that a concurrent pack has just flipped
+  to `packed`, so the line skips pack's staged-qty review. Neither corrupts the ledger (the per-item
+  `post_putaway` lock holds). Fix = lock the SO row (or a unique partial index: one open shipment per
+  SO) + re-assert shipment status on pick-append. Same lock family as the cross-path ledger item.
+  Accepted-risk single-shop (needs two operators on the same SO in the same instant).
 - [ ] **Alembic autogenerate never exits clean** (Phase 9a verify, 2026-07-11) — `alembic check`
   reports spurious drift on **7 pre-existing unnamed `unique=True` constraints** (plum_part.part_number,
   uq_plum_part_one_released, syerp_gl_account/inventory_item/partner.code, purchase_order.po_number,
@@ -192,6 +206,11 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **Migration 0016 downgrade path has no automated test** (Phase 12b verify, 2026-07-19) — the
+  `0016→0015` drop of `gelato_shipment`/`gelato_shipment_line` + the SO-line accumulator columns is
+  exercised only by the manual `alembic downgrade -1 && upgrade head` round-trip command, not asserted
+  by any script. Low value (round-trip is reproducible; every `verify_*` runs on the upgraded schema),
+  but a durable downgrade-round-trip assertion would close the gap for all migrations at once.
 - [ ] **CRUMB quote→SO conversion has no idempotency guard** (Phase 11b verify Question, 2026-07-17)
   — an Accepted quote can be converted to **unlimited duplicate sales orders**: `convert_quote_to_sales_order`
   changes no quote state and takes no guard, yet `QuoteDetail.tsx` copy implies the quote "moves to

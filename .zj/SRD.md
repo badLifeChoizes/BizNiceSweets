@@ -593,16 +593,25 @@ future scope (expanded via `/zj:spec` when their milestones near).
   `verify_crumb_api.py` (HTTP RBAC + audit); FE Vitest + `npm run build`; nav gated on CRUMB enabled
   ∩ `crumb:read`. Flow-level human UAT at the v3.0 milestone.
 
-## GELATO-01: Warehouse core  [traces: PRD-8]  **Status: partial — 12a inbound foundation VERIFIED (AC1/AC2/AC8 + putaway-side AC6/AC7); outbound pick→pack→ship (AC3/AC4/AC5 + ship-side AC7) pending Phase 12b**
+## GELATO-01: Warehouse core  [traces: PRD-8]  **Status: VERIFIED — 12a inbound foundation (AC1/AC2/AC8 + putaway-side AC6/AC7) + 12b outbound pick→pack→ship (AC3/AC4/AC5 + ship-side AC7) both delivered & verified**
 > **12a delivered & verified** (`/zj:verify 12a`, 2026-07-18): bins CRUD (AC1), directed
 > putaway netting zero at location grain (AC2), per-bin on-hand derives + rolls up Decimal-exact
 > to the location total (AC1), quantities-only (AC6), putaway floor guard 4xx (AC7 putaway side),
-> audit + RBAC (AC8). NO GL posted (Trial Balance nets zero). Known boundary (BACKLOG p2, does not
-> block the inbound slice): only putaway is bin-aware, so a bin-blind draw
-> (transfer/adjust/MOUSSE-issue) staled the bin split until the 12b bin-aware pick/issue lands —
-> the location roll-up stays exact. **Pending 12b:** pick (AC3), pack (AC4), ship + COGS JE +
-> reservation relief (AC5), ship-side over-ship guard (AC7).
+> audit + RBAC (AC8). NO GL posted (Trial Balance nets zero). Known boundary (BACKLOG p2): only
+> putaway was bin-aware, so a bin-blind draw (transfer/adjust/MOUSSE-issue) staled the bin split —
+> the OUTBOUND half of that p2 item is now closed by 12b's bin-aware pick/issue; the location
+> roll-up stays exact throughout.
 > - **Verified (12a subset):** 52eb481
+> **12b delivered & verified** (`/zj:verify 12b`, 2026-07-19): pick (AC3) — bin-aware net-zero
+> move of reserved lines into a staging bin, stamps `qty_picked`, auto-advances the SO
+> confirmed→fulfilling; pack (AC4) — FSM picking→packed, partial packs; ship (AC5) — the accounting
+> crux: bin-aware `post_issue` from staging at moving-avg cost ATOMIC with ONE balanced Dr 5100
+> COGS / Cr 1130 Inventory JE (single commit), relieves the soft-reservation (`qty_reserved -=`),
+> stamps `qty_shipped`, never over-ships/over-issues (AC7), 1130 ties to the subledger + TB nets
+> zero with the JE. **Two concurrent ships of one packed shipment cannot double-post COGS** — the
+> shipment row is `SELECT … FOR UPDATE`-locked before the FSM gate (verify fix loop, blocker),
+> mutation-proven by `verify_gelato_ship.py` scenario (h). Audit + RBAC at HTTP level (AC8).
+> - **Verified (12b outbound):** 553bcfb
 > New module `backend/app/modules/gelato/` + `frontend/src/routes/gelato/`; RBAC codes
 > `gelato:read`/`gelato:write`. Writes the **SYERP inventory ledger** and posts GL JEs via imported
 > SYERP service functions (D-V3-9 / D-P10-6). Quantities + cost only — **lot/serial deferred**
@@ -640,11 +649,15 @@ future scope (expanded via `/zj:spec` when their milestones near).
   8. **Audit + RBAC** — Bin changes, putaway, pick, pack, and ship emit attributable audit events
      (NFR-1); endpoints gated by `gelato:read`/`gelato:write` (CORE-05).
 - **Verification:** live-Postgres `backend/scripts/verify_gelato.py` (per-bin on-hand rolls up to the
-  location total; putaway nets zero at location grain; ship relieves inventory + posts the COGS JE
-  Decimal-exact + clears the reservation + ties 1130 to the subledger; negative-stock reject; an
-  `asyncio` concurrency scenario) + `verify_gelato_api.py` (HTTP RBAC + audit); full regression
-  (`verify_inventory` etc. still exit 0, Trial Balance nets zero); FE Vitest + `npm run build`.
-  Flow-level human UAT at the v3.0 milestone.
+  location total; putaway nets zero at location grain; negative-stock reject; putaway concurrency
+  Barrier) + `verify_gelato_api.py` (inbound HTTP RBAC + audit) for the 12a inbound half;
+  **`verify_gelato_ship.py`** (ship relieves inventory + posts the COGS JE Decimal-exact + clears the
+  reservation + ties 1130 to the subledger; over-pick/over-ship/staging-floor rejects; scenario (g)
+  two ships cannot over-issue a scarce staging bin; **scenario (h) two concurrent ships of ONE packed
+  shipment cannot double-post COGS — shipment-row FOR UPDATE lock, mutation-proven**) +
+  **`verify_gelato_ship_api.py`** (ship HTTP RBAC + attributable audit incl. int-PK `target_id` str
+  guard) for the 12b outbound half; full regression (all `verify_*` exit 0, Trial Balance nets zero
+  WITH the COGS JE); FE Vitest + `npm run build`. Flow-level human UAT at the v3.0 milestone.
 
 ## CRISP-01: Quality core  [traces: PRD-9]  **Status: planned**
 - **Statement:** The system shall support inspections, NCRs, CAPA, quality holds on inventory, and compliance tracking linked to MOUSSE work orders.
