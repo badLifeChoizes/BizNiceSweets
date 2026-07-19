@@ -914,6 +914,180 @@ class PaymentRead(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Accounts-receivable schemas (Phase 13 — AR invoices, receipts; SYERP-13)
+# ---------------------------------------------------------------------------
+#
+# The sell-side mirror of the AP schemas. An invoice carries its lines nested
+# (InvoiceCreate.lines / InvoiceRead.lines) so a single POST records a whole
+# customer invoice and a single GET returns it complete. Each line draws an
+# uninvoiced shipped quantity off a CRUMB sales order line (the sell-side analogue
+# of a matched PO receipt). `total` / `open_balance` on InvoiceRead and `amount` on
+# ReceiptRead are DERIVED roll-ups the service computes (open_balance = total −
+# allocations; a receipt's amount = SUM of its allocations); they are plain fields
+# here, filled by the service rather than validated from the client. Money is
+# Decimal (never float — D-11).
+
+
+class UninvoicedShipmentRead(BaseModel):
+    """
+    One uninvoiced shipped quantity available to invoice (invoice-line picker).
+
+    A sales order line that has been shipped but not yet fully invoiced:
+    `uninvoiced_qty` is the still-billable quantity at the line's `unit_price`.
+    `item_id` FKs a SYERP stock item on a stock line; `description` carries the
+    free-text item on a non-stock line. Quantities/prices are fixed-point Decimals
+    (never float — D-11).
+    """
+
+    sales_order_line_id: str
+    so_number: str
+    item_id: Optional[str] = None
+    description: Optional[str] = None
+    uninvoiced_qty: Decimal
+    unit_price: Decimal
+
+
+class InvoiceLineCreate(BaseModel):
+    """
+    One line of an invoice-creation payload.
+
+    Draws `invoiced_qty` (> 0) off an uninvoiced shipped quantity on the sales order
+    line `sales_order_line_id`; its amount is derived by the service from the line's
+    unit price, so no `unit_price`/`amount` is supplied. Money is Decimal.
+    """
+
+    sales_order_line_id: str
+    invoiced_qty: Decimal = Field(..., gt=0)
+
+
+class InvoiceCreate(BaseModel):
+    """
+    Invoice (customer invoice) creation payload (POST /syerp/ar/invoices).
+
+    `customer_id` MUST reference an existing Partner with is_customer=True (enforced
+    in the service). `sales_order_id` optionally ties the invoice to the CRUMB sales
+    order it is raised from (NULL for a standalone invoice). `lines` is the non-empty
+    set of invoiced quantities; the service derives line amounts from the sales order
+    line prices and rolls up the total. `invoice_number` is server-generated, never
+    client-supplied; `invoice_date` defaults to today server-side when omitted.
+    """
+
+    customer_id: str = Field(..., max_length=36)
+    sales_order_id: Optional[str] = None
+    invoice_date: Optional[date] = None
+    lines: list[InvoiceLineCreate] = Field(..., min_length=1)
+
+
+class InvoiceLineRead(BaseModel):
+    """
+    One invoice line returned to API callers.
+
+    Serialized from an InvoiceLine ORM instance via from_attributes=True. `amount`
+    is the line's booked value — invoiced_qty * unit_price. Money is Decimal.
+    """
+
+    id: str
+    line_no: int
+    sales_order_line_id: str
+    invoiced_qty: Decimal
+    unit_price: Decimal
+    amount: Decimal
+
+    model_config = {"from_attributes": True}
+
+
+class InvoiceRead(BaseModel):
+    """
+    Invoice returned to API callers, with its lines nested.
+
+    `total` and `open_balance` are DERIVED roll-ups the service computes from the
+    lines and allocations (open_balance = total − SUM allocations), not stored
+    fields — the service constructs this model rather than serializing an ORM
+    instance for those two, so they are plain Decimals here. `status` walks
+    draft | posted | partially_paid | paid; `posted_at` is NULL until posted.
+    Money is Decimal (never float — D-11).
+    """
+
+    id: str
+    invoice_number: str
+    customer_id: str
+    sales_order_id: Optional[str] = None
+    invoice_date: date
+    status: str
+    memo: Optional[str] = None
+    posted_at: Optional[datetime] = None
+    total: Decimal = Decimal("0")
+    open_balance: Decimal = Decimal("0")
+    lines: list[InvoiceLineRead] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ReceiptAllocationCreate(BaseModel):
+    """
+    One allocation of a receipt to a specific invoice (receipt-creation payload).
+
+    Applies `amount` (> 0) against the open balance of `invoice_id`; the service
+    rejects over-application. Money is Decimal (never float — D-11).
+    """
+
+    invoice_id: str
+    amount: Decimal = Field(..., gt=0)
+
+
+class ReceiptCreate(BaseModel):
+    """
+    Receipt creation payload (POST /syerp/ar/receipts).
+
+    Records a cash collection into `cash_account_id` on `receipt_date`, split across
+    one or more invoices via `allocations`. The receipt's amount is NOT
+    client-supplied — the service sums the allocations — so it is absent here.
+    `reference` is the check/transfer reference (free text, optional). Money is
+    Decimal (never float — D-11).
+    """
+
+    receipt_date: date
+    cash_account_id: int
+    reference: Optional[str] = None
+    allocations: list[ReceiptAllocationCreate] = Field(..., min_length=1)
+
+
+class ReceiptAllocationRead(BaseModel):
+    """
+    One receipt allocation returned to API callers.
+
+    Serialized from a ReceiptAllocation ORM instance via from_attributes=True.
+    `amount` is the value applied to `invoice_id` (Decimal, never float — D-11).
+    """
+
+    invoice_id: str
+    amount: Decimal
+
+    model_config = {"from_attributes": True}
+
+
+class ReceiptRead(BaseModel):
+    """
+    Receipt returned to API callers, with its allocations nested.
+
+    `amount` is the DERIVED total the service sums from the allocations (the client
+    never supplies it), so this model is service-constructed rather than a plain ORM
+    serialization for that field. Money is Decimal (never float — D-11).
+    """
+
+    id: str
+    receipt_date: date
+    cash_account_id: int
+    amount: Decimal
+    reference: Optional[str] = None
+    allocations: list[ReceiptAllocationRead] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
 # Financial report schemas (Phase 9c — AP aging + financial statements)
 # ---------------------------------------------------------------------------
 #
@@ -971,6 +1145,54 @@ class ApAgingReport(BaseModel):
     as_of: date
     vendors: list[ApAgingBucketRow] = Field(default_factory=list)
     grand_total: ApAgingTotals
+    control_balance: Decimal
+    in_balance: bool
+
+
+class ArAgingTotals(BaseModel):
+    """
+    The five AR-aging bucket sums, shared by each customer row's roll-up and the
+    report grand total. `total` == current + d31_60 + d61_90 + d90_plus. Buckets
+    the still-open invoice balance by age = (as_of − invoice_date).days: `current`
+    0–30, `d31_60` 31–60, `d61_90` 61–90, `d90_plus` 90+. Money is Decimal.
+    """
+
+    current: Decimal
+    d31_60: Decimal
+    d61_90: Decimal
+    d90_plus: Decimal
+    total: Decimal
+
+
+class ArAgingBucketRow(BaseModel):
+    """
+    One customer's AR-aging row — the customer identity plus its five bucket sums
+    (same shape as ArAgingTotals). `total` is the customer's whole open receivable.
+    """
+
+    customer_id: str
+    customer_name: str
+    current: Decimal
+    d31_60: Decimal
+    d61_90: Decimal
+    d90_plus: Decimal
+    total: Decimal
+
+
+class ArAgingReport(BaseModel):
+    """
+    Accounts-receivable aging as of a date, with the 1200 subledger tie-out.
+
+    `customers` lists each customer with an open receivable, bucketed by age;
+    `grand_total` is the column roll-up across customers. `control_balance` is the
+    date-filtered Accounts-Receivable derived balance; `in_balance` is True when the
+    aging grand total ties to that control to the cent. Money is Decimal (never
+    float — D-11).
+    """
+
+    as_of: date
+    customers: list[ArAgingBucketRow] = Field(default_factory=list)
+    grand_total: ArAgingTotals
     control_balance: Decimal
     in_balance: bool
 
