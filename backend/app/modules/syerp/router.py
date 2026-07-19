@@ -44,6 +44,14 @@ Endpoints (all prefixed with /api/v1/syerp by registry.py mount_all):
   POST   /syerp/ap/bills/{bill_id}/post — post bill, auto-book AP journal (syerp:write)
   POST   /syerp/ap/payments            — record cash payment vs bills (syerp:write)
   GET    /syerp/ap/payments            — list payments (syerp:read)
+  GET    /syerp/ar/uninvoiced-shipments?customer_id= — uninvoiced SO shipments (syerp:read)
+  POST   /syerp/ar/invoices           — create draft invoice (syerp:write)
+  GET    /syerp/ar/invoices           — list invoices (+?customer_id=&status=) (syerp:read)
+  GET    /syerp/ar/invoices/{id}      — get invoice + lines (syerp:read)
+  POST   /syerp/ar/invoices/{id}/post — post invoice, auto-book AR journal (syerp:write)
+  POST   /syerp/ar/receipts           — record cash receipt vs invoices (syerp:write)
+  GET    /syerp/ar/receipts           — list receipts (syerp:read)
+  GET    /syerp/ar/aging?as_of=       — AR aging report (syerp:read)
 
 mount_all() in registry.py adds the /api/v1 prefix — do NOT include it here.
 Full paths are therefore /api/v1/syerp/partners, /api/v1/syerp/gl/accounts, etc.
@@ -79,6 +87,9 @@ Audit logging (D-10, T-04-08):
   - bill.created: on POST /ap/bills success.
   - bill.posted: on POST /ap/bills/{id}/post success.
   - payment.recorded: on POST /ap/payments success.
+  - invoice.created: on POST /ar/invoices success.
+  - invoice.posted: on POST /ar/invoices/{id}/post success.
+  - receipt.recorded: on POST /ar/receipts success.
 
 Archive strategy (RESEARCH.md Pattern 4):
   Archive flows through PATCH with {active: false}. The router compares
@@ -99,10 +110,14 @@ from app.modules.syerp.schemas import (
     AccountRegisterRead,
     AdjustmentCreate,
     ApAgingReport,
+    ArAgingReport,
+    ArReceiptCreate,
     BalanceSheetReport,
     BillCreate,
     BillRead,
     GLAccountRead,
+    InvoiceCreate,
+    InvoiceRead,
     InventoryItemCreate,
     InventoryItemRead,
     InventoryItemUpdate,
@@ -121,6 +136,7 @@ from app.modules.syerp.schemas import (
     PORead,
     ProfitLossReport,
     ReceiptCreate,
+    ReceiptRead,
     ReceiveLine,
     ReverseRequest,
     StockLocationCreate,
@@ -130,20 +146,24 @@ from app.modules.syerp.schemas import (
     TransferCreate,
     TrialBalanceReport,
     UnbilledReceiptRead,
+    UninvoicedShipmentRead,
 )
 from app.modules.syerp.service import (
     add_line,
     advance_po_status,
     ap_aging_report,
+    ar_aging_report,
     archive_partner,
     balance_sheet,
     create_bill,
+    create_invoice,
     create_item,
     create_location,
     create_partner,
     create_po,
     get_account_register,
     get_bill,
+    get_invoice,
     get_item,
     get_item_onhand,
     get_journal_entry,
@@ -152,6 +172,7 @@ from app.modules.syerp.service import (
     get_po,
     list_bills,
     list_gl_accounts,
+    list_invoices,
     list_item_transactions,
     list_items,
     list_journal_entries,
@@ -159,15 +180,19 @@ from app.modules.syerp.service import (
     list_locations,
     list_partners,
     list_pos,
+    list_receipts,
     list_unbilled_receipts,
+    list_uninvoiced_shipments,
     post_adjustment,
     post_bill,
+    post_invoice,
     post_journal_entry,
     post_receipt,
     post_transfer,
     profit_loss,
     receive_line,
     record_payment,
+    record_receipt,
     reverse_journal_entry,
     remove_line,
     trial_balance,
@@ -1272,6 +1297,202 @@ async def list_payments_endpoint(
     from app.modules.syerp.service import list_payments
 
     return await list_payments(db)
+
+
+# ---------------------------------------------------------------------------
+# AR Invoices & Receipts (Phase 13, SYERP-13)
+# ---------------------------------------------------------------------------
+#
+# The sell-side mirror of the AP routes: invoices are draft-then-post (create draws
+# uninvoiced SO shipments and three-way-matches nothing — the shipment IS the match;
+# post freezes it and auto-books the AR journal Dr 1120 / Cr 4110), receipts collect
+# cash against posted invoices (Dr cash / Cr 1120, auto-Paid at zero). There is
+# intentionally NO PUT/DELETE route that mutates a posted invoice's ledger effect (a
+# correction is a reversing flow, never an edit). Writes require syerp:write, reads
+# require syerp:read. write_audit self-commits and is called only AFTER the service
+# commit — the atomicity requirement (create_invoice / post_invoice / record_receipt
+# commit=True).
+
+
+@router.get("/ar/uninvoiced-shipments", response_model=list[UninvoicedShipmentRead])
+async def list_uninvoiced_shipments_endpoint(
+    customer_id: str,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[UninvoicedShipmentRead]:
+    """
+    List a customer's shipped-but-not-fully-invoiced SO lines (the invoice picker).
+
+    For every sales order line of `customer_id`'s sales orders, returns the
+    still-invoiceable quantity at the line's unit price (shipped minus already
+    invoiced). Read-only: no audit row. Requires syerp:read permission.
+    """
+    return await list_uninvoiced_shipments(db, customer_id)
+
+
+@router.post(
+    "/ar/invoices", response_model=InvoiceRead, status_code=status.HTTP_201_CREATED
+)
+async def create_invoice_endpoint(
+    data: InvoiceCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> InvoiceRead:
+    """
+    Create a draft customer invoice from uninvoiced SO shipments (Phase 13).
+
+    Every line is validated before any write (no partial invoice): a line draws an
+    invoiced quantity off a live-recomputed uninvoiced shipped quantity on a sales
+    order line for THIS customer (over-invoice or wrong-customer → 422; unknown line →
+    404). The invoice is assigned a server-generated INV-#### number in status 'draft'
+    and each SO line's qty_invoiced accumulator is bumped. Requires syerp:write. Writes
+    an invoice.created audit row after the create commits.
+    """
+    invoice = await create_invoice(
+        db,
+        customer_id=data.customer_id,
+        sales_order_id=data.sales_order_id,
+        invoice_date=data.invoice_date,
+        lines=data.lines,
+        actor_id=str(current_user.id),
+    )
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="invoice.created",
+        target_type="invoice",
+        target_id=str(invoice.id),
+        detail=f"Invoice created: {invoice.invoice_number} for customer "
+        f"{invoice.customer_id}",
+    )
+    return invoice
+
+
+@router.get("/ar/invoices", response_model=list[InvoiceRead])
+async def list_invoices_endpoint(
+    customer_id: str | None = None,
+    status: str | None = None,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[InvoiceRead]:
+    """
+    List invoices (newest-first), each with its lines nested and roll-ups derived.
+
+    Query params (all optional): `customer_id` restricts to one customer; `status`
+    restricts to one status (draft | posted | paid). Read-only: no audit row. Requires
+    syerp:read permission.
+    """
+    return await list_invoices(db, customer_id=customer_id, status=status)
+
+
+@router.get("/ar/invoices/{invoice_id}", response_model=InvoiceRead)
+async def get_invoice_endpoint(
+    invoice_id: str,
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> InvoiceRead:
+    """
+    Get a single invoice (header + nested lines + derived roll-ups) by id.
+
+    Read-only: no audit row. Requires syerp:read permission. Returns 404 if the invoice
+    does not exist.
+    """
+    return await get_invoice(db, invoice_id)
+
+
+@router.post("/ar/invoices/{invoice_id}/post", response_model=InvoiceRead)
+async def post_invoice_endpoint(
+    invoice_id: str,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> InvoiceRead:
+    """
+    Post a draft invoice, freezing it and auto-booking the AR journal (Phase 13).
+
+    Transitions the invoice draft → posted and posts a balanced GL journal entry (Dr
+    1120 Accounts Receivable / Cr 4110 Product Revenue) for its total in one atomic
+    transaction. Rejects a non-draft invoice with 422; returns 404 if the invoice does
+    not exist. Requires syerp:write. Writes an invoice.posted audit row after the post
+    commits.
+    """
+    invoice = await post_invoice(db, invoice_id, str(current_user.id))
+    await write_audit(
+        db,
+        actor_id=str(current_user.id),
+        action="invoice.posted",
+        target_type="invoice",
+        target_id=str(invoice_id),
+        detail=f"Invoice posted: {invoice.invoice_number} (status: {invoice.status})",
+    )
+    return invoice
+
+
+@router.post(
+    "/ar/receipts", response_model=ReceiptRead, status_code=status.HTTP_201_CREATED
+)
+async def record_receipt_endpoint(
+    data: ArReceiptCreate,
+    current_user=Depends(require_permission("syerp:write")),
+    db: AsyncSession = Depends(get_db),
+) -> ReceiptRead:
+    """
+    Record a cash receipt against one or more posted AR invoices (Phase 13).
+
+    Collects `data.amount` (summed from allocations by the service) into
+    `cash_account_id` — a required ASSET GL account id in the payload — across each
+    allocation's invoice. The whole receipt is one atomic unit: any guard rejects (404
+    unknown invoice / 422 unposted, non-ASSET account, or overpayment) with nothing
+    persisted; success lands the header, allocations, a balanced Dr cash / Cr AR
+    journal, and any auto-Paid transition together. Requires syerp:write. Writes a
+    receipt.recorded audit row after the receipt commits.
+    """
+    actor_id = str(current_user.id)
+    receipt = await record_receipt(
+        db,
+        receipt_date=data.receipt_date,
+        cash_account_id=data.cash_account_id,
+        reference=data.reference,
+        allocations=data.allocations,
+        actor_id=actor_id,
+    )
+    await write_audit(
+        db,
+        actor_id=actor_id,
+        action="receipt.recorded",
+        target_type="receipt",
+        target_id=str(receipt.id),
+        detail=f"Receipt {receipt.id}: {receipt.amount} across "
+        f"{len(data.allocations)} invoice(s)",
+    )
+    return receipt
+
+
+@router.get("/ar/receipts", response_model=list[ReceiptRead])
+async def list_receipts_endpoint(
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[ReceiptRead]:
+    """
+    List recorded receipts (oldest-first), each with its allocations nested.
+
+    Read-only: no audit row. Requires syerp:read permission.
+    """
+    return await list_receipts(db)
+
+
+@router.get("/ar/aging", response_model=ArAgingReport)
+async def ar_aging_endpoint(
+    as_of: date | None = Query(default=None),
+    current_user=Depends(require_permission("syerp:read")),
+    db: AsyncSession = Depends(get_db),
+) -> ArAgingReport:
+    """
+    AR aging report of open invoice balances bucketed by age, tied to 1120.
+
+    Query param `as_of` (optional) sets the aging reference date; it defaults to today
+    when omitted. Read-only: no audit row. Requires syerp:read permission.
+    """
+    return await ar_aging_report(db, as_of=as_of)
 
 
 # ---------------------------------------------------------------------------

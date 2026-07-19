@@ -1036,15 +1036,19 @@ class ReceiptAllocationCreate(BaseModel):
     amount: Decimal = Field(..., gt=0)
 
 
-class ReceiptCreate(BaseModel):
+class ArReceiptCreate(BaseModel):
     """
-    Receipt creation payload (POST /syerp/ar/receipts).
+    AR cash-receipt creation payload (POST /syerp/ar/receipts).
 
     Records a cash collection into `cash_account_id` on `receipt_date`, split across
     one or more invoices via `allocations`. The receipt's amount is NOT
     client-supplied — the service sums the allocations — so it is absent here.
     `reference` is the check/transfer reference (free text, optional). Money is
     Decimal (never float — D-11).
+
+    Named ArReceiptCreate (not ReceiptCreate) to avoid colliding with the inventory
+    costed-receipt schema of that name earlier in this module — a duplicate class name
+    would shadow the inventory one and break its request body (Phase 13 fix).
     """
 
     receipt_date: date

@@ -16,7 +16,7 @@ Branch cut off the verified 12b tip (code-identical to tag `zj/good-12b-gelato-p
 - [x] 8. `post_invoice` — Dr 1120 / Cr 4110 JE + FSM
 - [ ] 9. `record_receipt` — allocations + FOR-UPDATE guard + Dr cash / Cr 1120 JE + auto-Paid
 - [x] 10. `ar_aging_report` in reports.py
-- [ ] 11. AR router endpoints — RBAC-gated, audit-after-commit
+- [x] 11. AR router endpoints — RBAC-gated, audit-after-commit
 
 ## Wave C — verify
 - [ ] 12. `verify_ar.py` — service-level tie-out + match + reject + COGS tie + concurrency
