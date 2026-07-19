@@ -816,3 +816,84 @@ class InvoiceLine(Base):
         Numeric(precision=18, scale=6), nullable=False
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Receipt — accounts-receivable cash receipt (Phase 13, SYERP-13)
+# ---------------------------------------------------------------------------
+
+
+class Receipt(Base):
+    """
+    Receipt — one immutable cash collection against customer invoices.
+
+    The sell-side mirror of Payment: APPEND-ONLY (mirrors JournalEntry): rows are
+    never updated or deleted; a mistaken receipt is corrected by a compensating
+    receipt / reversing entry, never by editing or deleting the original. The cash
+    lands in a single cash_account_id (an FK into syerp_gl_account.id); the amount
+    is apportioned across invoices by the child ReceiptAllocation rows.
+
+    Money is fixed-point Numeric(18,6) (never float — D-11).
+    """
+
+    __tablename__ = "syerp_receipt"
+
+    # --- Primary key — UUID string (non-enumerable ledger row) -------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Receipt details ---------------------------------------------------
+    receipt_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # cash_account_id: FK into the GL cash account the funds land in
+    cash_account_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("syerp_gl_account.id"), nullable=False
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
+    reference: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # --- Provenance / audit ------------------------------------------------
+    actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# ReceiptAllocation — receipt-to-invoice apportionment (Phase 13, SYERP-13)
+# ---------------------------------------------------------------------------
+
+
+class ReceiptAllocation(Base):
+    """
+    Receipt allocation — one immutable apportionment of a Receipt to an Invoice.
+
+    The sell-side mirror of PaymentAllocation: APPEND-ONLY (mirrors JournalLine):
+    rows are never updated or deleted. A single Receipt may settle several
+    invoices, and a single Invoice may be settled over several receipts; each
+    (receipt, invoice) apportionment is one row here. The sum of a receipt's
+    allocations equals the receipt amount and an invoice is fully collected when
+    its allocations equal its total — invariants enforced in the service layer.
+
+    Money is fixed-point Numeric(18,6) (never float — D-11).
+    """
+
+    __tablename__ = "syerp_receipt_allocation"
+
+    # --- Primary key — UUID string -----------------------------------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Links -------------------------------------------------------------
+    receipt_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_receipt.id"), nullable=False, index=True
+    )
+    invoice_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("syerp_invoice.id"), nullable=False, index=True
+    )
+
+    # --- Amount (D-11) — fixed-point, never float --------------------------
+    amount: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
