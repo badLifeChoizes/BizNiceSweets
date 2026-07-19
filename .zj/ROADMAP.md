@@ -1,5 +1,17 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-19 (**Phase 12b (GELATO pick→pack→ship + COGS JE + reservation relief) VERIFIED + RETRO'D** — `/zj:verify 12b` + `/zj:retro 12b`, `553bcfb`, tag `zj/good-12b-gelato-pick-pack-ship`; 21/21 verify_gelato_ship + 23/23 verify_gelato_ship_api + 21/21 regression, TB nets zero WITH the ship COGS JE (Dr 5100 / Cr 1130) + 1130 ties to subledger. **Verify fix loop caught + fixed a BLOCKER:** two concurrent ships of one packed shipment gated on an unlocked status → double COGS post; fixed with a shipment-row FOR UPDATE lock before the FSM gate, mutation-pinned by verify_gelato_ship scenario (h). **Retro banked LEARNINGS Phase 12b:** a forced-interleave test can pass for the wrong reason (scenario g's fixture let the floor guard mask the missing FSM lock) → construct concurrency fixtures so ONLY the guard under test can reject; a mirrored exemplar's lock is safe only if your transition is repeatable (MOUSSE issue is; ship is one-shot terminal); the dead-through-UI trap was caught in-build (4th phase); review-overrides-PASS load-bearing 4 phases running. Two pick-path shipment-header races (Q1/Q2) logged BACKLOG p2; downgrade-test gap p3; bin-blind-desync p2 outbound-half now closed. Closes v3.0 DoD clause 2 (warehouse fulfillment outbound). Next: `/zj:plan 13` (SYERP-13 AR + invoice-from-shipment).)
+Updated: 2026-07-19 (**Milestone v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** — DoD audited
+goal-backward against the running stack (`.zj/MILESTONE-v3.0-AUDIT.md`): the WHOLE money loop driven on
+ONE sales order end-to-end (order → reserve → pick → pack → partial ship → invoice-from-shipment →
+post → partial + full receipt → auto-Paid), all COGS/AR/Revenue/Cash JEs correct, AR aging ties
+Decimal-exact to the debit-normal 1120 at every stage, TB nets zero throughout — 19/19 + all 23 live
+`verify_*` exit 0 + build clean + 131 Vitest. **Two gaps found, BOTH FIXED at close (owner, D-M3-1/2,
+`97b977b`):** GAP-1 (AR aging falsely tripped a negative-1120 tie-out when a receipt predated its
+invoice_date — prepayment reclassified at the report layer, pinned by `verify_ar` scenario G) + GAP-2
+(invoice picker rendered a bare item UUID → resolved `item_label`). Phases 11a/11b/12a/12b/13 archived
+to `.zj/history/v3.0/`. **Next milestone = v4.0 Infra-debt + quality paydown (D-M3-3)** — pay down the
+3-milestone-old p1 debt + the shared inventory row-lock. Next action: `/zj:spec` (sharpen the v4.0 DoD)
+then `/zj:plan 1`. Optional: `/zj:ship` to merge the 11a+11b+12a+12b+13 stack to master.)
+Prior: 2026-07-19 (**Phase 12b (GELATO pick→pack→ship + COGS JE + reservation relief) VERIFIED + RETRO'D** — `/zj:verify 12b` + `/zj:retro 12b`, `553bcfb`, tag `zj/good-12b-gelato-pick-pack-ship`; 21/21 verify_gelato_ship + 23/23 verify_gelato_ship_api + 21/21 regression, TB nets zero WITH the ship COGS JE (Dr 5100 / Cr 1130) + 1130 ties to subledger. **Verify fix loop caught + fixed a BLOCKER:** two concurrent ships of one packed shipment gated on an unlocked status → double COGS post; fixed with a shipment-row FOR UPDATE lock before the FSM gate, mutation-pinned by verify_gelato_ship scenario (h). **Retro banked LEARNINGS Phase 12b:** a forced-interleave test can pass for the wrong reason (scenario g's fixture let the floor guard mask the missing FSM lock) → construct concurrency fixtures so ONLY the guard under test can reject; a mirrored exemplar's lock is safe only if your transition is repeatable (MOUSSE issue is; ship is one-shot terminal); the dead-through-UI trap was caught in-build (4th phase); review-overrides-PASS load-bearing 4 phases running. Two pick-path shipment-header races (Q1/Q2) logged BACKLOG p2; downgrade-test gap p3; bin-blind-desync p2 outbound-half now closed. Closes v3.0 DoD clause 2 (warehouse fulfillment outbound). Next: `/zj:plan 13` (SYERP-13 AR + invoice-from-shipment).)
 Prior: 2026-07-18 (**Phase 12a (GELATO bins + directed putaway) VERIFIED + RETRO'D** — `/zj:verify 12a` + `/zj:retro 12a`, `52eb481`, tag `zj/good-12a-gelato-bins-putaway`; 11/11 verify_gelato + 29/29 verify_gelato_api + 17/17 regression, TB nets zero. One review MAJOR (bin split desyncs after a bin-blind draw) documented as the 12a→12b boundary + pinned by verify scenario E → BACKLOG p2. Retro banked LEARNINGS Phase 12a (new-dimension-on-a-shared-ledger corruption class; first int-PK audit-target coercion bug). Next: `/zj:plan 12b`.)
 Prior: 2026-07-16 (**v3.0 "Customer & logistics" spec'd** — DoD sharpened into 3 clauses, CRUMB-01/GELATO-01/SYERP-13 expanded to full ACs, Phase 11→12→13 mapping proposed; D-V3-1..9. Next: `/zj:plan 11`.)
 Prior: 2026-07-16 (**Milestone v2.0 "Operations" CLOSED + tagged `v2.0`** — DoD audited goal-backward vs the running stack (`.zj/MILESTONE-v2.0-AUDIT.md`: 13/13 verify scripts, TB nets zero, subledgers tie; 1 minor gap G1 fixed at close `2578ca5`). Phases 8/9a/9b/9c/10 archived to `.zj/history/v2.0/`. **Next milestone = v3.0 Customer & logistics** (CRUMB + GELATO + AR, D-M2-4). Next action: `/zj:ship` (2-milestone master-merge debt) then `/zj:spec` for v3.0.)
@@ -318,7 +330,24 @@ Phase directories archived to `.zj/history/v2.0/phases/`.
 
 ---
 
-## v3.0 — Customer & logistics (CRUMB + GELATO + AR)  [in progress — spec'd 2026-07-16; Phase 11 split 11a/11b and Phase 11a planned 2026-07-16, D-V3-1..15]
+## v3.0 — Customer & logistics (CRUMB + GELATO + AR)  [done — closed 2026-07-16… 2026-07-19, tag `v3.0`]
+
+**Closed 2026-07-19.** Definition of done — the three clauses below — audited goal-backward against the
+running stack (`.zj/MILESTONE-v3.0-AUDIT.md`): the whole lead→order→ship→invoice→cash loop driven on ONE
+sales order (incl. a partial ship that relieved the reservation 40→10 exactly), all sell-side JEs correct,
+AR aging tying Decimal-exact to the debit-normal 1120 at every stage, TB netting zero throughout — 19/19
+end-to-end assertions + all 23 live `verify_*` exit 0 + `npm run build` clean + 131 Vitest. Two gaps the
+five phase verifications missed, **both fixed at close** (owner D-M3-1/2, `97b977b`): **GAP-1** (AR aging
+tie-out falsely reported a negative 1120 control when a receipt predated its invoice_date — a reachable
+prepayment / future-dated-invoice path; fixed by reclassifying prepayments in `ar_aging_report`, pinned
+load-bearing by `verify_ar` scenario G) and **GAP-2** (invoice picker rendered a bare item UUID → resolved
+`item_label`). **Records:** CHANGELOG v3.0 (2 new suites), `.zj/logs/milestone-v3.0.md` (130 commits,
+~14.6 h over 10 sessions), `.zj/LEARNINGS.md` "Milestone v3.0", `.zj/DECISIONS.md` D-M3-1..4 + index
+regenerated (134). **Tag:** `v3.0` on the `feature-syerp-ar-invoicing` tip (the 11a→13 stack is unmerged;
+`/zj:ship` owes the master-merge, same known-good pattern as v2.0's PR #2). Phase directories archived to
+`.zj/history/v3.0/phases/`.
+
+Prior in-progress framing (spec'd 2026-07-16; Phase 11 split 11a/11b, D-V3-1..15):
 
 Owner chose this as the milestone after v2.0 (over the FLAN port and PLUM-advanced): it completes
 the **sell-side + fulfillment loop** on top of the now-complete operations core, and it is where
@@ -362,10 +391,36 @@ floor-guarded path (issue/adjust/receive/transfer/**ship**) rather than a per-mo
 
 ---
 
-## Later milestones (unordered candidates — sequence at v3.0 close)
+## v4.0 — Infra-debt + quality paydown  [next — chosen 2026-07-19 (D-M3-3); scope at `/zj:spec`]
+
+Owner chose this as the milestone after v3.0 (over the FLAN port and PLUM-advanced): correctness has
+rested entirely on the standalone `verify_*` scripts + Vitest for **three** milestones while the p1
+infra debt rode unpaid, and the shared inventory-ledger row-lock now has multiple writers. Harden the
+foundation before adding more features.
+
+**Candidate scope (sharpen + sequence at `/zj:spec`, then `/zj:plan 1`):**
+- **CI pipeline** — run the `verify_*` suite + Vitest + build on every push (no CI today).
+- **Repair the live-DB pytest harness** (D-P7-4) — the ~100 skipped async tests; port the
+  `verify_*` assertions into the ordinary suite so integration coverage isn't a separate manual step.
+- **Restore both lint gates** (BACKLOG p1) — ESLint flat-config migration + the missing
+  `@typescript-eslint` deps on the frontend; install/ wire `ruff` on the backend.
+- **Shared cross-path inventory-ledger FOR-UPDATE lock** (BACKLOG p2) — one lock discipline across
+  every floor-guarded path (issue/adjust/receive/transfer/ship) + the inbound half of the
+  bin-blind-desync item (`post_transfer`/`post_adjustment`/MOUSSE-issue still bin-blind).
+- **Human click-through UAT** (D-M2-2) — extend the checklist with CRUMB/GELATO/AR flows and run the
+  long-deferred pre-public-release gate.
+- **Optional groundwork:** CRISP-01 (QMS) or NFR-3 offline scaffolding if budget allows.
+
+**DoD (draft, confirm at `/zj:spec`):** "The full test suite (integration + unit) runs green in CI on
+every push, both lint gates enforce, and the inventory ledger is race-safe across every writer — so a
+new deploy is trustworthy without a manual verify run."
+
+---
+
+## Later milestones (unordered candidates — sequence at v4.0 close)
 
 - **FLAN port** (FLAN-01) — retire the second frozen prototype.
 - **PLUM advanced** (PLUM-11..16) — documents, ECO workflow, labor costing, cost ranges,
   distributor pricing.
 - **Quality & release** (CRISP-01, NFR-3 offline, license audit, public open-source release
-  prep).
+  prep) — partially pulled forward into v4.0 if scoped there at `/zj:spec`.

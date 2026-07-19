@@ -17,15 +17,15 @@ one shop can actually deploy and operate on its own.
 
 ## The Seven Suites
 
-| Suite | Domain | Status (2026-07-16, post-v2.0) |
+| Suite | Domain | Status (2026-07-19, post-v3.0) |
 |-------|--------|--------------------------------|
-| SYERP | ERP — partners, inventory, POs, GL, AP, reporting — **the hub** | Core (Phase 4) + operations shipped (Phases 8/9: inventory, purchasing, double-entry GL, AP, financial statements). AR (SYERP-13) = v3.0 |
+| SYERP | ERP — partners, inventory, POs, GL, AP, **AR**, reporting — **the hub** | Core (Phase 4) + operations (Phases 8/9: inventory, purchasing, double-entry GL, AP, statements) + **accounts receivable shipped (SYERP-13, Phase 13, v3.0: invoice-from-shipment, receipts, AR aging tie-out)** |
 | PLUM | Product Lifecycle Management | Ported + shipped v1.0 (Phases 5–7: parts, revisions, BOM, costing, AVL, import/export). Advanced features (PLUM-11..16) = later milestone |
 | MOUSSE | Manufacturing Execution | Materials-only work-order core shipped (Phase 10, v2.0). Routing/work-centers, labor/overhead, shop-floor view deferred (D-P10-1) |
-| CRUMB | CRM | Planned — **v3.0 (next milestone)** |
-| GELATO | Warehouse Management | Planned — **v3.0 (next milestone)** |
+| CRUMB | CRM | **Shipped v3.0 (Phases 11a/11b, CRUMB-01 complete):** leads → opportunities → quotes → sales orders with PLUM-derived pricing, communication log, soft-reservation |
+| GELATO | Warehouse Management | **Shipped v3.0 (Phases 12a/12b, GELATO-01):** bins, directed putaway, pick → pack → ship, reservation relief + COGS JE. Lot/serial deferred (D-V3-4) |
 | FLAN | Project Management | HTML prototype only; port deferred to a later milestone |
-| CRISP | Quality Management | Planned |
+| CRISP | Quality Management | Planned (candidate for v4.0 groundwork) |
 
 ## Users
 
@@ -56,20 +56,26 @@ The re-platform is **substantially built** — this is no longer a prototypes-pl
 
 Full codebase detail: `.zj/codebase/MAP.md`.
 
-## Definition of done — current milestone (v3.0 Customer & logistics)
+## Definition of done — current milestone (v4.0 Infra-debt + quality paydown)
 
-> **Draft (confirm at `/zj:spec`):** "Can manage customers and a sales pipeline through to orders,
-> fulfil those orders from warehouse inventory (receive → pick/pack → ship), and invoice customers
-> with AR posting to the GL and AR aging that ties to its control account."
+> **Draft (confirm at `/zj:spec`):** "The full test suite (integration + unit) runs green in CI on
+> every push, both lint gates enforce, and the inventory ledger is race-safe across every writer — so
+> a new deploy is trustworthy without a manual verify run."
 
-Chosen 2026-07-16 at the v2.0 close (D-M2-4) over the FLAN port and PLUM-advanced: it completes the
-sell-side + fulfilment loop on the operations core and is where AR was parked (SYERP-13, D-P9-4).
-Candidate phases — **CRUMB-01** (CRM: leads/pipeline/quotes/orders), **GELATO-01** (warehouse:
-bins, receiving, pick/pack/ship, lot/serial), **SYERP-13** (accounts receivable) — are all coarse
-FR placeholders needing `/zj:spec` expansion, and sequencing is open. **Next: `/zj:ship`** (resolve
-the 2-milestone-deep master-merge debt, D-M2-3) then **`/zj:spec`** to sharpen this DoD into clauses.
+Chosen 2026-07-19 at the v3.0 close (D-M3-3) over the FLAN port and PLUM-advanced: correctness has
+rested entirely on the standalone `verify_*` scripts + Vitest for **three** milestones while the p1
+infra debt (no CI, broken live-DB pytest harness D-P7-4, both non-functional lint gates) rode unpaid,
+and the shared inventory-ledger row-lock now has multiple writers (BACKLOG p2). Harden the foundation
+before adding more features. Candidate scope (CI, pytest-harness repair, lint gates, the shared
+FOR-UPDATE lock, the deferred human UAT, optional CRISP/offline groundwork) needs `/zj:spec` expansion
+and sequencing. **Next: `/zj:spec`** to sharpen this DoD into clauses, then `/zj:plan 1`.
 
 **Shipped milestones:**
+- **v3.0 — Customer & logistics.** *"Can manage customers and a sales pipeline through to orders, fulfil
+  those orders from warehouse inventory (bins → pick/pack/ship), and invoice customers with AR posting to
+  the GL and AR aging that ties to its 1120 control account."* Two new suites (CRUMB CRM + GELATO WMS) and
+  the sell-side of SYERP (AR). Closed 2026-07-19 (tag `v3.0`; audit `.zj/MILESTONE-v3.0-AUDIT.md` — whole
+  money loop driven end-to-end on one order, all 3 clauses MET, 2 gaps fixed at close D-M3-1/2).
 - **v2.0 — Operations.** *"Can track inventory, raise purchase orders, keep real books (double-entry
   GL with AP + financial statements), and execute work orders that consume PLUM BOMs and inventory."*
   Closed 2026-07-16 (tag `v2.0`; audit `.zj/MILESTONE-v2.0-AUDIT.md`, all four clauses proven live).

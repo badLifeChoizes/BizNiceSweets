@@ -1,18 +1,17 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-19 (**Step: MILESTONE** — v3.0 "Customer & logistics" close-out IN PROGRESS
-(`/zj:milestone`). **Empirical audit is clean:** all 23 live `verify_*` scripts exit 0 (14 service
-+ 9 HTTP), whole-DB trial balance nets 0.000000, control accounts flat at rest, `npm run build`
-exit 0; all 5 phases (11a/11b/12a/12b/13) verified + retro'd with complete artifacts; SRD marks
-CRUMB-01/GELATO-01/SYERP-13 all `verified`; `zj doctor` clean but for cosmetic BACKLOG tag warnings.
-**Records produced + committed:** CHANGELOG v3.0 section (feat/fix by phase), `.zj/logs/milestone-v3.0.md`
-(130 commits, ~14.6h/10 sessions), LEARNINGS `## Milestone v3.0` roll-up (headline: review-not-verify
-caught the defect that mattered on all 5 phases), DECISIONS index regenerated 73→130 entries.
-**Still pending (needs owner input):** the milestone-level goal-backward DoD auditor is driving the
-full lead→order→ship→invoice→cash loop to hunt the cross-phase seam gap phase verifications miss
-(→ `.zj/MILESTONE-v3.0-AUDIT.md`); then triage any gaps, tag `v3.0`, archive phases 11–13 to
-`.zj/history/v3.0/`, and roll the roadmap to the next milestone (candidates: FLAN port / PLUM advanced
-/ CRISP+offline+infra-debt-paydown — owner picks + approves the `v3.0` version). **Next action:**
-await the audit, then triage + tag + archive + roll-forward.
+Updated: 2026-07-19 (**Milestone v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** — `/zj:milestone`
+done. DoD audited goal-backward (`.zj/MILESTONE-v3.0-AUDIT.md`): the WHOLE money loop driven on ONE
+sales order end-to-end (order→reserve→pick→pack→partial-ship→invoice-from-shipment→post→partial+full
+receipt→auto-Paid), all 3 clauses MET, 19/19 + 23/23 live `verify_*` + build + 131 Vitest. **Two gaps
+found, BOTH FIXED at close (owner, D-M3-1/2, `97b977b`):** GAP-1 (AR aging falsely tripped a negative
+1120 tie-out when a receipt predated its invoice_date — prepayment reclassified in `ar_aging_report`,
+pinned by `verify_ar` scenario G, load-bearing) + GAP-2 (invoice picker bare UUID → resolved
+`item_label`). **Records:** CHANGELOG v3.0 + milestone-close fixes, `.zj/logs/milestone-v3.0.md`
+(130 commits, ~14.6h/10 sessions), LEARNINGS `## Milestone v3.0` (headline: review-not-verify caught
+the defect on all 5 phases), DECISIONS D-M3-1..4 + index regenerated 73→134. Phases 11a/11b/12a/12b/13
+archived to `.zj/history/v3.0/`. **Next milestone = v4.0 Infra-debt + quality paydown (D-M3-3).**
+**Next action:** `/zj:spec` (sharpen the v4.0 DoD into clauses) then `/zj:plan 1`. Optional: `/zj:ship`
+to merge the 11a+11b+12a+12b+13 stack to master.
 
 Prior: 2026-07-19 (**Phase 13 RETRO'D** — `/zj:retro 13`. Roadmap already marked
 `[done — verified 2026-07-19]`; no future phase resized. **LEARNINGS Phase 13 banked (1 surprise +
@@ -169,14 +168,13 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
-- **Step:** milestone — **v3.0 "Customer & logistics" close-out IN PROGRESS** (`/zj:milestone`,
-  2026-07-19). Empirical audit clean (23/23 verify scripts exit 0, TB nets zero, build clean, all 5
-  phases verified + retro'd, SRD FRs `verified`). Records produced + committed: CHANGELOG v3.0,
-  `.zj/logs/milestone-v3.0.md`, LEARNINGS `## Milestone v3.0`, DECISIONS index 73→130. Pending:
-  the goal-backward DoD auditor (`.zj/MILESTONE-v3.0-AUDIT.md`, driving the full lead→cash loop) →
-  triage gaps with owner → tag `v3.0` → archive phases 11–13 → roll roadmap to the next milestone
-  (owner picks scope + approves version). **Next action:** await audit, then triage + tag + archive
-  + roll-forward.
+- **Step:** milestone — **v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** (`/zj:milestone`,
+  2026-07-19). DoD audited goal-backward — whole money loop on one order end-to-end, all 3 clauses MET,
+  19/19 + all 23 `verify_*` + build + 131 Vitest; 2 audit gaps BOTH fixed at close (D-M3-1/2, `97b977b`,
+  pinned by `verify_ar` scenario G + FE tests). Records produced; phases 11a/11b/12a/12b/13 archived to
+  `.zj/history/v3.0/`; roadmap + PROJECT rolled to **v4.0 Infra-debt + quality paydown (D-M3-3)**.
+  **Next action:** `/zj:spec` (sharpen the v4.0 DoD into clauses) then `/zj:plan 1`. Optional:
+  `/zj:ship` to merge the 11a+11b+12a+12b+13 stack to master.
 
 - **(historical) Step:** **RETRO'D** — **Phase 13 (SYERP-13 AR & sell-side books — the FINAL v3.0 phase) closed
   2026-07-19** (`/zj:retro 13`), tag `zj/good-13-syerp-ar-invoicing`. Roadmap marked
@@ -367,23 +365,18 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
   plum_part PKs are UUIDs, not int).
 
 - **Project:** BizNiceSweets
-- **Milestone:** v3.0 Customer & logistics — **ALL PHASES DONE** (11a/11b/12a/12b/13 verified + retro'd;
-  DoD clauses 1–3 closed) — **pending `/zj:milestone` close-out** (tag + archive + roadmap roll). v2.0
-  CLOSED + tagged `v2.0`; v1.0 closed + tagged 2026-07-11.
-- **Branch (planning artifacts):** `chore-spec-v3-customer-logistics` — carries the v3.0 spec + this
-  plan's doc edits. `master` at `35f9b66` carries all of Phases 8–10. **Phase 11a builds on a new
-  `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
-  master first.
+- **Milestone:** **v3.0 Customer & logistics — CLOSED + tagged `v3.0`** 2026-07-19 (all phases verified +
+  retro'd; DoD audited goal-backward, 2 gaps fixed at close; phases archived to `.zj/history/v3.0/`).
+  **Next milestone = v4.0 Infra-debt + quality paydown (D-M3-3).** v2.0 + v1.0 closed + tagged.
+- **Branch:** `feature-syerp-ar-invoicing` — the v3.0 tag sits here; the 11a→13 stack is unmerged (the
+  `/zj:ship` master-merge is the standing debt, same known-good FF pattern as v2.0's PR #2). `master` at
+  `35f9b66` carries through Phase 10.
 - **Last update:** 2026-07-19
-- **Next action:** `/zj:milestone` — **close v3.0 (Customer & logistics).** All three DoD clauses are
-  met and their phases verified + retro'd (11a/11b CRUMB CRM→SO+reservation, 12a/12b GELATO bins→pick/
-  pack/ship+COGS, 13 SYERP-13 AR & sell-side books). Close-out: audit the v3.0 DoD, generate the records,
-  tag the release, archive phases 11–13, and roll the roadmap to the next milestone (candidates unordered
-  in ROADMAP: FLAN port, PLUM advanced, CRISP/offline/license-audit + public open-source release prep).
-  Also weigh the carried **BACKLOG p1** infra debt (CI, live-DB pytest harness, both lint gates — now
-  three milestones old) and the **p2** shared cross-path inventory-ledger row-lock before a multi-writer
-  deploy. Optional first: `/zj:log phase 13` (formal work log); `/zj:ship` to merge the
-  11a+11b+12a+12b+13 stack to master.
+- **Next action:** **`/zj:spec`** — sharpen the v4.0 "Infra-debt + quality paydown" DoD (draft in
+  PROJECT.md / ROADMAP) into numbered clauses: CI on every push, live-DB pytest-harness repair (D-P7-4),
+  both lint gates restored, the shared cross-path inventory-ledger FOR-UPDATE lock (BACKLOG p2) + the
+  inbound bin-blind-desync half, the deferred human UAT (D-M2-2), optional CRISP/offline groundwork —
+  then `/zj:plan 1`. Optional: `/zj:ship` to merge the 11a+11b+12a+12b+13 stack to master.
 
 ## Next action (detail)
 
