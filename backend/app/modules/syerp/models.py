@@ -714,8 +714,8 @@ class Invoice(Base):
     Accounts-receivable customer invoice header — a customer's demand to pay us.
 
     The sell-side mirror of Bill: an FSM *document* (not a ledger row) carrying a
-    MUTABLE `status` that walks a controlled lifecycle (draft | posted |
-    partially_paid | paid). Posting the invoice to the GL is a separate,
+    MUTABLE `status` that walks a controlled lifecycle (draft | posted | paid;
+    a partial receipt leaves it 'posted'). Posting the invoice to the GL is a separate,
     append-only act (a JournalEntry); the invoice itself is a working document
     whose status advances as it is posted and collected.
 
@@ -752,8 +752,8 @@ class Invoice(Base):
     # invoice_date: the invoice date AR aging buckets from
     invoice_date: Mapped[date] = mapped_column(Date, nullable=False)
 
-    # status: MUTABLE FSM column (mirrors Bill.status) — draft | posted |
-    # partially_paid | paid ... walked forward by the service layer; NOT immutable
+    # status: MUTABLE FSM column (mirrors Bill.status) — draft | posted | paid
+    # (partial receipt stays 'posted') ... walked forward by the service; NOT immutable
     status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
     memo: Mapped[str | None] = mapped_column(String(500), nullable=True)
 

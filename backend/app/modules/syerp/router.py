@@ -1192,7 +1192,7 @@ async def list_bills_endpoint(
     List bills (newest-first), each with its lines nested and roll-ups derived.
 
     Query params (all optional): `vendor_id` restricts to one vendor; `status`
-    restricts to one status (draft | posted | partially_paid | paid). Read-only:
+    restricts to one status (draft | posted | paid). Read-only:
     no audit row. Requires syerp:read permission.
     """
     return await list_bills(db, vendor_id=vendor_id, status=status)

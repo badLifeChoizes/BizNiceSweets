@@ -830,7 +830,7 @@ class BillRead(BaseModel):
     lines and allocations (open_balance = total - SUM allocations), not stored
     fields — the service constructs this model rather than serializing an ORM
     instance for those two, so they are plain Decimals here. `status` walks
-    draft | posted | partially_paid | paid; `posted_at` is NULL until posted.
+    draft | posted | paid (a partial receipt stays 'posted'); `posted_at` is NULL until posted.
     Money is Decimal (never float — D-11).
     """
 
@@ -1004,7 +1004,7 @@ class InvoiceRead(BaseModel):
     lines and allocations (open_balance = total − SUM allocations), not stored
     fields — the service constructs this model rather than serializing an ORM
     instance for those two, so they are plain Decimals here. `status` walks
-    draft | posted | partially_paid | paid; `posted_at` is NULL until posted.
+    draft | posted | paid (a partial receipt stays 'posted'); `posted_at` is NULL until posted.
     Money is Decimal (never float — D-11).
     """
 
