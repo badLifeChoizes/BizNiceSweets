@@ -214,6 +214,7 @@ async def create_invoice(
     invoice_date: date | None = None,
     lines: "Iterable[InvoiceLineCreate]",
     actor_id: str,
+    _attempt: int = 0,
 ) -> "InvoiceRead":
     """
     Create a draft customer invoice against uninvoiced SO shipments (Phase 13).
@@ -256,6 +257,20 @@ async def create_invoice(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Partner {customer_id} is not a customer (is_customer must be True).",
         )
+
+    # Validate the optional SO-header link UP FRONT. sales_order_id is a client-supplied
+    # nullable FK; an invalid one would otherwise surface only as an IntegrityError on the
+    # header flush below — indistinguishable there from an invoice-number collision, so the
+    # retry path would recurse forever on a bad id. Reject it here with a clean 404.
+    if sales_order_id is not None:
+        so_header = await db.execute(
+            select(SalesOrder.id).where(SalesOrder.id == sales_order_id)
+        )
+        if so_header.scalar() is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Sales order {sales_order_id} not found.",
+            )
 
     line_list = list(lines)
 
@@ -347,6 +362,15 @@ async def create_invoice(
         await db.flush()
     except sqlalchemy.exc.IntegrityError:
         await db.rollback()
+        # sales_order_id was validated up front, so the only expected integrity failure
+        # here is an invoice-number collision — retry ONCE (mirrors create_bill's contract).
+        # Bound the retry so any unexpected integrity error fails loudly rather than
+        # recursing forever.
+        if _attempt >= 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Could not assign a unique invoice number; please retry.",
+            )
         # The rollback discarded the qty_invoiced bumps too; re-lock, re-validate and
         # re-apply against the now-current state before retrying the header insert.
         return await create_invoice(
@@ -356,6 +380,7 @@ async def create_invoice(
             invoice_date=invoice_date,
             lines=line_list,
             actor_id=actor_id,
+            _attempt=_attempt + 1,
         )
 
     for line_no, p in enumerate(prepared, start=1):

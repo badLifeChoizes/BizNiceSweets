@@ -733,6 +733,51 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
         )
 
         # ===================================================================
+        # (D2) INVALID sales_order_id REJECTED — clean 404, no unbounded retry
+        # ===================================================================
+        # A client-supplied non-null sales_order_id that does not exist must be rejected
+        # 404 UP FRONT. Regression guard: previously the bad FK surfaced only on the header
+        # flush, was misread as an invoice-number collision, and recursed forever
+        # (RecursionError / HTTP 500). A RecursionError here is UNCAUGHT below and crashes
+        # the script — that is the intended loud failure signal. The line is a real one so
+        # the rejection is provably the header FK check, not line validation.
+        bogus_so_id = "00000000-0000-0000-0000-000000000000"
+        bad_so_status = None
+        async with session_factory() as session:
+            try:
+                await create_invoice(
+                    session,
+                    customer_id=cust_id,
+                    sales_order_id=bogus_so_id,
+                    invoice_date=today,
+                    lines=[
+                        InvoiceLineCreate(
+                            sales_order_line_id=c["so_line_id"], invoiced_qty=Decimal("1")
+                        )
+                    ],
+                    actor_id=actor_id,
+                )
+            except HTTPException as exc:
+                bad_so_status = exc.status_code
+        async with session_factory() as session:
+            bad_so_rows = (
+                await session.execute(
+                    select(func.count()).select_from(Invoice).where(
+                        Invoice.sales_order_id == bogus_so_id
+                    )
+                )
+            ).scalar()
+        check(
+            "(D2) a non-existent sales_order_id raises a clean 404 (not RecursionError/500) "
+            "and persists NOTHING — no invoice row and c's qty_invoiced still 0",
+            bad_so_status == 404
+            and bad_so_rows == 0
+            and await _so_line_invoiced(session_factory, c["so_line_id"]) == Decimal("0"),
+            f"status={bad_so_status!r} rows={bad_so_rows!r} "
+            f"invoiced={await _so_line_invoiced(session_factory, c['so_line_id'])!r}",
+        )
+
+        # ===================================================================
         # (E) LOAD-BEARING CONCURRENCY on record_receipt (the overpayment lock)
         # ===================================================================
         await run_receipt_concurrency(
