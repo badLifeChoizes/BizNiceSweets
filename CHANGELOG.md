@@ -150,6 +150,15 @@ with accounts receivable, completing the lead → order → ship → invoice →
 - validate invoice sales_order_id up front + bound retry — prevents unbounded recursion/500 (`7610e63`)
 
 
+### Milestone close — audit gap fixes
+
+
+**Fixed**
+
+- AR aging tie-out reclassifies prepayments — a receipt dated before its invoice_date no longer reports a false negative 1120 control (`97b977b`)
+- invoice picker shows a resolved item "code — name" label instead of a bare item UUID (`97b977b`)
+
+
 ## [v2.0] — Operations — 2026-07-16
 
 Definition of done: *"Can track inventory, raise purchase orders, keep real books (double-entry

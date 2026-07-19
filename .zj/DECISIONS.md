@@ -1,5 +1,5 @@
 # DECISIONS — BizNiceSweets
-Updated: 2026-07-19 (v3.0 "Customer & logistics" milestone close — index regenerated, 130 decisions)
+Updated: 2026-07-19 (v3.0 "Customer & logistics" milestone close — D-M3-1..4, index regenerated, 134 decisions)
 
 Recovered decisions are marked `(recovered)` with their original source (now archived).
 Numbering is append-only.
@@ -8,7 +8,7 @@ Numbering is append-only.
 ## Index
 
 One line per decision, newest last. Entries below are append-only — regenerate this index
-at milestone close, never hand-edit it. 130 decisions.
+at milestone close, never hand-edit it. 134 decisions.
 
 - **D-1:** Business domain = hybrid open-source business suite of 7 integrated suites (SYERP, PLUM, FLAN, MOUSSE, CRUMB, GELATO, CRISP), each usable standalone…
 - **D-2:** Manufacturing (facilities, work centers, routings) lives in MOUSSE, not PLUM — PLUM is product *development*; released products hand off to MOUSSE
@@ -140,6 +140,10 @@ at milestone close, never hand-edit it. 130 decisions.
 - **D-P13-6:** Branch feature-syerp-ar-invoicing off the verified 12b tip (tag zj/good-12b-gelato-pick-pack-ship, 553bcfb); 11a/11b/12a/12b unmerged, 13 stacks…
 - **D-P13-7:** AR aging control-tie has NO sign negation — ar_aging_report copies ap_aging_report but 1120 is debit-normal (control_balance = Σdr − Σcr, positive…
 - **D-P13-8:** The running app depends on app.core.models being imported at boot. Module __init__ imports only the router, and GELATO imports its models lazily…
+- **D-M3-1:** GAP-1 (AR aging prepayment tie-out) fixed at close, not deferred. The goal-backward audit (.zj/MILESTONE-v3.0-AUDIT.md) found that ar_aging_report's…
+- **D-M3-2:** GAP-2 (invoice picker rendered a raw item UUID) fixed at close. list_uninvoiced_shipments now LEFT JOINs the stock item and returns a resolved…
+- **D-M3-3:** Next milestone (v4.0) = Infra-debt + quality paydown. Chosen over the FLAN port and PLUM-advanced. Pays down the BACKLOG p1 debt now three milestones…
+- **D-M3-4:** Release tagged v3.0 — semver major-per-milestone, continuing v1.0/v2.0. Applied on the feature-syerp-ar-invoicing tip (the 11a+11b+12a+12b+13 stack…
 
 ## Product & Architecture
 
@@ -969,3 +973,30 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   imports the central `app.core.models` aggregator after module registration — the same metadata contract
   Alembic and every `verify_*.py` already rely on. D-P12a-3 intact (SYERP never imports gelato; the
   aggregator does). Any new cross-module FK must keep its model reachable via that aggregator.
+
+## v3.0 "Customer & logistics" milestone close (2026-07-19)
+
+- **D-M3-1 (owner, milestone audit fix-now):** **GAP-1 (AR aging prepayment tie-out) fixed at close,
+  not deferred.** The goal-backward audit (`.zj/MILESTONE-v3.0-AUDIT.md`) found that
+  `ar_aging_report`'s tie-out badge falsely tripped (a nonsensical NEGATIVE 1120 control,
+  `in_balance=False`) when a receipt was dated before its invoice's `invoice_date` — a reachable
+  customer-prepayment / future-dated-invoice path. Chosen fix: at the report layer, add back the 1120
+  credit legs of receipts allocated to invoices dated after `as_of` (prepayment reclassification), so
+  the tie-out holds for every date ordering while `control_balance` stays GL-sourced (`97b977b`,
+  `service/reports.py::ar_aging_report`). *Why fix-now over defer:* small, well-localized, and the
+  negative-receivable display is user-alarming — mirrors the v2.0 G1 fix-at-close (D-M2-1a). Pinned
+  load-bearing by `verify_ar` scenario (G). A proper customer-deposit/unearned-revenue liability model
+  is out of v3.0 scope → BACKLOG (revisit with credit memos / prepayment accounting).
+- **D-M3-2 (owner, milestone audit fix-now):** **GAP-2 (invoice picker rendered a raw item UUID) fixed
+  at close.** `list_uninvoiced_shipments` now LEFT JOINs the stock item and returns a resolved
+  `item_label` ("code — name"); the invoice dialog renders that, never the UUID (`97b977b`). Cosmetic
+  but cheap; FE tests assert the label renders and the UUID does not.
+- **D-M3-3 (owner):** **Next milestone (v4.0) = Infra-debt + quality paydown.** Chosen over the FLAN
+  port and PLUM-advanced. Pays down the BACKLOG p1 debt now three milestones old (no CI, broken live-DB
+  pytest harness D-P7-4, both non-functional lint gates) plus the shared cross-path inventory-ledger
+  row-lock (BACKLOG p2), with CRISP/offline groundwork as candidates. *Why:* the debt compounds and
+  correctness has rested on `verify_*` + Vitest alone for three milestones; harden before more features.
+  DoD to be sharpened at `/zj:spec`.
+- **D-M3-4 (owner):** **Release tagged `v3.0`** — semver major-per-milestone, continuing v1.0/v2.0.
+  Applied on the `feature-syerp-ar-invoicing` tip (the 11a+11b+12a+12b+13 stack is unmerged; the
+  `/zj:ship` master-merge is the standing debt, cleared for v2.0 via PR #2 — same known-good pattern).
