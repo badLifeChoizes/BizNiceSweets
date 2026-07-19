@@ -1,5 +1,26 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-19 (**Phase 12b VERIFIED** — `/zj:verify 12b` PASS on branch
+Updated: 2026-07-19 (**Phase 12b RETRO'D** — `/zj:retro 12b` on branch
+`feature-gelato-pick-pack-ship`, tag `zj/good-12b-gelato-pick-pack-ship` over `553bcfb`. Roadmap
+marked `[done — verified + retro'd]`; **CRUMB→GELATO outbound loop complete** (v3.0 DoD clause 2 closed).
+**LEARNINGS Phase 12b banked (4 keepers):** (1) **the headline — a forced-interleave concurrency test can
+pass for the WRONG reason and mask the exact bug it targets**: scenario g's staging bin was seeded to
+*exactly* the ship qty, so `post_issue`'s floor guard (a *bystander* guard) rejected the duplicate while
+the real defect — an UNLOCKED shipment-status FSM gate letting two ships of one packed shipment double-post
+COGS — sailed through untested; keeper = build concurrency fixtures so ONLY the guard under test can reject
+(scenario h: order 10 ship 5, ample staging, only the shipment-row lock can 409 the duplicate; mutation-proven);
+(2) **mirroring an exemplar's lock is safe only if your transition shares its safety property** — MOUSSE
+`issue_components`' status-before-lock shape is safe because issuing is *repeatable*; ship is a *one-shot
+terminal* transition, so the copied item locks are necessary-but-not-sufficient — the fix locks the Shipment
+row (`SELECT … FOR UPDATE`) before the FSM gate; (3) **the dead-through-UI trap was caught IN-BUILD this time**
+(qty_shipped serialization on `SalesOrderLineRead`) — the counter-measure works; (4) **parallel
+verifier+reviewer, reviewer-blocker-overrides-PASS, is load-bearing 4 phases running** (11a/11b/12a/12b).
+Deferred items all homed at verify, trued up at retro: pick-path races Q1/Q2 → BACKLOG p2; bin-blind-desync
+p2 **outbound half now closed** (inbound `post_transfer`/`post_adjustment`/MOUSSE-issue still open); downgrade
+test → p3. Artifacts: VERIFICATION.md + REVIEW.md + LEARNINGS.md Phase 12b. **Next action:** `/zj:plan 13`
+(SYERP-13 AR + invoice-from-shipment + customer receipts + AR aging tie-out — closes v3.0 DoD clause 3).
+Optional: `/zj:log phase 12b` (formal work log); `/zj:ship` to merge the 11a+11b+12a+12b stack.)
+
+Prior: 2026-07-19 (**Phase 12b VERIFIED** — `/zj:verify 12b` PASS on branch
 `feature-gelato-pick-pack-ship`, tag `zj/good-12b-gelato-pick-pack-ship` over `553bcfb`. Verifier +
 reviewer ran in parallel; the **reviewer caught a BLOCKER the verifier's concurrency test masked**:
 `execute_ship` gated on an UNLOCKED shipment status and locked only the `InventoryItem` rows, so two
@@ -44,12 +65,23 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
-- **Step:** **BUILD COMPLETE** — **Phase 12b (GELATO outbound: pick → pack → ship) built 2026-07-18.**
+- **Step:** **RETRO'D** — **Phase 12b (GELATO outbound: pick → pack → ship) closed 2026-07-19**
+  (`/zj:retro 12b`), tag `zj/good-12b-gelato-pick-pack-ship` at `553bcfb`. Roadmap marked
+  `[done — verified + retro'd]`. **v3.0 DoD clause 2 (warehouse fulfillment outbound) closed** and the
+  sell-side **COGS** JE (Dr 5100 / Cr 1130) posts atomically on ship. Retro banked LEARNINGS Phase 12b
+  (4 keepers — the forced-interleave-test-passes-for-the-wrong-reason headline, the mirror-an-exemplar's-lock
+  caveat for one-shot vs repeatable transitions, the in-build dead-through-UI catch, and review-overrides-PASS
+  now load-bearing 4 phases running). Deferred items homed: pick-path races Q1/Q2 → BACKLOG p2;
+  bin-blind-desync outbound half closed (inbound still open, p2); downgrade test → p3. **Next action:**
+  `/zj:plan 13` (SYERP-13 AR + invoice-from-shipment). Optional: `/zj:log phase 12b`; `/zj:ship` to merge
+  the 11a+11b+12a+12b stack.
+
+- **(historical) Step:** **BUILD COMPLETE** — **Phase 12b (GELATO outbound: pick → pack → ship) built 2026-07-18.**
   All **15 tasks** on branch `feature-gelato-pick-pack-ship`. Closes the v3.0 DoD clause 2 (warehouse
   fulfillment outbound) and posts the sell-side **COGS** JE (Dr 5100 / Cr 1130). Proof: `verify_gelato_ship.py`
   22 asserts + `verify_gelato_ship_api.py` 23 asserts + **19/19** full regression (TB nets zero with the
   new JE, 1130↔subledger tie) + FE **38 files/116 tests** + `npm run build` exit 0. Checklist (all 15
-  ticked): `docs/tasks/feature-gelato-pick-pack-ship.md`. **Next action:** `/zj:verify 12b`.
+  ticked): `docs/tasks/feature-gelato-pick-pack-ship.md`.
 
 ## (historical) Position
 
@@ -211,24 +243,24 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
   plan's doc edits. `master` at `35f9b66` carries all of Phases 8–10. **Phase 11a builds on a new
   `feature-crumb-crm-pipeline` branch off master (D-V3-13)** — fast-forward this spec/plan branch to
   master first.
-- **Last update:** 2026-07-18
-- **Next action:** `/zj:plan 12b` — plan the GELATO outbound crux: **pick → pack → ship + reservation
-  relief + the sell-side COGS JE** (GELATO-01 AC3/AC4/AC5 + ship-side AC7/AC8). Carries the durable fix
-  for the 12a MAJOR: **make pick/issue (and ideally transfer/adjust) bin-aware** so the ledger's `bin_id`
-  dimension stays consistent — 12b MUST NOT assume 12a closed it (BACKLOG p2). Emphases the plan should
-  bake in: the shared FOR-UPDATE floor lock across every draw path (issue/adjust/receive/transfer/**ship**),
-  not a per-module lock, since ship makes GELATO a third writer of the inventory ledger; ship posts the
-  COGS JE (imports SYERP GL fns, D-V3-9) so `verify_reports` TB must still net zero with the new JE;
-  staging-bin moves land here (D-P12a-11). Keep the three recurring keepers: real router/UI payload shape
-  in verify, the non-optional HTTP audit/RBAC script, and a load-bearing `asyncio.Barrier` concurrency
-  scenario. Branch stacks on `feature-gelato-bins-putaway` (12a) per the per-sub-phase precedent.
+- **Last update:** 2026-07-19
+- **Next action:** `/zj:plan 13` — the final v3.0 phase: **SYERP-13 AR & sell-side books** (7 ACs).
+  Invoice-from-shipment (Dr AR 1120 / Cr Revenue), customer receipts (Dr Cash / Cr AR 1120), and an
+  **AR aging report tying Decimal-exactly to the 1120 control account** with the Trial Balance still
+  netting zero — closing v3.0 DoD clause 3. Builds on the shipments 12b posts (invoices key off a
+  shipped shipment) + the SYERP-12 GL engine ✓. Keep the recurring keepers: the subledger↔control
+  same-date-basis tie-out (09c), the control-ties-to-subledger assertion not just TB-nets-zero (Phase 10),
+  the row-lock + `asyncio.Barrier` concurrency scenario on any receipt/allocation guard, the non-optional
+  HTTP audit/RBAC script, and the real router/UI payload shape in verify + Vitest. Likely to sub-split at
+  plan (mirrors 9a/b/c, 11a/b, 12a/b) — the DoD, not the phase count, is the contract.
 
 ## Next action (detail)
 
-**`/zj:plan 12b`** — GELATO outbound (pick/pack/ship). Then Phase 13 (SYERP-13 AR + invoicing from the
-shipment/SO). The DoD, not the phase count, is the contract. **Alternative — pay down infra debt first:**
-the BACKLOG **p1** items (CI, live-DB pytest harness repair, both lint gates) are now two milestones old; a
-debt-paydown phase is reasonable if the owner wants it (raise at `/zj:ideate`).
+**`/zj:plan 13`** — SYERP-13 AR + invoicing from the shipment/SO — the last v3.0 clause. **Alternative —
+pay down infra debt first:** the BACKLOG **p1** items (CI, live-DB pytest harness repair, both lint gates)
+are now two milestones old; a debt-paydown phase is reasonable if the owner wants it (raise at `/zj:ideate`).
+Also standing: the pick-path shipment-header races (BACKLOG p2, Q1/Q2) and the inbound half of the
+bin-blind-desync item (p2) — weigh the shared cross-path row-lock refactor when a multi-writer deploy nears.
 
 ### (historical) Phase 11b verify target
 **`/zj:verify 11b`** verified goal-backward against the 6 SCs: SO model/migration/wiring (SC1); direct

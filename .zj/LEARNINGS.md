@@ -3,6 +3,92 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 12b — GELATO outbound pick → pack → ship + COGS JE (verified 2026-07-19)
+
+The outbound crux: pick (bin-aware net-zero to staging) → pack (FSM) → ship (bin-aware
+`post_issue` from staging + atomic Dr 5100 COGS / Cr 1130 JE + reservation relief), closing
+v3.0 DoD clause 2. Built by mirroring MOUSSE `issue_components` shape-for-shape. Verifier
+returned PASS (21/21); the parallel reviewer found a BLOCKER — the **fourth consecutive phase
+(11a/11b/12a/12b) where the code review, not the verify suite, caught the one defect that
+mattered.** But this one is the sharpest of the four, because the verify suite *had* a
+concurrency test aimed straight at the bug and it went green anyway.
+
+### Surprises (assumptions wrong → corrected truth)
+
+- **A concurrency test can pass for the WRONG reason and thereby mask the exact bug it
+  targets — a green forced-interleave scenario is not proof unless its fixture lets ONLY the
+  guard under test reject.** `execute_ship` gated on `shipment.status == "packed"` read from an
+  UNLOCKED `db.get` and locked only the `InventoryItem` rows, so two concurrent ships of one
+  *packed* shipment both passed the FSM gate → double inventory issue + double COGS JE + double
+  reservation relief. Scenario (g) — the phase's own `asyncio.Barrier(2)` two-ship test — went
+  green, so SC4's concurrency claim read as proven. It masked the blocker because its staging
+  bin was seeded to *exactly* the ship qty, so `post_issue`'s **floor guard** incidentally
+  rejected the second draw — a *different* guard catching the duplicate for an unrelated reason,
+  while the FSM/row-lock defect sailed through untested. With an ample or residual-staged bin
+  (normal WMS practice) the double-post goes through. **Corrected truth / keeper: when you write
+  a forced-interleave test, construct the fixture so the guard under test is the ONLY thing that
+  can reject the second actor — give every *other* guard (floor, over-ship, quantity) enough
+  slack to pass. The new scenario (h) does exactly this: order 10, ship 5, ample staging, so the
+  over-ship guard and floor guard both have headroom and only the shipment-row lock can 409 the
+  duplicate. Mutation-proven: revert the lock → successes=2 / je_count=2 / qty_shipped=10.** A
+  green concurrency assertion whose fixture lets a bystander guard do the rejecting is the
+  concurrency-axis cousin of 11b's "verify built its input in a shape the UI never sends" — the
+  test exercises a path, just not the one it claims to.
+
+- **Mirroring an exemplar's concurrency pattern faithfully still ships a race when the
+  exemplar's safety rests on a property your use case doesn't share.** The build copied MOUSSE
+  `issue_components`' "read status → lock item rows → mutate" shape verbatim, and the build-time
+  note reasoned the item locks were "belt-and-suspenders" redundant. Both were wrong for ship:
+  MOUSSE's status-before-lock shape is safe *only because issuing is an intentionally repeatable
+  operation* — re-issuing is a legitimate no-harm replay. Ship is a **one-shot terminal
+  transition** (packed → shipped, posting an irreversible GL fact), so the same shape is a
+  double-post, and the item locks (which serialize DB *access* to the stock rows) do NOT protect
+  the one-shot *status gate* — only a lock on the row whose status gates the transition does.
+  Fix: `select(Shipment).where(id==...).with_for_update()` before the FSM gate, so the loser
+  blocks, re-reads `shipped`, and 409s. **Keeper: the exemplar's lock is on the resource; a
+  one-shot FSM transition must also lock (or re-assert after locking) the row whose status is the
+  gate. Before copying a concurrency pattern, ask whether the exemplar is safe because the
+  operation is repeatable — if yours is terminal, the copied lock is necessary but not
+  sufficient.** (This corrects, on the record, the build-time "either item lock alone suffices"
+  reasoning — it held only for scenario (g)'s scarce-bin, two-*different*-shipments case.)
+
+### Patterns that worked (repeat these)
+
+- **The recurring dead-through-UI trap was CAUGHT DURING BUILD this time, not at verify.** SO
+  detail rendered a "Shipped" column from `qty_shipped`, but `SalesOrderLineRead` didn't
+  serialize `qty_picked`/`qty_shipped` — the 11a/11b/12a blank-column trap set up to strike a
+  fourth time. The engineer caught it in-build (fix commit "serialize qty_picked/qty_shipped on
+  SalesOrderLineRead") because the plan's Task 15 explicitly said to render from the accumulator
+  AND the FE test asserted the value renders. Confirmation: the counter-measure (drive/assert the
+  real contract end-to-end, backend-serialization included) works — writing "assert the column
+  actually renders its value" into the frontend task is what turns the recurring trap into an
+  in-build catch instead of a verify-loop finding.
+
+- **Parallel verifier + reviewer, reviewer-blocker-overrides-PASS, is now load-bearing four
+  phases running — budget it as non-optional, most of all when verify is green.** 11a (part-less
+  line), 11b (dead-through-UI), 12a (bin-split desync), 12b (concurrent double-ship): each time
+  the verifier returned PASS and the reviewer found the defect that mattered. 12b is the strongest
+  case yet *for* the review because verify didn't merely lack the test — it *had* the test and it
+  was falsely green. The independent adversarial read reasons about the input/interleaving domain
+  the harness's own fixtures can't reach. This is settled practice; a green verify is never a
+  reason to skip it.
+
+### Deferred items (each has a home — logged at verify, trued up here)
+
+- **Two pick-path shipment-header races (reviewer Q1/Q2)** — concurrent first-pick creates two
+  open shipments per SO (Q1); pick can append a line to a shipment a concurrent pack just flipped
+  (Q2). No ledger corruption (per-item `post_putaway` lock holds), but both break the "≤1 open
+  pick per SO / no post-pack append" assumptions. → **BACKLOG p2**, same lock family as the
+  cross-path ledger race; fix = lock the SO row (or a unique partial index: one open shipment per
+  SO) + re-assert shipment status on append.
+- **Bin-blind-desync p2 item half-closed.** 12b makes the OUTBOUND path (pick `post_putaway` +
+  ship `post_issue`) bin-aware, so pick→ship keeps the `bin_id` dimension consistent. Still open:
+  `post_transfer`/`post_adjustment`/MOUSSE `issue_components` remain bin-blind. **BACKLOG p2
+  updated** to record the outbound half is done, inbound/adjust half remains.
+- **Migration 0016 downgrade path has no automated test** — exercised only by the manual
+  `downgrade -1 && upgrade head` round-trip. → **BACKLOG p3** (a durable downgrade-round-trip
+  assertion would close it for all migrations at once).
+
 ## Phase 12a — GELATO bins & directed putaway (verified 2026-07-18)
 
 First GELATO phase: a new `gelato` module (bins + directed inbound putaway) that added a

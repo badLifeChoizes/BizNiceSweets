@@ -1,6 +1,6 @@
 # Plan: Phase 12b — GELATO warehouse outbound (pick → pack → ship)
 Goal: A warehouse operator can fulfill a Confirmed CRUMB sales order end-to-end — pick reserved lines from bins into a staging bin, pack the shipment, and ship it — where shipping issues staged stock at moving-average cost, relieves the SO's soft-reservation, stamps shipped quantities, and posts a balanced Dr 5100 COGS / Cr 1130 Inventory journal entry atomically with the inventory issue, Trial Balance still netting zero and 1130 tying to the inventory subledger.
-Status: draft
+Status: done (verified + retro'd 2026-07-19 — LEARNINGS Phase 12b banked; roadmap `[done]`)
 
 ## Success criteria
 <!-- Traces GELATO-01 AC3 (pick) / AC4 (pack) / AC5 (ship) / AC7 (ship floor + over-ship) / AC8 (audit+RBAC), and SYERP-13 AC1's COGS-on-ship clause. Invoice-from-shipment + AR = Phase 13, NOT here. -->
