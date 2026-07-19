@@ -3,6 +3,102 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Milestone v3.0 — Customer & logistics (closed 2026-07-19)
+
+Roll-up of Phases 11a, 11b, 12a, 12b, 13 (CRUMB CRM → sales orders; GELATO bins → pick/pack/
+ship; SYERP-13 AR). Two new suites plus the sell-side of SYERP, closing the lead → order →
+ship → invoice → cash loop. Distilled from the five phase retros plus the milestone audit
+(`.zj/MILESTONE-v3.0-AUDIT.md`). The milestone's dominant lesson is not about accounting or
+warehousing — it is about **how this project's verification actually catches defects**, and the
+answer became statistically undeniable this milestone.
+
+### Repeat these
+
+- **The adversarial code review, not the verify suite, caught the one defect that mattered on
+  ALL FIVE phases (11a/11b/12a/12b/13) — this is now a process fact, not a run of bad luck.**
+  Budget the parallel reviewer as *non-optional*, most of all on a "just mirror the exemplar,
+  verify is green" build where it feels redundant. The division of labour is stable: the verify
+  suite proves the happy path and the specific concurrency/tie-out cruxes the plan anticipated;
+  the independent review reasons about the input/interleaving domain the harness's own fixtures
+  can't reach. Run verifier + reviewer in parallel and let a reviewer BLOCKER override a verifier
+  PASS — the manager did this five times and was right five times.
+- **A green verify assertion is not proof when its fixture doesn't match reality — three distinct
+  failure mechanisms surfaced this milestone, all worth guarding against.** (1) *Uncovered
+  negative space* (11a: a part-less priced quote line silently accepted — verify tested only
+  well-formed lines). (2) *Wrong input shape* (11b: verify hand-fed `item_id=` while the UI sends
+  `plum_part_id` only, certifying a headline feature that was dead through the UI). (3) *A
+  bystander guard doing the rejecting* (12b: a forced-interleave concurrency test went green
+  because a scarce-staging floor guard rejected the duplicate, masking the unlocked-FSM double-ship
+  it was aimed at). Keepers, respectively: build verify inputs in the SAME shape the router/UI
+  sends; and construct concurrency fixtures so ONLY the guard under test can reject (give every
+  other guard slack). A test that exercises *a* path proves nothing about the path it *claims* to.
+- **Mirroring an exemplar retires architectural risk, never correctness risk — and the copy is
+  un-audited exactly where your case differs from the exemplar's.** Every phase mirrored a prior
+  one (11a←MOUSSE, 11b←bills locking, 12b←MOUSSE issue, 13←AP bills/aging) and every phase's
+  headline defect lived in the delta. Two sharp cases: 12b copied MOUSSE's status-before-lock
+  shape, which is safe only because issuing is *repeatable* — ship is a *one-shot terminal*
+  transition, so the copied lock was necessary-but-not-sufficient. 13 copied `create_bill`'s
+  broad `except IntegrityError → retry`, safe only because a number collision is the *only*
+  IntegrityError that path raises — `create_invoice` added a nullable `sales_order_id` FK the
+  exemplar lacks, so a bad id raised a *different* IntegrityError the retry misread → unbounded
+  recursion. Keeper: before copying, name the property that makes the exemplar safe (repeatable?
+  no other constraint on this path? no FK the mirror lacks?) and check yours shares it; every
+  field the mirror doesn't have is un-audited by the copy.
+- **The zero-sum-identity blind spot from v2.0 generalizes beyond the GL — it hits any shared
+  ledger with a new dimension.** 12a added a `bin_id` dimension to `syerp_inventory_txn` and made
+  only putaway bin-aware; every bin-blind writer (`post_transfer`/`post_adjustment`/MOUSSE-issue)
+  then silently corrupts the bin split while the location roll-up identity stays Decimal-exact —
+  so every green assertion misses it, exactly as v2.0's Σdr==Σcr identities couldn't see a
+  control-vs-subledger drift. Keeper: when you add a dimension to a shared ledger, either make
+  every writer dimension-aware in the same phase, or explicitly scope the new dimension trustworthy
+  only up to the first dimension-blind write AND pin that boundary with a test (never clamp the
+  wrong-looking value away — clamping would have broken the very roll-up identity that was the
+  crux). The inbound half of this remains BACKLOG p2.
+- **The dead-through-UI counter-measure is now reliable — it caught the trap IN-BUILD on two
+  straight phases (12b `qty_shipped`, 13 `qty_invoiced`) after biting at verify in 11a/11b.**
+  Writing "assert the column actually renders its value" into the frontend task drives the full
+  contract (backend serialization included) end-to-end and converts the recurring blank-column
+  trap into a non-event.
+- **The adjacent-untouched-surface regression assertion is the only gate that exercises a cold
+  process the way production boots.** Phase 13's mandated "assert the neighbour you didn't touch
+  still works" check returned a 500 on a fresh app process and surfaced a latent cross-module
+  metadata defect (lazy gelato model imports left a string FK unresolvable) that all of 12a/12b's
+  own green suites had sailed past because their fixtures pre-warmed the models. Keep writing it
+  into every phase that shares a table/FK with a prior one.
+- **Settled practice, paying off every phase:** the paired HTTP-level `verify_*_api.py` (proves
+  router audit/RBAC a service script structurally cannot — caught the int-PK audit coercion 500
+  in 12a); a new suite starts as a `service/` package from day one (zero refactor debt); the
+  pre-planned FOR-UPDATE lock + `asyncio.Barrier` forced-interleave scenario planned in the same
+  breath as any invariant-guarding mutation; and standalone live-DB `verify_*` as the real
+  integration gate (23 scripts, re-run clean at close) while the pytest harness stays down.
+
+### Never do these again
+
+- **Never mirror a retry-on-`IntegrityError` block onto a function that accepts a FK the exemplar
+  lacks without (a) narrowing the `except` to the specific constraint and bounding the retry, and
+  (b) validating that FK up front.** The broad catch turns any new constraint violation into a
+  misdiagnosed retry (13's unbounded-recursion 500).
+- **Never trust a "dev-only `--reload` race" diagnosis for a cross-module metadata/FK error.**
+  12a's Noticed mislabelled the `bin_id→gelato_bin` boot failure as a reload artifact; it was a
+  real order-dependent cold-boot 500 that only surfaced when Phase 13's adjacent-surface check hit
+  a fresh process. An order-dependent import defect looks transient but is deterministic on a cold
+  start.
+
+### Process notes
+
+- **The p1 infra debt rode a THIRD consecutive milestone unpaid** — no CI, live-DB pytest harness
+  still broken (D-P7-4), both lint gates non-functional. Correctness rested entirely on `verify_*`
+  + Vitest across all five phases. It held again, but the debt compounds; weigh a debt-paydown
+  phase before the next feature milestone.
+- **The stacked-branch / master-merge pattern held for a whole milestone without incident** — each
+  phase cut a fresh branch off the previous verified tip (11a→11b→12a→12b→13), 11a off master. Clean
+  to build, but the entire 5-phase stack is unmerged at close; `/zj:ship` owes the reconciliation
+  (the v2.0 debt was cleared via PR #2, so the pattern is known-good — just don't let it compound).
+- **A phase count is not a contract; the DoD is.** Phase 12 sub-split 12a/12b at plan and Phase 13
+  stayed whole — both were the right call because the test was always "does the money loop close,"
+  not "did we ship N phases." Sub-split when a phase has two provable cruxes; keep whole when the
+  second half is a near-mechanical copy of a shipped one (13's AR aging ≈ AP aging).
+
 ## Phase 13 — SYERP-13 AR & sell-side books (verified 2026-07-19)
 
 The final v3.0 phase: invoice-from-shipment (Dr 1120 / Cr 4110) → receipt (Dr cash / Cr 1120)

@@ -8,6 +8,148 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Only `fe
 `fix:` commits appear here; `docs:`/`chore:`/`test:` are omitted.
 
 
+## [v3.0] — Customer & logistics — 2026-07-19
+
+Definition of done — three clauses: *(1) manage customers and run leads → opportunities →
+quotes → sales orders with PLUM-derived editable line pricing and a communication log, where
+confirming an order soft-reserves inventory; (2) bins within stock locations, directed putaway
+on inbound receipts, and outbound pick → pack → ship that relieves the reservation; (3) shipment
+posts Dr COGS / Cr Inventory, invoice-from-shipment posts Dr AR / Cr Revenue, customer receipt
+posts Dr Cash / Cr AR, with AR aging tying Decimal-exactly to the 1120 control account and the
+trial balance still netting zero.* All three clauses audited goal-backward against the running
+stack (`.zj/MILESTONE-v3.0-AUDIT.md`): 23/23 live verify scripts exit 0 (14 service + 9 HTTP),
+whole-DB trial balance nets zero, AR/AP control accounts tie to their subledgers, frontend build
++ Vitest green. Human click-through UAT carried on BACKLOG p1 (D-M2-2).
+
+Adds two new suites — **CRUMB** (CRM) and **GELATO** (WMS) — and closes the sell-side of SYERP
+with accounts receivable, completing the lead → order → ship → invoice → cash loop.
+
+
+### Phase 11a — CRUMB CRM & pipeline
+
+
+**Added**
+
+- add CRM ORM models — lead, opportunity, quote, interaction (`e57459c`)
+- add Alembic 0013 for crumb crm tables (`5391918`)
+- seed crumb:read / crumb:write permissions (`79fcf31`)
+- add CRUMB Pydantic schemas (`3cd5b1f`)
+- scaffold crumb/service package + FSM/markup helpers (`6bbb5d5`)
+- quotes service — PLUM-priced lines, QUOTE-#### generator, status FSM (`e145998`)
+- leads service — CRUD, archive, customer link, convert (`67744c1`)
+- interactions service — append-only per-customer timeline (`8154c7c`)
+- opportunities service — stage FSM, pipeline, spawn quote (`0dc2ddd`)
+- router + self-registration with router-layer audit (`ff88aeb`)
+- frontend nav, hooks, routes + page stubs (`402d048`)
+- leads list, detail sheet, archive + convert UI (`d409d4d`)
+- opportunity pipeline (stage-grouped) + detail (`2fef975`)
+- quote builder, line editor + status FSM actions (`3550f69`)
+- communication-log timeline (append-only) (`1a6fbcd`)
+
+**Fixed**
+
+- close verification gaps in quote lines + convert + audit (`a697c69`)
+
+
+### Phase 11b — CRUMB sales orders + soft-reservation
+
+
+**Added**
+
+- add SalesOrder + SalesOrderLine ORM models (`3f37d72`)
+- add alembic migration 0014 for CRUMB sales-order tables (`567a48d`)
+- add SO_TRANSITIONS FSM table to CRUMB _common (`c6b5b64`)
+- add get_item_on_hand scalar helper to SYERP inventory service (`f19964e`)
+- add sales-order Pydantic schemas (`ce3d13f`)
+- sales-orders service — create, draft edits, status FSM (`a80bba1`)
+- convert accepted quote to draft sales order (`b69034e`)
+- sales-order confirm (soft-reservation) + cancel release (`692dbda`)
+- sales-order + conversion router endpoints with audit (`9f5c563`)
+- sales-order hooks, routes, and nav item (`73030eb`)
+- Convert to Sales Order action on accepted quotes (`ed1cb59`)
+- sales-order list + create dialog with draft line editor (`69cbc48`)
+- sales-order detail with reserved / shortage lines + FSM (`1233aea`)
+
+**Fixed**
+
+- resolve item_id from plum_part_id on direct SO create/edit (`fec334f`)
+
+
+### Phase 12a — GELATO bins & directed putaway
+
+
+**Added**
+
+- add Bin model + bin_id ledger column + gelato package (`b0b0dcd`)
+- wire module import + model aggregation (`2cc1161`)
+- migration 0015 — gelato_bin + syerp_inventory_txn.bin_id column (`7449fb4`)
+- seed gelato:read / gelato:write permissions (`57745e5`)
+- add Pydantic schemas for bins + putaway (`24c47ed`)
+- add SYERP post_putaway + get_bin_on_hand bin-aware primitives (`5de6ea6`)
+- bin CRUD + putaway orchestration service (`f548f2e`)
+- router — bins CRUD + putaway, RBAC + audit (`f8dd454`)
+- FE API hooks + nav + routes (`f46bce4`)
+- Bins screen — list / create / edit / archive (`7ab258c`)
+- Putaway screen — unbinned → bin directed move (`82e37c5`)
+
+**Fixed**
+
+- coerce bin audit target_id to str for varchar column (`136e98d`)
+
+
+### Phase 12b — GELATO outbound pick → pack → ship + COGS JE
+
+
+**Added**
+
+- add qty_picked / qty_shipped accumulators to SalesOrderLine (`61a695e`)
+- add Shipment + ShipmentLine ORM models (`6515f50`)
+- add shipment pick/pack/ship Pydantic schemas (`074d1c0`)
+- migration 0016 — shipment tables + SO-line accumulators (`9a0c867`)
+- add SYERP bin-aware post_issue inventory primitive (`2940d61`)
+- add commit param to post_putaway for atomic batching (`9b87e14`)
+- shipment pick service — bin-aware, net-zero to staging (`53b3b88`)
+- shipment pack service — FSM picking → packed (`3f06ed3`)
+- ship service — issue + Dr 5100 COGS / Cr 1130 JE + reservation relief (`0082f9d`)
+- pick/pack/ship router endpoints with audit + RBAC (`c248fdf`)
+- shipment hooks + Fulfillment nav / route (`304f78a`)
+- Fulfillment pick/pack/ship screen + test (`6d319b2`)
+- SO-detail Fulfill/Ship affordance + qty_shipped (`da3f5d7`)
+
+**Fixed**
+
+- type shipment FK id fields as Optional[str] (`6fa9c0f`)
+- serialize qty_picked / qty_shipped on SalesOrderLineRead (`65a1425`)
+- lock shipment row FOR UPDATE before ship FSM gate — prevents concurrent double-ship (`553bcfb`)
+
+
+### Phase 13 — SYERP-13 accounts receivable & sell-side books
+
+
+**Added**
+
+- add Invoice + InvoiceLine ORM models (`6a5ce2f`)
+- add Receipt + ReceiptAllocation ORM models (`4a95d88`)
+- add AR Pydantic schemas — invoice / receipt / aging (`86399ac`)
+- add qty_invoiced accumulator to SO line — model + schema + UI (`4ba5ec6`)
+- migration 0017 — AR tables + qty_invoiced column (`da64a80`)
+- AR scaffolding — invoice numbering + uninvoiced-shipments query (`21b33f7`)
+- create_invoice + invoice read layer (`40a0114`)
+- post_invoice — Dr 1120 AR / Cr 4110 Revenue journal entry (`dd35877`)
+- record_receipt — allocations + Dr cash / Cr 1120 + auto-Paid (`86dd190`)
+- ar_aging_report — buckets + 1120 control tie (debit-normal, no negation) (`099d92b`)
+- AR router endpoints — RBAC-gated, audit-after-commit (`f06ec78`)
+- AR invoices list + create-from-shipment dialog (FE) (`651a204`)
+- AR invoice detail — post action + open balance (FE) (`71250bb`)
+- AR receipts — record receipt against posted invoices (FE) (`5e9d14f`)
+- AR aging screen + nav + routes (FE) (`5d89da8`)
+
+**Fixed**
+
+- import model aggregator at startup so cross-module FKs resolve on a cold process (`ea2f2cb`)
+- validate invoice sales_order_id up front + bound retry — prevents unbounded recursion/500 (`7610e63`)
+
+
 ## [v2.0] — Operations — 2026-07-16
 
 Definition of done: *"Can track inventory, raise purchase orders, keep real books (double-entry

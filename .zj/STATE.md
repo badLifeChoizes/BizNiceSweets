@@ -1,5 +1,20 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-19 (**Phase 13 RETRO'D** — `/zj:retro 13`. Roadmap already marked
+Updated: 2026-07-19 (**Step: MILESTONE** — v3.0 "Customer & logistics" close-out IN PROGRESS
+(`/zj:milestone`). **Empirical audit is clean:** all 23 live `verify_*` scripts exit 0 (14 service
++ 9 HTTP), whole-DB trial balance nets 0.000000, control accounts flat at rest, `npm run build`
+exit 0; all 5 phases (11a/11b/12a/12b/13) verified + retro'd with complete artifacts; SRD marks
+CRUMB-01/GELATO-01/SYERP-13 all `verified`; `zj doctor` clean but for cosmetic BACKLOG tag warnings.
+**Records produced + committed:** CHANGELOG v3.0 section (feat/fix by phase), `.zj/logs/milestone-v3.0.md`
+(130 commits, ~14.6h/10 sessions), LEARNINGS `## Milestone v3.0` roll-up (headline: review-not-verify
+caught the defect that mattered on all 5 phases), DECISIONS index regenerated 73→130 entries.
+**Still pending (needs owner input):** the milestone-level goal-backward DoD auditor is driving the
+full lead→order→ship→invoice→cash loop to hunt the cross-phase seam gap phase verifications miss
+(→ `.zj/MILESTONE-v3.0-AUDIT.md`); then triage any gaps, tag `v3.0`, archive phases 11–13 to
+`.zj/history/v3.0/`, and roll the roadmap to the next milestone (candidates: FLAN port / PLUM advanced
+/ CRISP+offline+infra-debt-paydown — owner picks + approves the `v3.0` version). **Next action:**
+await the audit, then triage + tag + archive + roll-forward.
+
+Prior: 2026-07-19 (**Phase 13 RETRO'D** — `/zj:retro 13`. Roadmap already marked
 `[done — verified 2026-07-19]`; no future phase resized. **LEARNINGS Phase 13 banked (1 surprise +
 3 patterns):** (1) **the headline — mirroring a broad `except IntegrityError → retry` is only sound
 if the mirrored fn can't raise a *different* IntegrityError, and adding a nullable FK the exemplar
@@ -154,7 +169,16 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
-- **Step:** **RETRO'D** — **Phase 13 (SYERP-13 AR & sell-side books — the FINAL v3.0 phase) closed
+- **Step:** milestone — **v3.0 "Customer & logistics" close-out IN PROGRESS** (`/zj:milestone`,
+  2026-07-19). Empirical audit clean (23/23 verify scripts exit 0, TB nets zero, build clean, all 5
+  phases verified + retro'd, SRD FRs `verified`). Records produced + committed: CHANGELOG v3.0,
+  `.zj/logs/milestone-v3.0.md`, LEARNINGS `## Milestone v3.0`, DECISIONS index 73→130. Pending:
+  the goal-backward DoD auditor (`.zj/MILESTONE-v3.0-AUDIT.md`, driving the full lead→cash loop) →
+  triage gaps with owner → tag `v3.0` → archive phases 11–13 → roll roadmap to the next milestone
+  (owner picks scope + approves version). **Next action:** await audit, then triage + tag + archive
+  + roll-forward.
+
+- **(historical) Step:** **RETRO'D** — **Phase 13 (SYERP-13 AR & sell-side books — the FINAL v3.0 phase) closed
   2026-07-19** (`/zj:retro 13`), tag `zj/good-13-syerp-ar-invoicing`. Roadmap marked
   `[done — verified 2026-07-19]`; **v3.0 DoD clause 3 closed → v3.0 milestone complete pending close-out.**
   LEARNINGS Phase 13 banked (mirror-a-retry-only-safe-if-no-new-FK headline; adjacent-surface regression
@@ -191,7 +215,7 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## (historical) Position
 
-- **Step:** **PLAN COMPLETE** — **Phase 12b (GELATO outbound: pick → pack → ship) planned 2026-07-18.**
+- **(historical) Step:** **PLAN COMPLETE** — **Phase 12b (GELATO outbound: pick → pack → ship) planned 2026-07-18.**
   Closes the v3.0 DoD clause 2 (warehouse fulfillment outbound) and posts the sell-side **COGS** JE
   (Dr 5100 / Cr 1130) — the first half of SYERP-13's sell-side books; invoice-from-shipment + AR stay
   Phase 13. **15 tasks:** Wave A schema (Shipment + ShipmentLine models, `qty_picked`/`qty_shipped` on
@@ -212,7 +236,7 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## (historical) Position
 
-- **Step:** **RETRO'D** — **Phase 12a (GELATO bins & directed putaway) closed 2026-07-18** (`/zj:retro 12a`),
+- **(historical) Step:** **RETRO'D** — **Phase 12a (GELATO bins & directed putaway) closed 2026-07-18** (`/zj:retro 12a`),
   tag `zj/good-12a-gelato-bins-putaway` at `52eb481`. Roadmap marked `[done — verified + retro'd]`. Retro banked
   **LEARNINGS Phase 12a**, five keepers: (1) **the headline lesson — adding a new dimension (`bin_id`) to a
   shared ledger silently corrupts it for every existing writer that ignores the dimension, and it's a
@@ -262,7 +286,7 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## (historical) Position
 
-- **Step:** **PLAN COMPLETE** — **Phase 12a (GELATO bins & directed putaway) planned 2026-07-17.**
+- **(historical) Step:** **PLAN COMPLETE** — **Phase 12a (GELATO bins & directed putaway) planned 2026-07-17.**
   Phase 12 (GELATO-01, 8 ACs) **split 12a/12b at plan** (D-P12a-1, owner — mirrors 9a/b/c + 11a/b):
   **12a** = bins CRUD + directed putaway (inbound foundation; covers GELATO-01 AC1/AC2 + the putaway
   portion of AC7/AC8; **NO GL, NO sales-order/reservation, NO pick/pack/ship**); **12b** = pick → pack
@@ -283,7 +307,7 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
   tip (tag `zj/good-11b-crumb-sales-orders`, `fec334f`) — 11a/11b unmerged; 12a stacks. Lint gates
   remain non-functional (BACKLOG p1, known); correctness rests on the verify_* suite + Vitest.
 
-- **Step:** **RETRO'D** — **Phase 11b (CRUMB sales orders + soft-reservation) closed 2026-07-17**,
+- **(historical) Step:** **RETRO'D** — **Phase 11b (CRUMB sales orders + soft-reservation) closed 2026-07-17**,
   tag `zj/good-11b-crumb-sales-orders` (`fec334f`). **CRUMB-01 complete (all ACs).** Roadmap marked
   `[done — verified + retro'd]`. Retro banked three keepers (LEARNINGS Phase 11b): (1) **verify built
   its inputs in a shape the UI never sends** — `item_id=` hand-fed while the UI sends `plum_part_id`
