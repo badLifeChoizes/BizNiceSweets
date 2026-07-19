@@ -525,6 +525,7 @@ export interface SalesOrderLine {
   unit_price: string
   qty_reserved: string
   qty_shipped: string
+  qty_invoiced: string
   sort_order: number
   line_total: string
   shortage: string

@@ -437,4 +437,8 @@ class SalesOrderLine(Base):
     qty_shipped: Mapped[Decimal] = mapped_column(
         Numeric(precision=18, scale=6), nullable=False, default=Decimal("0")
     )
+    # qty_invoiced: invoiced accumulator (AR seam); starts at zero
+    qty_invoiced: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False, default=Decimal("0")
+    )
     sort_order: Mapped[int] = mapped_column(Integer)

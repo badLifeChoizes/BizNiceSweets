@@ -401,6 +401,7 @@ class SalesOrderLineRead(BaseModel):
     qty_reserved: Decimal
     qty_picked: Decimal
     qty_shipped: Decimal
+    qty_invoiced: Decimal
     sort_order: int
 
     # Service-derived (not ORM columns) — filled by the detail loader.

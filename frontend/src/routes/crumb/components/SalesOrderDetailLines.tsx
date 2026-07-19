@@ -163,6 +163,7 @@ function SalesOrderLineRow({
       </TableCell>
       <TableCell className="text-right font-mono">{line.qty_reserved}</TableCell>
       <TableCell className="text-right font-mono">{line.qty_shipped}</TableCell>
+      <TableCell className="text-right font-mono">{line.qty_invoiced}</TableCell>
       <TableCell
         className={cn('text-right font-mono', hasShortage && 'font-semibold text-amber-600')}
       >
@@ -370,6 +371,7 @@ export function SalesOrderDetailLines({ soId, lines, isDraft }: SalesOrderDetail
               <TableHead className="text-right">Unit price</TableHead>
               <TableHead className="text-right">Reserved</TableHead>
               <TableHead className="text-right">Shipped</TableHead>
+              <TableHead className="text-right">Invoiced</TableHead>
               <TableHead className="text-right">Shortage</TableHead>
               <TableHead className="text-right">Line total</TableHead>
               {isDraft && <TableHead className="text-right">Actions</TableHead>}

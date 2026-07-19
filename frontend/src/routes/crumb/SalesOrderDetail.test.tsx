@@ -89,6 +89,7 @@ function salesOrder(status: string) {
         unit_price: '10.00',
         qty_reserved: '6',
         qty_shipped: '4',
+        qty_invoiced: '3',
         sort_order: 0,
         line_total: '80.00',
         shortage: '2',
@@ -103,6 +104,7 @@ function salesOrder(status: string) {
         unit_price: '50.00',
         qty_reserved: '0',
         qty_shipped: '0',
+        qty_invoiced: '0',
         sort_order: 1,
         line_total: '50.00',
         shortage: '0',
@@ -201,6 +203,9 @@ describe('SalesOrderDetail screen', () => {
     // The Shipped column header renders and the first line's shipped qty (4) shows.
     expect(screen.getByText('Shipped')).toBeInTheDocument()
     expect(screen.getByText('4')).toBeInTheDocument()
+    // The Invoiced column header renders and the first line's invoiced qty (3) shows.
+    expect(screen.getByText('Invoiced')).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
   })
 
   it('shows Fulfill / Ship when GELATO is enabled ∩ gelato:read on a fulfilling SO', async () => {
