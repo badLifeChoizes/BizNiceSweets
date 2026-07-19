@@ -51,35 +51,35 @@ None. All architecture choices are pinned by the owner (single phase; price lock
 
 ### Wave A — schema
 
-### [ ] 1. Add Invoice + InvoiceLine ORM models
+### [x] 1. Add Invoice + InvoiceLine ORM models
 - **Files:** `backend/app/modules/syerp/models.py`
 - **Do:** Mirror `Bill`/`BillLine` (510-623). `Invoice(String(36) pk, invoice_number String(30) unique index, customer_id FK→syerp_partner.id, sales_order_id String(36) FK→crumb_sales_order.id nullable, invoice_date Date not-null, status String(20) default 'draft', memo, posted_at DateTime nullable, actor_id, created_at, updated_at)`. `InvoiceLine(String(36) pk, invoice_id FK→syerp_invoice.id index, line_no Integer, sales_order_line_id String(36) FK→crumb_sales_order_line.id, invoiced_qty Numeric(18,6), unit_price Numeric(18,6), amount Numeric(18,6))`. No ORM relationships (Pitfall 2). Cite AC1/AC2.
 - **Done when:** `python -c "from app.modules.syerp.models import Invoice, InvoiceLine"` imports clean; both tables appear in `Base.metadata`.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.modules.syerp.models import Invoice, InvoiceLine; print(Invoice.__tablename__, InvoiceLine.__tablename__)"`
 - **Parallel-ok:** yes
 
-### [ ] 2. Add Receipt + ReceiptAllocation ORM models
+### [x] 2. Add Receipt + ReceiptAllocation ORM models
 - **Files:** `backend/app/modules/syerp/models.py`
 - **Do:** Mirror `Payment`/`PaymentAllocation` (631-705). `Receipt(String(36) pk, receipt_date Date, cash_account_id Integer FK→syerp_gl_account.id, amount Numeric(18,6), reference String(200) nullable, actor_id, created_at)`. `ReceiptAllocation(String(36) pk, receipt_id FK→syerp_receipt.id index, invoice_id FK→syerp_invoice.id index, amount Numeric(18,6))`. Cite AC1/AC3.
 - **Done when:** both classes import clean and register on `Base.metadata`.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.modules.syerp.models import Receipt, ReceiptAllocation; print('ok')"`
 - **Parallel-ok:** yes
 
-### [ ] 3. Add `qty_invoiced` accumulator to SalesOrderLine (model + read schema + FE type/render)
+### [x] 3. Add `qty_invoiced` accumulator to SalesOrderLine (model + read schema + FE type/render)
 - **Files:** `backend/app/modules/crumb/models.py` (SalesOrderLine, ~439); `backend/app/modules/crumb/schemas.py` (SalesOrderLineRead, 394-410); `frontend/src/routes/crumb/hooks.ts` (~527); `frontend/src/routes/crumb/components/SalesOrderDetailLines.tsx` (~165); `frontend/src/routes/crumb/SalesOrderDetail.test.tsx`.
 - **Do:** Add `qty_invoiced: Mapped[Decimal] = mapped_column(Numeric(18,6), nullable=False, default=Decimal("0"))` mirroring `qty_shipped`. Add `qty_invoiced: Decimal` to `SalesOrderLineRead`. Add `qty_invoiced: string` to the FE line type and render a mono `<TableCell>` next to `qty_shipped`. Update the SO-detail Vitest fixture + assertion (mirror `qty_shipped: '4'`). **This is the dead-through-UI keeper** — the field must serialize AND render. Cite AC2/AC4.
 - **Done when:** `SalesOrderLineRead.model_fields` contains `qty_invoiced`; the SO-detail Vitest asserts the value renders and passes.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from app.modules.syerp import models; from app.modules.crumb.schemas import SalesOrderLineRead; print('qty_invoiced' in SalesOrderLineRead.model_fields)"` → `True`; then `cd frontend && npx vitest run src/routes/crumb/SalesOrderDetail.test.tsx`
 - **Parallel-ok:** no (blocks migration 0017 and the AR service)
 
-### [ ] 4. Migration 0017 — create AR tables + add qty_invoiced column
+### [x] 4. Migration 0017 — create AR tables + add qty_invoiced column
 - **Files:** `backend/alembic/versions/0017_syerp_ar_invoicing.py` (new)
 - **Do:** `revision="0017", down_revision="0016"`. `upgrade`: create `syerp_invoice`, `syerp_invoice_line`, `syerp_receipt`, `syerp_receipt_allocation` (columns/FKs/indexes matching Tasks 1-2); `op.add_column("crumb_sales_order_line", Column("qty_invoiced", Numeric(18,6), nullable=False, server_default="0"))`. `downgrade`: drop the column then the four tables in reverse-FK order. Match the hand-written style of `0010_syerp_ap_bills.py`.
 - **Done when:** `alembic upgrade head` reaches 0017 and a full `downgrade -1` / `upgrade head` round-trip succeeds with no diff.
 - **Verify:** `podman exec compose_api_1 alembic upgrade head && podman exec compose_api_1 alembic downgrade -1 && podman exec compose_api_1 alembic upgrade head`
 - **Parallel-ok:** no (depends on Tasks 1-3)
 
-### [ ] 5. Add Pydantic schemas for AR
+### [x] 5. Add Pydantic schemas for AR
 - **Files:** `backend/app/modules/syerp/schemas.py`
 - **Do:** Mirror the Bill/Payment/ApAging schema families. `UninvoicedShipmentRead(sales_order_line_id, so_number, item_id|description, uninvoiced_qty, unit_price)`. `InvoiceLineCreate(sales_order_line_id, invoiced_qty)` / `InvoiceCreate(customer_id, sales_order_id|None, invoice_date|None, lines)`. `InvoiceLineRead` + `InvoiceRead(id, invoice_number, customer_id, invoice_date, status, posted_at, total, open_balance, lines, created_at)` with `total`/`open_balance` DERIVED (constructed explicitly, mirror `BillRead`). `ReceiptAllocationCreate/Read`, `ReceiptCreate(receipt_date, cash_account_id, reference, allocations)`, `ReceiptRead`. `ArAgingBucketRow(customer_id, customer_name, current, d31_60, d61_90, d90_plus, total)`, `ArAgingTotals`, `ArAgingReport(as_of, customers, grand_total, control_balance, in_balance)`. Cite AC2/AC3/AC4.
 - **Done when:** all schema classes import clean; `InvoiceRead.model_fields` has `open_balance`.

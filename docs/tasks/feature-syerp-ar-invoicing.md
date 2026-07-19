@@ -4,11 +4,11 @@ Plan: `.zj/phases/13-syerp-ar-invoicing/PLAN.md`. Closes v3.0 DoD clause 3.
 Branch cut off the verified 12b tip (code-identical to tag `zj/good-12b-gelato-pick-pack-ship`).
 
 ## Wave A — schema
-- [ ] 1. Add Invoice + InvoiceLine ORM models
-- [ ] 2. Add Receipt + ReceiptAllocation ORM models
-- [ ] 3. Add `qty_invoiced` accumulator to SalesOrderLine (model + read schema + FE type/render)
-- [ ] 4. Migration 0017 — create AR tables + add qty_invoiced column
-- [ ] 5. Add Pydantic schemas for AR
+- [x] 1. Add Invoice + InvoiceLine ORM models
+- [x] 2. Add Receipt + ReceiptAllocation ORM models
+- [x] 3. Add `qty_invoiced` accumulator to SalesOrderLine (model + read schema + FE type/render)
+- [x] 4. Migration 0017 — create AR tables + add qty_invoiced column
+- [x] 5. Add Pydantic schemas for AR
 
 ## Wave B — backend service
 - [ ] 6. Create `service/ar.py` — pure helpers + uninvoiced-shipments query
