@@ -281,3 +281,11 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `backend/app/modules/mousse/service.py` (which matched the SYERP convention, Phase 10), now also
   `backend/app/modules/crumb/service/*` (Phase 11a, same convention), and likely older modules.
   Cosmetic; one mechanical sweep before it becomes log noise.
+- [ ] `[task] [p3]` **Proper customer prepayment / deposit accounting** (v3.0 milestone audit,
+  GAP-1 / D-M3-1) — v3.0 fixed the AR aging *report* so a receipt dated before its invoice_date no
+  longer trips a false negative-1120 tie-out (prepayments reclassified out of the control in
+  `ar_aging_report`), but there is still no first-class model for a customer deposit: the cash sits
+  as a credit against a not-yet-recognized invoice rather than in an unearned-revenue / customer-
+  deposit liability account. Revisit alongside invoice void / credit memos (the other Phase-13 p3
+  deferrals) when sell-side revenue-recognition work is scoped. Until then the report tie-out is
+  correct for every date ordering and the GL always balances.
