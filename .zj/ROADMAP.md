@@ -391,7 +391,7 @@ floor-guarded path (issue/adjust/receive/transfer/**ship**) rather than a per-mo
 
 ---
 
-## v4.0 — Infra-debt + quality paydown  [next — chosen 2026-07-19 (D-M3-3); scope at `/zj:spec`]
+## v4.0 — Infra-debt + quality paydown  [pending — chosen 2026-07-19 (D-M3-3); scope at `/zj:spec`]
 
 Owner chose this as the milestone after v3.0 (over the FLAN port and PLUM-advanced): correctness has
 rested entirely on the standalone `verify_*` scripts + Vitest for **three** milestones while the p1
