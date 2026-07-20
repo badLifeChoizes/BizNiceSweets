@@ -1,5 +1,29 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-20 (**v3.0 SHIPPED to master** — `/zj:ship`. The 11a→13 stack (135 commits) merged to
+Updated: 2026-07-20 (**v4.0 Phase 1 PLAN COMPLETE** — `/zj:plan 1`. Phase 1 = **lint gates
+fixed-to-clean (NFR-6)**; artifacts in `.zj/phases/01-lint-gates-clean/PLAN.md`. **13 tasks** (Task 0
+branch + 12 work) in 3 waves — **A: frontend gate** (add `@eslint/js`/`eslint-plugin-react-hooks`/
+`eslint-plugin-react-refresh`; write flat `eslint.config.js`; fix the `--ext`-broken `lint` script;
+delete `.eslintrc.cjs`; fix to zero) · **B: backend gate** (ruff availability + convention; safe
+`--fix`; audit/`# noqa`-guard side-effect imports FIRST; resolve the ~71 survivors — F821×4, F811/E741/
+F841, UP035×~23, 2 unsafe) · **C: regression + enforce-proof** (23/23 verify_* in-container + Vitest +
+build + **cold boot**; red→green gate proof; flip NFR-6 status). **Recon done at plan** (grounds the
+scope): FE is near-clean already (`tsc -b` `noUnusedLocals`/`strict` keeps unused out; only 6
+pre-existing `react-hooks/exhaustive-deps` disables, which prove react-hooks was the intended
+ruleset) — deps `eslint@10.5.0`+`typescript-eslint@8.62.0` already installed, just no flat config;
+BE has **1159 ruff violations, 1088 SAFE-auto-fixable**, config already committed in `pyproject.toml`
+(E/F/I/UP), ruff pinned in `requirements-dev.txt` but absent from `.venv`/image. **Top risk (handled):**
+blind F401 `--fix` could strip a load-bearing side-effect import (module self-registration /
+`app/main.py` `import app.core.models`) and re-introduce the Phase-13 cold-boot 500 — sequenced as
+audit-and-`# noqa`-first (Task 6) → review every deleted-import line (Task 7) → empirical cold-boot +
+23/23 gate (Task 10). **3 owner decisions bound at plan:** D-M4-3 fix-to-clean (not ratchet);
+**rule strictness = recommended sets only** (no tseslint recommendedTypeChecked, no ruff B/SIM/RUF);
+**formatter scope = lint-check only** (no `ruff format`/`prettier --check`; E501 stays ignored).
+No `## Decisions needed` open (one conditional escalation: if an F821 is a real runtime bug, stop +
+surface). **Branch:** cut fresh `chore-lint-gates-clean` off `origin/master` (current
+`feature-syerp-ar-invoicing` is fully merged, 0 ahead; it may be deleted). **Next action:**
+`/zj:build 1`.)
+
+Prior: 2026-07-20 (**v3.0 SHIPPED to master** — `/zj:ship`. The 11a→13 stack (135 commits) merged to
 `master` via **PR #3**, fast-forward `3b762ba..87fb79d` preserving SHAs (same known-good pattern as v2.0's
 PR #2) — `origin/master == 87fb79d`, PR #3 MERGED, all `zj/good-*` tags + annotated `v3.0` (→`e92b91d`)
 pushed and reachable from master. **The standing `/zj:ship` master-merge debt is now CLEARED** (it had
@@ -392,12 +416,13 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
   standing `/zj:ship` master-merge debt (carried since v2.0) is **CLEARED**. The merged branch can be
   deleted once the next phase branches off master.
 - **Last update:** 2026-07-20
-- **Next action:** **`/zj:plan 1`** — v4.0 Phase 1 = **lint gates fixed-to-clean (NFR-6)**: add
-  `frontend/eslint.config.js` (flat) + `@typescript-eslint` deps, install/wire `ruff`, and fix every
-  existing violation to a zero-violation baseline (D-M4-3). It's the mechanical, dependency-free phase
-  that unblocks CI (Phase 3) having green gates to enforce. v4.0 DoD + NFR-4..8 + the 5-phase mapping
-  are in ROADMAP; scope confirmed D-M4-1..3. (First, optional housekeeping: delete the merged
-  `feature-syerp-ar-invoicing` branch and cut Phase 1 off `master`.)
+- **Next action:** **`/zj:build 1`** — v4.0 Phase 1 = **lint gates fixed-to-clean (NFR-6)**, PLAN
+  complete (`.zj/phases/01-lint-gates-clean/PLAN.md`, 13 tasks / 3 waves). Cut a fresh
+  `chore-lint-gates-clean` branch off `origin/master` first (Task 0; current
+  `feature-syerp-ar-invoicing` is fully merged and may be deleted). Build order: Wave A (FE gate) and
+  Wave B (BE gate) are parallel-safe; Wave C (regression + enforce-proof) depends on both. Watch the
+  F401 side-effect-import hazard (Task 6 guards it; Task 10 cold-boot + 23/23 verify_* proves it).
+  Scope bound by D-M4-3 + the two at-plan decisions (recommended-sets-only, lint-check-only).
 
 ## Next action (detail)
 
