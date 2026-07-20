@@ -1,5 +1,16 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-19 (**Milestone v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** — `/zj:milestone`
+Updated: 2026-07-20 (**v3.0 SHIPPED to master** — `/zj:ship`. The 11a→13 stack (135 commits) merged to
+`master` via **PR #3**, fast-forward `3b762ba..87fb79d` preserving SHAs (same known-good pattern as v2.0's
+PR #2) — `origin/master == 87fb79d`, PR #3 MERGED, all `zj/good-*` tags + annotated `v3.0` (→`e92b91d`)
+pushed and reachable from master. **The standing `/zj:ship` master-merge debt is now CLEARED** (it had
+carried since v2.0). Preflight was a fresh green on the branch tip: **23/23** live `verify_*` exit 0 +
+**131/131** Vitest / 44 files + `npm run build` exit 0 (lint gates still non-functional, BACKLOG p1 — the
+v4.0 headline). Changelog already carried v3.0 (generated at milestone close); `.zj/` + `docs/tasks/`
+artifacts shipped in the merge per repo convention. **Next action:** `/zj:spec` (sharpen the v4.0
+"Infra-debt + quality paydown" DoD into clauses) then `/zj:plan 1`. Post-merge housekeeping: delete the
+merged local + remote `feature-syerp-ar-invoicing` branch once the next phase branches off master.)
+
+Prior: 2026-07-19 (**Milestone v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** — `/zj:milestone`
 done. DoD audited goal-backward (`.zj/MILESTONE-v3.0-AUDIT.md`): the WHOLE money loop driven on ONE
 sales order end-to-end (order→reserve→pick→pack→partial-ship→invoice-from-shipment→post→partial+full
 receipt→auto-Paid), all 3 clauses MET, 19/19 + 23/23 live `verify_*` + build + 131 Vitest. **Two gaps
@@ -368,10 +379,11 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 - **Milestone:** **v3.0 Customer & logistics — CLOSED + tagged `v3.0`** 2026-07-19 (all phases verified +
   retro'd; DoD audited goal-backward, 2 gaps fixed at close; phases archived to `.zj/history/v3.0/`).
   **Next milestone = v4.0 Infra-debt + quality paydown (D-M3-3).** v2.0 + v1.0 closed + tagged.
-- **Branch:** `feature-syerp-ar-invoicing` — the v3.0 tag sits here; the 11a→13 stack is unmerged (the
-  `/zj:ship` master-merge is the standing debt, same known-good FF pattern as v2.0's PR #2). `master` at
-  `35f9b66` carries through Phase 10.
-- **Last update:** 2026-07-19
+- **Branch:** `feature-syerp-ar-invoicing` — **SHIPPED to master** 2026-07-20 (PR #3, FF `3b762ba..87fb79d`).
+  `origin/master == 87fb79d` carries the full 11a→13 stack; the v3.0 tag is reachable from master. The
+  standing `/zj:ship` master-merge debt (carried since v2.0) is **CLEARED**. The merged branch can be
+  deleted once the next phase branches off master.
+- **Last update:** 2026-07-20
 - **Next action:** **`/zj:spec`** — sharpen the v4.0 "Infra-debt + quality paydown" DoD (draft in
   PROJECT.md / ROADMAP) into numbered clauses: CI on every push, live-DB pytest-harness repair (D-P7-4),
   both lint gates restored, the shared cross-path inventory-ledger FOR-UPDATE lock (BACKLOG p2) + the
