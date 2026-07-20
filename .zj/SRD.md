@@ -1,5 +1,8 @@
 # SRD — BizNiceSweets
-Updated: 2026-07-16 (v3.0 "Customer & logistics" spec — SYERP-13 (AR), CRUMB-01, GELATO-01
+Updated: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — NFR-4 (CI), NFR-5 (runnable
+integration tests / harness repair), NFR-6 (enforced lint gates), NFR-7 (concurrency-safe
+inventory ledger), NFR-8 (human UAT) added under new PRD-12; D-M4-1..3)
+Prior: 2026-07-16 (v3.0 "Customer & logistics" spec — SYERP-13 (AR), CRUMB-01, GELATO-01
 expanded from coarse placeholders into full acceptance criteria; D-V3-1..9)
 Prior: 2026-07-11
 
@@ -683,6 +686,82 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ---
 
+## v4.0 — Infra-debt & quality paydown (NFR-4..8)  [traces: PRD-12]
+
+> Non-functional, no new end-user capability. Scope confirmed by the owner at the v4.0 spec
+> (D-M4-1: CI + lint + harness + ledger race-safety + human UAT; CRISP/offline deferred).
+
+## NFR-4: Continuous integration on every push  [traces: PRD-12]  **Status: planned**
+- **Statement:** On every push and pull request to the GitHub repository, an automated pipeline
+  (**GitHub Actions**, D-M4-2) shall run, and report a pass/fail status on the commit/PR, all of:
+  backend lint (`ruff check .`), frontend lint (`npm run lint`), type-check (`tsc -b`), frontend
+  unit tests (`vitest run`), frontend build (`npm run build`), and the backend `pytest` suite
+  **against a live PostgreSQL service container** (so the DB-backed / integration tests of NFR-5
+  actually execute in CI, not skip). A failing job shall produce a red (blocking) status.
+- **Verification:** a pushed commit shows the pipeline executing every named job; a branch with a
+  deliberately-broken test **and** a branch with a deliberately-introduced lint violation each turn
+  the status red; a clean branch shows all jobs green. Demonstrated on a real PR.
+- **Source:** BACKLOG p1 (no CI anywhere — no `.github/`); D-M3-3. The `SyerpPartner` 500 shipped
+  through four plans precisely because these checks never ran automatically.
+
+## NFR-5: Runnable integration coverage — pytest harness repair  [traces: PRD-12, PRD-7, PRD-8]  **Status: planned**
+- **Statement:** The backend `pytest` suite shall execute its DB-backed tests against a live
+  PostgreSQL database with **zero silent skips**, and the crux behaviors currently proven only by
+  standalone `backend/scripts/verify_*.py` shall be covered by tests that run inside the ordinary
+  suite. The four confirmed root causes of the silent skip (D-P7-4) shall be fixed: (1) the
+  `psycopg2` DSN passed the SQLAlchemy `+psycopg2` URL; (2) the module-level async engine bound to
+  a foreign event loop; (3) no seeded `admin-user`; (4) no per-test isolation.
+- **Verification:** `pytest -q` reports **0 skipped** among the DB-backed tests (the ~100 formerly
+  silently-skipped now run — auth/plum/syerp/core); the ported crux assertions (inventory
+  moving-average + audit + RBAC, GL/AP/AR posting ties, MOUSSE WIP-clears, CRUMB reservation,
+  GELATO ship COGS) are present and pass; reverting a crux turns a **pytest** test red (not only a
+  `verify_*` script). Then drop the "script-only / UI-flow-UAT-pending" caveats those SRD rows carry.
+- **Source:** D-P7-4 (BACKLOG p1); "port Phase-8 verify-script assertions into runnable integration
+  tests" (BACKLOG p1). Enables NFR-4's live-DB CI job to be meaningful.
+
+## NFR-6: Enforced static-analysis (lint) gates  [traces: PRD-12]  **Status: planned**
+- **Statement:** Both lint gates shall run and pass clean and be enforced in CI (NFR-4): the
+  frontend on an ESLint **flat config** (`frontend/eslint.config.js`) with the
+  `@typescript-eslint` parser/plugin installed as dev dependencies, and the backend on `ruff`
+  (installed in the dev environment / image). Existing violations shall be **fixed to a
+  zero-violation baseline** (D-M4-3, owner — not baseline-and-ratchet).
+- **Verification:** `npm run lint` and `ruff check .` each exit 0 on the clean tree; introducing a
+  violation of each makes the respective command exit non-zero; both are wired as CI jobs that go
+  red on violation.
+- **Source:** BACKLOG p1 (recurring Phases 6/7/8 — ESLint 10 flat-config gap; `ruff` absent). Folds
+  into NFR-4 once both commands work.
+
+## NFR-7: Concurrency-safe inventory ledger  [traces: PRD-12, PRD-7, PRD-8]  **Status: planned**
+- **Statement:** Every floor-guarded write to the inventory ledger — issue, adjust, receive,
+  transfer, ship — shall serialize on the contended row(s) under one shared `SELECT … FOR UPDATE`
+  lock discipline (sorted-id order, the `create_bill`/`record_payment` template) so the hard
+  invariants hold under concurrent writers: per-location on-hand `≥ 0`, `qty_received ≤ qty_ordered`.
+  The remaining **bin-blind** draw primitives (`post_transfer`, `post_adjustment`, MOUSSE
+  `issue_components`) shall become **bin-aware** so the bin dimension stays consistent with location
+  totals (closing the inbound half of the bin-blind-desync gap; the outbound half closed in 12b).
+- **Verification:** an `asyncio`-concurrent two-writer scenario across *mixed* paths (e.g. a MOUSSE
+  issue racing a SYERP adjust on the same item/location) cannot drive derived on-hand negative —
+  **mutation-proven** (remove the shared lock → invariant breaches; restore → exactly one succeeds,
+  the other rejects); and a bin-blind draw after a putaway no longer leaves the bin overstated /
+  the unbinned pool negative (revises `verify_gelato.py` scenario E). Regression: all `verify_*`
+  stay green, Trial Balance nets zero.
+- **Source:** BACKLOG p2 (inventory-ledger read-check-write race, trigger now live with 3+ writers;
+  bin-blind-desync inbound half). Accepted-risk single-shop until now; hardened as the multi-writer
+  DoD clause.
+
+## NFR-8: Human-verified release readiness  [traces: PRD-12, PRD-5, PRD-7, PRD-8]  **Status: planned**
+- **Statement:** Before the milestone closes, every shipped user-facing flow — v1.0 PLUM
+  (parts/BOM/costing/AVL/import-export), v2.0 SYERP operations + MOUSSE, v3.0 CRUMB + GELATO + AR —
+  shall be exercised by a **documented human click-through** against the running stack, with a
+  pass/defect result recorded per flow.
+- **Verification:** the consolidated UAT checklist (`.zj/UAT-v1.0.md` round-2 + `.zj/UAT-v2.0.md`
+  extended with GL/AP/reports/MOUSSE + new CRUMB/GELATO/AR checks) is complete; each defect found is
+  fixed or homed to BACKLOG with an ID.
+- **Source:** D-M2-2 (deferred at the v2.0 close; owed v1.0 round-2 is 2/12) + owner include-decision
+  at the v4.0 spec (D-M4-1). The long-standing pre-public-release gate.
+
+---
+
 ## Traceability
 
 | PRD | Covered by | Gaps |
@@ -698,6 +777,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-9 | CRISP-01, NFR-1 | CRISP coarse |
 | PRD-10 | NFR-3 | — |
 | PRD-11 | NFR-2 | license audit outstanding |
+| PRD-12 | NFR-4, NFR-5, NFR-6, NFR-7, NFR-8 | **v4.0 spec (2026-07-20, D-M4-1..3)** — all `planned`. Infra/quality, no new end-user capability: CI on every push (GitHub Actions), pytest harness repair so the ~100 DB-backed tests run + verify_* ported into the suite, both lint gates fixed-to-clean, shared FOR-UPDATE lock across every inventory writer + inbound bin-blind fix, human UAT of all shipped flows. CRISP-01 + NFR-3 groundwork deferred (D-M4-1). |
 
 **v3.0 spec update (2026-07-16):** SYERP-13, CRUMB-01, and GELATO-01 moved from *coarse
 placeholder* to *fully-specified `planned`* (7 / 7 / 8 acceptance criteria respectively), targeting

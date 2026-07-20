@@ -1,5 +1,9 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-19 (**Milestone v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** — DoD audited
+Updated: 2026-07-20 (**v3.0 SHIPPED to master** via PR #3 (FF `3b762ba..87fb79d`, SHAs preserved) —
+`/zj:ship`; the standing master-merge debt is cleared. **v4.0 "Infra-debt + quality paydown" spec'd** —
+DoD confirmed into 5 clauses, NFR-4..8 written under new PRD-12, phase→FR mapping proposed (D-M4-1..3).
+Next: `/zj:plan 1`.)
+Prior: 2026-07-19 (**Milestone v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** — DoD audited
 goal-backward against the running stack (`.zj/MILESTONE-v3.0-AUDIT.md`): the WHOLE money loop driven on
 ONE sales order end-to-end (order → reserve → pick → pack → partial ship → invoice-from-shipment →
 post → partial + full receipt → auto-Paid), all COGS/AR/Revenue/Cash JEs correct, AR aging ties
@@ -391,29 +395,38 @@ floor-guarded path (issue/adjust/receive/transfer/**ship**) rather than a per-mo
 
 ---
 
-## v4.0 — Infra-debt + quality paydown  [pending — chosen 2026-07-19 (D-M3-3); scope at `/zj:spec`]
+## v4.0 — Infra-debt + quality paydown  [pending — chosen 2026-07-19 (D-M3-3); spec'd 2026-07-20 (D-M4-1..3)]
 
 Owner chose this as the milestone after v3.0 (over the FLAN port and PLUM-advanced): correctness has
 rested entirely on the standalone `verify_*` scripts + Vitest for **three** milestones while the p1
 infra debt rode unpaid, and the shared inventory-ledger row-lock now has multiple writers. Harden the
-foundation before adding more features.
+foundation before adding more features. **No new end-user capability ships in this milestone.**
 
-**Candidate scope (sharpen + sequence at `/zj:spec`, then `/zj:plan 1`):**
-- **CI pipeline** — run the `verify_*` suite + Vitest + build on every push (no CI today).
-- **Repair the live-DB pytest harness** (D-P7-4) — the ~100 skipped async tests; port the
-  `verify_*` assertions into the ordinary suite so integration coverage isn't a separate manual step.
-- **Restore both lint gates** (BACKLOG p1) — ESLint flat-config migration + the missing
-  `@typescript-eslint` deps on the frontend; install/ wire `ruff` on the backend.
-- **Shared cross-path inventory-ledger FOR-UPDATE lock** (BACKLOG p2) — one lock discipline across
-  every floor-guarded path (issue/adjust/receive/transfer/ship) + the inbound half of the
-  bin-blind-desync item (`post_transfer`/`post_adjustment`/MOUSSE-issue still bin-blind).
-- **Human click-through UAT** (D-M2-2) — extend the checklist with CRUMB/GELATO/AR flows and run the
-  long-deferred pre-public-release gate.
-- **Optional groundwork:** CRISP-01 (QMS) or NFR-3 offline scaffolding if budget allows.
+**Definition of done (confirmed at `/zj:spec`, D-M4-1 — traces PRD-12):** *"The full test suite
+(integration + unit) runs green in a GitHub Actions CI pipeline on every push, both lint gates enforce
+a zero-violation baseline, the inventory ledger is race-safe across every writer, and every shipped UI
+flow has passed a documented human click-through — so a new deploy is trustworthy without a manual
+`verify_*` run."*
 
-**DoD (draft, confirm at `/zj:spec`):** "The full test suite (integration + unit) runs green in CI on
-every push, both lint gates enforce, and the inventory ledger is race-safe across every writer — so a
-new deploy is trustworthy without a manual verify run."
+**Scope (D-M4-1):** NFR-4 (CI), NFR-5 (pytest harness repair + `verify_*` ported into the suite),
+NFR-6 (both lint gates fixed-to-clean, D-M4-3), NFR-7 (shared inventory FOR-UPDATE lock + inbound
+bin-blind fix), NFR-8 (human UAT). **Deferred:** CRISP-01 (QMS) and NFR-3 (offline) groundwork —
+they add end-user surface; they stay PRD-9/PRD-10 for a later milestone.
+
+**Phase → FR mapping (proposed; confirm/sub-split at `/zj:plan`):**
+
+| Phase | Delivers | Depends on | Notes |
+|-------|----------|-----------|-------|
+| **1 — Lint gates fixed-to-clean** | NFR-6 | — | ESLint flat config + `@typescript-eslint` deps (FE); install/wire `ruff` (BE); fix every existing violation to a zero-violation baseline. Mechanical, independent — unblocks CI having green things to gate. |
+| **2 — Pytest harness repair + port `verify_*`** | NFR-5 | — | Fix the 4 D-P7-4 root causes (psycopg2 DSN, event-loop-bound engine, missing `admin-user` seed, per-test isolation) so the ~100 DB-backed tests run; port the standalone `verify_*` crux assertions into the pytest suite. |
+| **3 — CI pipeline (GitHub Actions)** | NFR-4 | Phases 1 & 2 (green lint + runnable tests) | Workflow runs ruff + eslint + `tsc -b` + vitest + `npm run build` + `pytest` against a Postgres service container on every push/PR; red status blocks. D-M4-2. |
+| **4 — Inventory ledger race-safety** | NFR-7 | — (CI from Phase 3 then guards it) | Shared `SELECT … FOR UPDATE` lock (sorted-id, `create_bill` template) across issue/adjust/receive/transfer/ship; make `post_transfer`/`post_adjustment`/MOUSSE-issue bin-aware. Mutation-proven mixed-path concurrency scenario. |
+| **5 — Human click-through UAT** | NFR-8 | Phases 1–4 (run against the hardened stack) | Complete `.zj/UAT-v1.0.md` round-2 + `.zj/UAT-v2.0.md` extended with GL/AP/reports/MOUSSE + new CRUMB/GELATO/AR checks; fix or home each defect. The pre-public-release gate. |
+
+Likely to sub-split at plan the way Phase 9 became 9a/9b/9c; **the DoD, not the phase count, is the
+contract.** Build order is dependency-first: clean the lint tree and make tests runnable (1, 2) so CI
+(3) has meaningful green to enforce, then the race-safety refactor (4) lands under CI protection, and
+the human UAT (5) runs last against the fully-hardened stack.
 
 ---
 

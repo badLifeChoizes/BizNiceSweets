@@ -1,5 +1,5 @@
 # DECISIONS — BizNiceSweets
-Updated: 2026-07-19 (v3.0 "Customer & logistics" milestone close — D-M3-1..4, index regenerated, 134 decisions)
+Updated: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — D-M4-1..3 scope/CI-platform/lint-baseline; v3.0 shipped to master via PR #3, D-M3-4 updated; 137 decisions)
 
 Recovered decisions are marked `(recovered)` with their original source (now archived).
 Numbering is append-only.
@@ -144,6 +144,9 @@ at milestone close, never hand-edit it. 134 decisions.
 - **D-M3-2:** GAP-2 (invoice picker rendered a raw item UUID) fixed at close. list_uninvoiced_shipments now LEFT JOINs the stock item and returns a resolved…
 - **D-M3-3:** Next milestone (v4.0) = Infra-debt + quality paydown. Chosen over the FLAN port and PLUM-advanced. Pays down the BACKLOG p1 debt now three milestones…
 - **D-M3-4:** Release tagged v3.0 — semver major-per-milestone, continuing v1.0/v2.0. Applied on the feature-syerp-ar-invoicing tip (the 11a+11b+12a+12b+13 stack…
+- **D-M4-1:** v4.0 scope = CI + lint + test-harness repair + inventory race-safety + human UAT; CRISP/offline groundwork deferred (owner, /zj:spec)…
+- **D-M4-2:** CI platform = GitHub Actions — repo already on GitHub, free zero-setup runners + Postgres service container + status on each commit/PR…
+- **D-M4-3:** Lint enforcement = fix-to-clean (zero-violation baseline), not baseline-and-ratchet — honest green from day one…
 
 ## Product & Architecture
 
@@ -1000,3 +1003,28 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
 - **D-M3-4 (owner):** **Release tagged `v3.0`** — semver major-per-milestone, continuing v1.0/v2.0.
   Applied on the `feature-syerp-ar-invoicing` tip (the 11a+11b+12a+12b+13 stack is unmerged; the
   `/zj:ship` master-merge is the standing debt, cleared for v2.0 via PR #2 — same known-good pattern).
+  **Update 2026-07-20:** debt cleared — the 11a→13 stack shipped to master via **PR #3** (fast-forward
+  `3b762ba..87fb79d`, SHAs preserved, `v3.0` tag reachable from master), same pattern as PR #2.
+
+## v4.0 "Infra-debt + quality paydown" spec (2026-07-20)
+
+- **D-M4-1 (owner, `/zj:spec`):** **v4.0 scope = CI + lint + test-harness repair + inventory
+  race-safety + human UAT; CRISP/offline groundwork deferred.** Confirmed against the D-M3-3 candidate
+  list. In: NFR-4 (GitHub Actions CI on every push), NFR-6 (both lint gates fixed-to-clean), NFR-5
+  (repair the D-P7-4 silent-skip so ~100 DB-backed tests run + port `verify_*` into the pytest suite),
+  NFR-7 (shared cross-path inventory-ledger FOR-UPDATE lock + the inbound bin-blind-desync half),
+  NFR-8 (the deferred human click-through UAT of every shipped flow, D-M2-2). **Out:** CRISP-01 (QMS)
+  and NFR-3 (offline) groundwork — *why deferred:* they add end-user surface and dilute an
+  infra-hardening milestone; both remain their own PRD items (PRD-9/PRD-10) for a later milestone.
+  *Owner note at spec:* asked what "CI" meant — confirmed the milestone adds **no new app capability**,
+  it hardens the foundation so a new deploy is trustworthy without a manual `verify_*` run.
+- **D-M4-2 (owner):** **CI platform = GitHub Actions.** The repo already lives on GitHub
+  (`badLifeChoizes/BizNiceSweets`), so native Actions gives free zero-setup runners, a Postgres
+  service container for the live-DB job, and the ✓/✗ status directly on each commit/PR. Chosen over a
+  self-hosted robot (Forgejo/Gitea, more to maintain) and a portable-script-first approach; the whole
+  gate can still be factored into a script CI calls if portability is wanted later.
+- **D-M4-3 (owner):** **Lint enforcement = fix-to-clean, not baseline-and-ratchet.** Resolve every
+  existing `ruff`/ESLint violation up front so both gates pass with a zero-violation baseline, rather
+  than recording current violations as an accepted baseline and gating only new ones. *Why:* an honest
+  green from day one; the codebase is disciplined enough that the count should be tractable (revisit to
+  ratchet only if the fix-to-clean effort proves outsized at plan).

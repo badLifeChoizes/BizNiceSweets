@@ -58,17 +58,21 @@ Full codebase detail: `.zj/codebase/MAP.md`.
 
 ## Definition of done — current milestone (v4.0 Infra-debt + quality paydown)
 
-> **Draft (confirm at `/zj:spec`):** "The full test suite (integration + unit) runs green in CI on
-> every push, both lint gates enforce, and the inventory ledger is race-safe across every writer — so
-> a new deploy is trustworthy without a manual verify run."
+> **Confirmed at `/zj:spec` (2026-07-20, D-M4-1; traces PRD-12):** "The full test suite (integration +
+> unit) runs green in a **GitHub Actions CI** pipeline on every push, both lint gates enforce a
+> zero-violation baseline, the inventory ledger is race-safe across every writer, and every shipped UI
+> flow has passed a documented human click-through — so a new deploy is trustworthy without a manual
+> `verify_*` run."
 
 Chosen 2026-07-19 at the v3.0 close (D-M3-3) over the FLAN port and PLUM-advanced: correctness has
 rested entirely on the standalone `verify_*` scripts + Vitest for **three** milestones while the p1
 infra debt (no CI, broken live-DB pytest harness D-P7-4, both non-functional lint gates) rode unpaid,
 and the shared inventory-ledger row-lock now has multiple writers (BACKLOG p2). Harden the foundation
-before adding more features. Candidate scope (CI, pytest-harness repair, lint gates, the shared
-FOR-UPDATE lock, the deferred human UAT, optional CRISP/offline groundwork) needs `/zj:spec` expansion
-and sequencing. **Next: `/zj:spec`** to sharpen this DoD into clauses, then `/zj:plan 1`.
+before adding more features — **this milestone ships no new end-user capability.** Scope confirmed at
+`/zj:spec`: **NFR-4** (CI), **NFR-5** (pytest harness repair + `verify_*` ported into the suite),
+**NFR-6** (both lint gates fixed-to-clean, D-M4-3), **NFR-7** (shared inventory FOR-UPDATE lock +
+inbound bin-blind fix), **NFR-8** (human UAT). CRISP-01 / offline groundwork deferred (D-M4-1).
+Proposed 5-phase mapping in ROADMAP. **Next: `/zj:plan 1`.**
 
 **Shipped milestones:**
 - **v3.0 — Customer & logistics.** *"Can manage customers and a sales pipeline through to orders, fulfil

@@ -1,5 +1,7 @@
 # PRD — BizNiceSweets
-Updated: 2026-07-16 (PRD-8 refined + promoted to the active next milestone at the v3.0 spec —
+Updated: 2026-07-20 (PRD-12 added at the v4.0 spec — trustworthy, contributor-ready engineering
+baseline: CI, enforced lint, runnable integration tests, ledger race-safety, human UAT; D-M4-1..3)
+Prior: 2026-07-16 (PRD-8 refined + promoted to the active next milestone at the v3.0 spec —
 order-to-cash + WMS scope, sell-side real books; D-V3-1..9)
 Prior: 2026-07-11 (PRD-7/8 refined at the Phase-9 spec — GL+AP+reporting scope, AR→CRUMB; D-P9-1..4)
 Originally: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/` GSD artifacts, and `docs/` program roadmap — all archived; see DECISIONS.md D-ADOPT-1)
@@ -158,3 +160,29 @@ Originally: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/
 - **Evidence:** NFR-2 implemented but unaudited (permissive-license dependencies) (see SRD).
 - **Status: partial** — stack chosen for permissive licenses throughout (MIT/Apache/PostgreSQL);
   no public release or license audit yet.
+
+## PRD-12: Trustworthy, contributor-ready engineering baseline
+- **Statement:** The product's codebase shall enforce its own correctness automatically — every
+  push runs the full test suite and static-analysis gates and reports pass/fail; integration
+  coverage runs in the ordinary test suite rather than as a separate manual step; the inventory
+  ledger stays correct under concurrent writers; and every shipped user-facing flow is confirmed
+  by a documented human click-through — so a new deployment is trustworthy **without a manual
+  verification run**.
+- **Why:** For three milestones (v1.0→v3.0) correctness has rested entirely on standalone
+  `verify_*` scripts and Vitest run **by hand**. The class of bug that ships when tests silently
+  skip is real and already bit — a `SyerpPartner` 500 shipped through four plans because the
+  live-DB tests never ran (v1.0 audit G3 / D-P7-4). This is the safety net that makes future
+  feature work — and the eventual public open-source release with outside contributors —
+  trustworthy. Unlike a feature, this outlives any single suite: it protects all of them. *(No new
+  end-user capability ships in this milestone — it hardens the foundation.)*
+- **Priority:** should (**active next milestone — v4.0 "Infra-debt + quality paydown"**)
+- **Source:** v3.0 close decision D-M3-3; BACKLOG p1 (CI, harness, lint) + p2 (ledger race);
+  D-P7-4; owner scope confirmation at the v4.0 spec (D-M4-1..3)
+- **Acceptance signal:** A contributor pushes a branch; GitHub shows green test/lint/build checks
+  automatically, and a maintainer merges trusting the gate without anyone running `verify_*` by
+  hand. `pytest` runs (not skips) its DB-backed tests. Two simultaneous inventory saves cannot
+  drive on-hand negative. The consolidated UAT checklist is complete for every shipped flow.
+- **Evidence:** NFR-4 (CI), NFR-5 (runnable integration tests), NFR-6 (enforced lint), NFR-7
+  (ledger race-safety), NFR-8 (human UAT) — see SRD.
+- **Status: planned** — v4.0 spec complete (this doc); phases not yet planned/built. CRISP-01 (QMS)
+  and NFR-3 (offline) groundwork were weighed and **deferred** out of this milestone (D-M4-1).

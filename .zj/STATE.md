@@ -6,9 +6,17 @@ pushed and reachable from master. **The standing `/zj:ship` master-merge debt is
 carried since v2.0). Preflight was a fresh green on the branch tip: **23/23** live `verify_*` exit 0 +
 **131/131** Vitest / 44 files + `npm run build` exit 0 (lint gates still non-functional, BACKLOG p1 — the
 v4.0 headline). Changelog already carried v3.0 (generated at milestone close); `.zj/` + `docs/tasks/`
-artifacts shipped in the merge per repo convention. **Next action:** `/zj:spec` (sharpen the v4.0
-"Infra-debt + quality paydown" DoD into clauses) then `/zj:plan 1`. Post-merge housekeeping: delete the
-merged local + remote `feature-syerp-ar-invoicing` branch once the next phase branches off master.)
+artifacts shipped in the merge per repo convention.
+
+**v4.0 "Infra-debt + quality paydown" SPEC'D** (`/zj:spec`, 2026-07-20) — DoD confirmed into 5 clauses,
+**NFR-4..8** written under new **PRD-12** (trustworthy engineering baseline; no new end-user capability).
+Scope (D-M4-1, owner): NFR-4 CI (GitHub Actions, D-M4-2) + NFR-5 pytest-harness repair & `verify_*`
+ported into the suite + NFR-6 both lint gates fixed-to-clean (D-M4-3) + NFR-7 shared inventory
+FOR-UPDATE lock & inbound bin-blind fix + NFR-8 human UAT; **CRISP/offline deferred.** Proposed 5-phase
+mapping in ROADMAP (lint → harness → CI → race-safety → UAT; dependency-first). Owner note: asked what
+"CI" was → confirmed the milestone hardens the foundation, adds nothing users click. **Next action:**
+`/zj:plan 1` (Phase 1 = lint gates fixed-to-clean, NFR-6). Post-merge housekeeping: delete the merged
+`feature-syerp-ar-invoicing` branch when Phase 1 branches off master.
 
 Prior: 2026-07-19 (**Milestone v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** — `/zj:milestone`
 done. DoD audited goal-backward (`.zj/MILESTONE-v3.0-AUDIT.md`): the WHOLE money loop driven on ONE
@@ -384,11 +392,12 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
   standing `/zj:ship` master-merge debt (carried since v2.0) is **CLEARED**. The merged branch can be
   deleted once the next phase branches off master.
 - **Last update:** 2026-07-20
-- **Next action:** **`/zj:spec`** — sharpen the v4.0 "Infra-debt + quality paydown" DoD (draft in
-  PROJECT.md / ROADMAP) into numbered clauses: CI on every push, live-DB pytest-harness repair (D-P7-4),
-  both lint gates restored, the shared cross-path inventory-ledger FOR-UPDATE lock (BACKLOG p2) + the
-  inbound bin-blind-desync half, the deferred human UAT (D-M2-2), optional CRISP/offline groundwork —
-  then `/zj:plan 1`. Optional: `/zj:ship` to merge the 11a+11b+12a+12b+13 stack to master.
+- **Next action:** **`/zj:plan 1`** — v4.0 Phase 1 = **lint gates fixed-to-clean (NFR-6)**: add
+  `frontend/eslint.config.js` (flat) + `@typescript-eslint` deps, install/wire `ruff`, and fix every
+  existing violation to a zero-violation baseline (D-M4-3). It's the mechanical, dependency-free phase
+  that unblocks CI (Phase 3) having green gates to enforce. v4.0 DoD + NFR-4..8 + the 5-phase mapping
+  are in ROADMAP; scope confirmed D-M4-1..3. (First, optional housekeeping: delete the merged
+  `feature-syerp-ar-invoicing` branch and cut Phase 1 off `master`.)
 
 ## Next action (detail)
 
