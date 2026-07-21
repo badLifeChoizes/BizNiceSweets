@@ -719,7 +719,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Source:** D-P7-4 (BACKLOG p1); "port Phase-8 verify-script assertions into runnable integration
   tests" (BACKLOG p1). Enables NFR-4's live-DB CI job to be meaningful.
 
-## NFR-6: Enforced static-analysis (lint) gates  [traces: PRD-12]  **Status: planned**
+## NFR-6: Enforced static-analysis (lint) gates  [traces: PRD-12]  **Status: implemented (v4.0 Phase 1 — both gates fixed-to-clean + enforcing; CI-wiring clause pending NFR-4/Phase 3)**
 - **Statement:** Both lint gates shall run and pass clean and be enforced in CI (NFR-4): the
   frontend on an ESLint **flat config** (`frontend/eslint.config.js`) with the
   `@typescript-eslint` parser/plugin installed as dev dependencies, and the backend on `ruff`
@@ -730,6 +730,16 @@ future scope (expanded via `/zj:spec` when their milestones near).
   red on violation.
 - **Source:** BACKLOG p1 (recurring Phases 6/7/8 — ESLint 10 flat-config gap; `ruff` absent). Folds
   into NFR-4 once both commands work.
+- **Evidence (v4.0 Phase 1, `chore-lint-gates-clean`):** FE — flat `frontend/eslint.config.js`
+  (js+typescript-eslint+react-hooks@5 [D-P1-1]+react-refresh recommended, `no-unused-vars ^_`),
+  `.eslintrc.cjs` deleted, `lint` script de-`--ext`'d; `npm run lint` **exit 0**. BE — `ruff` dev-venv
+  `0.15.18`, ~1159 violations fixed-to-clean (1139 safe-autofix + F821×4 via TYPE_CHECKING, F811 seeded_db
+  → `tests/auth/conftest.py`, E741/F841 hand-fixed, 51 load-bearing syerp re-exports `# noqa: F401`);
+  `ruff check .` from `backend/` **exit 0**. Enforce-proof: each gate exits **non-zero** on a planted
+  violation, **0** after revert. No regression: **23/23 `verify_*` exit 0** in-container + cold boot
+  (`/health/ready` 200 + `import app.main` BOOT_OK) + Vitest 44/131 + `tsc -b && vite build` exit 0.
+  **Pending for NFR-4/Phase 3:** wiring both as CI jobs + ruff into the container image + `.npmrc`
+  `legacy-peer-deps=true` for reproducible `npm ci`.
 
 ## NFR-7: Concurrency-safe inventory ledger  [traces: PRD-12, PRD-7, PRD-8]  **Status: planned**
 - **Statement:** Every floor-guarded write to the inventory ledger — issue, adjust, receive,
