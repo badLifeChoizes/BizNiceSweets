@@ -69,7 +69,7 @@ The vanilla-JS / CDN / localStorage details in the "Legacy prototypes" subsectio
 - **Styling:** Tailwind CSS 4.3.1 via `@tailwindcss/vite` (no `tailwind.config` file); shadcn/ui-style primitives (Radix + cva) generated into `src/components/ui/`
 - **Server state:** TanStack Query 5.101.1; single axios 1.18.1 client (`src/api/client.ts`) handles tokens
 - **UX:** sonner for toasts
-- **Dev/test:** Vitest 4.1.9 + Testing Library + jsdom; Prettier 3.8.4. **Both lint gates are currently non-functional** (BACKLOG p1): ESLint 10 is flat-config-only but the repo still ships `.eslintrc.cjs`, the `lint` script passes the removed `--ext` flag, and the `@typescript-eslint` parser/plugin packages are absent from `devDependencies`; `ruff` is pinned in `requirements-dev.txt` but not installed in `backend/.venv`. Correctness rests on the test suites and `backend/scripts/verify_*.py`, not on lint.
+- **Dev/test:** Vitest 4.1.9 + Testing Library + jsdom; Prettier 3.8.4. **Both lint gates are fixed to a zero-violation baseline and enforcing** (v4.0 Phase 1, NFR-6): the frontend runs on a flat `frontend/eslint.config.js` (`.eslintrc.cjs` deleted, `lint` script de-`--ext`'d, `@typescript-eslint`/react-hooks@5/react-refresh devDeps present) — `npm run lint` exits 0; the backend runs `ruff` (installed at `backend/.venv/bin/ruff`, convention: `ruff check .` from `backend/`) — exit 0. CI auto-run of both gates is pending Phase 3 (NFR-4); until then they are run manually alongside the test suites and `backend/scripts/verify_*.py`.
 
 ## Database & Deployment
 - **Database:** PostgreSQL 17 (`postgres:17-alpine`) — one shared database for all modules, never port-mapped to the host

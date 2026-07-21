@@ -719,7 +719,8 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Source:** D-P7-4 (BACKLOG p1); "port Phase-8 verify-script assertions into runnable integration
   tests" (BACKLOG p1). Enables NFR-4's live-DB CI job to be meaningful.
 
-## NFR-6: Enforced static-analysis (lint) gates  [traces: PRD-12]  **Status: implemented (v4.0 Phase 1 — both gates fixed-to-clean + enforcing; CI-wiring clause pending NFR-4/Phase 3)**
+## NFR-6: Enforced static-analysis (lint) gates  [traces: PRD-12]  **Status: verified (v4.0 Phase 1 — both gates fixed-to-clean + enforcing; CI-wiring clause pending NFR-4/Phase 3)**
+- **Verified:** ee11674 (Phase 01 verify, 2026-07-21 — `/zj:verify 1`: verifier re-ran both red→green enforce proofs independently, 23/23 `verify_*` + Vitest 131/131 + `tsc -b && vite build` + cold-boot all green, reviewer 0 findings; tag `zj/good-01-lint-gates-clean`. CI-wiring clause remains deferred to Phase 3/NFR-4.)
 - **Statement:** Both lint gates shall run and pass clean and be enforced in CI (NFR-4): the
   frontend on an ESLint **flat config** (`frontend/eslint.config.js`) with the
   `@typescript-eslint` parser/plugin installed as dev dependencies, and the backend on `ruff`
@@ -737,7 +738,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
   → `tests/auth/conftest.py`, E741/F841 hand-fixed, 51 load-bearing syerp re-exports `# noqa: F401`);
   `ruff check .` from `backend/` **exit 0**. Enforce-proof: each gate exits **non-zero** on a planted
   violation, **0** after revert. No regression: **23/23 `verify_*` exit 0** in-container + cold boot
-  (`/health/ready` 200 + `import app.main` BOOT_OK) + Vitest 44/131 + `tsc -b && vite build` exit 0.
+  (`/health/ready` 200 + `import app.main` BOOT_OK) + Vitest **131/131 tests pass** (44 files, 0 fail/skip) + `tsc -b && vite build` exit 0.
   **Pending for NFR-4/Phase 3:** wiring both as CI jobs + ruff into the container image + `.npmrc`
   `legacy-peer-deps=true` for reproducible `npm ci`.
 

@@ -160,6 +160,9 @@ None open. The three scope decisions are already bound: **D-M4-3** (fix-to-clean
 - **An F821 is a real runtime bug, not a stale string annotation.** Early-warning: the defining schema truly does not exist AND the code path is reachable at runtime. This exceeds a mechanical lint phase — Task 8 surfaces it to the owner rather than papering over it.
 - **A hand-fixed frontend violation changes render/hook behavior.** Early-warning: Vitest or `tsc -b` regresses in Task 10. Fixes must be lint-only; a hook-deps fix that alters effect timing is a behavior change and must be reverted to a justified `eslint-disable` instead.
 
+## Noticed
+- **SC4 has no standing automated enforce-test (minor, logged at verify).** "Gate exits non-zero on a violation" is proven only by the one-time manual red→green proof (re-run independently by the verifier). Conventionally the gate's presence in CI (Phase 3 / NFR-4) is deemed sufficient standing protection; a tiny plant→expect-fail→revert CI smoke could automate it if desired. Low priority — deferred to the CI wiring in Phase 3.
+
 ## Out of scope
 - CI wiring of the gates (GitHub Actions) — Phase 3 / NFR-4.
 - Adopting `ruff format` or `prettier --check`; any whole-repo reformatting diff — owner: lint-check-only this phase.

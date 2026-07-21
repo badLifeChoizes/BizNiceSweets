@@ -1,5 +1,23 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-21 (**v4.0 Phase 1 BUILD COMPLETE** — `/zj:build 1` on branch `chore-lint-gates-clean`
+Updated: 2026-07-21 (**v4.0 Phase 1 VERIFIED — `/zj:verify 1`.** Verdict **PASS**, tag
+`zj/good-01-lint-gates-clean`. Verifier + reviewer both ran **empirically** (not trusting the build
+report): all 5 SCs pass — SC1 flat config/devDeps/deleted `.eslintrc.cjs`/fixed `lint` script wired
+(print-config confirms rules loaded); SC2 `npm run lint` **exit 0**; SC3 `ruff 0.15.18 check .` **exit
+0**; SC4 both gates' red→green enforce proof **re-run independently** (planted → exit 1, revert → exit
+0, tree left clean); SC5 **23/23 `verify_*`** in-container + **Vitest 131/131** (the build's "44/131"
+resolved to 44 files/131 tests, **0 fail/skip**) + `tsc -b && vite build` exit 0 + cold-boot `import
+app.main` BOOT_OK. **Reviewer: 0 findings** — F401 import sets byte-identical in every load-bearing file
+(only I001 reorder, `# noqa: F401` guards intact, full FK graph resolves), F821 via real `TYPE_CHECKING`,
+`seeded_db` collapse scope-safe, `l`→`line` rename complete, removed F841 locals side-effect-free, 4
+deleted exhaustive-deps disables genuinely stale. `npm ci --dry-run` exit 0 with tracked `.npmrc`.
+**3 minor gaps, none undermine the goal — 2 fixed in the verify close-out:** stale `CLAUDE.md:72`
+("lint gates non-functional") corrected; `BACKLOG.md:44` p1 item marked resolved (CI item stays open).
+**Logged (not built):** SC4 has no standing automated enforce-test → deferred to Phase 3 CI (PLAN.md
+`## Noticed`). SRD NFR-6 → **verified** + stamped `ee11674`; ROADMAP Phase 1 → `[verified]`; artifacts
+`VERIFICATION.md`/`REVIEW.md` committed. **Next action:** `/zj:retro 1` (bank the D-P1-1 react-hooks-preset
++ F401-side-effect-guard lessons), then `/zj:plan 2` (NFR-5 pytest harness repair + port `verify_*`).)
+
+Prior: 2026-07-21 (**v4.0 Phase 1 BUILD COMPLETE** — `/zj:build 1` on branch `chore-lint-gates-clean`
 (cut off the plan-carrying tip `a6ee1fb`, code-identical to `origin/master`; Task-0 branch-point
 deviation logged). **All 13 tasks (0–12) done, atomic commits, tree clean.** NFR-6 delivered: **both
 lint gates fixed-to-clean + proven enforcing.** Wave A (frontend ESLint 10 flat gate): flat

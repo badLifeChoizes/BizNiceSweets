@@ -41,12 +41,11 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `tests/auth/test_rbac.py` covers the mechanism). Blocked on the async live-DB harness repair above;
   once that lands, port the script assertions into pytest integration tests and drop the "UI flow UAT
   pending / script-only" caveats from the SRD. A silent break in the crux currently passes every gate.
-- [ ] **Neither lint gate runs (Phases 6/7/8 — recurring)** — `npm run lint` errors out because
-  ESLint 10 requires a flat `eslint.config.js` the project lacks, so frontend lint has effectively
-  never run; `ruff` is absent from both `backend/.venv` and the API image, so backend lint can't run
-  either. `tsc -b` is the only enforced static check. Fix: add `frontend/eslint.config.js` (flat
-  config) and install ruff as a dev dep / add it to the image. Treat as a hard pre-merge chore, not
-  a per-phase surprise. Folds into the CI item above once both commands work.
+- [x] **Neither lint gate runs (Phases 6/7/8 — recurring)** — RESOLVED in v4.0 Phase 1
+  (`chore-lint-gates-clean`, NFR-6, verified). Frontend now runs on a flat `frontend/eslint.config.js`
+  (`npm run lint` exit 0); `ruff` installed at `backend/.venv/bin/ruff` (`ruff check .` exit 0); both
+  fixed to a zero-violation baseline and proven enforcing (red→green). CI auto-run of the two gates
+  still folds into the CI-pipeline item above (Phase 3 / NFR-4) — that item stays open.
 - [ ] **Seed/startup integration test** — admin-seed path has no DB-backed regression test
   (a `MissingGreenlet` slipped past unit tests in Phase 2).
 - [ ] **Rebuild `frontend/dist` + the API container image** — production bundle predates Phase 3;
