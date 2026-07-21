@@ -16,7 +16,7 @@ recommended-sets-only, lint-check-only.
 
 - [x] 0. Branch off master (via plan-carrying tip) and open this checklist
 - [x] 1. Add the three missing ESLint flat-config devDependencies (Wave A)
-- [ ] 2. Write `frontend/eslint.config.js` flat config (Wave A)
+- [x] 2. Write `frontend/eslint.config.js` flat config (Wave A)
 - [ ] 3. Fix the `lint` script and delete legacy `.eslintrc.cjs` (Wave A)
 - [ ] 4. Run `npm run lint` and fix every surfaced FE violation to zero (Wave A)
 - [ ] 5. Ensure ruff availability + document the invocation convention (Wave B)
@@ -39,6 +39,18 @@ recommended-sets-only, lint-check-only.
 - Lockfile diff: +469/-3; the 3 removals are only `"peer": true` flags flipping now that these
   are direct deps — no version churn.
 - Verify: `node -e "require('@eslint/js');require('eslint-plugin-react-hooks');require('eslint-plugin-react-refresh')"` → `exit=0`.
+
+### Task 2 — flat `eslint.config.js`
+- New `frontend/eslint.config.js` (ESM `export default tseslint.config(...)`): `ignores: ['dist','coverage']`,
+  `files: ['**/*.{ts,tsx}']`, extends `js.configs.recommended` + `tseslint.configs.recommended` +
+  `reactHooks.configs.flat.recommended` + `reactRefresh.configs.vite`, plus the preserved
+  `@typescript-eslint/no-unused-vars: ['error', { argsIgnorePattern: '^_' }]` override (matches the legacy
+  `.eslintrc.cjs` verbatim). No `recommendedTypeChecked`; no formatter step.
+- `--print-config src/App.tsx` resolved: `react-hooks/rules-of-hooks`=`[2]`,
+  `@typescript-eslint/no-unused-vars`=`[2,{argsIgnorePattern:'^_'}]`, `react-refresh/only-export-components`=
+  `[2,{allowConstantExport:true}]`, and `no-undef`=`[0]` (typescript-eslint recommended disables it, so no
+  `globals` package is needed for browser globals).
+- Verify: `npx eslint --print-config src/main.tsx >/dev/null && echo CONFIG_OK` → `CONFIG_OK`.
 
 ### Deviations
 - **Task 0 branch point:** Plan Task 0 says `git checkout -b chore-lint-gates-clean origin/master`,
