@@ -26,7 +26,7 @@ recommended-sets-only, lint-check-only.
 - [x] 9. Resolve remaining hand-inspect items: F811, E741, F841 (Wave B)
 - [x] 9b. Resolve UP035 deprecated-imports and the 2 unsafe fixes (Wave B)
 - [x] 10. Prove no regression across the full behavioral safety net (Wave C)
-- [ ] 11. Demonstrate both gates are enforcing (red→green proof) (Wave C)
+- [x] 11. Demonstrate both gates are enforcing (red→green proof) (Wave C)
 - [ ] 12. Update requirements-progress, flip NFR-6 status, final commit (Wave C)
 
 ## Notes / evidence
@@ -44,6 +44,16 @@ Dev stack up (`podman-compose -f compose/compose.yml -f compose/compose.dev.yml 
   `verify_reports.py` (accounting identity — this file was touched by Task 9's F841 fix).
 - **Vitest: 44 files / 131 tests passed.**
 - **Build: `tsc -b && vite build` exit 0** (pre-existing informational chunk-size >500kB warning only).
+
+### Task 11 — gates proven enforcing (red→green) — both PASS
+Used throwaway probe files (clean deletion = guaranteed revert; working tree confirmed clean after).
+- **Frontend:** planted `frontend/src/__lint_probe__.ts` with an unused non-`_` var →
+  `npm run lint` **exit=1** (`@typescript-eslint/no-unused-vars` error, `✖ 1 problem`); removed probe →
+  `npm run lint` **exit=0**.
+- **Backend:** planted `backend/scripts/__ruff_probe__.py` with an unused `import os` →
+  `.venv/bin/ruff check .` **exit=1** (`F401 ... 'os' imported but unused`, `Found 1 error.`); removed
+  probe → `.venv/bin/ruff check .` **exit=0** (`All checks passed!`).
+- `git status --porcelain` empty afterward (no scratch left behind).
 
 ### Task 5 — ruff availability + invocation convention
 - `cd backend && .venv/bin/ruff --version` → `ruff 0.15.18` (matches `requirements-dev.txt`
