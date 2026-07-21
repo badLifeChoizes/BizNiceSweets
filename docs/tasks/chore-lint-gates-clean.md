@@ -24,7 +24,7 @@ recommended-sets-only, lint-check-only.
 - [x] 7. Apply safe ruff auto-fixes, review F401 removal diff, enumerate remaining set (Wave B)
 - [x] 8. Inspect and resolve the 4 F821 undefined-name annotations (Wave B)
 - [x] 9. Resolve remaining hand-inspect items: F811, E741, F841 (Wave B)
-- [ ] 9b. Resolve UP035 deprecated-imports and the 2 unsafe fixes (Wave B)
+- [x] 9b. Resolve UP035 deprecated-imports and the 2 unsafe fixes (Wave B)
 - [ ] 10. Prove no regression across the full behavioral safety net (Wave C)
 - [ ] 11. Demonstrate both gates are enforcing (red→green proof) (Wave C)
 - [ ] 12. Update requirements-progress, flip NFR-6 status, final commit (Wave C)
@@ -142,6 +142,25 @@ Sites (re-located by symbol post-Task-7): `plum/service.py:2650` (`-> ImportPrev
   fixture's dep) resolves from root `tests/conftest.py:97`. Test behavior unchanged.
 - Verify: `ruff check . --select F811,E741,F841` → **All checks passed! (exit=0)**;
   whole-tree `ruff check .` → **exit=0** already at this point.
+
+### Task 9b — UP035 + 2 unsafe fixes (queue cleared by Tasks 7 & 9)
+- **UP035 (23):** safe `ruff check . --fix` in Task 7 already rewrote all 23 deprecated
+  imports (`typing.List`/`Sequence`/`Mapping`/`Iterable` → `collections.abc`, etc.); no
+  manual/`--unsafe-fixes` UP035 work remained. `ruff check . --select UP035` → **exit=0**.
+- **2 hidden unsafe fixes:** both were **F841** (`--statistics --unsafe-fixes` showed only
+  F841 `[*]`) — the `draft_bill` + `user_data` pair, hand-fixed under Task 9 (dropped the
+  unused binding, kept the side-effectful `await` — the correct behavior-preserving fix the
+  blind unsafe autofix would have gotten wrong). No `--unsafe-fixes` was ever applied.
+- This task therefore carried **no new code change** — it is the whole-tree backstop.
+- **Verify:** `ruff check . --select UP035` → `up035=0`; `ruff check .` → **All checks
+  passed! (exit=0)** — the SC3 backend gate is clean on a zero-violation baseline.
+- **Cold-boot sanity (per coordinator note):** local `import app.main` initially failed on
+  missing required secrets (no `.env`; `POSTGRES_PASSWORD`/`JWT_SECRET`/`BNS_ADMIN_PASSWORD`
+  have no defaults — expected 12-factor behavior, NOT an import error). With dummy secrets:
+  `POSTGRES_PASSWORD=dummy JWT_SECRET=dummy BNS_ADMIN_PASSWORD=dummy python -c "import
+  app.main; print('BOOT_OK')"` → **BOOT_OK**. Also confirmed the 51 syerp-service re-exports
+  (public + private) import cleanly. No side-effect import was stripped. (In-container 23/23
+  cold-boot is Wave C / Task 10.)
 
 ### Task 1 — add eslint flat-config devDependencies
 - `npm install -D @eslint/js eslint-plugin-react-hooks eslint-plugin-react-refresh` → added:
