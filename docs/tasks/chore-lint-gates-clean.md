@@ -15,7 +15,7 @@ recommended-sets-only, lint-check-only.
 ## Checklist
 
 - [x] 0. Branch off master (via plan-carrying tip) and open this checklist
-- [ ] 1. Add the three missing ESLint flat-config devDependencies (Wave A)
+- [x] 1. Add the three missing ESLint flat-config devDependencies (Wave A)
 - [ ] 2. Write `frontend/eslint.config.js` flat config (Wave A)
 - [ ] 3. Fix the `lint` script and delete legacy `.eslintrc.cjs` (Wave A)
 - [ ] 4. Run `npm run lint` and fix every surfaced FE violation to zero (Wave A)
@@ -31,6 +31,14 @@ recommended-sets-only, lint-check-only.
 
 ## Notes / evidence
 (filled in per task)
+
+### Task 1 — add eslint flat-config devDependencies
+- `npm install -D @eslint/js eslint-plugin-react-hooks eslint-plugin-react-refresh` → added:
+  `@eslint/js@^10.0.1`, `eslint-plugin-react-hooks@^7.1.1`, `eslint-plugin-react-refresh@^0.5.3`.
+- `eslint` stayed `10.5.0`, `typescript-eslint` stayed `8.62.0` (verified via `require('.../package.json').version`).
+- Lockfile diff: +469/-3; the 3 removals are only `"peer": true` flags flipping now that these
+  are direct deps — no version churn.
+- Verify: `node -e "require('@eslint/js');require('eslint-plugin-react-hooks');require('eslint-plugin-react-refresh')"` → `exit=0`.
 
 ### Deviations
 - **Task 0 branch point:** Plan Task 0 says `git checkout -b chore-lint-gates-clean origin/master`,
