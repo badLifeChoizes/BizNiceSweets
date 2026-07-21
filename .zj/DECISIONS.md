@@ -147,6 +147,10 @@ at milestone close, never hand-edit it. 134 decisions.
 - **D-M4-1:** v4.0 scope = CI + lint + test-harness repair + inventory race-safety + human UAT; CRISP/offline groundwork deferred (owner, /zj:spec)…
 - **D-M4-2:** CI platform = GitHub Actions — repo already on GitHub, free zero-setup runners + Postgres service container + status on each commit/PR…
 - **D-M4-3:** Lint enforcement = fix-to-clean (zero-violation baseline), not baseline-and-ratchet — honest green from day one…
+- **D-P2a-1:** Test isolation = dedicated `biznice_test` DB + session NullPool engine + per-test TRUNCATE…RESTART IDENTITY CASCADE + reseed (chosen over savepoint-rollback because the service layer commits pervasively)…
+- **D-P2a-2:** Phase 2 (NFR-5) split 2a/2b; concurrency mutation-proofs STAY in standalone `verify_*` (not ported to pytest), which is what lets 2a skip in-pytest cross-session concurrency…
+- **D-P2a-3:** Branch `chore-pytest-harness-repair` off `zj/good-01-lint-gates-clean` @ `dd401d1`; unmerged v4.0 stack to milestone close…
+- **D-P2a-4:** SC3 needs a seeded `User(id="admin-user")` bound to the admin role — RBAC resolves permissions from the DB user, not the token claim…
 
 ## Product & Architecture
 
@@ -1046,3 +1050,38 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   for NFR-6. Amends the Task-1 dependency version committed at `911108d`. Residual 11 (6
   `react-refresh/only-export-components`, 4 stale unused-disable directives, 1 `rules-of-hooks` false
   positive on `AppShell`'s `use`-prefixed pure helper `useVisibleModules`) resolved within Task 4.
+
+## v4.0 Phase 2a plan (pytest harness repair, 2026-07-21)
+
+- **D-P2a-1 (owner steer, `/zj:plan 2`):** **Per-test isolation = dedicated test database + truncate-reset**,
+  not savepoint/transaction-rollback. A separate `biznice_test` DB (overridable via `TEST_POSTGRES_DB`)
+  is migrated once per session via `alembic upgrade head`; a session-scoped async engine uses
+  `poolclass=NullPool`; each test is preceded by `TRUNCATE <all model tables except alembic_version>
+  RESTART IDENTITY CASCADE` + a re-run of the idempotent seeds. *Why over the "cleaner" savepoint +
+  shared-connection approach:* the service layer calls `db.commit()` pervasively and HTTP-client tests
+  commit through the app's own `get_db` session (a different connection than a test's direct session),
+  so a rollback bound to one connection cannot isolate the other; truncate-reset is robust regardless of
+  how many sessions/connections committed. NullPool is simultaneously the fix for root-cause #2 (no
+  cross-event-loop asyncpg connection reuse). A separate DB (not the running `biznice`) means the
+  per-test TRUNCATE can never wipe live app/dev data — conftest **force-sets** `POSTGRES_DB=biznice_test`
+  (unconditional, since the container already exports `POSTGRES_DB=biznice`) before `import app.main`.
+- **D-P2a-2 (owner, `/zj:plan 2`):** **Phase 2 (NFR-5) is split 2a/2b**, mirroring 9a/b/c & 11a/b.
+  **2a** repairs the harness and greens the *existing* ~100 DB-backed tests (0 silent skips). **2b**
+  (a separate later phase) ports the DoD-named `verify_*` cruxes (inventory moving-avg + audit/RBAC,
+  GL/AP/AR ties, MOUSSE WIP-clears, CRUMB reservation, GELATO ship COGS) into pytest. **The concurrency
+  mutation-proofs (`asyncio.gather`/`Barrier` + `FOR UPDATE`) STAY in the standalone `verify_*` scripts**
+  (run as a separate CI step) and are NOT ported. *Why:* they need real cross-session concurrent commits,
+  which is incompatible with any rollback-isolation model and would force fragile shared-connection
+  machinery; they are proven load-bearing where they live (verify_ap j/k, verify_mousse F, verify_gelato_ship h).
+  Keeping them out of pytest is precisely what lets 2a's isolation model stay simple.
+- **D-P2a-3 (`/zj:plan 2`):** **Branch `chore-pytest-harness-repair`** cut off the Phase-1 verified tip
+  `zj/good-01-lint-gates-clean` @ `dd401d1`; unmerged, stacks to the v4.0 milestone close (same pattern
+  as v3.0's 11a→13 stack). No Alembic schema change expected — the test DB uses existing migrations.
+- **D-P2a-4 (`/zj:plan 2`, from architect recon):** SC3 ("root cause #3 — admin-user seed") is satisfied
+  by seeding, per test, BOTH the real admin (`seed_admin_user`) AND a `User(id="admin-user")` bound to
+  the admin (wildcard) role. *Why the second row:* `get_current_user` resolves the token `sub` to a DB
+  user and `require_permission` reads permissions **from that DB user, not from the token's `permissions`
+  claim** (verified in `app/modules/auth/dependencies.py`). The plum/syerp tests mint
+  `create_access_token(subject="admin-user", …)`, so without a `User(id="admin-user")` row those tokens
+  authenticate to nothing and every RBAC-gated call 401s. `User.id` is `String(36)`, so `"admin-user"`
+  is a legal PK. This is a harness seed, not a product change.

@@ -1,5 +1,24 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-21 (**v4.0 Phase 1 RETRO'D — `/zj:retro 1`.** Phase closed `[done — verified +
+Updated: 2026-07-21 (**v4.0 Phase 2a PLANNED — `/zj:plan 2`.** Phase 2 (NFR-5, pytest harness repair)
+**split 2a/2b** at plan (owner, D-P2a-2 — mirrors 9a/b/c & 11a/b). **This plan = 2a only:** repair the
+harness so the ~100 already-written-but-silently-skipped auth/plum/syerp/core DB-backed tests RUN
+0-silent-skip green, fixing the four D-P7-4 root causes. **2b** (separate later phase) ports the
+DoD-named `verify_*` cruxes; the **concurrency mutation-proofs STAY in `verify_*`** (not ported, D-P2a-2)
+— which is what keeps 2a's isolation model simple. **13 tasks** (`.zj/phases/02a-pytest-harness-repair/PLAN.md`),
+3 waves: **A** = 4 root-cause fixes at the harness layer (SC1 DSN probe → libpq kwargs; SC2 NullPool
+test engine resolving the app's `get_db`/`AsyncSessionLocal`; SC3+SC4 per-test TRUNCATE…RESTART IDENTITY
+CASCADE + reseed on a dedicated `biznice_test` DB, incl. a seeded `User(id="admin-user")`); **B** = green
+each package (auth/core/plum/syerp/root), triaging the LATENT breakage these never-run tests will surface
+(fix or xfail-with-reason, no blanket skips); **C** = non-vacuity mutation proof + env-pointability (SC6,
+in-container `db` AND CI localhost) + regression keepers (cold boot + 23/23 `verify_*` + full 0-skip suite).
+**Owner calls at plan:** split 2a/2b; port depth = DoD-named set (2b); concurrency stays in `verify_*`;
+isolation = dedicated-DB truncate-reset over savepoint (D-P2a-1, service layer commits pervasively).
+**Architect recon de-risked SC3:** RBAC resolves permissions from the DB user, not the token claim
+(`dependencies.py`), so tokens minted `subject="admin-user"` need a real `User(id="admin-user")` row
+(D-P2a-4). No `## Decisions needed` open; D-P2a-1..4 recorded. **Branch (D-P2a-3):** `chore-pytest-harness-repair`
+off `zj/good-01-lint-gates-clean` @ `dd401d1`; unmerged stack. **Next action:** `/zj:build 2a`.)
+
+Prior: 2026-07-21 (**v4.0 Phase 1 RETRO'D — `/zj:retro 1`.** Phase closed `[done — verified +
 retro'd]`; tag `zj/good-01-lint-gates-clean` stands. **3 LEARNINGS keepers banked** (LEARNINGS.md
 "Phase 01"): (1) a lint plugin's `recommended` preset is a moving target across majors — pin the
 major before scoping (react-hooks v7 `recommended` bundled the React-Compiler ruleset = 54 errors/42
@@ -464,17 +483,17 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 - **Milestone:** **v3.0 Customer & logistics — CLOSED + tagged `v3.0`** 2026-07-19 (all phases verified +
   retro'd; DoD audited goal-backward, 2 gaps fixed at close; phases archived to `.zj/history/v3.0/`).
   **Next milestone = v4.0 Infra-debt + quality paydown (D-M3-3).** v2.0 + v1.0 closed + tagged.
-- **Branch:** `chore-lint-gates-clean` — v4.0 Phase 1 **BUILD COMPLETE** (all 13 tasks committed, tree
-  clean, `19` commits over `origin/master`). Cut off the plan-carrying tip `a6ee1fb` (code-identical to
-  `origin/master == 87fb79d`). Not yet verified/shipped. The merged `feature-syerp-ar-invoicing` branch
-  may be deleted.
+- **Branch:** v4.0 Phase 1 **DONE — verified + retro'd** on `chore-lint-gates-clean` (tip `dd401d1`,
+  tag `zj/good-01-lint-gates-clean`). Phase 2a plans off that tip onto a fresh
+  `chore-pytest-harness-repair` (D-P2a-3); unmerged v4.0 stack ships at milestone close. The merged
+  `feature-syerp-ar-invoicing` branch may be deleted.
 - **Last update:** 2026-07-21
-- **Next action:** **`/zj:verify 1`** — verify v4.0 Phase 1 (NFR-6 lint gates) goal-backward against
-  SC1–SC5: FE flat config + clean `npm run lint`; BE `ruff check .` clean; both gates enforce
-  (red→green); no regression (23/23 `verify_*` + cold boot + Vitest + build). Build evidence + the
-  D-P1-1 deviation are in `docs/tasks/_completed/2026-07-21-chore-lint-gates-clean.md`. The CI-wiring
-  clause of NFR-6 is deliberately OUT of scope (deferred to NFR-4/Phase 3) — do not fault the phase for
-  it. Then `/zj:retro 1`.
+- **Next action:** **`/zj:build 2a`** — build v4.0 Phase 2a (NFR-5, pytest harness repair) from
+  `.zj/phases/02a-pytest-harness-repair/PLAN.md` (13 tasks). Cut `chore-pytest-harness-repair` off
+  `zj/good-01-lint-gates-clean` @ `dd401d1` (Task 0). Wave A fixes the four D-P7-4 root causes; Wave B
+  greens each existing package (expect + triage latent breakage — these tests have never run); Wave C
+  proves non-vacuity, env-pointability, and no regression (23/23 `verify_*` + cold boot + 0-skip suite).
+  Porting `verify_*` cruxes is **2b**, not here.
 
 ## Next action (detail)
 
