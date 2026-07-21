@@ -19,7 +19,7 @@ recommended-sets-only, lint-check-only.
 - [x] 2. Write `frontend/eslint.config.js` flat config (Wave A)
 - [x] 3. Fix the `lint` script and delete legacy `.eslintrc.cjs` (Wave A)
 - [x] 4. Run `npm run lint` and fix every surfaced FE violation to zero (Wave A)
-- [ ] 5. Ensure ruff availability + document the invocation convention (Wave B)
+- [x] 5. Ensure ruff availability + document the invocation convention (Wave B)
 - [ ] 6. Audit and protect load-bearing side-effect imports BEFORE auto-fix (Wave B)
 - [ ] 7. Apply safe ruff auto-fixes, review F401 removal diff, enumerate remaining set (Wave B)
 - [ ] 8. Inspect and resolve the 4 F821 undefined-name annotations (Wave B)
@@ -31,6 +31,13 @@ recommended-sets-only, lint-check-only.
 
 ## Notes / evidence
 (filled in per task)
+
+### Task 5 — ruff availability + invocation convention
+- `cd backend && .venv/bin/ruff --version` → `ruff 0.15.18` (matches `requirements-dev.txt`
+  pin `ruff==0.15.18`); no `pip install` needed, dev venv already had it.
+- No `backend/README.md` exists — convention stays in this checklist ("Conventions recorded"
+  above): run `ruff check .` from `backend/`; container-image ruff is Phase 3/CI's concern.
+- Did NOT add a Makefile (per plan).
 
 ### Task 1 — add eslint flat-config devDependencies
 - `npm install -D @eslint/js eslint-plugin-react-hooks eslint-plugin-react-refresh` → added:
