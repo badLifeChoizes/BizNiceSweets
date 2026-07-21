@@ -71,7 +71,7 @@ import sys
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 # Import the central model aggregator FIRST so Base.metadata is fully populated

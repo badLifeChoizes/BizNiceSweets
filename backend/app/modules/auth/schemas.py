@@ -14,10 +14,7 @@ Schemas:
 """
 from __future__ import annotations
 
-from typing import List, Optional
-
 from pydantic import BaseModel, EmailStr
-
 
 # ---------------------------------------------------------------------------
 # Token schemas
@@ -41,8 +38,8 @@ class UserCreate(BaseModel):
 
     email: EmailStr
     password: str
-    full_name: Optional[str] = None
-    role: Optional[str] = None  # role name to assign; defaults to "user" if omitted
+    full_name: str | None = None
+    role: str | None = None  # role name to assign; defaults to "user" if omitted
 
 
 class UserRead(BaseModel):
@@ -50,13 +47,13 @@ class UserRead(BaseModel):
 
     id: str
     email: str
-    full_name: Optional[str] = None
+    full_name: str | None = None
     is_active: bool
-    roles: List[RoleRead] = []
+    roles: list[RoleRead] = []
     # Flat permission-code list for frontend nav filtering (D-04, CORE-08).
     # Populated by collect_permissions(user) in the /me endpoint.
     # Admin users include "*" (wildcard) plus all explicit codes.
-    permissions: List[str] = []
+    permissions: list[str] = []
 
     model_config = {"from_attributes": True}
 
@@ -64,9 +61,9 @@ class UserRead(BaseModel):
 class UserUpdate(BaseModel):
     """Admin-only update (all fields optional — PATCH semantics)."""
 
-    full_name: Optional[str] = None
-    is_active: Optional[bool] = None
-    role: Optional[str] = None  # replace the user's roles with this single role
+    full_name: str | None = None
+    is_active: bool | None = None
+    role: str | None = None  # replace the user's roles with this single role
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +76,6 @@ class RoleRead(BaseModel):
 
     id: int
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
     model_config = {"from_attributes": True}

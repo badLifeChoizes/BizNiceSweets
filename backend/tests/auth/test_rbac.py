@@ -12,9 +12,7 @@ Behaviors tested (CORE-05, D-10):
 Unit tests (no DB needed) verify JWT payload.
 Integration tests (need DB) verify the full require_permission + DB flow.
 """
-import pytest
 import httpx
-
 
 # ---------------------------------------------------------------------------
 # Unit tests — JWT payload content (no DB needed)
@@ -101,11 +99,11 @@ async def test_gated_endpoint_denies_token_without_permission(
     Requires DB: get_current_user looks up the user by id to validate is_active.
     Uses the seeded admin user id via login, then tests with a reduced-permission token.
     """
-    from tests.auth.conftest_helpers import admin_login_token
-    from app.modules.auth.service import create_access_token
+    from sqlalchemy import select
+
     from app.core.db import AsyncSessionLocal
     from app.modules.auth.models import User
-    from sqlalchemy import select
+    from app.modules.auth.service import create_access_token
 
     # Get the real admin user's id from DB so the token resolves
     async with AsyncSessionLocal() as session:
@@ -139,10 +137,11 @@ async def test_gated_endpoint_denies_empty_permissions(
 
     Requires DB: get_current_user validates the user exists in DB.
     """
-    from app.modules.auth.service import create_access_token
+    from sqlalchemy import select
+
     from app.core.db import AsyncSessionLocal
     from app.modules.auth.models import User
-    from sqlalchemy import select
+    from app.modules.auth.service import create_access_token
 
     async with AsyncSessionLocal() as session:
         from app.core.config import settings
@@ -197,11 +196,9 @@ async def test_rbac_probe_denies_without_syerp_read(
 
     Creates a non-admin user with no syerp:read and uses their token.
     """
-    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
+
     from app.modules.auth.service import create_access_token
-    from app.core.db import AsyncSessionLocal
-    from app.modules.auth.models import User
-    from sqlalchemy import select
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
 
     admin_token = await admin_login_token(client)
     # Create a regular user (no roles assigned by default → no permissions)
@@ -222,8 +219,8 @@ async def test_rbac_probe_denies_no_permissions(
     skip_if_no_db: None,
 ) -> None:
     """GET /auth/_rbac_probe with no permissions returns 403."""
-    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
     from app.modules.auth.service import create_access_token
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
 
     admin_token = await admin_login_token(client)
     user = await create_regular_user(

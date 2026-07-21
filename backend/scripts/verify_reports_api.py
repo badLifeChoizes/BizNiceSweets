@@ -66,7 +66,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Populate Base.metadata (FKs across modules) before any query.
 import app.core.models  # noqa: F401
-from app.core.config import settings
 from app.modules.auth.models import Permission, Role, User
 from app.modules.auth.service import create_access_token, hash_password
 

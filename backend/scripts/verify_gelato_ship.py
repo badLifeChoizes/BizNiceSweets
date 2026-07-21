@@ -138,6 +138,7 @@ from app.modules.gelato.schemas import (
     PackRequest,
     PickLineRequest,
     PickRequest,
+    PutawayRequest,
 )
 from app.modules.gelato.service import (
     build_pick_list,
@@ -148,7 +149,6 @@ from app.modules.gelato.service import (
     execute_ship,
     get_bin_on_hand,
 )
-from app.modules.gelato.schemas import PutawayRequest
 from app.modules.syerp.inventory_seed import DEFAULT_LOCATION_NAME, seed_default_location
 from app.modules.syerp.models import (
     GLAccount,

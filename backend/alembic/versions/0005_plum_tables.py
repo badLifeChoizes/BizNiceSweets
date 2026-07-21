@@ -28,9 +28,11 @@ Threat mitigations baked into schema:
   T-05-03: Migration chains to down_revision "0004" (SYERP tables) so Alembic
            single-history is maintained and FK ordering is correct.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

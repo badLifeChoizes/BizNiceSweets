@@ -2,10 +2,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
-from datetime import date, datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
 from sqlalchemy import Integer, cast, func, or_, select
@@ -15,40 +12,11 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from app.modules.syerp.models import (
-        Bill,
-        BillLine,
-        GLAccount,
         InventoryItem,
-        JournalEntry,
-        JournalLine,
-        Partner,
-        PurchaseOrder,
-        PurchaseOrderLine,
-        StockLocation,
     )
     from app.modules.syerp.schemas import (
-        AccountRegisterRead,
-        ApAgingReport,
-        BalanceSheetReport,
-        BillLineCreate,
-        BillRead,
         InventoryItemCreate,
         InventoryItemUpdate,
-        ItemOnHandRead,
-        JournalEntryRead,
-        PartnerCreate,
-        PartnerUpdate,
-        POCreate,
-        POLineCreate,
-        POLineRead,
-        POLineUpdate,
-        PORead,
-        ProfitLossReport,
-        StockLocationCreate,
-        StockLocationUpdate,
-        TransactionRead,
-        TrialBalanceReport,
-        UnbilledReceiptRead,
     )
 
 
@@ -59,7 +27,7 @@ if TYPE_CHECKING:
 _ITEM_CODE_RE = re.compile(r"^ITEM-[0-9]+$")
 
 
-def _next_item_code(existing_codes: "Iterable[str]") -> str:
+def _next_item_code(existing_codes: Iterable[str]) -> str:
     """
     Compute the next ITEM-#### code from the set of existing item codes.
 
@@ -118,7 +86,7 @@ async def generate_item_code(db: AsyncSession) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _build_item_kwargs(code: str, data: "InventoryItemCreate") -> dict:
+def _build_item_kwargs(code: str, data: InventoryItemCreate) -> dict:
     """Build the InventoryItem constructor kwargs from an InventoryItemCreate schema."""
     return {
         "code": code,
@@ -148,7 +116,7 @@ async def _validate_plum_part(db: AsyncSession, plum_part_id: str | None) -> Non
         )
 
 
-async def create_item(db: AsyncSession, data: "InventoryItemCreate") -> "InventoryItem":
+async def create_item(db: AsyncSession, data: InventoryItemCreate) -> InventoryItem:
     """
     Insert a new inventory item row.
 
@@ -202,7 +170,7 @@ async def list_items(
     db: AsyncSession,
     q: str | None = None,
     include_archived: bool = False,
-) -> list["InventoryItem"]:
+) -> list[InventoryItem]:
     """
     Return inventory items matching the given filters.
 
@@ -235,7 +203,7 @@ async def list_items(
     return list(result.scalars().all())
 
 
-async def get_item(db: AsyncSession, item_id: str) -> "InventoryItem":
+async def get_item(db: AsyncSession, item_id: str) -> InventoryItem:
     """
     Load an inventory item by id.
 
@@ -258,8 +226,8 @@ async def get_item(db: AsyncSession, item_id: str) -> "InventoryItem":
 async def update_item(
     db: AsyncSession,
     item_id: str,
-    data: "InventoryItemUpdate",
-) -> "InventoryItem":
+    data: InventoryItemUpdate,
+) -> InventoryItem:
     """
     Apply a partial update to an inventory item (PATCH semantics).
 

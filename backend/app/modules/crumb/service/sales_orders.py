@@ -101,7 +101,7 @@ async def generate_sales_order_number(db: AsyncSession) -> str:
 
 
 async def _resolve_and_validate_item_id(
-    db: AsyncSession, line: "SalesOrderLineCreate"
+    db: AsyncSession, line: SalesOrderLineCreate
 ) -> str | None:
     """
     Determine the SYERP stock item a sales-order line reserves against.
@@ -128,7 +128,7 @@ async def _resolve_and_validate_item_id(
 
 def _build_line_kwargs(
     sales_order_id: str,
-    line: "SalesOrderLineCreate",
+    line: SalesOrderLineCreate,
     sort_order: int,
     item_id: str | None,
 ) -> dict:
@@ -151,8 +151,8 @@ def _build_line_kwargs(
 
 
 async def create_sales_order(
-    db: AsyncSession, data: "SalesOrderCreate", actor_id: str
-) -> "SalesOrder":
+    db: AsyncSession, data: SalesOrderCreate, actor_id: str
+) -> SalesOrder:
     """
     Create a draft sales order header and its ordered lines (CRUMB-01).
 
@@ -246,9 +246,9 @@ async def _resolve_item_id_for_part(db: AsyncSession, plum_part_id: str | None) 
 async def convert_quote_to_sales_order(
     db: AsyncSession,
     quote_id: str,
-    data: "QuoteToSalesOrderRequest",
+    data: QuoteToSalesOrderRequest,
     actor_id: str,
-) -> "SalesOrder":
+) -> SalesOrder:
     """
     Convert an accepted quote into a draft sales order (AC3, AC6).
 
@@ -335,7 +335,7 @@ async def convert_quote_to_sales_order(
 
 async def _get_quote_lines_for_conversion(
     db: AsyncSession, quote_id: str
-) -> list["QuoteLine"]:
+) -> list[QuoteLine]:
     """Load a quote's lines ordered by sort_order (for line-copy conversion)."""
     from app.modules.crumb.models import QuoteLine
 
@@ -349,7 +349,7 @@ async def _get_quote_lines_for_conversion(
 
 async def _get_sales_order_lines(
     db: AsyncSession, sales_order_id: str
-) -> list["SalesOrderLine"]:
+) -> list[SalesOrderLine]:
     """Load a sales order's lines ordered by sort_order."""
     from app.modules.crumb.models import SalesOrderLine
 
@@ -361,7 +361,7 @@ async def _get_sales_order_lines(
     return list(result.scalars().all())
 
 
-async def get_sales_order_detail(db: AsyncSession, so_id: str) -> "SalesOrder":
+async def get_sales_order_detail(db: AsyncSession, so_id: str) -> SalesOrder:
     """
     Load a sales order with its lines and derived line/total figures (CRUMB-01).
 
@@ -391,7 +391,7 @@ async def get_sales_order_detail(db: AsyncSession, so_id: str) -> "SalesOrder":
     return so
 
 
-async def list_sales_orders(db: AsyncSession) -> list["SalesOrder"]:
+async def list_sales_orders(db: AsyncSession) -> list[SalesOrder]:
     """Return all sales orders ordered by so_number."""
     from app.modules.crumb.models import SalesOrder
 
@@ -404,7 +404,7 @@ async def list_sales_orders(db: AsyncSession) -> list["SalesOrder"]:
 # ---------------------------------------------------------------------------
 
 
-async def _get_draft_sales_order(db: AsyncSession, so_id: str) -> "SalesOrder":
+async def _get_draft_sales_order(db: AsyncSession, so_id: str) -> SalesOrder:
     """Load a sales order (404) and assert it is editable, i.e. status == draft (409)."""
     from app.modules.crumb.models import SalesOrder
 
@@ -423,8 +423,8 @@ async def _get_draft_sales_order(db: AsyncSession, so_id: str) -> "SalesOrder":
 
 
 async def add_line(
-    db: AsyncSession, so_id: str, line: "SalesOrderLineCreate", actor_id: str
-) -> "SalesOrderLine":
+    db: AsyncSession, so_id: str, line: SalesOrderLineCreate, actor_id: str
+) -> SalesOrderLine:
     """Add an ordered line to a draft sales order (409 if not draft). Returns the line."""
     from app.modules.crumb.models import SalesOrderLine
 
@@ -441,7 +441,7 @@ async def add_line(
     return row
 
 
-async def _get_line(db: AsyncSession, so_id: str, line_id: str) -> "SalesOrderLine":
+async def _get_line(db: AsyncSession, so_id: str, line_id: str) -> SalesOrderLine:
     """Load a sales-order line belonging to the given order (404 if not found)."""
     from app.modules.crumb.models import SalesOrderLine
 
@@ -458,9 +458,9 @@ async def update_line(
     db: AsyncSession,
     so_id: str,
     line_id: str,
-    patch: "SalesOrderLineCreate",
+    patch: SalesOrderLineCreate,
     actor_id: str,
-) -> "SalesOrderLine":
+) -> SalesOrderLine:
     """
     Replace a draft sales-order line's ordered fields (409 if not draft).
 
@@ -498,7 +498,7 @@ async def delete_line(db: AsyncSession, so_id: str, line_id: str, actor_id: str)
 
 async def advance_sales_order_status(
     db: AsyncSession, so_id: str, target_status: str, actor_id: str
-) -> "SalesOrder":
+) -> SalesOrder:
     """
     Advance a sales order through the status FSM (CRUMB-01).
 
@@ -574,7 +574,7 @@ async def _reserved_by_other_open_sos(
 
 async def confirm_sales_order(
     db: AsyncSession, so_id: str, actor_id: str
-) -> "SalesOrder":
+) -> SalesOrder:
     """Confirm a draft sales order, soft-reserving stock (draft → confirmed).
 
     Loads the Draft SO (404 if missing; 422 if not Draft). Collects the distinct
@@ -647,7 +647,7 @@ async def confirm_sales_order(
 
 async def cancel_sales_order(
     db: AsyncSession, so_id: str, actor_id: str
-) -> "SalesOrder":
+) -> SalesOrder:
     """Cancel a sales order, releasing any soft-reservations (→ cancelled).
 
     Allowed only from Draft or Confirmed (422 otherwise — SO_TRANSITIONS forbids

@@ -2,53 +2,27 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, NamedTuple
 
 from fastapi import HTTPException, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import Integer, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from app.modules.syerp.models import (
-        Bill,
-        BillLine,
-        GLAccount,
-        InventoryItem,
-        JournalEntry,
-        JournalLine,
-        Partner,
         PurchaseOrder,
         PurchaseOrderLine,
-        StockLocation,
     )
     from app.modules.syerp.schemas import (
-        AccountRegisterRead,
-        ApAgingReport,
-        BalanceSheetReport,
-        BillLineCreate,
-        BillRead,
-        InventoryItemCreate,
-        InventoryItemUpdate,
-        ItemOnHandRead,
-        JournalEntryRead,
-        PartnerCreate,
-        PartnerUpdate,
         POCreate,
         POLineCreate,
         POLineRead,
         POLineUpdate,
         PORead,
-        ProfitLossReport,
-        StockLocationCreate,
-        StockLocationUpdate,
-        TransactionRead,
-        TrialBalanceReport,
-        UnbilledReceiptRead,
     )
 
 from app.modules.syerp.service._common import _COST_QUANTUM
@@ -56,7 +30,6 @@ from app.modules.syerp.service.accounts import _gl_account_id_by_code
 from app.modules.syerp.service.inventory import post_receipt
 from app.modules.syerp.service.items import get_item
 from app.modules.syerp.service.journal import post_journal_entry
-
 
 # ---------------------------------------------------------------------------
 # Purchase-order number generation (Phase 8, Task 15)
@@ -71,7 +44,7 @@ from app.modules.syerp.service.journal import post_journal_entry
 _PO_NUMBER_RE = re.compile(r"^PO-[0-9]+$")
 
 
-def _next_po_number(existing_numbers: "Iterable[str]") -> str:
+def _next_po_number(existing_numbers: Iterable[str]) -> str:
     """
     Compute the next PO-#### number from the set of existing PO numbers.
 
@@ -149,7 +122,7 @@ class _POAggregates(NamedTuple):
 
 
 def _po_aggregates(
-    lines: "Iterable[tuple[Decimal, Decimal, Decimal]]",
+    lines: Iterable[tuple[Decimal, Decimal, Decimal]],
 ) -> _POAggregates:
     """
     Pure per-PO aggregate helper (no DB — unit-testable).
@@ -176,7 +149,7 @@ def _po_aggregates(
     )
 
 
-def _po_to_read(po: "PurchaseOrder", lines: "Iterable[PurchaseOrderLine]") -> "PORead":
+def _po_to_read(po: PurchaseOrder, lines: Iterable[PurchaseOrderLine]) -> PORead:
     """Assemble a PORead schema from a PurchaseOrder ORM row and its lines."""
     from app.modules.syerp.schemas import POLineRead, PORead
 
@@ -202,7 +175,7 @@ def _po_to_read(po: "PurchaseOrder", lines: "Iterable[PurchaseOrderLine]") -> "P
     )
 
 
-async def _load_po_lines(db: AsyncSession, po_id: str) -> "list[PurchaseOrderLine]":
+async def _load_po_lines(db: AsyncSession, po_id: str) -> list[PurchaseOrderLine]:
     """Return a PO's lines ordered by line_no (helper for PORead assembly)."""
     from app.modules.syerp.models import PurchaseOrderLine
 
@@ -214,7 +187,7 @@ async def _load_po_lines(db: AsyncSession, po_id: str) -> "list[PurchaseOrderLin
     return list(result.scalars().all())
 
 
-async def _get_po_row(db: AsyncSession, po_id: str) -> "PurchaseOrder":
+async def _get_po_row(db: AsyncSession, po_id: str) -> PurchaseOrder:
     """
     Load a PurchaseOrder ORM row by id (internal helper).
 
@@ -234,7 +207,7 @@ async def _get_po_row(db: AsyncSession, po_id: str) -> "PurchaseOrder":
     return po
 
 
-def _require_draft(po: "PurchaseOrder") -> None:
+def _require_draft(po: PurchaseOrder) -> None:
     """
     Guard: reject a line mutation when the PO is not in Draft (AC11-1).
 
@@ -252,7 +225,7 @@ def _require_draft(po: "PurchaseOrder") -> None:
         )
 
 
-async def create_po(db: AsyncSession, data: "POCreate") -> "PORead":
+async def create_po(db: AsyncSession, data: POCreate) -> PORead:
     """
     Insert a new purchase-order header (Draft, empty of lines).
 
@@ -298,7 +271,7 @@ async def create_po(db: AsyncSession, data: "POCreate") -> "PORead":
     return _po_to_read(po, [])
 
 
-async def list_pos(db: AsyncSession, vendor_id: str | None = None) -> "list[PORead]":
+async def list_pos(db: AsyncSession, vendor_id: str | None = None) -> list[PORead]:
     """
     Return purchase orders (newest-first), optionally filtered by vendor.
 
@@ -328,14 +301,14 @@ async def list_pos(db: AsyncSession, vendor_id: str | None = None) -> "list[PORe
         .where(PurchaseOrderLine.po_id.in_(po_ids))
         .order_by(PurchaseOrderLine.line_no)
     )
-    lines_by_po: dict[str, list["PurchaseOrderLine"]] = {po_id: [] for po_id in po_ids}
+    lines_by_po: dict[str, list[PurchaseOrderLine]] = {po_id: [] for po_id in po_ids}
     for line in lines_result.scalars().all():
         lines_by_po[line.po_id].append(line)
 
     return [_po_to_read(po, lines_by_po[po.id]) for po in pos]
 
 
-async def get_po(db: AsyncSession, po_id: str) -> "PORead":
+async def get_po(db: AsyncSession, po_id: str) -> PORead:
     """
     Load a purchase order (header + nested lines) by id.
 
@@ -357,7 +330,7 @@ async def _next_line_no(db: AsyncSession, po_id: str) -> int:
     return (current_max or 0) + 1
 
 
-async def add_line(db: AsyncSession, po_id: str, data: "POLineCreate") -> "POLineRead":
+async def add_line(db: AsyncSession, po_id: str, data: POLineCreate) -> POLineRead:
     """
     Append a line to a purchase order (Draft-only, AC11-1).
 
@@ -394,7 +367,7 @@ async def add_line(db: AsyncSession, po_id: str, data: "POLineCreate") -> "POLin
 
 async def _get_line_row(
     db: AsyncSession, po_id: str, line_id: str
-) -> "PurchaseOrderLine":
+) -> PurchaseOrderLine:
     """
     Load a PO line by id, scoped to its parent PO (internal helper).
 
@@ -420,8 +393,8 @@ async def _get_line_row(
 
 
 async def update_line(
-    db: AsyncSession, po_id: str, line_id: str, data: "POLineUpdate"
-) -> "POLineRead":
+    db: AsyncSession, po_id: str, line_id: str, data: POLineUpdate
+) -> POLineRead:
     """
     Apply a partial update to a PO line (PATCH semantics, Draft-only, AC11-1).
 
@@ -491,7 +464,7 @@ PO_TRANSITIONS: dict[str, set[str]] = {
 
 async def advance_po_status(
     db: AsyncSession, po_id: str, target: str, actor_id: str
-) -> "PORead":
+) -> PORead:
     """
     Advance a purchase order through the FSM (Phase 8, Task 16).
 
@@ -524,7 +497,7 @@ async def advance_po_status(
 
     po.status = target
     if target == "approved":
-        po.approved_at = datetime.now(timezone.utc)
+        po.approved_at = datetime.now(UTC)
         po.approved_by = actor_id
 
     await db.commit()
@@ -564,7 +537,7 @@ def _is_over_receipt(qty_received: Decimal, qty: Decimal, qty_ordered: Decimal) 
     return qty_received + qty > qty_ordered
 
 
-def _po_rollup_status(line_qtys: "Iterable[tuple[Decimal, Decimal]]") -> str:
+def _po_rollup_status(line_qtys: Iterable[tuple[Decimal, Decimal]]) -> str:
     """
     Pure PO status roll-up predicate (no DB — unit-testable).
 
@@ -586,7 +559,7 @@ async def receive_line(
     location_id: int,
     qty: Decimal,
     actor_id: str,
-) -> "PORead":
+) -> PORead:
     """
     Receive `qty` of a PO line into stock (Phase 8, Task 17, AC11-4/5).
 

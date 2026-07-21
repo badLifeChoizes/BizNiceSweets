@@ -170,7 +170,7 @@ def build_dsn() -> str:
     return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
 
 
-async def _account_by_code(session, code: str) -> "GLAccount | None":
+async def _account_by_code(session, code: str) -> GLAccount | None:
     """Resolve a seeded GL account (full row) by its Chart-of-Accounts `code`."""
     result = await session.execute(select(GLAccount).where(GLAccount.code == code))
     return result.scalars().first()

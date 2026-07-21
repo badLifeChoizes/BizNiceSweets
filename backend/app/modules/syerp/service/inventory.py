@@ -1,61 +1,27 @@
 """SYERP service — on-hand derivation, moving-average costing, receipts, adjustments, transfers."""
 from __future__ import annotations
 
-import re
-from collections.abc import Mapping
-from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from app.modules.syerp.models import (
-        Bill,
-        BillLine,
-        GLAccount,
-        InventoryItem,
         InventoryTxn,
-        JournalEntry,
-        JournalLine,
-        Partner,
-        PurchaseOrder,
-        PurchaseOrderLine,
-        StockLocation,
     )
     from app.modules.syerp.schemas import (
-        AccountRegisterRead,
-        ApAgingReport,
-        BalanceSheetReport,
-        BillLineCreate,
-        BillRead,
-        InventoryItemCreate,
-        InventoryItemUpdate,
         ItemOnHandRead,
-        JournalEntryRead,
-        PartnerCreate,
-        PartnerUpdate,
-        POCreate,
-        POLineCreate,
-        POLineRead,
-        POLineUpdate,
-        PORead,
-        ProfitLossReport,
-        StockLocationCreate,
-        StockLocationUpdate,
         TransactionRead,
-        TrialBalanceReport,
-        UnbilledReceiptRead,
     )
 
 from app.modules.syerp.service._common import _COST_QUANTUM
 from app.modules.syerp.service.items import get_item
 from app.modules.syerp.service.locations import get_location
-
 
 # ---------------------------------------------------------------------------
 # On-hand & valuation reads (Phase 8, Task 4)
@@ -73,9 +39,9 @@ from app.modules.syerp.service.locations import get_location
 
 
 def _derive_onhand(
-    location_rows: "Iterable[tuple[int, str, Decimal]]",
+    location_rows: Iterable[tuple[int, str, Decimal]],
     moving_avg_cost: Decimal,
-) -> "tuple[list[tuple[int, str, Decimal]], Decimal, Decimal]":
+) -> tuple[list[tuple[int, str, Decimal]], Decimal, Decimal]:
     """
     Pure valuation core for on-hand derivation (no DB — unit-testable).
 
@@ -97,7 +63,7 @@ def _derive_onhand(
     return nonzero, total_qty, value
 
 
-async def get_item_onhand(db: AsyncSession, item_id: str) -> "ItemOnHandRead":
+async def get_item_onhand(db: AsyncSession, item_id: str) -> ItemOnHandRead:
     """
     Return the derived on-hand-by-location + valuation for an inventory item.
 
@@ -166,7 +132,7 @@ async def get_item_on_hand(db: AsyncSession, item_id: str) -> Decimal:
     return result.scalar() or Decimal("0")
 
 
-async def list_item_transactions(db: AsyncSession, item_id: str) -> "list[TransactionRead]":
+async def list_item_transactions(db: AsyncSession, item_id: str) -> list[TransactionRead]:
     """
     Return an item's inventory-ledger rows, newest-first (Task 11 read half).
 
@@ -247,7 +213,7 @@ async def post_receipt(
     source_type: str | None = None,
     source_id: str | None = None,
     commit: bool = True,
-) -> "TransactionRead":
+) -> TransactionRead:
     """
     Post a costed receipt: append one ledger row and recompute the moving average.
 
@@ -374,7 +340,7 @@ async def post_adjustment(
     qty_delta: Decimal,
     reason: str,
     actor_id: str,
-) -> "TransactionRead":
+) -> TransactionRead:
     """
     Post a stock adjustment: append one signed `adjustment` ledger row.
 
@@ -476,7 +442,7 @@ async def post_transfer(
     to_location_id: int,
     qty: Decimal,
     actor_id: str,
-) -> "list[TransactionRead]":
+) -> list[TransactionRead]:
     """
     Post a stock transfer: append the two paired `transfer` ledger legs.
 
@@ -679,7 +645,7 @@ async def post_putaway(
     actor_id: str,
     *,
     commit: bool = True,
-) -> "list[TransactionRead]":
+) -> list[TransactionRead]:
     """
     Post a bin putaway: append the two paired `putaway` ledger legs.
 
@@ -851,7 +817,7 @@ async def post_issue(
     source_type: str,
     source_id: str,
     commit: bool = True,
-) -> "tuple[InventoryTxn, Decimal]":
+) -> tuple[InventoryTxn, Decimal]:
     """
     Post a bin-aware issue: append ONE `-qty` `issue` ledger leg and value it.
 

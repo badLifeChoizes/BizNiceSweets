@@ -12,9 +12,7 @@ exist yet. Tests will fail/skip until Plan 02 (SYERP Partner API) implements
 the route — they are written as real behavior assertions to be greened by
 Plan 02.
 """
-import pytest
 import httpx
-
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/syerp/gl/accounts — read-only CoA browse (SYERP-05)
@@ -69,9 +67,10 @@ async def test_gl_seed_idempotent(
     T-04-02: select-before-insert idempotency — re-running seed on every
     podman-compose up must leave the CoA count unchanged.
     """
+    from sqlalchemy import func, select
+
     from app.core.db import AsyncSessionLocal
     from app.modules.syerp.coa_seed import seed_gl_accounts
-    from sqlalchemy import select, func
     from app.modules.syerp.models import GLAccount
 
     async with AsyncSessionLocal() as session:

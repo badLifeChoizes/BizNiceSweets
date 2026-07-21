@@ -15,14 +15,12 @@ an active session context (RESEARCH.md Pitfall 1).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import List
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.base import Base
-
 
 # ---------------------------------------------------------------------------
 # Association tables (no mapped class — join table only)
@@ -65,20 +63,20 @@ class User(Base):
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # lazy="selectin" — loads roles in a single additional SELECT before the
     # session closes; prevents MissingGreenlet in async context (Pitfall 1).
-    roles: Mapped[List[Role]] = relationship(
+    roles: Mapped[list[Role]] = relationship(
         secondary=user_roles, back_populates="users", lazy="selectin"
     )
-    refresh_tokens: Mapped[List[RefreshToken]] = relationship(
+    refresh_tokens: Mapped[list[RefreshToken]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -90,9 +88,9 @@ class Role(Base):
     name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    users: Mapped[List[User]] = relationship(secondary=user_roles, back_populates="roles")
+    users: Mapped[list[User]] = relationship(secondary=user_roles, back_populates="roles")
     # lazy="selectin" — same async-safe pattern as User.roles.
-    permissions: Mapped[List[Permission]] = relationship(
+    permissions: Mapped[list[Permission]] = relationship(
         secondary=role_permissions, back_populates="roles", lazy="selectin"
     )
 
@@ -107,7 +105,7 @@ class Permission(Base):
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    roles: Mapped[List[Role]] = relationship(
+    roles: Mapped[list[Role]] = relationship(
         secondary=role_permissions, back_populates="permissions"
     )
 
@@ -128,7 +126,7 @@ class RefreshToken(Base):
     # family links a rotation chain; reuse detection revokes the whole family (D-07)
     family: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
     user: Mapped[User] = relationship(back_populates="refresh_tokens")
@@ -146,5 +144,5 @@ class AuditLog(Base):
     target_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

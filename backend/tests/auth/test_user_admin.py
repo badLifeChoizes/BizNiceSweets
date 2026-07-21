@@ -12,11 +12,9 @@ Behaviors tested (CORE-04, D-05):
 
 Tests require a live PostgreSQL database (skip_if_no_db) and the seeded admin user.
 """
-import pytest
 import httpx
 
 from tests.auth.conftest_helpers import admin_login_token, create_regular_user
-
 
 # ---------------------------------------------------------------------------
 # POST /auth/users — create user
@@ -103,8 +101,8 @@ async def test_non_admin_list_users_forbidden(
     Requires DB: uses a real user's id so get_current_user can validate them,
     but mints a token without users:manage so require_permission returns 403.
     """
-    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
     from app.modules.auth.service import create_access_token
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
 
     admin_token = await admin_login_token(client)
     user = await create_regular_user(

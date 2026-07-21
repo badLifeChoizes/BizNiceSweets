@@ -108,7 +108,11 @@ from app.modules.crumb.schemas import (
 # so calling the SO editors never shadows crumb_service.add_line (the quote editor).
 from app.modules.crumb.service.sales_orders import (
     add_line as add_so_line,
+)
+from app.modules.crumb.service.sales_orders import (
     delete_line as delete_so_line,
+)
+from app.modules.crumb.service.sales_orders import (
     update_line as update_so_line,
 )
 

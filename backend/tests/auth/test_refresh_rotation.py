@@ -7,7 +7,6 @@ Behaviors tested (CORE-03 / D-07):
 
 Tests require a live database (skip_if_no_db).
 """
-import pytest
 import httpx
 
 

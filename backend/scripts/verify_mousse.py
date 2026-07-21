@@ -82,7 +82,7 @@ import asyncio
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import HTTPException
@@ -238,7 +238,7 @@ async def _make_part_with_revision(
         status="released" if released else "draft",
         description=f"verify_mousse {part_number}",
         unit_of_measure=uom,
-        released_at=datetime.now(timezone.utc) if released else None,
+        released_at=datetime.now(UTC) if released else None,
     )
     session.add(rev)
     await session.flush()

@@ -82,7 +82,7 @@ async def suggest_target_bin(
 async def list_unbinned_stock(
     db: AsyncSession,
     location_id: int,
-) -> list["UnbinnedStockRead"]:
+) -> list[UnbinnedStockRead]:
     """
     Return each item with unbinned on-hand (> 0) at the location, awaiting putaway.
 
@@ -129,9 +129,9 @@ async def list_unbinned_stock(
 
 async def execute_putaway(
     db: AsyncSession,
-    data: "PutawayRequest",
+    data: PutawayRequest,
     actor_id: str,
-) -> "PutawayResult":
+) -> PutawayResult:
     """
     Execute a putaway: validate bins, delegate the ledger posting, build the result.
 

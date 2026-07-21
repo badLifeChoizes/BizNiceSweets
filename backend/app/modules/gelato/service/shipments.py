@@ -95,7 +95,6 @@ async def _resolve_fulfilling_location(
     (D-P12a-3, D-P10-6). SYERP imports are lazy to avoid pulling in the hub at
     module import time.
     """
-    from app.modules.gelato.models import Shipment
     from app.modules.syerp.service import get_item_onhand
 
     # (a) An in-progress pick has already committed the SO to one location.
@@ -120,7 +119,7 @@ async def _resolve_fulfilling_location(
     return best_location_id
 
 
-async def build_pick_list(db: AsyncSession, sales_order_id: str) -> "PickListRead":
+async def build_pick_list(db: AsyncSession, sales_order_id: str) -> PickListRead:
     """
     Build the pick list for a sales order — the pick suggestion screen (SC2).
 
@@ -212,7 +211,7 @@ async def build_pick_list(db: AsyncSession, sales_order_id: str) -> "PickListRea
 
 
 def _suggest_pick_bin(
-    available_bins: "list", remaining_to_pick: Decimal
+    available_bins: list, remaining_to_pick: Decimal
 ) -> int | None:
     """
     Choose a suggested source bin from a line's candidate bins (pure, no DB).
@@ -239,7 +238,7 @@ def _suggest_pick_bin(
 
 async def _get_open_shipment(
     db: AsyncSession, sales_order_id: str
-) -> "Shipment | None":
+) -> Shipment | None:
     """
     Return the SO's OPEN (status "picking") shipment, or None if there is none.
 
@@ -259,8 +258,8 @@ async def _get_open_shipment(
 
 
 async def execute_pick(
-    db: AsyncSession, req: "PickRequest", actor_id: str
-) -> "ShipmentRead":
+    db: AsyncSession, req: PickRequest, actor_id: str
+) -> ShipmentRead:
     """
     Pick a sales order into its staging bin — bin-aware, net-zero (SC2).
 
@@ -425,8 +424,8 @@ async def execute_pick(
 
 
 async def execute_pack(
-    db: AsyncSession, shipment_id: int, req: "PackRequest", actor_id: str
-) -> "ShipmentRead":
+    db: AsyncSession, shipment_id: int, req: PackRequest, actor_id: str
+) -> ShipmentRead:
     """
     Pack a picked shipment — advance picking → packed and record the staged qty.
 
@@ -516,7 +515,7 @@ async def execute_pack(
 
 async def execute_ship(
     db: AsyncSession, shipment_id: int, actor_id: str
-) -> "ShipmentRead":
+) -> ShipmentRead:
     """
     Ship a packed shipment — the accounting crux (GELATO-02, SC4; SYERP-13 AC1).
 
@@ -701,7 +700,7 @@ async def execute_ship(
     return await _load_shipment_read(db, shipment.id)
 
 
-async def get_shipment(db: AsyncSession, shipment_id: int) -> "ShipmentRead":
+async def get_shipment(db: AsyncSession, shipment_id: int) -> ShipmentRead:
     """
     Read one shipment with its lines as a ShipmentRead (404 if it does not exist).
 
@@ -712,7 +711,7 @@ async def get_shipment(db: AsyncSession, shipment_id: int) -> "ShipmentRead":
     return await _load_shipment_read(db, shipment_id)
 
 
-async def _load_shipment_read(db: AsyncSession, shipment_id: int) -> "ShipmentRead":
+async def _load_shipment_read(db: AsyncSession, shipment_id: int) -> ShipmentRead:
     """
     Load a shipment with its lines and serialize it as a ShipmentRead.
 

@@ -24,7 +24,6 @@ from app.modules.syerp.service import (
     _reverse_lines,
 )
 
-
 # A balanced 2-line entry: DR 100.00 Cash / CR 100.00 Revenue.
 BALANCED_TWO_LINE = [
     {"debit": Decimal("100.000000"), "credit": None},

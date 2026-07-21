@@ -11,10 +11,8 @@ Behaviors tested (CORE-04, D-02, D-09):
 
 Tests require a live PostgreSQL database (skip_if_no_db).
 """
-import pytest
 
 from tests.auth.conftest_helpers import seeded_db  # noqa: F401 — fixture re-export
-
 
 # ---------------------------------------------------------------------------
 # Idempotency

@@ -23,7 +23,7 @@ Sources:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -125,7 +125,7 @@ async def login(
     access_token = create_access_token(str(user.id), collect_permissions(user))
     raw_refresh, hashed_refresh = new_refresh_token()
     family = str(uuid.uuid4())
-    expires_at = datetime.now(timezone.utc) + timedelta(
+    expires_at = datetime.now(UTC) + timedelta(
         days=settings.refresh_token_expire_days
     )
 
@@ -206,8 +206,9 @@ async def logout(
     ensuring the device's session is terminated even if the access token
     would still be valid for its remaining TTL.
     """
-    from app.modules.auth.models import RefreshToken
     import hashlib
+
+    from app.modules.auth.models import RefreshToken
 
     raw_token = request.cookies.get("refresh_token")
     if raw_token:
@@ -324,8 +325,9 @@ async def update_user_endpoint(
     """
     was_active_before = True
     # Check current state to determine audit action
-    from app.modules.auth.models import User as UserModel
     from sqlalchemy import select as sa_select
+
+    from app.modules.auth.models import User as UserModel
     pre_result = await db.execute(sa_select(UserModel).where(UserModel.id == user_id))
     pre_user = pre_result.scalars().first()
     if pre_user:

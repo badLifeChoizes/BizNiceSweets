@@ -29,9 +29,11 @@ Threat mitigations baked into schema:
   T-04-03: self-referential FK on syerp_gl_account.parent_id (static seed
            uses parent-before-child ordering; no runtime DoS surface).
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

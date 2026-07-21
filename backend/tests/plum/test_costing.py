@@ -21,9 +21,8 @@ and collectable by pytest so the test map is in place for 06-02 to drive.
 
 Pattern mirrors backend/tests/plum/test_revisions.py (when it exists) exactly.
 """
-import pytest
 import httpx
-
+import pytest
 
 # ---------------------------------------------------------------------------
 # Effective cost — vendor price source (PLUM-08)

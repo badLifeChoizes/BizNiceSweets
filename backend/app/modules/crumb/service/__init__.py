@@ -18,7 +18,6 @@ from app.modules.crumb.service._common import (
     STAGE_TRANSITIONS,
     _resolve_customer,
 )
-
 from app.modules.crumb.service.interactions import (
     create_interaction,
     list_customer_timeline,
@@ -51,6 +50,7 @@ from app.modules.crumb.service.quotes import (
     list_quotes,
     update_line,
 )
+
 # NOTE: sales_orders.py also defines add_line / update_line / delete_line (the
 # Draft-only SO line editors, mirroring quotes). Those three names collide with
 # the quotes editors already re-exported above, so they are intentionally NOT

@@ -24,7 +24,6 @@ from app.modules.syerp.service import (
     compute_new_moving_avg,
 )
 
-
 # ---------------------------------------------------------------------------
 # _next_item_code — pure, no-DB digit-boundary guarantee
 # ---------------------------------------------------------------------------

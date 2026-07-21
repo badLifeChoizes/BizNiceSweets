@@ -32,11 +32,10 @@ os.environ.setdefault("BNS_ADMIN_PASSWORD", "testadminpass")
 # (it 404s in production when debug is false — CR-02 guard).
 os.environ.setdefault("DEBUG", "true")
 
-import pytest
 import httpx
+import pytest
 
 from app.main import app
-
 
 # ---------------------------------------------------------------------------
 # DB availability probe
@@ -52,6 +51,7 @@ def _check_db_available() -> bool:
     """
     try:
         import psycopg2  # type: ignore[import]
+
         from app.core.config import settings
 
         conn = psycopg2.connect(

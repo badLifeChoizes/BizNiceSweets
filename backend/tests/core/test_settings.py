@@ -15,11 +15,9 @@ Test contract:
 
 Tests require a live PostgreSQL database (skip_if_no_db) and the seeded settings rows.
 """
-import pytest
 import httpx
 
 from tests.auth.conftest_helpers import admin_login_token
-
 
 # ---------------------------------------------------------------------------
 # Seed validation — verifies seed_default_settings output directly
@@ -32,6 +30,7 @@ async def test_seed_defaults(
     """After seeded_core_db, the settings table contains a global row for
     company.name='BizNiceSweets' with owner_id=None (D-11 seed)."""
     from sqlalchemy import select
+
     from app.core.settings_model import Setting
 
     result = await seeded_core_db.execute(
@@ -87,6 +86,7 @@ async def test_update_setting(
     """Admin PATCH /api/v1/core/settings/company.name {value:'Acme'} returns 200 and
     the DB shows value='Acme'. Restores to 'BizNiceSweets' at test end."""
     from sqlalchemy import select
+
     from app.core.settings_model import Setting
 
     token = await admin_login_token(client)

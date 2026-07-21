@@ -99,7 +99,7 @@ _STANDARD_COA: list[dict] = [
 ]
 
 
-async def seed_gl_accounts(db: "AsyncSession") -> None:
+async def seed_gl_accounts(db: AsyncSession) -> None:
     """
     Idempotent chart-of-accounts seed.
 

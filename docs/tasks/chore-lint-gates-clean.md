@@ -21,7 +21,7 @@ recommended-sets-only, lint-check-only.
 - [x] 4. Run `npm run lint` and fix every surfaced FE violation to zero (Wave A)
 - [x] 5. Ensure ruff availability + document the invocation convention (Wave B)
 - [x] 6. Audit and protect load-bearing side-effect imports BEFORE auto-fix (Wave B)
-- [ ] 7. Apply safe ruff auto-fixes, review F401 removal diff, enumerate remaining set (Wave B)
+- [x] 7. Apply safe ruff auto-fixes, review F401 removal diff, enumerate remaining set (Wave B)
 - [ ] 8. Inspect and resolve the 4 F821 undefined-name annotations (Wave B)
 - [ ] 9. Resolve remaining hand-inspect items: F811, E741, F841 (Wave B)
 - [ ] 9b. Resolve UP035 deprecated-imports and the 2 unsafe fixes (Wave B)
@@ -58,6 +58,48 @@ already referenced or `# noqa: F401`-guarded; Task 7's `--fix` must not strip th
   `seed_default_settings`, `seed_gl_accounts`, `seed_default_location`, `seed_plum_data`) are
   **function-local and all called** (used, not F401-susceptible); `TYPE_CHECKING` guard used.
 - No OTHER unguarded side-effect import found in seed/registry wiring.
+
+### Task 7 — safe autofix + remaining-set enumeration + ownership map
+**BEFORE (`ruff check . --statistics`):** 1159 errors, 1088 fixable —
+`F401 419 · UP045 270 · UP037 252 · I001 101 · UP017 66 · UP035 23 · F811 10 ·
+UP006 8 · F821 4 · E741 2 · F841 2 · UP043 2`.
+
+**`ruff check . --fix` (SAFE only, no `--unsafe-fixes`):** `1139 fixed, 68 remaining`
+(cascade fixes exceed the 1088 headline as reformatted lines re-qualify).
+
+**Deleted-import review (guards SC5 — no side-effect import stripped):**
+- `git diff | grep '^-.*# noqa: F401'` net-removed check → **0 net removals**; the guarded
+  `models.py` lines appeared as `-`/`+` only from I001 re-sort (all 8 active guards still
+  present, verified by grep). All 6 `app/modules/*/__init__.py` router guards survive.
+- Genuine F401 removals (`pytest`, `PutawayRequest`, `gl_service` alias, stray `re`/`uuid`
+  etc.) confirmed unused — safe.
+
+**AFTER safe `--fix` (`--statistics`):** 68 errors →
+`F401 51 · F811 9 · F821 4 · E741 2 · F841 2`. UP035 → **0** (safe `--fix` resolved all 23,
+contra plan estimate — no manual UP035 work left for 9b). 2 hidden unsafe fixes remain,
+both **F841** (== the 2 F841 items below; `--statistics --unsafe-fixes` shows only F841 `[*]`).
+
+**The 51 F401 — LOAD-BEARING re-exports (resolved in THIS task, not deferred):** all 51 are
+in `app/modules/syerp/service/__init__.py` — the private `_`-prefixed helpers imported but
+absent from `__all__` (ruff treats `__init__` imports as used only if in `__all__`). The
+service-split refactor (`chore-syerp-service-split`) deliberately re-exports the *full*
+surface; these private names ARE imported *from the aggregator package* by
+`app/modules/mousse/service.py`, `app/modules/gelato/service/shipments.py`,
+`tests/syerp/test_inventory.py`, `test_gl_journal.py`, `test_ap.py`, `test_purchasing.py`.
+Removing them would break those imports. Fix = `# noqa: F401` on each of the 51 re-export
+lines (codebase's existing re-export convention, cf. `models.py`); `__all__` stays the true
+public surface (private names NOT promoted into it). `ruff check . --select F401` → **0**.
+
+**Remaining set after this task (17) → OWNERSHIP MAP (every category owned; none rely on a
+Task-9 backstop alone):**
+- `F401 51` → **Task 7** (this task — load-bearing re-export `# noqa`, resolved → 0)
+- `UP035 23→0` → **Task 7** safe `--fix` (resolved → 0; Task 9b now only *verifies* UP035=0)
+- `F821 4` → **Task 8**
+- `F811 9` → **Task 9**
+- `E741 2` → **Task 9**
+- `F841 2` → **Task 9** (these two == the "2 hidden unsafe fixes" Task 9b referenced;
+  hand-fixed under Task 9 to satisfy its own `--select F811,E741,F841` verify. Task 9b's
+  substantive queue is thus empty post-Task-9 → 9b is the whole-tree `exit=0` backstop.)
 
 ### Task 1 — add eslint flat-config devDependencies
 - `npm install -D @eslint/js eslint-plugin-react-hooks eslint-plugin-react-refresh` → added:

@@ -56,12 +56,11 @@ Archive strategy:
 from __future__ import annotations
 
 import json
-from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
@@ -104,7 +103,6 @@ from app.modules.plum.service import (
     get_cost_read,
     get_part,
     get_part_with_revisions,
-    get_revision,
     get_where_used,
     list_avl_links,
     list_parts,
@@ -345,7 +343,7 @@ class BomAddBody(BomItemCreate):
     rely on this auto-resolution path.
     """
 
-    revision_id: Optional[str] = None
+    revision_id: str | None = None
 
 
 @router.post(
@@ -420,7 +418,7 @@ async def advance_revision_status_endpoint(
 @router.get("/parts/{part_id}/bom", response_model=list[BomTreeNode])
 async def get_bom_tree_endpoint(
     part_id: str,
-    rev_id: Optional[str] = Query(None, description="Revision ID; defaults to latest"),
+    rev_id: str | None = Query(None, description="Revision ID; defaults to latest"),
     current_user=Depends(require_permission("plum:read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[BomTreeNode]:
@@ -460,7 +458,7 @@ async def get_bom_tree_endpoint(
 @router.get("/parts/{part_id}/bom/flat", response_model=list[FlatBomRow])
 async def get_flat_bom_endpoint(
     part_id: str,
-    rev_id: Optional[str] = Query(None, description="Revision ID; defaults to latest"),
+    rev_id: str | None = Query(None, description="Revision ID; defaults to latest"),
     current_user=Depends(require_permission("plum:read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[FlatBomRow]:

@@ -33,10 +33,8 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Classification Tag schemas
@@ -48,7 +46,7 @@ class TagRead(BaseModel):
 
     id: int
     name: str
-    sort_order: Optional[int] = None
+    sort_order: int | None = None
     active: bool
 
     model_config = {"from_attributes": True}
@@ -68,12 +66,12 @@ class RevisionCreate(BaseModel):
     `reason_for_revision` is strongly recommended (D-09 forward-only model).
     """
 
-    source_revision_id: Optional[str] = None
-    description: Optional[str] = Field(None, max_length=500)
-    category: Optional[str] = Field(None, max_length=100)
-    unit_of_measure: Optional[str] = Field(None, max_length=50)
-    notes: Optional[str] = None
-    reason_for_revision: Optional[str] = None
+    source_revision_id: str | None = None
+    description: str | None = Field(None, max_length=500)
+    category: str | None = Field(None, max_length=100)
+    unit_of_measure: str | None = Field(None, max_length=50)
+    notes: str | None = None
+    reason_for_revision: str | None = None
 
 
 class RevisionRead(BaseModel):
@@ -85,20 +83,20 @@ class RevisionRead(BaseModel):
     revision_label: str
     status: str
     description: str
-    category: Optional[str] = None
-    unit_of_measure: Optional[str] = None
-    notes: Optional[str] = None
-    reason_for_revision: Optional[str] = None
+    category: str | None = None
+    unit_of_measure: str | None = None
+    notes: str | None = None
+    reason_for_revision: str | None = None
     created_at: datetime
-    released_at: Optional[datetime] = None
-    obsoleted_at: Optional[datetime] = None
+    released_at: datetime | None = None
+    obsoleted_at: datetime | None = None
 
     # Phase 6 cost fields (D-06/D-09/D-12/D-14) — all optional; null until set
-    material_cost: Optional[Decimal] = None
-    sale_price: Optional[Decimal] = None
-    released_cost_snapshot: Optional[Decimal] = None
-    selected_vendor_link_id: Optional[str] = None
-    selected_price_break_index: Optional[int] = None
+    material_cost: Decimal | None = None
+    sale_price: Decimal | None = None
+    released_cost_snapshot: Decimal | None = None
+    selected_vendor_link_id: str | None = None
+    selected_price_break_index: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -119,16 +117,16 @@ class PartCreate(BaseModel):
     """
 
     # Identity (D-06)
-    part_number: Optional[str] = Field(None, max_length=50)  # server auto-gens if None
+    part_number: str | None = Field(None, max_length=50)  # server auto-gens if None
 
     # Required for first revision (D-12 — only description is truly required)
     description: str = Field(..., max_length=500)
 
     # Optional revision-controlled fields seeded into first revision (D-03)
-    category: Optional[str] = Field(None, max_length=100)
-    unit_of_measure: Optional[str] = Field(None, max_length=50)
-    notes: Optional[str] = None
-    reason_for_revision: Optional[str] = None  # free-text ECO substitute
+    category: str | None = Field(None, max_length=100)
+    unit_of_measure: str | None = Field(None, max_length=50)
+    notes: str | None = None
+    reason_for_revision: str | None = None  # free-text ECO substitute
 
     # Classification tags (D-12) — list of PlumClassificationTag.id values
     tag_ids: list[int] = Field(default_factory=list)
@@ -147,15 +145,15 @@ class PartUpdate(BaseModel):
     returns 422 (D-07 immutability, enforced in service layer).
     """
 
-    part_number: Optional[str] = Field(None, max_length=50)
-    active: Optional[bool] = None
-    tag_ids: Optional[list[int]] = None
+    part_number: str | None = Field(None, max_length=50)
+    active: bool | None = None
+    tag_ids: list[int] | None = None
 
     # Revision-controlled fields (only editable on Draft revisions — D-07)
-    description: Optional[str] = Field(None, max_length=500)
-    category: Optional[str] = Field(None, max_length=100)
-    unit_of_measure: Optional[str] = Field(None, max_length=50)
-    notes: Optional[str] = None
+    description: str | None = Field(None, max_length=500)
+    category: str | None = Field(None, max_length=100)
+    unit_of_measure: str | None = Field(None, max_length=50)
+    notes: str | None = None
 
 
 class PartRead(BaseModel):
@@ -176,8 +174,8 @@ class PartRead(BaseModel):
     updated_at: datetime
 
     # Current revision summary (populated by service from latest revision query)
-    current_revision_label: Optional[str] = None
-    current_revision_status: Optional[str] = None
+    current_revision_label: str | None = None
+    current_revision_status: str | None = None
 
     # Classification tag names (populated by service from join query)
     tags: list[str] = []
@@ -223,8 +221,8 @@ class BomItemCreate(BaseModel):
 
     child_part_id: str
     qty: Decimal = Field(..., gt=0)
-    ref_des: Optional[str] = Field(None, max_length=500)
-    sort_order: Optional[int] = None
+    ref_des: str | None = Field(None, max_length=500)
+    sort_order: int | None = None
 
 
 class BomItemUpdate(BaseModel):
@@ -235,9 +233,9 @@ class BomItemUpdate(BaseModel):
     Only editable on Draft revisions (D-07 immutability enforced in service).
     """
 
-    qty: Optional[Decimal] = Field(None, gt=0)
-    ref_des: Optional[str] = Field(None, max_length=500)
-    sort_order: Optional[int] = None
+    qty: Decimal | None = Field(None, gt=0)
+    ref_des: str | None = Field(None, max_length=500)
+    sort_order: int | None = None
 
 
 class BomItemRead(BaseModel):
@@ -247,7 +245,7 @@ class BomItemRead(BaseModel):
     parent_revision_id: str
     child_part_id: str
     qty: Decimal
-    ref_des: Optional[str] = None
+    ref_des: str | None = None
     sort_order: int
     created_at: datetime
 
@@ -270,14 +268,14 @@ class BomTreeNode(BaseModel):
     bom_item_id: str
     part_id: str
     part_number: str
-    unit_of_measure: Optional[str] = None
+    unit_of_measure: str | None = None
     qty: Decimal
-    ref_des: Optional[str] = None
+    ref_des: str | None = None
     sort_order: int
     depth: int = 0
     is_unreleased: bool = False
-    effective_cost: Optional[Decimal] = None
-    effective_cost_source: Optional[str] = None  # "vendor price" | "manual" | "roll-up" | "uncosted"
+    effective_cost: Decimal | None = None
+    effective_cost_source: str | None = None  # "vendor price" | "manual" | "roll-up" | "uncosted"
     children: list[BomTreeNode] = []
 
 
@@ -295,10 +293,10 @@ class FlatBomRow(BaseModel):
 
     part_id: str
     part_number: str
-    unit_of_measure: Optional[str] = None
+    unit_of_measure: str | None = None
     total_qty: Decimal
-    effective_cost: Optional[Decimal] = None
-    extended_cost: Optional[Decimal] = None  # total_qty × effective_cost
+    effective_cost: Decimal | None = None
+    extended_cost: Decimal | None = None  # total_qty × effective_cost
     is_unreleased: bool = False
 
 
@@ -335,8 +333,8 @@ class PriceBreakCreate(BaseModel):
 
     qty_threshold: int = Field(..., ge=1)
     unit_cost: Decimal = Field(..., ge=0)
-    lead_days: Optional[int] = Field(None, ge=0)
-    sort_order: Optional[int] = None
+    lead_days: int | None = Field(None, ge=0)
+    sort_order: int | None = None
 
 
 class PriceBreakRead(BaseModel):
@@ -346,7 +344,7 @@ class PriceBreakRead(BaseModel):
     avl_link_id: str
     qty_threshold: int
     unit_cost: Decimal
-    lead_days: Optional[int] = None
+    lead_days: int | None = None
     sort_order: int
 
     model_config = {"from_attributes": True}
@@ -361,9 +359,9 @@ class AvlLinkCreate(BaseModel):
     """
 
     vendor_id: str
-    vendor_part_number: Optional[str] = Field(None, max_length=100)
+    vendor_part_number: str | None = Field(None, max_length=100)
     preferred: bool = False
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class AvlLinkUpdate(BaseModel):
@@ -373,10 +371,10 @@ class AvlLinkUpdate(BaseModel):
     All fields Optional — PATCH semantics.
     """
 
-    vendor_part_number: Optional[str] = Field(None, max_length=100)
-    preferred: Optional[bool] = None
-    notes: Optional[str] = None
-    active: Optional[bool] = None
+    vendor_part_number: str | None = Field(None, max_length=100)
+    preferred: bool | None = None
+    notes: str | None = None
+    active: bool | None = None
 
 
 class AvlLinkRead(BaseModel):
@@ -385,9 +383,9 @@ class AvlLinkRead(BaseModel):
     id: str
     part_id: str
     vendor_id: str
-    vendor_part_number: Optional[str] = None
+    vendor_part_number: str | None = None
     preferred: bool
-    notes: Optional[str] = None
+    notes: str | None = None
     active: bool
     price_breaks: list[PriceBreakRead] = []
 
@@ -408,10 +406,10 @@ class CostUpdate(BaseModel):
     effective cost (D-07 step 1). material_cost is the manual override (D-06).
     """
 
-    material_cost: Optional[Decimal] = Field(None, ge=0)
-    sale_price: Optional[Decimal] = Field(None, ge=0)
-    selected_vendor_link_id: Optional[str] = None
-    selected_price_break_index: Optional[int] = Field(None, ge=0)
+    material_cost: Decimal | None = Field(None, ge=0)
+    sale_price: Decimal | None = Field(None, ge=0)
+    selected_vendor_link_id: str | None = None
+    selected_price_break_index: int | None = Field(None, ge=0)
 
 
 class CostRead(BaseModel):
@@ -427,16 +425,16 @@ class CostRead(BaseModel):
     Released revisions additionally expose `released_cost_snapshot` (frozen at release).
     """
 
-    material_cost: Optional[Decimal] = None
-    sale_price: Optional[Decimal] = None
-    released_cost_snapshot: Optional[Decimal] = None
-    selected_vendor_link_id: Optional[str] = None
-    selected_price_break_index: Optional[int] = None
-    effective_cost: Optional[Decimal] = None
-    effective_cost_source: Optional[str] = None
-    bom_rollup_cost: Optional[Decimal] = None
-    margin: Optional[Decimal] = None
-    margin_pct: Optional[Decimal] = None
+    material_cost: Decimal | None = None
+    sale_price: Decimal | None = None
+    released_cost_snapshot: Decimal | None = None
+    selected_vendor_link_id: str | None = None
+    selected_price_break_index: int | None = None
+    effective_cost: Decimal | None = None
+    effective_cost_source: str | None = None
+    bom_rollup_cost: Decimal | None = None
+    margin: Decimal | None = None
+    margin_pct: Decimal | None = None
 
     model_config = {"from_attributes": True}
 

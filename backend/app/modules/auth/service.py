@@ -21,8 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import jwt
@@ -76,7 +75,7 @@ def create_access_token(subject: str, permissions: list[str]) -> str:
     Payload: { sub, exp, perms }.
     Secret is read via get_secret_value() — never logged or repr'd (T-02-01).
     """
-    expire = datetime.now(timezone.utc) + timedelta(
+    expire = datetime.now(UTC) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
     payload = {
@@ -131,7 +130,7 @@ def new_refresh_token() -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> "User | None":
+async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     """
     Load a User by email.  Roles + permissions are loaded via selectin (lazy="selectin"
     on the relationship) so no extra await is needed.
@@ -142,7 +141,7 @@ async def get_user_by_email(db: AsyncSession, email: str) -> "User | None":
     return result.scalars().first()
 
 
-async def get_user_by_id(db: AsyncSession, user_id: str) -> "User | None":
+async def get_user_by_id(db: AsyncSession, user_id: str) -> User | None:
     """Load a User by primary-key UUID string. Roles selectin-loaded automatically."""
     from app.modules.auth.models import User
 
@@ -157,7 +156,7 @@ async def get_user_by_id(db: AsyncSession, user_id: str) -> "User | None":
 
 async def authenticate_user(
     db: AsyncSession, email: str, password: str
-) -> "User | None":
+) -> User | None:
     """
     Timing-safe credential verification.
 
@@ -181,7 +180,7 @@ async def authenticate_user(
 # ---------------------------------------------------------------------------
 
 
-def collect_permissions(user: "User") -> list[str]:
+def collect_permissions(user: User) -> list[str]:
     """
     Flatten a user's role permissions into a list of code strings.
 
@@ -225,7 +224,7 @@ async def store_refresh_token(
 
 async def rotate_refresh_token(
     db: AsyncSession, raw_token: str
-) -> tuple[str, "User"]:
+) -> tuple[str, User]:
     """
     Rotate a refresh token:
       1. Look up the token row by SHA-256 hash.
@@ -251,11 +250,11 @@ async def rotate_refresh_token(
             detail="Invalid refresh token",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires = token_row.expires_at
     # Ensure both datetimes are timezone-aware for comparison
     if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
+        expires = expires.replace(tzinfo=UTC)
 
     if expires < now:
         raise HTTPException(
@@ -347,7 +346,7 @@ async def write_audit(
 # ---------------------------------------------------------------------------
 
 
-async def list_users(db: AsyncSession) -> list["User"]:
+async def list_users(db: AsyncSession) -> list[User]:
     """Return all User rows (admin-gated by the router)."""
     from app.modules.auth.models import User
 
@@ -361,7 +360,7 @@ async def create_user(
     password: str,
     full_name: str | None = None,
     role_name: str | None = None,
-) -> "User":
+) -> User:
     """
     Create a new user account.
 
@@ -399,7 +398,7 @@ async def update_user(
     full_name: str | None = None,
     is_active: bool | None = None,
     role_name: str | None = None,
-) -> "User":
+) -> User:
     """
     Patch a user record.  All fields are optional (PATCH semantics).
 

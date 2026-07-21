@@ -46,9 +46,11 @@ Timestamps carry NO server_default: the model populates created_at in Python
 (default=lambda: datetime.now(timezone.utc)), matching the drift-free convention
 used by 0014 / 0015.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

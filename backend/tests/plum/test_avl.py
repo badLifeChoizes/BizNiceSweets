@@ -14,9 +14,7 @@ by pytest so the test map is in place for 06-02 to drive.
 
 Pattern mirrors backend/tests/plum/test_parts.py exactly.
 """
-import pytest
 import httpx
-
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/plum/parts/{id}/avl — add AVL link (PLUM-07)

@@ -24,9 +24,8 @@ Pattern mirrors backend/tests/plum/test_parts.py exactly.
 """
 import io
 import json
-import pytest
-import httpx
 
+import httpx
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/plum/export/json — JSON export (PLUM-10)
@@ -76,8 +75,9 @@ async def test_export_excel_sheets(
     sheet and a BOM sheet (PLUM-10, D-16). openpyxl is used to verify the
     file is a valid workbook.
     """
-    from app.modules.auth.service import create_access_token
     import openpyxl
+
+    from app.modules.auth.service import create_access_token
 
     token = create_access_token(subject="admin-user", permissions=["plum:read"])
 

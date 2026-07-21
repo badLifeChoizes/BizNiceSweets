@@ -63,9 +63,11 @@ Threat mitigations baked into schema:
   rows; FK cash_account_id prevents postings against a non-existent GL account;
   FK receipt_id prevents an allocation against a non-existent receipt.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

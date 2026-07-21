@@ -13,7 +13,7 @@ are written at the router layer, not here.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
@@ -32,8 +32,8 @@ _INTERACTION_TYPES = {"call", "email", "note", "meeting"}
 
 
 async def create_interaction(
-    db: AsyncSession, data: "InteractionCreate", actor_id: str
-) -> "Interaction":
+    db: AsyncSession, data: InteractionCreate, actor_id: str
+) -> Interaction:
     """
     Append one immutable customer-touch record (CRUMB-01).
 
@@ -62,7 +62,7 @@ async def create_interaction(
         lead_id=data.lead_id,
         opportunity_id=data.opportunity_id,
         quote_id=data.quote_id,
-        occurred_at=data.occurred_at or datetime.now(timezone.utc),
+        occurred_at=data.occurred_at or datetime.now(UTC),
         actor_id=actor_id,
     )
     db.add(interaction)
@@ -73,7 +73,7 @@ async def create_interaction(
 
 async def list_customer_timeline(
     db: AsyncSession, partner_id: str
-) -> list["Interaction"]:
+) -> list[Interaction]:
     """
     Return a customer's full interaction timeline, newest-first.
 

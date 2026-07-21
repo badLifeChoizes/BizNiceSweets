@@ -30,14 +30,13 @@ mirroring SYERP.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.base import Base
-
 
 # ---------------------------------------------------------------------------
 # WorkOrder — work-order header (MOUSSE-01)
@@ -106,7 +105,7 @@ class WorkOrder(Base):
     # --- Provenance / audit ------------------------------------------------
     actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     # completed_at: set when the WO is completed; NULL until then
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -219,6 +218,6 @@ class WorkOrderIssue(Base):
     actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )

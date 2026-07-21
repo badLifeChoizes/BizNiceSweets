@@ -24,9 +24,11 @@ with no live DB available at plan time; structure matches the ORM definitions
 exactly.  After running `podman-compose up`, `alembic upgrade head` will apply
 this migration to the live PostgreSQL instance.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

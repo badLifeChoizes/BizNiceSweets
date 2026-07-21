@@ -21,11 +21,7 @@ These are Wave 0 stubs: the API routes do not exist yet. Tests will fail/skip un
 Plan 02 (SYERP Partner API) implements the routes — they are written as real
 behavior assertions to be greened by Plan 02.
 """
-import pytest
 import httpx
-
-from tests.auth.conftest_helpers import admin_login_token
-
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/syerp/partners — create partner
@@ -111,6 +107,7 @@ async def test_update_partner_writes_audit(
 
     # Verify AuditLog row was written
     from sqlalchemy import select
+
     from app.core.db import AsyncSessionLocal
     from app.modules.auth.models import AuditLog
 

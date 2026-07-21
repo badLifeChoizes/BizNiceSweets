@@ -56,9 +56,11 @@ Threat mitigations baked into schema:
   postings against a non-existent GL account; FK payment_id prevents an
   allocation against a non-existent payment.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

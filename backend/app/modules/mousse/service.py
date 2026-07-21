@@ -27,7 +27,7 @@ All money/qty arithmetic is Decimal (never float — D-11).
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 _WO_NUMBER_RE = re.compile(r"^WO-[0-9]+$")
 
 
-def _next_wo_number(existing_numbers: "Iterable[str]") -> str:
+def _next_wo_number(existing_numbers: Iterable[str]) -> str:
     """
     Compute the next WO-###### number from the set of existing WO numbers.
 
@@ -114,7 +114,7 @@ async def generate_wo_number(db: AsyncSession) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def _get_work_order_row(db: AsyncSession, wo_id: str) -> "WorkOrder":
+async def _get_work_order_row(db: AsyncSession, wo_id: str) -> WorkOrder:
     """Load a WorkOrder ORM row by id, raising HTTP 404 if it does not exist."""
     from app.modules.mousse.models import WorkOrder
 
@@ -129,8 +129,8 @@ async def _get_work_order_row(db: AsyncSession, wo_id: str) -> "WorkOrder":
 
 
 async def create_work_order(
-    db: AsyncSession, data: "WorkOrderCreate", actor_id: str
-) -> "WorkOrderRead":
+    db: AsyncSession, data: WorkOrderCreate, actor_id: str
+) -> WorkOrderRead:
     """
     Create a Draft work order to build a PLUM part (MOUSSE-01, SC1).
 
@@ -203,7 +203,7 @@ async def create_work_order(
 
 async def list_work_orders(
     db: AsyncSession, status_filter: str | None = None
-) -> "list[WorkOrderRead]":
+) -> list[WorkOrderRead]:
     """
     List work orders (newest-first), optionally filtered by status (MOUSSE-01).
 
@@ -266,7 +266,7 @@ async def _component_issued_so_far(db: AsyncSession, component_id: str) -> Decim
 
 async def _load_components(
     db: AsyncSession, wo_id: str
-) -> "list":
+) -> list:
     """Return a WO's components ordered by sort_order (no ORM relationship)."""
     from app.modules.mousse.models import WorkOrderComponent
 
@@ -278,7 +278,7 @@ async def _load_components(
     return list(result.scalars().all())
 
 
-async def get_work_order_detail(db: AsyncSession, wo_id: str) -> "WorkOrderDetailRead":
+async def get_work_order_detail(db: AsyncSession, wo_id: str) -> WorkOrderDetailRead:
     """
     Load a work order (header + resolved components + derived figures) by id.
 
@@ -348,7 +348,7 @@ def _validate_transition(current: str, target: str) -> bool:
     return target in _WO_TRANSITIONS.get(current, set())
 
 
-def _require_transition(wo: "WorkOrder", target: str) -> None:
+def _require_transition(wo: WorkOrder, target: str) -> None:
     """
     Guard a WO state transition, raising HTTP 409 when it is illegal.
 
@@ -371,7 +371,7 @@ def _require_transition(wo: "WorkOrder", target: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _resolve_item_by_part(db: AsyncSession, part_id: str) -> "object | None":
+async def _resolve_item_by_part(db: AsyncSession, part_id: str) -> object | None:
     """Return the InventoryItem linked to a PLUM part (advisory link), or None."""
     from app.modules.syerp.models import InventoryItem
 
@@ -383,7 +383,7 @@ async def _resolve_item_by_part(db: AsyncSession, part_id: str) -> "object | Non
 
 async def release_work_order(
     db: AsyncSession, wo_id: str, actor_id: str
-) -> "WorkOrderRead":
+) -> WorkOrderRead:
     """
     Release a Draft work order: snapshot its single-level BOM (MOUSSE-01, SC1).
 
@@ -506,7 +506,7 @@ async def release_work_order(
 
 async def cancel_work_order(
     db: AsyncSession, wo_id: str, actor_id: str
-) -> "WorkOrderRead":
+) -> WorkOrderRead:
     """
     Cancel a work order — allowed only from Draft or Released (MOUSSE-01, SC1).
 
@@ -526,7 +526,7 @@ async def cancel_work_order(
 
 async def hold_work_order(
     db: AsyncSession, wo_id: str, actor_id: str
-) -> "WorkOrderRead":
+) -> WorkOrderRead:
     """
     Put an In-Progress work order On Hold (pause) — MOUSSE-01, SC1b, D-P10-9.
 
@@ -546,7 +546,7 @@ async def hold_work_order(
 
 async def resume_work_order(
     db: AsyncSession, wo_id: str, actor_id: str
-) -> "WorkOrderRead":
+) -> WorkOrderRead:
     """
     Resume an On-Hold work order back to In Progress — MOUSSE-01, SC1b, D-P10-9.
 
@@ -580,9 +580,9 @@ async def resume_work_order(
 async def issue_components(
     db: AsyncSession,
     wo_id: str,
-    request: "IssueComponentsRequest",
+    request: IssueComponentsRequest,
     actor_id: str,
-) -> "IssueResultRead":
+) -> IssueResultRead:
     """
     Issue one or more components against a work order (MOUSSE-01, SC2/SC5).
 
@@ -760,7 +760,7 @@ async def issue_components(
     )
 
     # One WorkOrderIssue row per line, linking its txn + the shared JE.
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for comp, qty, location_id, unit_cost, txn in created:
         db.add(
             WorkOrderIssue(
@@ -829,7 +829,7 @@ async def complete_work_order(
     wo_id: str,
     actor_id: str,
     override_incomplete: bool = False,
-) -> "WorkOrderCompleteResult":
+) -> WorkOrderCompleteResult:
     """
     Complete an In-Progress work order — clear WIP, receive the FG (MOUSSE-01, SC3).
 
@@ -969,7 +969,7 @@ async def complete_work_order(
         )
 
     wo.status = "completed"
-    wo.completed_at = datetime.now(timezone.utc)
+    wo.completed_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(wo)

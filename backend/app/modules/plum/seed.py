@@ -45,7 +45,7 @@ _PLUM_SETTINGS = [
 ]
 
 
-async def seed_plum_data(db: "AsyncSession") -> None:
+async def seed_plum_data(db: AsyncSession) -> None:
     """
     Seed PLUM classification tags and default settings.
 
@@ -56,8 +56,8 @@ async def seed_plum_data(db: "AsyncSession") -> None:
     """
     from sqlalchemy import select
 
-    from app.modules.plum.models import PlumClassificationTag
     from app.core.settings_model import Setting
+    from app.modules.plum.models import PlumClassificationTag
 
     # 1. Seed classification tag starter vocabulary (D-12)
     for name, sort_order in _CLASSIFICATION_TAGS:

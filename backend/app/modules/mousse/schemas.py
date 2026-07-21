@@ -25,10 +25,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Work-order create (MOUSSE-01)
@@ -53,7 +51,7 @@ class WorkOrderCreate(BaseModel):
     plum_part_id: str = Field(..., max_length=36)
     planned_qty: Decimal = Field(..., gt=0)
     target_location_id: int
-    wo_date: Optional[date] = None
+    wo_date: date | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +77,7 @@ class WorkOrderComponentRead(BaseModel):
     id: str
     work_order_id: str
     child_part_id: str
-    item_id: Optional[str] = None
+    item_id: str | None = None
     qty_per: Decimal
     qty_required: Decimal
     unit_of_measure: str
@@ -111,15 +109,15 @@ class WorkOrderRead(BaseModel):
     id: str
     wo_number: str
     plum_part_id: str
-    released_revision_id: Optional[str] = None
-    output_item_id: Optional[str] = None
+    released_revision_id: str | None = None
+    output_item_id: str | None = None
     planned_qty: Decimal
     target_location_id: int
     status: str
     wo_date: date
     actor_id: str
     created_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -153,7 +151,7 @@ class IssueComponentLine(BaseModel):
 
     component_id: str
     quantity: Decimal = Field(..., gt=0)
-    location_id: Optional[int] = None
+    location_id: int | None = None
 
 
 class IssueComponentsRequest(BaseModel):

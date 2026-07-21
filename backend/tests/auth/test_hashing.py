@@ -60,6 +60,7 @@ def test_decode_access_token_rejects_foreign_secret() -> None:
     """decode_access_token must raise InvalidTokenError for a wrong-secret token."""
     import jwt
     from jwt.exceptions import InvalidTokenError
+
     from app.modules.auth.service import decode_access_token
 
     # Mint a token with a different secret

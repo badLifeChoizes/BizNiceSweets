@@ -11,7 +11,8 @@ Substantive tables arrive with their owning modules in later phases
 Per Claude's Discretion (01-CONTEXT.md): a minimal/empty baseline is
 acceptable for Phase 1.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 # revision identifiers, used by Alembic
 revision: str = "0001"

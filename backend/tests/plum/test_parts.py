@@ -22,9 +22,7 @@ collectable by pytest so the test map is in place for 05-02 to drive.
 
 Pattern mirrors backend/tests/syerp/test_partners.py exactly.
 """
-import pytest
 import httpx
-
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/plum/parts — create part (PLUM-01)
@@ -111,6 +109,7 @@ async def test_update_part(
 
     # Verify AuditLog row was written (mirrors test_update_partner_writes_audit pattern)
     from sqlalchemy import select
+
     from app.core.db import AsyncSessionLocal
     from app.modules.auth.models import AuditLog
 

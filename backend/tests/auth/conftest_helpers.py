@@ -19,10 +19,9 @@ Usage in test files:
 """
 from __future__ import annotations
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Async DB session factory (real PostgreSQL; skip when unavailable)

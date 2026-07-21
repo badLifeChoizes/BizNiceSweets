@@ -1,58 +1,29 @@
 """SYERP service — double-entry journal posting, reversal, balances, and account register."""
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from app.modules.syerp.models import (
-        Bill,
-        BillLine,
         GLAccount,
-        InventoryItem,
         JournalEntry,
         JournalLine,
-        Partner,
-        PurchaseOrder,
-        PurchaseOrderLine,
-        StockLocation,
     )
     from app.modules.syerp.schemas import (
         AccountRegisterRead,
-        ApAgingReport,
-        BalanceSheetReport,
-        BillLineCreate,
-        BillRead,
-        InventoryItemCreate,
-        InventoryItemUpdate,
-        ItemOnHandRead,
         JournalEntryRead,
-        PartnerCreate,
-        PartnerUpdate,
-        POCreate,
-        POLineCreate,
-        POLineRead,
-        POLineUpdate,
-        PORead,
-        ProfitLossReport,
-        StockLocationCreate,
-        StockLocationUpdate,
-        TransactionRead,
-        TrialBalanceReport,
-        UnbilledReceiptRead,
     )
 
 from app.modules.syerp.service._common import _COST_QUANTUM
-
 
 # ---------------------------------------------------------------------------
 # Journal-entry balance helpers (Phase 9a — GL posting engine, SYERP-12)
@@ -70,7 +41,7 @@ from app.modules.syerp.service._common import _COST_QUANTUM
 # other is None (or 0). Amounts are quantized to `_COST_QUANTUM` before summing.
 
 
-def _je_side(line: "object", side: str) -> Decimal:
+def _je_side(line: object, side: str) -> Decimal:
     """
     Read one side (``"debit"`` or ``"credit"``) off a journal line.
 
@@ -88,7 +59,7 @@ def _je_side(line: "object", side: str) -> Decimal:
     return Decimal(str(value)).quantize(_COST_QUANTUM, rounding=ROUND_HALF_UP)
 
 
-def _je_totals(lines: "Iterable[object]") -> tuple[Decimal, Decimal]:
+def _je_totals(lines: Iterable[object]) -> tuple[Decimal, Decimal]:
     """
     Sum (Σdebits, Σcredits) across journal lines, quantized to scale 6 (D-11).
 
@@ -106,7 +77,7 @@ def _je_totals(lines: "Iterable[object]") -> tuple[Decimal, Decimal]:
     )
 
 
-def _je_is_balanced(lines: "Iterable[object]") -> bool:
+def _je_is_balanced(lines: Iterable[object]) -> bool:
     """
     Return whether a journal entry is a valid, balanced double-entry (D-P9a).
 
@@ -135,7 +106,7 @@ def _je_is_balanced(lines: "Iterable[object]") -> bool:
     return total_debit == total_credit
 
 
-def _reverse_lines(lines: "Iterable[object]") -> list[dict]:
+def _reverse_lines(lines: Iterable[object]) -> list[dict]:
     """
     Reverse a set of journal lines by swapping debit <-> credit (D-P9a).
 
@@ -175,14 +146,14 @@ def _reverse_lines(lines: "Iterable[object]") -> list[dict]:
 # SELECTs, exactly like the PurchaseOrder line loaders above.
 
 
-def _je_account_id(line: "object") -> int:
+def _je_account_id(line: object) -> int:
     """Read `account_id` off a journal line (mapping or attribute-bearing object)."""
     if isinstance(line, Mapping):
         return line.get("account_id")
     return getattr(line, "account_id", None)
 
 
-async def _require_gl_account(db: AsyncSession, account_id: int) -> "GLAccount":
+async def _require_gl_account(db: AsyncSession, account_id: int) -> GLAccount:
     """
     Load a GL account by id, raising HTTP 404 if it does not exist.
 
@@ -201,7 +172,7 @@ async def _require_gl_account(db: AsyncSession, account_id: int) -> "GLAccount":
     return account
 
 
-async def _get_journal_entry_row(db: AsyncSession, entry_id: str) -> "JournalEntry":
+async def _get_journal_entry_row(db: AsyncSession, entry_id: str) -> JournalEntry:
     """Load a JournalEntry ORM row by id, raising HTTP 404 if missing."""
     from app.modules.syerp.models import JournalEntry
 
@@ -215,7 +186,7 @@ async def _get_journal_entry_row(db: AsyncSession, entry_id: str) -> "JournalEnt
     return entry
 
 
-async def _load_journal_lines(db: AsyncSession, entry_id: str) -> "list[JournalLine]":
+async def _load_journal_lines(db: AsyncSession, entry_id: str) -> list[JournalLine]:
     """Return an entry's lines ordered by line_no (no ORM relationship — Pitfall 2)."""
     from app.modules.syerp.models import JournalLine
 
@@ -228,8 +199,8 @@ async def _load_journal_lines(db: AsyncSession, entry_id: str) -> "list[JournalL
 
 
 def _je_to_read(
-    entry: "JournalEntry", lines: "Iterable[JournalLine]"
-) -> "JournalEntryRead":
+    entry: JournalEntry, lines: Iterable[JournalLine]
+) -> JournalEntryRead:
     """Assemble a JournalEntryRead from a JournalEntry ORM row and its lines."""
     from app.modules.syerp.schemas import JournalEntryRead, JournalLineRead
 
@@ -251,13 +222,13 @@ async def post_journal_entry(
     *,
     entry_date: date,
     memo: str | None,
-    lines: "Iterable[object]",
+    lines: Iterable[object],
     actor_id: str,
     source_type: str | None = None,
     source_id: str | None = None,
     reversal_of_id: str | None = None,
     commit: bool = True,
-) -> "JournalEntryRead":
+) -> JournalEntryRead:
     """
     Post a balanced double-entry journal entry (Phase 9a, SYERP-12 AC1).
 
@@ -341,7 +312,7 @@ async def reverse_journal_entry(
     entry_id: str,
     actor_id: str,
     memo: str | None = None,
-) -> "JournalEntryRead":
+) -> JournalEntryRead:
     """
     Reverse an existing journal entry by posting its mirror image (AC2, D-P9a).
 
@@ -418,7 +389,7 @@ async def list_journal_entries(
     source_type: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
-) -> "list[JournalEntryRead]":
+) -> list[JournalEntryRead]:
     """
     Return journal entries (newest-first), optionally filtered (AC1 query side).
 
@@ -450,14 +421,14 @@ async def list_journal_entries(
         .where(JournalLine.entry_id.in_(entry_ids))
         .order_by(JournalLine.line_no)
     )
-    lines_by_entry: dict[str, list["JournalLine"]] = {eid: [] for eid in entry_ids}
+    lines_by_entry: dict[str, list[JournalLine]] = {eid: [] for eid in entry_ids}
     for line in lines_result.scalars().all():
         lines_by_entry[line.entry_id].append(line)
 
     return [_je_to_read(entry, lines_by_entry[entry.id]) for entry in entries]
 
 
-async def get_journal_entry(db: AsyncSession, entry_id: str) -> "JournalEntryRead":
+async def get_journal_entry(db: AsyncSession, entry_id: str) -> JournalEntryRead:
     """
     Load a journal entry (header + nested lines) by id (404 if missing).
     """
@@ -522,7 +493,7 @@ async def get_account_register(
     account_id: int,
     date_from: date | None = None,
     date_to: date | None = None,
-) -> "AccountRegisterRead":
+) -> AccountRegisterRead:
     """
     Build an account register for one GL account over a date range (AC1).
 
@@ -583,7 +554,7 @@ async def get_account_register(
 
     result = await db.execute(rows_stmt)
     running_balance = opening_balance
-    rows: list["AccountRegisterRow"] = []
+    rows: list[AccountRegisterRow] = []
     for entry_date_, entry_id_, memo_, debit_, credit_ in result:
         running_balance = running_balance + (debit_ or Decimal("0")) - (credit_ or Decimal("0"))
         rows.append(

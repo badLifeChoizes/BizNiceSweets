@@ -1,54 +1,20 @@
 """SYERP service — partner CRUD and code generation."""
 from __future__ import annotations
 
-import re
-from collections.abc import Mapping
-from datetime import date, datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
 
     from app.modules.syerp.models import (
-        Bill,
-        BillLine,
-        GLAccount,
-        InventoryItem,
-        JournalEntry,
-        JournalLine,
         Partner,
-        PurchaseOrder,
-        PurchaseOrderLine,
-        StockLocation,
     )
     from app.modules.syerp.schemas import (
-        AccountRegisterRead,
-        ApAgingReport,
-        BalanceSheetReport,
-        BillLineCreate,
-        BillRead,
-        InventoryItemCreate,
-        InventoryItemUpdate,
-        ItemOnHandRead,
-        JournalEntryRead,
         PartnerCreate,
         PartnerUpdate,
-        POCreate,
-        POLineCreate,
-        POLineRead,
-        POLineUpdate,
-        PORead,
-        ProfitLossReport,
-        StockLocationCreate,
-        StockLocationUpdate,
-        TransactionRead,
-        TrialBalanceReport,
-        UnbilledReceiptRead,
     )
 
 
@@ -64,7 +30,6 @@ async def generate_partner_code(db: AsyncSession) -> str:
     this function is a best-effort generator. The caller must handle
     IntegrityError on collision (RESEARCH.md Pattern 3).
     """
-    from sqlalchemy import func
 
     from app.modules.syerp.models import Partner
 
@@ -90,7 +55,7 @@ async def generate_partner_code(db: AsyncSession) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _build_partner_kwargs(code: str, data: "PartnerCreate") -> dict:
+def _build_partner_kwargs(code: str, data: PartnerCreate) -> dict:
     """Build the Partner constructor kwargs from a PartnerCreate schema."""
     return {
         "code": code,
@@ -114,7 +79,7 @@ def _build_partner_kwargs(code: str, data: "PartnerCreate") -> dict:
     }
 
 
-async def create_partner(db: AsyncSession, data: "PartnerCreate") -> "Partner":
+async def create_partner(db: AsyncSession, data: PartnerCreate) -> Partner:
     """
     Insert a new partner row.
 
@@ -164,7 +129,7 @@ async def list_partners(
     role: str | None = None,
     q: str | None = None,
     include_archived: bool = False,
-) -> list["Partner"]:
+) -> list[Partner]:
     """
     Return partners matching the given filters.
 
@@ -205,7 +170,7 @@ async def list_partners(
     return list(result.scalars().all())
 
 
-async def get_partner(db: AsyncSession, partner_id: str) -> "Partner":
+async def get_partner(db: AsyncSession, partner_id: str) -> Partner:
     """
     Load a partner by id.
 
@@ -228,8 +193,8 @@ async def get_partner(db: AsyncSession, partner_id: str) -> "Partner":
 async def update_partner(
     db: AsyncSession,
     partner_id: str,
-    data: "PartnerUpdate",
-) -> "Partner":
+    data: PartnerUpdate,
+) -> Partner:
     """
     Apply a partial update to a partner (PATCH semantics).
 
@@ -253,7 +218,7 @@ async def update_partner(
     return partner
 
 
-async def archive_partner(db: AsyncSession, partner_id: str) -> "Partner":
+async def archive_partner(db: AsyncSession, partner_id: str) -> Partner:
     """
     Set a partner's active flag to False (soft-delete / archive).
 

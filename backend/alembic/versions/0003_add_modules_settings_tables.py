@@ -22,9 +22,11 @@ Tables:
 
 Migration hand-authored from ORM models — no live DB at plan time (0002 convention).
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

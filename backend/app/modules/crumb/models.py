@@ -36,14 +36,13 @@ mirroring SYERP.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.base import Base
-
 
 # ---------------------------------------------------------------------------
 # Lead — pipeline lead (CRUMB-01)
@@ -97,7 +96,7 @@ class Lead(Base):
     # --- Provenance / audit ------------------------------------------------
     actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
 
@@ -152,7 +151,7 @@ class Opportunity(Base):
     # --- Provenance / audit ------------------------------------------------
     actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
 
@@ -202,7 +201,7 @@ class Quote(Base):
     # --- Provenance / audit ------------------------------------------------
     actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
 
@@ -301,14 +300,14 @@ class Interaction(Base):
     interaction_type: Mapped[str] = mapped_column(String(20))
     # occurred_at: when the touch actually happened (vs created_at when logged)
     occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     body: Mapped[str] = mapped_column(String)
 
     # --- Provenance / audit ------------------------------------------------
     actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
 
@@ -368,7 +367,7 @@ class SalesOrder(Base):
     # --- Provenance / audit ------------------------------------------------
     actor_id: Mapped[str] = mapped_column(String(36), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
 

@@ -1,54 +1,20 @@
 """SYERP service — stock location CRUD."""
 from __future__ import annotations
 
-import re
-from collections.abc import Mapping
-from datetime import date, datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
 
     from app.modules.syerp.models import (
-        Bill,
-        BillLine,
-        GLAccount,
-        InventoryItem,
-        JournalEntry,
-        JournalLine,
-        Partner,
-        PurchaseOrder,
-        PurchaseOrderLine,
         StockLocation,
     )
     from app.modules.syerp.schemas import (
-        AccountRegisterRead,
-        ApAgingReport,
-        BalanceSheetReport,
-        BillLineCreate,
-        BillRead,
-        InventoryItemCreate,
-        InventoryItemUpdate,
-        ItemOnHandRead,
-        JournalEntryRead,
-        PartnerCreate,
-        PartnerUpdate,
-        POCreate,
-        POLineCreate,
-        POLineRead,
-        POLineUpdate,
-        PORead,
-        ProfitLossReport,
         StockLocationCreate,
         StockLocationUpdate,
-        TransactionRead,
-        TrialBalanceReport,
-        UnbilledReceiptRead,
     )
 
 
@@ -57,7 +23,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-async def create_location(db: AsyncSession, data: "StockLocationCreate") -> "StockLocation":
+async def create_location(db: AsyncSession, data: StockLocationCreate) -> StockLocation:
     """
     Insert a new stock location row.
 
@@ -92,7 +58,7 @@ async def create_location(db: AsyncSession, data: "StockLocationCreate") -> "Sto
 async def list_locations(
     db: AsyncSession,
     include_archived: bool = False,
-) -> list["StockLocation"]:
+) -> list[StockLocation]:
     """
     Return stock locations matching the given filter.
 
@@ -114,7 +80,7 @@ async def list_locations(
     return list(result.scalars().all())
 
 
-async def get_location(db: AsyncSession, location_id: int) -> "StockLocation":
+async def get_location(db: AsyncSession, location_id: int) -> StockLocation:
     """
     Load a stock location by id.
 
@@ -137,8 +103,8 @@ async def get_location(db: AsyncSession, location_id: int) -> "StockLocation":
 async def update_location(
     db: AsyncSession,
     location_id: int,
-    data: "StockLocationUpdate",
-) -> "StockLocation":
+    data: StockLocationUpdate,
+) -> StockLocation:
     """
     Apply a partial update to a stock location (PATCH semantics).
 

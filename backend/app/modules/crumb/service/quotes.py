@@ -96,7 +96,7 @@ async def generate_quote_number(db: AsyncSession) -> str:
 
 
 async def _resolve_line_amounts(
-    db: AsyncSession, line: "QuoteLineCreate"
+    db: AsyncSession, line: QuoteLineCreate
 ) -> tuple[Decimal, Decimal | None]:
     """
     Resolve (unit_price, markup_pct) for one quote line per the pricing rules.
@@ -148,7 +148,7 @@ async def _resolve_line_amounts(
 
 def _build_line_kwargs(
     quote_id: str,
-    line: "QuoteLineCreate",
+    line: QuoteLineCreate,
     unit_price: Decimal,
     markup_pct: Decimal | None,
     sort_order: int,
@@ -170,7 +170,7 @@ def _build_line_kwargs(
 # ---------------------------------------------------------------------------
 
 
-async def create_quote(db: AsyncSession, data: "QuoteCreate", actor_id: str) -> "Quote":
+async def create_quote(db: AsyncSession, data: QuoteCreate, actor_id: str) -> Quote:
     """
     Create a draft quote header and its priced lines (CRUMB-01).
 
@@ -238,7 +238,7 @@ async def create_quote(db: AsyncSession, data: "QuoteCreate", actor_id: str) -> 
     return quote
 
 
-async def _get_quote_lines(db: AsyncSession, quote_id: str) -> list["QuoteLine"]:
+async def _get_quote_lines(db: AsyncSession, quote_id: str) -> list[QuoteLine]:
     """Load a quote's lines ordered by sort_order."""
     from app.modules.crumb.models import QuoteLine
 
@@ -250,7 +250,7 @@ async def _get_quote_lines(db: AsyncSession, quote_id: str) -> list["QuoteLine"]
     return list(result.scalars().all())
 
 
-async def get_quote_detail(db: AsyncSession, quote_id: str) -> "Quote":
+async def get_quote_detail(db: AsyncSession, quote_id: str) -> Quote:
     """
     Load a quote with its lines and the derived line/total figures (CRUMB-01).
 
@@ -278,7 +278,7 @@ async def get_quote_detail(db: AsyncSession, quote_id: str) -> "Quote":
     return quote
 
 
-async def list_quotes(db: AsyncSession) -> list["Quote"]:
+async def list_quotes(db: AsyncSession) -> list[Quote]:
     """Return all quotes ordered by quote_number."""
     from app.modules.crumb.models import Quote
 
@@ -291,7 +291,7 @@ async def list_quotes(db: AsyncSession) -> list["Quote"]:
 # ---------------------------------------------------------------------------
 
 
-async def _get_draft_quote(db: AsyncSession, quote_id: str) -> "Quote":
+async def _get_draft_quote(db: AsyncSession, quote_id: str) -> Quote:
     """Load a quote (404) and assert it is editable, i.e. status == draft (409)."""
     from app.modules.crumb.models import Quote
 
@@ -307,8 +307,8 @@ async def _get_draft_quote(db: AsyncSession, quote_id: str) -> "Quote":
 
 
 async def add_line(
-    db: AsyncSession, quote_id: str, line: "QuoteLineCreate", actor_id: str
-) -> "QuoteLine":
+    db: AsyncSession, quote_id: str, line: QuoteLineCreate, actor_id: str
+) -> QuoteLine:
     """Add a priced line to a draft quote (409 if not draft). Returns the line."""
     from app.modules.crumb.models import QuoteLine
 
@@ -325,7 +325,7 @@ async def add_line(
     return row
 
 
-async def _get_line(db: AsyncSession, quote_id: str, line_id: str) -> "QuoteLine":
+async def _get_line(db: AsyncSession, quote_id: str, line_id: str) -> QuoteLine:
     """Load a quote line belonging to the given quote (404 if not found)."""
     from app.modules.crumb.models import QuoteLine
 
@@ -341,9 +341,9 @@ async def update_line(
     db: AsyncSession,
     quote_id: str,
     line_id: str,
-    patch: "QuoteLineCreate",
+    patch: QuoteLineCreate,
     actor_id: str,
-) -> "QuoteLine":
+) -> QuoteLine:
     """
     Replace a draft quote line's priced fields (409 if the quote is not draft).
 
@@ -381,7 +381,7 @@ async def delete_line(db: AsyncSession, quote_id: str, line_id: str, actor_id: s
 
 async def advance_quote_status(
     db: AsyncSession, quote_id: str, target_status: str, actor_id: str
-) -> "Quote":
+) -> Quote:
     """
     Advance a quote through the status FSM (CRUMB-01).
 

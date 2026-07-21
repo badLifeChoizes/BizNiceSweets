@@ -26,7 +26,6 @@ from app.modules.syerp.service import (
     _unbilled_qty,
 )
 
-
 # ---------------------------------------------------------------------------
 # _next_bill_number — numeric-not-lexicographic BILL-#### series (D-P9b-1)
 # ---------------------------------------------------------------------------

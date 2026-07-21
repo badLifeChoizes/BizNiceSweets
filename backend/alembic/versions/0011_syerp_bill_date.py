@@ -20,9 +20,11 @@ today), so no Python/server default is carried on the model.
 Chains to down_revision "0010" (the AP bill/line + payment/allocation tables),
 so syerp_bill already exists when this runs.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

@@ -29,12 +29,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.syerp.schemas import TransactionRead
-
 
 # ---------------------------------------------------------------------------
 # Bin create / update / read (GELATO-01)
@@ -53,7 +51,7 @@ class BinCreate(BaseModel):
 
     location_id: int
     code: str = Field(..., min_length=1, max_length=50)
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class BinUpdate(BaseModel):
@@ -65,8 +63,8 @@ class BinUpdate(BaseModel):
     `code` are immutable identity and so are not settable here.
     """
 
-    description: Optional[str] = None
-    active: Optional[bool] = None
+    description: str | None = None
+    active: bool | None = None
 
 
 class BinRead(BaseModel):
@@ -81,7 +79,7 @@ class BinRead(BaseModel):
     id: int
     location_id: int
     code: str
-    description: Optional[str] = None
+    description: str | None = None
     active: bool
     created_at: datetime
 
@@ -123,7 +121,7 @@ class PutawayRequest(BaseModel):
     location_id: int
     to_bin_id: int
     qty: Decimal = Field(..., gt=0)
-    from_bin_id: Optional[int] = None
+    from_bin_id: int | None = None
 
 
 class PutawayResult(BaseModel):
@@ -163,7 +161,7 @@ class UnbinnedStockRead(BaseModel):
     item_id: str
     location_id: int
     unbinned_qty: Decimal
-    suggested_bin_id: Optional[int] = None
+    suggested_bin_id: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +250,7 @@ class ShipmentLineRead(BaseModel):
     item_id: str
     from_bin_id: int
     qty: Decimal
-    inventory_txn_id: Optional[str] = None
+    inventory_txn_id: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -275,7 +273,7 @@ class ShipmentRead(BaseModel):
     location_id: int
     staging_bin_id: int
     status: str
-    journal_entry_id: Optional[str] = None
+    journal_entry_id: str | None = None
     lines: list[ShipmentLineRead]
     created_at: datetime
 
@@ -319,7 +317,7 @@ class PickListLineRead(BaseModel):
     qty_reserved: Decimal
     qty_picked: Decimal
     qty_shipped: Decimal
-    suggested_from_bin_id: Optional[int] = None
+    suggested_from_bin_id: int | None = None
     available_bins: list[PickListBinRead]
 
 

@@ -39,9 +39,11 @@ Threat mitigations baked into schema:
   against non-existent items/locations. plum_part_id FK is nullable with no
   ondelete cascade — the link is advisory (D-P8-2).
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic
