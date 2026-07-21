@@ -57,6 +57,30 @@ recommended-sets-only, lint-check-only.
   ESLint-10-invalid `--ext ts,tsx`; kept the other two flags). `git rm frontend/.eslintrc.cjs`.
 - Verify: `! test -f .eslintrc.cjs && grep -q -- '--report-unused-disable-directives' package.json && ! grep -q -- '--ext' package.json && echo SCRIPT_OK` → `SCRIPT_OK`.
 
+### Task 4 — BLOCKED (owner scope decision needed)
+- `npm run lint` on the committed config surfaced **54 errors / 41 files** (not the "near-zero" the
+  plan predicted). By rule: `react-hooks/set-state-in-effect` ×42, `react-refresh/only-export-components`
+  ×6, unused-disable-directive ×4, `react-hooks/rules-of-hooks` ×1, `react-hooks/refs` ×1.
+- **Root cause:** `eslint-plugin-react-hooks@^7.1.1` (what `npm i` grabbed in Task 1) redefined its
+  `recommended`/`flat.recommended` preset to include the full **React-Compiler** ruleset
+  (`set-state-in-effect`, `refs`, `immutability`, `purity`, `set-state-in-render`, …). The plan was
+  written against react-hooks v4/v5 semantics, where `recommended` = only `rules-of-hooks` (error) +
+  `exhaustive-deps` (warn). v7 has **no** classic 2-rule preset. The 42 `set-state-in-effect` (+`refs`,
+  +conditional `rules-of-hooks`) are behavior-sensitive; per the guardrail "fixes must be lint-only",
+  each would need an inline `eslint-disable` — ~44 disables across 41 files = a codebase-wide change and
+  a scope decision, not a mechanical fix.
+- Plan premise falsified: it predicted the 6 pre-existing `exhaustive-deps` disables would all be USED;
+  **4 of 6** report as UNUSED under both v7 AND the classic ruleset (they are genuinely stale no-ops).
+- **Measured the plan-intended config** (classic react-hooks `rules-of-hooks`+`exhaustive-deps` +
+  `react-refresh` vite): **11 errors / 9 files** — 6 `react-refresh/only-export-components`,
+  4 stale unused-disable directives, 1 `react-hooks/rules-of-hooks` (a FALSE POSITIVE: `AppShell`'s
+  `useVisibleModules` is a pure helper named with a `use` prefix, called after early returns). These 11
+  are bounded and mostly lint-only.
+- **Recommendation:** pin `eslint-plugin-react-hooks` to `^5` (its `recommended` == the plan's assumed
+  2-rule set; honors "recommended sets only") → drops the 43 compiler-rule violations. Then resolve the
+  residual 11 within Task 4's spirit. This amends the already-committed Task 1 dep version, so surfacing
+  to the owner before proceeding. Awaiting decision; Task 4 left unchecked.
+
 ### Deviations
 - **Task 0 branch point:** Plan Task 0 says `git checkout -b chore-lint-gates-clean origin/master`,
   but the phase PLAN.md lives only in commit `a6ee1fb` (docs-only, on the feature branch, not on
