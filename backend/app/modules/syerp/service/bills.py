@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from app.modules.syerp.schemas import (
         BillLineCreate,
         BillRead,
+        PaymentRead,
         UnbilledReceiptRead,
     )
 

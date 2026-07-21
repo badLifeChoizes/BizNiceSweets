@@ -74,6 +74,8 @@ if TYPE_CHECKING:
         BomItemCreate,
         BomItemUpdate,
         CostUpdate,
+        ImportCommitResponse,
+        ImportPreviewResponse,
         PartCreate,
         PartUpdate,
         PriceBreakCreate,

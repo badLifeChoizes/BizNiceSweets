@@ -22,7 +22,7 @@ recommended-sets-only, lint-check-only.
 - [x] 5. Ensure ruff availability + document the invocation convention (Wave B)
 - [x] 6. Audit and protect load-bearing side-effect imports BEFORE auto-fix (Wave B)
 - [x] 7. Apply safe ruff auto-fixes, review F401 removal diff, enumerate remaining set (Wave B)
-- [ ] 8. Inspect and resolve the 4 F821 undefined-name annotations (Wave B)
+- [x] 8. Inspect and resolve the 4 F821 undefined-name annotations (Wave B)
 - [ ] 9. Resolve remaining hand-inspect items: F811, E741, F841 (Wave B)
 - [ ] 9b. Resolve UP035 deprecated-imports and the 2 unsafe fixes (Wave B)
 - [ ] 10. Prove no regression across the full behavioral safety net (Wave C)
@@ -100,6 +100,24 @@ Task-9 backstop alone):**
 - `F841 2` → **Task 9** (these two == the "2 hidden unsafe fixes" Task 9b referenced;
   hand-fixed under Task 9 to satisfy its own `--select F811,E741,F841` verify. Task 9b's
   substantive queue is thus empty post-Task-9 → 9b is the whole-tree `exit=0` backstop.)
+
+### Task 8 — 4 F821 undefined-name annotations (NOT runtime bugs)
+Sites (re-located by symbol post-Task-7): `plum/service.py:2650` (`-> ImportPreviewResponse`)
++ `:2775` (`-> ImportCommitResponse`); `syerp/service/bills.py:739` + `:926` (`PaymentRead`).
+- **Root cause:** each function imports its response schema *inside the function body*
+  (`plum/service.py:2667,2800`; `bills.py:779,937`), so the name is absent from module scope
+  when the `-> Name` return annotation is evaluated at definition time → F821. Both files
+  already carry `from __future__ import annotations` — which does NOT suppress F821 (ruff
+  still requires the name be resolvable).
+- **Verified NOT a runtime bug** (no escalation): all three schemas exist —
+  `plum/schemas.py:461 ImportPreviewResponse`, `:476 ImportCommitResponse`,
+  `syerp/schemas.py:894 PaymentRead` — and are runtime-imported in the bodies that build them.
+- **Fix (plan-preferred TYPE_CHECKING form):** added each schema to the file's existing
+  `if TYPE_CHECKING:` schema import block (`plum/service.py:71-83`, `bills.py:20-25`),
+  preserving alphabetical order. Resolves F821 for ruff + type-checkers; the function-body
+  runtime imports still construct the objects; no F401 (TYPE_CHECKING import used in an
+  annotation is "used") and no circular-import risk (block not evaluated at runtime).
+- Verify: `ruff check . --select F821` → **All checks passed! (exit=0)**.
 
 ### Task 1 — add eslint flat-config devDependencies
 - `npm install -D @eslint/js eslint-plugin-react-hooks eslint-plugin-react-refresh` → added:
