@@ -12,14 +12,14 @@
 
 import { useAuth } from '@/hooks/useAuth'
 import { useModules } from '@/hooks/useModules'
-import { useVisibleModules } from '@/components/AppShell'
+import { getVisibleModules } from '@/components/AppShell'
 
 export function Home() {
   const { user } = useAuth()
   const { data: modules = [] } = useModules()
 
   // Compute visible modules (same logic as AppShell; cache hit — no re-fetch)
-  const visibleModules = useVisibleModules(user, modules)
+  const visibleModules = getVisibleModules(user, modules)
 
   if (visibleModules.length === 0) {
     // D-05 empty state

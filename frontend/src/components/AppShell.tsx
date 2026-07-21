@@ -33,7 +33,8 @@ import type { AuthUser } from '@/hooks/useAuth'
  * Intersects enabled modules with user permissions (D-04).
  * Admin role is wildcard — sees all enabled modules (Pitfall 4).
  */
-export function useVisibleModules(user: AuthUser | null, modules: ModuleRecord[]): ModuleRecord[] {
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper reused by Home/SalesOrderDetail; not a component
+export function getVisibleModules(user: AuthUser | null, modules: ModuleRecord[]): ModuleRecord[] {
   if (!user) return []
   return modules.filter((mod) => {
     if (!mod.enabled) return false
@@ -63,7 +64,7 @@ export function AppShell() {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  const visibleModules = useVisibleModules(user, modules)
+  const visibleModules = getVisibleModules(user, modules)
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">

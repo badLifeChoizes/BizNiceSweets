@@ -58,7 +58,7 @@ function authUser(hasGelatoRead: boolean) {
 }
 
 // The module registry (GET /core/modules). enabled ∩ gelato:read is what the app-wide
-// useVisibleModules signal intersects to gate GELATO — reused by the affordance.
+// getVisibleModules signal intersects to gate GELATO — reused by the affordance.
 function moduleList(gelatoEnabled: boolean) {
   return [{ key: 'gelato', display_name: 'GELATO', enabled: gelatoEnabled, always_on: false, sort_order: 6 }]
 }

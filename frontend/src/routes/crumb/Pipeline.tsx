@@ -25,8 +25,10 @@ import { usePipeline } from './hooks'
 // ─── Stage vocabulary (shared with OpportunityDetail) ─────────────────────────
 
 /** Fixed column order for the board. The server owns the FSM; this is display only. */
+// eslint-disable-next-line react-refresh/only-export-components -- shared display constant (also used by OpportunityDetail); not a component
 export const STAGE_ORDER = ['qualify', 'proposal', 'won', 'lost'] as const
 
+// eslint-disable-next-line react-refresh/only-export-components -- shared display constant (also used by OpportunityDetail); not a component
 export const STAGE_LABELS: Record<string, string> = {
   qualify: 'Qualify',
   proposal: 'Proposal',

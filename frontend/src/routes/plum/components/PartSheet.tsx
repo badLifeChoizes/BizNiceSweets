@@ -159,7 +159,6 @@ export function PartSheet({ open, mode, part, onClose }: PartSheetProps) {
       setFormTagIds(selectedIds)
       setFormReasonForRevision('')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, part])
 
   // ── Tag toggle handler ──

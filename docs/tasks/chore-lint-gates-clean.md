@@ -18,7 +18,7 @@ recommended-sets-only, lint-check-only.
 - [x] 1. Add the three missing ESLint flat-config devDependencies (Wave A)
 - [x] 2. Write `frontend/eslint.config.js` flat config (Wave A)
 - [x] 3. Fix the `lint` script and delete legacy `.eslintrc.cjs` (Wave A)
-- [ ] 4. Run `npm run lint` and fix every surfaced FE violation to zero (Wave A)
+- [x] 4. Run `npm run lint` and fix every surfaced FE violation to zero (Wave A)
 - [ ] 5. Ensure ruff availability + document the invocation convention (Wave B)
 - [ ] 6. Audit and protect load-bearing side-effect imports BEFORE auto-fix (Wave B)
 - [ ] 7. Apply safe ruff auto-fixes, review F401 removal diff, enumerate remaining set (Wave B)
@@ -47,6 +47,14 @@ recommended-sets-only, lint-check-only.
   to coordinator (no CI exists yet — BACKLOG p1). `eslint.config.js` switched
   `reactHooks.configs.flat.recommended` (v7-only) → `reactHooks.configs['recommended-latest']` (v5's
   flat export; v5 `configs.recommended` is legacy eslintrc format and errors under flat config).
+- **Regression + fix from the `--legacy-peer-deps` install:** that flag made npm prune npm-7's
+  auto-installed peer subtree — notably `@testing-library/dom@10.4.1` (peer of `@testing-library/react`)
+  — which broke all 44 Vitest files (`Cannot find module '@testing-library/dom'`). Restored by declaring
+  `@testing-library/dom@^10.4.1` as an explicit devDependency and adding `frontend/.npmrc`
+  (`legacy-peer-deps=true`) so `npm install`/`npm ci` are reproducible and don't re-prune. The `@babel/core`
+  toolchain + `browserslist` were also dropped but are genuinely unused (Vite 8 uses rolldown; Vitest its
+  own transform) — tests + build are green without them. `zod`/`zod-validation-error` were react-hooks-**v7**
+  deps (React-Compiler runtime); their removal is correct.
 
 ### Task 2 — flat `eslint.config.js`
 - New `frontend/eslint.config.js` (ESM `export default tseslint.config(...)`): `ignores: ['dist','coverage']`,
@@ -65,29 +73,25 @@ recommended-sets-only, lint-check-only.
   ESLint-10-invalid `--ext ts,tsx`; kept the other two flags). `git rm frontend/.eslintrc.cjs`.
 - Verify: `! test -f .eslintrc.cjs && grep -q -- '--report-unused-disable-directives' package.json && ! grep -q -- '--ext' package.json && echo SCRIPT_OK` → `SCRIPT_OK`.
 
-### Task 4 — BLOCKED (owner scope decision needed)
-- `npm run lint` on the committed config surfaced **54 errors / 41 files** (not the "near-zero" the
-  plan predicted). By rule: `react-hooks/set-state-in-effect` ×42, `react-refresh/only-export-components`
-  ×6, unused-disable-directive ×4, `react-hooks/rules-of-hooks` ×1, `react-hooks/refs` ×1.
-- **Root cause:** `eslint-plugin-react-hooks@^7.1.1` (what `npm i` grabbed in Task 1) redefined its
-  `recommended`/`flat.recommended` preset to include the full **React-Compiler** ruleset
-  (`set-state-in-effect`, `refs`, `immutability`, `purity`, `set-state-in-render`, …). The plan was
-  written against react-hooks v4/v5 semantics, where `recommended` = only `rules-of-hooks` (error) +
-  `exhaustive-deps` (warn). v7 has **no** classic 2-rule preset. The 42 `set-state-in-effect` (+`refs`,
-  +conditional `rules-of-hooks`) are behavior-sensitive; per the guardrail "fixes must be lint-only",
-  each would need an inline `eslint-disable` — ~44 disables across 41 files = a codebase-wide change and
-  a scope decision, not a mechanical fix.
-- Plan premise falsified: it predicted the 6 pre-existing `exhaustive-deps` disables would all be USED;
-  **4 of 6** report as UNUSED under both v7 AND the classic ruleset (they are genuinely stale no-ops).
-- **Measured the plan-intended config** (classic react-hooks `rules-of-hooks`+`exhaustive-deps` +
-  `react-refresh` vite): **11 errors / 9 files** — 6 `react-refresh/only-export-components`,
-  4 stale unused-disable directives, 1 `react-hooks/rules-of-hooks` (a FALSE POSITIVE: `AppShell`'s
-  `useVisibleModules` is a pure helper named with a `use` prefix, called after early returns). These 11
-  are bounded and mostly lint-only.
-- **Recommendation:** pin `eslint-plugin-react-hooks` to `^5` (its `recommended` == the plan's assumed
-  2-rule set; honors "recommended sets only") → drops the 43 compiler-rule violations. Then resolve the
-  residual 11 within Task 4's spirit. This amends the already-committed Task 1 dep version, so surfacing
-  to the owner before proceeding. Awaiting decision; Task 4 left unchecked.
+### Task 4 — resolved to zero (v5 per D-P1-1)
+- Owner decision **D-P1-1** = pin react-hooks `^5` (see Task 1 AMENDED note). Under the v5 classic
+  ruleset `npm run lint` surfaced **11 errors / 9 files** (the 43 v7 React-Compiler violations were
+  dropped, as predicted). All 11 resolved lint-only:
+  - **4 stale unused `exhaustive-deps` disable directives deleted** (behaviour-neutral no-ops; the
+    setState setters are stable so deps were already complete): `AvlLinkSheet:210`, `BomLineSheet:181`,
+    `PartSheet:162`, `JournalEntryDialog:162`.
+  - **1 `react-hooks/rules-of-hooks` false positive** — `AppShell`'s pure helper `useVisibleModules`
+    (a `.filter()`, no hooks) tripped the rule via its `use` prefix when called after early returns.
+    Renamed `useVisibleModules` → `getVisibleModules` (definition + the 2 importers `Home.tsx`,
+    `SalesOrderDetail.tsx`, + a stale comment in `SalesOrderDetail.test.tsx`).
+  - **6 `react-refresh/only-export-components`** — inline `// eslint-disable-next-line
+    react-refresh/only-export-components` with a reason on each: `AppShell` (`getVisibleModules`),
+    `ui/badge` (`badgeVariants`), `ui/button` (`buttonVariants`), `crumb/Pipeline` (`STAGE_ORDER`,
+    `STAGE_LABELS`), `mousse/WorkOrderDetail` (`isUnderIssued`). Fast Refresh is dev-only DX; moving the
+    shared exports out would touch many importers (out of scope for a lint chore).
+- Verify: `cd frontend && npm run lint; echo "exit=$?"` → **`exit=0`** (0 errors / 0 warnings).
+- Regression (touched `src/**`): `npm run test -- --run` → **44 files / 131 tests passed**;
+  `npm run build` → **exit 0** (`✓ built in 505ms`, 317 modules). No behaviour changed.
 
 ### Deviations
 - **Task 0 branch point:** Plan Task 0 says `git checkout -b chore-lint-gates-clean origin/master`,

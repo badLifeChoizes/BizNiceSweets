@@ -159,7 +159,6 @@ export function JournalEntryDialog({ open, onOpenChange, onSuccess }: JournalEnt
     setEntryDate(today())
     setMemo('')
     setLines(blankLines(nextKey()))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   function updateLine(key: number, patch: Partial<JournalLineDraft>) {
