@@ -23,7 +23,7 @@ recommended-sets-only, lint-check-only.
 - [x] 6. Audit and protect load-bearing side-effect imports BEFORE auto-fix (Wave B)
 - [x] 7. Apply safe ruff auto-fixes, review F401 removal diff, enumerate remaining set (Wave B)
 - [x] 8. Inspect and resolve the 4 F821 undefined-name annotations (Wave B)
-- [ ] 9. Resolve remaining hand-inspect items: F811, E741, F841 (Wave B)
+- [x] 9. Resolve remaining hand-inspect items: F811, E741, F841 (Wave B)
 - [ ] 9b. Resolve UP035 deprecated-imports and the 2 unsafe fixes (Wave B)
 - [ ] 10. Prove no regression across the full behavioral safety net (Wave C)
 - [ ] 11. Demonstrate both gates are enforcing (red→green proof) (Wave C)
@@ -118,6 +118,30 @@ Sites (re-located by symbol post-Task-7): `plum/service.py:2650` (`-> ImportPrev
   runtime imports still construct the objects; no F401 (TYPE_CHECKING import used in an
   annotation is "used") and no circular-import risk (block not evaluated at runtime).
 - Verify: `ruff check . --select F821` → **All checks passed! (exit=0)**.
+
+### Task 9 — F811 (9) + E741 (2) + F841 (2)
+(`partners.py` duplicate `func` F811 was already auto-fixed in Task 7 → 9 F811 remained.)
+- **E741 (2)** — ambiguous loop var `l` in f-string list comprehensions: `verify_crumb.py:590`
+  (`for l in ft_detail.lines`) + `verify_reports.py:536` (`for l in bs_3130`). Renamed
+  `l`→`line` (descriptive; both iterate document lines). Behavior-neutral.
+- **F841 (2)** — these ARE the "2 hidden unsafe fixes" (`--statistics --unsafe-fixes` showed
+  only F841 `[*]`). Both RHS are **side-effectful `await`s**, so the unsafe autofix (delete the
+  whole statement) would drop needed work — hand-fixed instead by dropping only the unused
+  binding, keeping the call: `verify_reports.py:373` `draft_bill = await make_expense_bill(...)`
+  → `await make_expense_bill(...)` (creates the DRAFT bill the next assertion checks does NOT
+  appear); `tests/core/test_modules.py:138` `user_data = await create_regular_user(...)`
+  → `await create_regular_user(...)` (creates the non-admin the test then logs in as).
+- **F811 (9× `seeded_db` in `tests/auth/test_seed_admin.py`)** — NOT duplicate fixture defs.
+  One fixture (`seeded_db`, defined in `conftest_helpers.py:52`) was imported at module level
+  (line 15, `# noqa: F401`) so pytest could discover it; ruff flagged each of the 9 test
+  `def …(seeded_db)` params as redefining that import. Minimal semantics-preserving refactor:
+  created `tests/auth/conftest.py` re-exporting `seeded_db` (idiomatic pytest fixture sharing,
+  mirroring `tests/core/conftest.py:16`'s `admin_login_token` re-export) and removed the
+  module-level import from `test_seed_admin.py`. Fixture now auto-discovered → params reference
+  it directly, no shadowing → F811 gone; also clears the line-15 F401. `skip_if_no_db` (the
+  fixture's dep) resolves from root `tests/conftest.py:97`. Test behavior unchanged.
+- Verify: `ruff check . --select F811,E741,F841` → **All checks passed! (exit=0)**;
+  whole-tree `ruff check .` → **exit=0** already at this point.
 
 ### Task 1 — add eslint flat-config devDependencies
 - `npm install -D @eslint/js eslint-plugin-react-hooks eslint-plugin-react-refresh` → added:

@@ -135,7 +135,7 @@ async def test_toggle_requires_admin(
 
     # Get admin token first, then create a non-admin user in the DB
     admin_token = await admin_login_token(client)
-    user_data = await create_regular_user(
+    await create_regular_user(
         client,
         admin_token,
         email="nonadmin_toggle_test@example.com",

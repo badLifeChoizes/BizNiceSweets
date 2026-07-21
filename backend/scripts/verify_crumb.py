@@ -587,7 +587,7 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             and ft_detail.lines[0].description == "Custom tooling charge"
             and ft_detail.lines[0].unit_price == Decimal("75")
             and ft_detail.lines[0].plum_part_id is None,
-            f"lines={[(l.description, l.unit_price) for l in ft_detail.lines]!r}",
+            f"lines={[(line.description, line.unit_price) for line in ft_detail.lines]!r}",
         )
 
         # (G) line integrity: Σ(qty × unit_price) == total_value, Decimal-exact.

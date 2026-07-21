@@ -370,7 +370,7 @@ async def run() -> None:
         # A DRAFT bill (created, NOT posted): 999. It is NOT posted to 2110, so it must
         # appear in NEITHER the aging total NOR the 2110 control — both must be UNCHANGED
         # from the pre-draft (report_paid) snapshot, and in_balance still True.
-        draft_bill = await make_expense_bill(Decimal("999"), as_of - timedelta(days=5), prepaid_id)
+        await make_expense_bill(Decimal("999"), as_of - timedelta(days=5), prepaid_id)
         async with session_factory() as session:
             report_draft = await ap_aging_report(session, as_of)
         check(
@@ -533,7 +533,7 @@ async def run() -> None:
             len(bs_3130) == 1
             and bs_3130[0].name == "Current Year Net Income"
             and bs_3130[0].amount == pl_all.net_income,
-            f"lines={[(l.code, l.amount) for l in bs_3130]!r} pnl_net={pl_all.net_income!r}",
+            f"lines={[(line.code, line.amount) for line in bs_3130]!r} pnl_net={pl_all.net_income!r}",
         )
 
         # Ledger 3130 itself must carry ZERO posted journal lines (no closing entries).
