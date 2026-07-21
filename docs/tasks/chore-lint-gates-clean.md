@@ -25,12 +25,25 @@ recommended-sets-only, lint-check-only.
 - [x] 8. Inspect and resolve the 4 F821 undefined-name annotations (Wave B)
 - [x] 9. Resolve remaining hand-inspect items: F811, E741, F841 (Wave B)
 - [x] 9b. Resolve UP035 deprecated-imports and the 2 unsafe fixes (Wave B)
-- [ ] 10. Prove no regression across the full behavioral safety net (Wave C)
+- [x] 10. Prove no regression across the full behavioral safety net (Wave C)
 - [ ] 11. Demonstrate both gates are enforcing (red→green proof) (Wave C)
 - [ ] 12. Update requirements-progress, flip NFR-6 status, final commit (Wave C)
 
 ## Notes / evidence
 (filled in per task)
+
+### Task 10 — no-regression gate (Wave C, coordinator-run) — all green
+Dev stack up (`podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`), api mounts
+`../backend:/app` so it runs the autofixed source live.
+- **Cold boot (2 ways):** freshly-started api container → `GET /health/ready` = **200** (liveness+DB);
+  explicit `podman exec compose_api_1 python -c "import app.main; print('BOOT_OK')"` → **BOOT_OK**.
+  This is the empirical guard for a stripped side-effect import / UP-rewrite import target — PASS.
+- **23/23 `verify_*.py` in-container exit 0** (loop over `backend/scripts/verify_*.py`, `pass=23 fail=0`).
+  Spot-checked real assertions ran: `verify_ar.py` (both FOR-UPDATE concurrency locks, aging↔1120 tie),
+  `verify_gelato_ship.py` (COGS control↔subledger tie, double-ship blocker regression),
+  `verify_reports.py` (accounting identity — this file was touched by Task 9's F841 fix).
+- **Vitest: 44 files / 131 tests passed.**
+- **Build: `tsc -b && vite build` exit 0** (pre-existing informational chunk-size >500kB warning only).
 
 ### Task 5 — ruff availability + invocation convention
 - `cd backend && .venv/bin/ruff --version` → `ruff 0.15.18` (matches `requirements-dev.txt`
