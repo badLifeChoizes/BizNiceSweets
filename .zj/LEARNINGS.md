@@ -3,6 +3,56 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 01 — Lint gates fixed-to-clean (v4.0, verified 2026-07-21)
+
+A mechanical NFR-6 chore — no capability shipped — but three keepers, because the two things
+that could have turned it into a behavior-changing phase (a plugin redefining its own ruleset,
+and an autofix stripping a load-bearing import) both surfaced and were contained by the plan's
+sequencing rather than by luck.
+
+### Repeat these
+
+- **A lint plugin's `recommended` preset is a moving target across major versions — pin the
+  major before you scope the phase.** `eslint-plugin-react-hooks` was installed at **v7.1.1**,
+  whose `recommended` silently bundles the React-Compiler ruleset: **54 errors across 41 files,
+  42 of them behavior-sensitive** — far outside a mechanical lint chore. Pinning to `^5`
+  (D-P1-1) made `recommended` mean the classic 2-rule set (11 residual errors, 9 files, all
+  hand-resolvable). The lesson generalizes past this plugin: when a phase's scope is "turn on
+  the recommended rules," the plugin *version* is part of that scope — an unpinned bump can
+  redefine "recommended" and smuggle in work you explicitly deferred. Verify what `recommended`
+  resolves to (`--print-config`) before estimating the phase.
+- **Autofix on a self-registering modular monolith needs guard-first, then a cold-boot gate.**
+  The app self-registers modules at import time (`registry.register` in each
+  `app/modules/*/__init__.py`) and `app/main.py` force-imports `app.core.models` so FK metadata
+  resolves at boot. A blind `ruff --fix` that strips a "unused" F401 there re-introduces a
+  cold-boot 500. The working sequence: **(1)** audit and `# noqa: F401`-guard every side-effect
+  import *before* `--fix`; **(2)** review every deleted-import line in the diff; **(3)** gate
+  empirically with `import app.main` cold-boot + the full `verify_*` run. The review confirmed
+  the autofix only *reordered* imports (I001) and removed nothing load-bearing — but that was a
+  *result* of the guard-first sequencing, not a property of the tool. Trust the boot, not the
+  linter's judgment of "unused," whenever an import's purpose is a side effect.
+- **Re-derive the exact post-autofix residual from `--statistics`; never trust the
+  hand-inspected list.** Planning hand-enumerated 18 manual items; safe-`--fix` actually left
+  **~71** (UP035 ×23, 2 unsafe fixes, ~28 remainder). The plan's rule — *every remaining rule
+  category must map to a named owning task before proceeding, no category riding the final
+  backstop* — is what stopped UP035 and the unsafe fixes from slipping through unowned. The
+  cheap discipline: after `--fix`, run `--statistics` and reconcile the real breakdown against
+  your task ownership map; the delta between "what I inspected" and "what actually remains" is
+  where a mechanical phase silently grows.
+
+### Process notes
+
+- **A build report's compressed counts can read as a partial pass — expand them at verify.**
+  The build reported Vitest "44/131"; a reader could take that as "44 of 131 passed." Verify
+  established it meant **44 test files / 131 tests, 0 failed, 0 skipped**. When a headline
+  number could be read as a failure ratio, the verifier must expand it before trusting the
+  verdict — a green run mis-typed as amber costs a re-investigation either way.
+- **`.npmrc legacy-peer-deps=true` is global, not scoped to the conflict that motivated it.**
+  Added for the react-hooks-v5 / eslint-10 peer pair (D-P1-1), it silences peer-dep conflicts
+  for *every* future `npm install`/`ci`, so a genuinely incompatible dep bump won't surface at
+  install time. Homed to the Phase 3 CI item (BACKLOG) — a CI runner must both honor the tracked
+  `.npmrc` and carry a note that it's masking peer resolution.
+
 ## Milestone v3.0 — Customer & logistics (closed 2026-07-19)
 
 Roll-up of Phases 11a, 11b, 12a, 12b, 13 (CRUMB CRM → sales orders; GELATO bins → pick/pack/

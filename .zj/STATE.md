@@ -1,5 +1,18 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-21 (**v4.0 Phase 1 VERIFIED — `/zj:verify 1`.** Verdict **PASS**, tag
+Updated: 2026-07-21 (**v4.0 Phase 1 RETRO'D — `/zj:retro 1`.** Phase closed `[done — verified +
+retro'd]`; tag `zj/good-01-lint-gates-clean` stands. **3 LEARNINGS keepers banked** (LEARNINGS.md
+"Phase 01"): (1) a lint plugin's `recommended` preset is a moving target across majors — pin the
+major before scoping (react-hooks v7 `recommended` bundled the React-Compiler ruleset = 54 errors/42
+behavior-sensitive; `^5` pin/D-P1-1 restored the classic 2-rule set); (2) autofix on a self-registering
+modular monolith needs guard-first (`# noqa: F401` side-effect imports before `--fix`) + a cold-boot
+gate (`import app.main`) — trust the boot, not the linter's "unused"; (3) re-derive the post-`--fix`
+residual from `--statistics` (safe-fix left ~71, not the 18 hand-enumerated — map every rule category to
+an owning task, none riding the backstop). **Deferred items homed:** SC4 enforce-smoke + `.npmrc`
+global peer-masking → Phase 3 CI backlog item (BACKLOG:18); both stale-doc gaps already fixed at verify
+close-out. ROADMAP Phase 1 → `[done]`. **Next action:** `/zj:plan 2` (NFR-5 pytest harness repair +
+port `verify_*`). Optional: `/zj:log phase 1` for the formal work log.)
+
+Prior: 2026-07-21 (**v4.0 Phase 1 VERIFIED — `/zj:verify 1`.** Verdict **PASS**, tag
 `zj/good-01-lint-gates-clean`. Verifier + reviewer both ran **empirically** (not trusting the build
 report): all 5 SCs pass — SC1 flat config/devDeps/deleted `.eslintrc.cjs`/fixed `lint` script wired
 (print-config confirms rules loaded); SC2 `npm run lint` **exit 0**; SC3 `ruff 0.15.18 check .` **exit

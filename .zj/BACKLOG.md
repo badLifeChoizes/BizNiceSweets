@@ -19,6 +19,13 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   are manual; the `SyerpPartner` bug shipped through 4 plans because live-DB tests never ran.
   Minimum: ruff + pytest + eslint + vitest on push; stretch: a live-Postgres test job so
   `skip_if_no_db` tests actually run.
+  **Phase 1 (2026-07-21) folds two items in here:** (a) SC4 has no *standing* automated
+  enforce-test — "gate exits non-zero on a violation" is proven only by a one-time manual
+  red→green proof; a tiny plant→expect-fail→revert smoke would automate it (low priority, the
+  gate's presence in CI is conventionally sufficient). (b) The CI runner must honor the tracked
+  `frontend/.npmrc` (`legacy-peer-deps=true`) so `npm ci` resolves — and that flag is *global*,
+  masking peer-dep conflicts for every future bump, so carry a one-line note that it's silencing
+  peer resolution.
 - [ ] **PLUM live-DB test harness never runs (4 root causes confirmed 2026-07-04, Phase 7)** —
   deferred by owner (D-P7-4) until blocking/asked. The `skip_if_no_db` suite has *always*
   silently skipped, even inside the API container. Confirmed causes: (1) `tests/conftest.py`
