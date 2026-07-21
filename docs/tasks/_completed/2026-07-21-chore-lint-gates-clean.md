@@ -27,7 +27,7 @@ recommended-sets-only, lint-check-only.
 - [x] 9b. Resolve UP035 deprecated-imports and the 2 unsafe fixes (Wave B)
 - [x] 10. Prove no regression across the full behavioral safety net (Wave C)
 - [x] 11. Demonstrate both gates are enforcing (red→green proof) (Wave C)
-- [ ] 12. Update requirements-progress, flip NFR-6 status, final commit (Wave C)
+- [x] 12. Update requirements-progress, flip NFR-6 status, final commit (Wave C)
 
 ## Notes / evidence
 (filled in per task)
@@ -54,6 +54,17 @@ Used throwaway probe files (clean deletion = guaranteed revert; working tree con
   `.venv/bin/ruff check .` **exit=1** (`F401 ... 'os' imported but unused`, `Found 1 error.`); removed
   probe → `.venv/bin/ruff check .` **exit=0** (`All checks passed!`).
 - `git status --porcelain` empty afterward (no scratch left behind).
+
+### Task 12 — docs + NFR-6 status flip — DONE
+- `.zj/SRD.md` NFR-6: `Status: planned` → `implemented (v4.0 Phase 1 — both gates fixed-to-clean +
+  enforcing; CI-wiring clause pending NFR-4/Phase 3)`; added a Phase-1 Evidence line. Not `verified`
+  (that is `/zj:verify 1`'s call — this is the build stage).
+- `docs/features/requirements-progress.md`: added a new **Infrastructure / Non-Functional (PRD-12,
+  v4.0)** section with the NFR-6 row (evidence + commit hashes) + refreshed the footer.
+- `CHANGELOG.md` NOT edited (generated from commits, per repo rule).
+- Checklist archived to `docs/tasks/_completed/2026-07-21-chore-lint-gates-clean.md`.
+
+**Phase 1 complete — all 13 tasks (0–12) done. Next: `/zj:verify 1`.**
 
 ### Task 5 — ruff availability + invocation convention
 - `cd backend && .venv/bin/ruff --version` → `ruff 0.15.18` (matches `requirements-dev.txt`
