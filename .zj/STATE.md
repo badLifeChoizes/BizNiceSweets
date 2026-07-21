@@ -1,17 +1,25 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-21 (**v4.0 Phase 1 BUILD IN PROGRESS** — `/zj:build 1` on fresh branch
-`chore-lint-gates-clean` (cut off the plan-carrying tip `a6ee1fb`, code-identical to `origin/master`;
-Task 0 branch-point deviation logged in checklist). **Wave A (frontend gate) tasks 0–3 committed**
-(`911108d` devDeps, `4276232` flat `eslint.config.js`, `00f5f5f` lint-script fix + `.eslintrc.cjs`
-delete). **Task 4 hit a MATERIAL deviation → owner decision D-P1-1:** the installed
-`eslint-plugin-react-hooks@7.1.1` redefined `recommended` to bundle the React-Compiler ruleset
-(54 errors/41 files, 42 behavior-sensitive) — out of NFR-6 scope; owner chose **pin to `^5`** (classic
-2-rule recommended = the plan's intent), leaving 11 bounded residual. Wave-A engineer finishing Task 4
-(pin v5 + resolve residual to zero) in the background. **Next:** Wave B (backend ruff gate, Tasks 5–9b)
-runs after Wave A lands (shared git index → serialized), then Wave C (regression 23/23 + cold-boot +
-red→green enforce proof, Tasks 10–12). Uncommitted: STATE/DECISIONS/PLAN doc edits (this build's
-bookkeeping), will commit with the phase. Unrelated `.vscode/settings.json` cosmetic edit stashed at
-owner's request. **Resume point if interrupted:** await Wave-A engineer report, then launch Wave B.)
+Updated: 2026-07-21 (**v4.0 Phase 1 BUILD COMPLETE** — `/zj:build 1` on branch `chore-lint-gates-clean`
+(cut off the plan-carrying tip `a6ee1fb`, code-identical to `origin/master`; Task-0 branch-point
+deviation logged). **All 13 tasks (0–12) done, atomic commits, tree clean.** NFR-6 delivered: **both
+lint gates fixed-to-clean + proven enforcing.** Wave A (frontend ESLint 10 flat gate): flat
+`eslint.config.js`, `.eslintrc.cjs` deleted, `lint` de-`--ext`'d, `npm run lint` **exit 0**. Wave B
+(backend `ruff` gate): ~1159 violations fixed-to-clean (1139 safe-autofix + F821×4 via `TYPE_CHECKING` +
+F811 `seeded_db`→`tests/auth/conftest.py` + E741/F841 hand-fixed + 51 load-bearing `syerp/service`
+re-exports `# noqa: F401`), `ruff check .` **exit 0**. Wave C: **23/23 `verify_*` exit 0** in-container +
+**cold boot** (`/health/ready` 200, `import app.main` BOOT_OK) + Vitest **44/131** + `tsc -b && vite
+build` exit 0; **red→green enforce proof** on both gates (planted violation → non-zero, revert → 0).
+**One MATERIAL deviation → owner decision D-P1-1:** installed `eslint-plugin-react-hooks@7.1.1`
+redefined `recommended` to bundle the React-Compiler ruleset (54 errors/41 files) — out of NFR-6 scope;
+owner chose **pin to `^5`** (classic 2-rule recommended = plan intent). Added `frontend/.npmrc`
+`legacy-peer-deps=true` (v5 peer-declares eslint≤^9) + re-declared `@testing-library/dom` — **both flagged
+for NFR-4/Phase-3 CI** (`npm ci` must keep them). SRD NFR-6 → `implemented` (CI-wiring clause deferred to
+NFR-4/Phase 3); `requirements-progress.md` NFR row added; checklist archived to
+`docs/tasks/_completed/2026-07-21-chore-lint-gates-clean.md`. Unrelated `.vscode/settings.json` cosmetic
+edit **stashed** at owner request (restore with `git stash pop`). **Noticed (non-blocking):** the
+transient-red intermediate commit `e7c6e18` (testing-lib restored next commit; tip green); root
+`tests/conftest.py` + `tests/core/conftest.py` predate the ABOUTME-header standard (future sweep).
+**Next action:** `/zj:verify 1`.)
 
 Prior: 2026-07-20 (**v4.0 Phase 1 PLAN COMPLETE** — `/zj:plan 1`. Phase 1 = **lint gates
 fixed-to-clean (NFR-6)**; artifacts in `.zj/phases/01-lint-gates-clean/PLAN.md`. **13 tasks** (Task 0
@@ -425,18 +433,17 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 - **Milestone:** **v3.0 Customer & logistics — CLOSED + tagged `v3.0`** 2026-07-19 (all phases verified +
   retro'd; DoD audited goal-backward, 2 gaps fixed at close; phases archived to `.zj/history/v3.0/`).
   **Next milestone = v4.0 Infra-debt + quality paydown (D-M3-3).** v2.0 + v1.0 closed + tagged.
-- **Branch:** `feature-syerp-ar-invoicing` — **SHIPPED to master** 2026-07-20 (PR #3, FF `3b762ba..87fb79d`).
-  `origin/master == 87fb79d` carries the full 11a→13 stack; the v3.0 tag is reachable from master. The
-  standing `/zj:ship` master-merge debt (carried since v2.0) is **CLEARED**. The merged branch can be
-  deleted once the next phase branches off master.
-- **Last update:** 2026-07-20
-- **Next action:** **`/zj:build 1`** — v4.0 Phase 1 = **lint gates fixed-to-clean (NFR-6)**, PLAN
-  complete (`.zj/phases/01-lint-gates-clean/PLAN.md`, 13 tasks / 3 waves). Cut a fresh
-  `chore-lint-gates-clean` branch off `origin/master` first (Task 0; current
-  `feature-syerp-ar-invoicing` is fully merged and may be deleted). Build order: Wave A (FE gate) and
-  Wave B (BE gate) are parallel-safe; Wave C (regression + enforce-proof) depends on both. Watch the
-  F401 side-effect-import hazard (Task 6 guards it; Task 10 cold-boot + 23/23 verify_* proves it).
-  Scope bound by D-M4-3 + the two at-plan decisions (recommended-sets-only, lint-check-only).
+- **Branch:** `chore-lint-gates-clean` — v4.0 Phase 1 **BUILD COMPLETE** (all 13 tasks committed, tree
+  clean, `19` commits over `origin/master`). Cut off the plan-carrying tip `a6ee1fb` (code-identical to
+  `origin/master == 87fb79d`). Not yet verified/shipped. The merged `feature-syerp-ar-invoicing` branch
+  may be deleted.
+- **Last update:** 2026-07-21
+- **Next action:** **`/zj:verify 1`** — verify v4.0 Phase 1 (NFR-6 lint gates) goal-backward against
+  SC1–SC5: FE flat config + clean `npm run lint`; BE `ruff check .` clean; both gates enforce
+  (red→green); no regression (23/23 `verify_*` + cold boot + Vitest + build). Build evidence + the
+  D-P1-1 deviation are in `docs/tasks/_completed/2026-07-21-chore-lint-gates-clean.md`. The CI-wiring
+  clause of NFR-6 is deliberately OUT of scope (deferred to NFR-4/Phase 3) — do not fault the phase for
+  it. Then `/zj:retro 1`.
 
 ## Next action (detail)
 
