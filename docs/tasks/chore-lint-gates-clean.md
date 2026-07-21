@@ -39,6 +39,14 @@ recommended-sets-only, lint-check-only.
 - Lockfile diff: +469/-3; the 3 removals are only `"peer": true` flags flipping now that these
   are direct deps — no version churn.
 - Verify: `node -e "require('@eslint/js');require('eslint-plugin-react-hooks');require('eslint-plugin-react-refresh')"` → `exit=0`.
+- **AMENDED (D-P1-1):** Task 1 originally landed `eslint-plugin-react-hooks@^7.1.1` (npm's auto-pick,
+  whose `recommended` is the full React-Compiler ruleset). Per owner decision D-P1-1, re-pinned to
+  `^5.2.0` (its `recommended`/`recommended-latest` == classic `rules-of-hooks`+`exhaustive-deps`).
+  v5.2.0 peer-declares `eslint` only up to `^9`, so the install needed `--legacy-peer-deps` (the rules
+  are eslint-version-agnostic; ESLint 10 works). Unmet-peer implication for a future `npm ci`/CI flagged
+  to coordinator (no CI exists yet — BACKLOG p1). `eslint.config.js` switched
+  `reactHooks.configs.flat.recommended` (v7-only) → `reactHooks.configs['recommended-latest']` (v5's
+  flat export; v5 `configs.recommended` is legacy eslintrc format and errors under flat config).
 
 ### Task 2 — flat `eslint.config.js`
 - New `frontend/eslint.config.js` (ESM `export default tseslint.config(...)`): `ignores: ['dist','coverage']`,
