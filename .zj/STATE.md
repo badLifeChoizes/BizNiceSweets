@@ -1,5 +1,19 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-20 (**v4.0 Phase 1 PLAN COMPLETE** — `/zj:plan 1`. Phase 1 = **lint gates
+Updated: 2026-07-21 (**v4.0 Phase 1 BUILD IN PROGRESS** — `/zj:build 1` on fresh branch
+`chore-lint-gates-clean` (cut off the plan-carrying tip `a6ee1fb`, code-identical to `origin/master`;
+Task 0 branch-point deviation logged in checklist). **Wave A (frontend gate) tasks 0–3 committed**
+(`911108d` devDeps, `4276232` flat `eslint.config.js`, `00f5f5f` lint-script fix + `.eslintrc.cjs`
+delete). **Task 4 hit a MATERIAL deviation → owner decision D-P1-1:** the installed
+`eslint-plugin-react-hooks@7.1.1` redefined `recommended` to bundle the React-Compiler ruleset
+(54 errors/41 files, 42 behavior-sensitive) — out of NFR-6 scope; owner chose **pin to `^5`** (classic
+2-rule recommended = the plan's intent), leaving 11 bounded residual. Wave-A engineer finishing Task 4
+(pin v5 + resolve residual to zero) in the background. **Next:** Wave B (backend ruff gate, Tasks 5–9b)
+runs after Wave A lands (shared git index → serialized), then Wave C (regression 23/23 + cold-boot +
+red→green enforce proof, Tasks 10–12). Uncommitted: STATE/DECISIONS/PLAN doc edits (this build's
+bookkeeping), will commit with the phase. Unrelated `.vscode/settings.json` cosmetic edit stashed at
+owner's request. **Resume point if interrupted:** await Wave-A engineer report, then launch Wave B.)
+
+Prior: 2026-07-20 (**v4.0 Phase 1 PLAN COMPLETE** — `/zj:plan 1`. Phase 1 = **lint gates
 fixed-to-clean (NFR-6)**; artifacts in `.zj/phases/01-lint-gates-clean/PLAN.md`. **13 tasks** (Task 0
 branch + 12 work) in 3 waves — **A: frontend gate** (add `@eslint/js`/`eslint-plugin-react-hooks`/
 `eslint-plugin-react-refresh`; write flat `eslint.config.js`; fix the `--ext`-broken `lint` script;

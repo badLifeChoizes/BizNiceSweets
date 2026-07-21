@@ -1028,3 +1028,21 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   than recording current violations as an accepted baseline and gating only new ones. *Why:* an honest
   green from day one; the codebase is disciplined enough that the count should be tractable (revisit to
   ratchet only if the fix-to-clean effort proves outsized at plan).
+
+## v4.0 Phase 1 build (lint gates fixed-to-clean, 2026-07-21)
+
+- **D-P1-1 (owner, `/zj:build 1`):** **Pin `eslint-plugin-react-hooks` to `^5`** for the frontend
+  gate. Phase 1's plan scoped "react-hooks recommended" as the classic 2-rule set
+  (`rules-of-hooks` error + `exhaustive-deps` warn), matching the 6 pre-existing `exhaustive-deps`
+  disable sites. But `npm install` (Task 1) pulled **v7.1.1**, whose `recommended`/`flat.recommended`
+  preset was silently **redefined to bundle the full React-Compiler ruleset** (`set-state-in-effect`,
+  `refs`, `immutability`, `purity`, `set-state-in-render`, …) — surfacing **54 errors / 41 files**,
+  42 of them behavior-sensitive `set-state-in-effect`. Under the plan's intended surface it is only
+  **11 errors / 9 files** (bounded, mostly mechanical). *Why v5, not "keep v7 + disable the compiler
+  rules":* pinning to a plugin version whose `recommended` already equals the intended set honors the
+  owner's standing "**recommended rulesets only, no broadening**" decision without the config having to
+  explicitly opt OUT of half its own plugin's preset; adopting the compiler ruleset (~44 behavior fixes
+  across 41 files) would balloon a gate-standup chore into a codebase-wide quality project, out of scope
+  for NFR-6. Amends the Task-1 dependency version committed at `911108d`. Residual 11 (6
+  `react-refresh/only-export-components`, 4 stale unused-disable directives, 1 `rules-of-hooks` false
+  positive on `AppShell`'s `use`-prefixed pure helper `useVisibleModules`) resolved within Task 4.

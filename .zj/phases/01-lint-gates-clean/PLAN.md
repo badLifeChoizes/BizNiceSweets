@@ -19,6 +19,7 @@ Implements **NFR-6** (`.zj/SRD.md:722`), fix-to-clean per **D-M4-3**. The CI-wir
 - No flat `eslint.config.js`. Legacy `frontend/.eslintrc.cjs` present (old `@typescript-eslint/parser`+plugin names, ignored by ESLint 10).
 - Current `lint` script: `eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0` — the `--ext` flag was REMOVED in ESLint 10.
 - `tsconfig.app.json` has `strict` + `noUnusedLocals` + `noUnusedParameters` all true and `build` runs `tsc -b`, so unused vars/imports are already impossible. 163 ts/tsx files under `frontend/src`.
+- **Deviation logged at build (D-P1-1):** the installed react-hooks was **v7.1.1**, whose `recommended` bundles the React-Compiler ruleset (54 errors / 41 files, 42 behavior-sensitive) — out of scope. **Pinned to `^5`** so `recommended` == the intended classic 2-rule set (11 errors / 9 files residual, resolved in Task 4). Also: **only 2 of the 6** pre-existing `exhaustive-deps` disables are actually USED — the other 4 (`AvlLinkSheet:210`, `BomLineSheet:181`, `PartSheet:162`, `JournalEntryDialog:162`) are stale no-ops and are deleted in Task 4.
 - **6 pre-existing** `// eslint-disable-next-line react-hooks/exhaustive-deps` directives (confirmed): `frontend/src/routes/syerp/components/JournalEntryDialog.tsx`, `.../syerp/components/PartnerSheet.tsx`, `.../plum/components/BomLineSheet.tsx`, `.../plum/components/NewRevisionDialog.tsx`, `.../plum/components/PartSheet.tsx`, `.../plum/components/AvlLinkSheet.tsx`. With `react-hooks` loaded these become valid suppressions; under `--report-unused-disable-directives` they REQUIRE the rule to be loaded (proves react-hooks is the intended ruleset). Expect near-zero NEW hand-fixes — but run the real config and fix whatever actually surfaces (do not assume zero).
 
 **Backend (verified today):**
@@ -57,7 +58,7 @@ None open. The three scope decisions are already bound: **D-M4-3** (fix-to-clean
 
 ### [ ] 1. Add the three missing ESLint flat-config devDependencies (NFR-6 / SC1)
 - **Files:** `frontend/package.json`, `frontend/package-lock.json`
-- **Do:** From `frontend/`, `npm install -D @eslint/js eslint-plugin-react-hooks eslint-plugin-react-refresh`. Do NOT touch `eslint` or `typescript-eslint` (already correct versions). Verify no unrelated dependency churn in the lockfile diff.
+- **Do:** From `frontend/`, `npm install -D @eslint/js eslint-plugin-react-hooks@^5 eslint-plugin-react-refresh` (**react-hooks pinned to `^5`, D-P1-1** — v7's `recommended` redefines the preset to bundle the React-Compiler ruleset, out of scope for NFR-6). Do NOT touch `eslint` or `typescript-eslint` (already correct versions). Verify no unrelated dependency churn in the lockfile diff.
 - **Done when:** the three packages appear in `devDependencies` and resolve in `node_modules`; `eslint`/`typescript-eslint` versions unchanged.
 - **Verify:** `node -e "require('@eslint/js');require('eslint-plugin-react-hooks');require('eslint-plugin-react-refresh')"` exits 0.
 - **Parallel-ok:** no (blocks Task 2/3 within Wave A)
