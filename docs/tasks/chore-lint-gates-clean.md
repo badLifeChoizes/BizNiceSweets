@@ -17,7 +17,7 @@ recommended-sets-only, lint-check-only.
 - [x] 0. Branch off master (via plan-carrying tip) and open this checklist
 - [x] 1. Add the three missing ESLint flat-config devDependencies (Wave A)
 - [x] 2. Write `frontend/eslint.config.js` flat config (Wave A)
-- [ ] 3. Fix the `lint` script and delete legacy `.eslintrc.cjs` (Wave A)
+- [x] 3. Fix the `lint` script and delete legacy `.eslintrc.cjs` (Wave A)
 - [ ] 4. Run `npm run lint` and fix every surfaced FE violation to zero (Wave A)
 - [ ] 5. Ensure ruff availability + document the invocation convention (Wave B)
 - [ ] 6. Audit and protect load-bearing side-effect imports BEFORE auto-fix (Wave B)
@@ -51,6 +51,11 @@ recommended-sets-only, lint-check-only.
   `[2,{allowConstantExport:true}]`, and `no-undef`=`[0]` (typescript-eslint recommended disables it, so no
   `globals` package is needed for browser globals).
 - Verify: `npx eslint --print-config src/main.tsx >/dev/null && echo CONFIG_OK` → `CONFIG_OK`.
+
+### Task 3 — fix `lint` script, drop legacy `.eslintrc.cjs`
+- `lint` script now `eslint . --report-unused-disable-directives --max-warnings 0` (removed the
+  ESLint-10-invalid `--ext ts,tsx`; kept the other two flags). `git rm frontend/.eslintrc.cjs`.
+- Verify: `! test -f .eslintrc.cjs && grep -q -- '--report-unused-disable-directives' package.json && ! grep -q -- '--ext' package.json && echo SCRIPT_OK` → `SCRIPT_OK`.
 
 ### Deviations
 - **Task 0 branch point:** Plan Task 0 says `git checkout -b chore-lint-gates-clean origin/master`,
