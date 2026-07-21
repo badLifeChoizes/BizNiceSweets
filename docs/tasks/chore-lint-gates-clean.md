@@ -20,7 +20,7 @@ recommended-sets-only, lint-check-only.
 - [x] 3. Fix the `lint` script and delete legacy `.eslintrc.cjs` (Wave A)
 - [x] 4. Run `npm run lint` and fix every surfaced FE violation to zero (Wave A)
 - [x] 5. Ensure ruff availability + document the invocation convention (Wave B)
-- [ ] 6. Audit and protect load-bearing side-effect imports BEFORE auto-fix (Wave B)
+- [x] 6. Audit and protect load-bearing side-effect imports BEFORE auto-fix (Wave B)
 - [ ] 7. Apply safe ruff auto-fixes, review F401 removal diff, enumerate remaining set (Wave B)
 - [ ] 8. Inspect and resolve the 4 F821 undefined-name annotations (Wave B)
 - [ ] 9. Resolve remaining hand-inspect items: F811, E741, F841 (Wave B)
@@ -38,6 +38,26 @@ recommended-sets-only, lint-check-only.
 - No `backend/README.md` exists — convention stays in this checklist ("Conventions recorded"
   above): run `ruff check .` from `backend/`; container-image ruff is Phase 3/CI's concern.
 - Did NOT add a Makefile (per plan).
+
+### Task 6 — side-effect import audit (protected-import list)
+Verify: `ruff check app/core/models.py app/main.py app/modules/*/__init__.py app/core/seed.py
+--select F401` → **All checks passed! (F401_exit=0)** — every side-effect import below is
+already referenced or `# noqa: F401`-guarded; Task 7's `--fix` must not strip these.
+
+**Protected imports (side-effect, `# noqa: F401`-guarded — do NOT let autofix remove):**
+- `app/core/models.py` — model-metadata aggregator, all guarded:
+  `syerp models` (:15), `auth models` (:18), `Module` (:21), `Setting` (:22),
+  `plum models` (:27), `mousse models` (:29), `crumb models` (:30), `gelato models` (:31)
+  (flan/crisp lines are commented out).
+- `app/modules/<x>/__init__.py` (auth, crumb, gelato, mousse, plum, syerp) — each
+  `from app.modules.<x>.router import router  # noqa: F401` (self-registration surface);
+  the `registry` import is USED (`registry.register(...)`), `sys` USED.
+- `app/main.py` — module registration is **string-based** `importlib.import_module(...)`
+  (not `import x`), so ruff cannot flag F401; top-level imports all used; :~107 `# noqa: E402`.
+- `app/core/seed.py` — seed fn imports (`seed_admin_user`, `seed_modules_table`,
+  `seed_default_settings`, `seed_gl_accounts`, `seed_default_location`, `seed_plum_data`) are
+  **function-local and all called** (used, not F401-susceptible); `TYPE_CHECKING` guard used.
+- No OTHER unguarded side-effect import found in seed/registry wiring.
 
 ### Task 1 — add eslint flat-config devDependencies
 - `npm install -D @eslint/js eslint-plugin-react-hooks eslint-plugin-react-refresh` → added:
