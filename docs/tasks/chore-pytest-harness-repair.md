@@ -21,9 +21,30 @@ Branch: `chore-pytest-harness-repair` off `93de57d` (code-identical to `dd401d1`
 - [x] 7. Green the plum package
 - [x] 8. Green the syerp DB-backed tests
 - [x] 9. Green the root tests
-- [ ] 10. Prove non-vacuity (SC5)
-- [ ] 11. Document + prove env-pointability (SC6)
+- [x] 10. Prove non-vacuity (SC5)
+- [x] 11. Document + prove env-pointability (SC6)
 - [ ] 12. Regression keepers: boot + verify_* + full-suite zero-skip green (SC5 + keepers)
+
+## Non-vacuity proof (Task 10, SC5)
+
+Planted a transient product-behavior mutation in `app/modules/syerp/service/partners.py`
+(`create_partner`: `partner.is_vendor = False` after building the row) → the DB-backed HTTP test
+`tests/syerp/test_partners.py::test_create_vendor` turned **RED** (`assert False is True`, 1 failed).
+Reverted the mutation → the same test returns **GREEN** (1 passed); working tree clean (no diff on
+`partners.py`). This proves the formerly-skipped tests exercise the real DB round-trip and do not
+vacuously pass.
+
+## Run modes (Task 11, SC6 — env-pointable, no hard-coded host)
+
+Documented in `backend/tests/conftest.py`'s module docstring. Host/port/password come from the
+environment; conftest forces `POSTGRES_DB=$TEST_POSTGRES_DB` (default `biznice_test`) so the running
+app DB is never touched. `grep -nE '"db"|"localhost"|host="' backend/tests/conftest.py` → none.
+
+- **In-container (local default):**
+  `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest -q'`
+- **Localhost Postgres (CI / Phase 3; compose_db is never host-port-mapped, so CI runs its own):**
+  `cd backend && POSTGRES_HOST=localhost POSTGRES_PORT=5432 POSTGRES_PASSWORD=<pw> JWT_SECRET=<≥32ch> BNS_ADMIN_PASSWORD=<pw> TEST_POSTGRES_DB=biznice_test .venv/bin/python -m pytest -q`
+- Parallel-isolated runs: pass a distinct `TEST_POSTGRES_DB` (auto-created + migrated by the session fixture) — used during Wave B to green plum/syerp on separate DBs.
 
 ## Deviations
 

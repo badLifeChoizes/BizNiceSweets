@@ -10,8 +10,26 @@ Key design decisions:
   before the first `import app.*`.
 - The async test client uses httpx.ASGITransport pointing at the FastAPI
   app — no real HTTP server is started.
-- db_available() pings the database URL synchronously; if unreachable, tests
-  that require a live DB are skipped with a clear message rather than failing.
+- db_available() pings the database via libpq keyword args synchronously; if
+  unreachable, tests that require a live DB are skipped with a clear message.
+
+Run modes (SC6 — env-pointable, no hard-coded host):
+  The harness reads POSTGRES_HOST / POSTGRES_PORT / POSTGRES_PASSWORD from the
+  environment and forces POSTGRES_DB to TEST_POSTGRES_DB (default "biznice_test")
+  so the running app DB is never touched. Required secrets: POSTGRES_PASSWORD,
+  JWT_SECRET, BNS_ADMIN_PASSWORD. Knobs: TEST_POSTGRES_DB (override the test DB
+  name — used to run isolated DBs in parallel).
+
+  1. In-container (local default; POSTGRES_HOST=db comes from the container env):
+       podman exec -e PYTHONPATH=/app compose_api_1 \
+         sh -c 'cd /app && python -m pytest -q'
+
+  2. Against a localhost Postgres (CI / Phase 3 — compose_db is never host-port-
+     mapped, so CI provides its own localhost Postgres service):
+       cd backend && POSTGRES_HOST=localhost POSTGRES_PORT=5432 \
+         POSTGRES_PASSWORD=<pw> JWT_SECRET=<>=32-char secret> \
+         BNS_ADMIN_PASSWORD=<pw> TEST_POSTGRES_DB=biznice_test \
+         .venv/bin/python -m pytest -q
 """
 from __future__ import annotations
 

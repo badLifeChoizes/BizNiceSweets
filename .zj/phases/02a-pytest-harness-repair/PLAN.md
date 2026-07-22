@@ -112,14 +112,14 @@ Implements **NFR-5** (`.zj/SRD.md`; roadmap Phase 2, split 2a/2b per D-P2a-2). F
 ---
 ### Wave C — non-vacuity, env-pointability, and the regression keepers (NFR-5, SC5/SC6 + keepers)
 
-### [ ] 10. Prove non-vacuity (SC5)
+### [x] 10. Prove non-vacuity (SC5)
 - **Files:** none committed (transient edit)
 - **Do:** Temporarily break one asserted product behavior a DB-backed test exercises (e.g. return a wrong `on_hand` in inventory service, or a wrong status code in `syerp/router.py`); confirm ≥1 DB-backed pytest test turns RED; revert. Record which test + which mutation in the checklist.
 - **Done when:** a documented mutation flips a named DB-backed test RED, and reverting restores green — proving the tests hit the DB, not vacuously pass.
 - **Verify:** the checklist records the RED test name and the revert; suite green after revert.
 - **Parallel-ok:** no (run after Wave B green)
 
-### [ ] 11. Document + prove env-pointability (SC6)
+### [x] 11. Document + prove env-pointability (SC6)
 - **Files:** `backend/tests/conftest.py` (module docstring), `docs/tasks/chore-pytest-harness-repair.md`
 - **Do:** Document the two run modes and the env knobs (`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_PASSWORD`, `JWT_SECRET`, `BNS_ADMIN_PASSWORD`, `TEST_POSTGRES_DB`). No hard-coded host anywhere. Prove the default in-container run (`host=db`) green; describe the CI localhost invocation for Phase 3 (a localhost Postgres service, since `compose_db` is never port-mapped to the host).
 - **Done when:** both commands (bottom of this plan) are documented; `grep -rn '"db"' backend/tests` shows no hard-coded host in test code.
