@@ -23,7 +23,20 @@ Branch: `chore-pytest-harness-repair` off `93de57d` (code-identical to `dd401d1`
 - [x] 9. Green the root tests
 - [x] 10. Prove non-vacuity (SC5)
 - [x] 11. Document + prove env-pointability (SC6)
-- [ ] 12. Regression keepers: boot + verify_* + full-suite zero-skip green (SC5 + keepers)
+- [x] 12. Regression keepers: boot + verify_* + full-suite zero-skip green (SC5 + keepers)
+
+## Regression gate (Task 12)
+
+- **Cold boot:** `import app.main` → `BOOT_OK` (guards the Phase 12a/13 boot-500 class); the ASGI
+  `tests/test_health.py` passes within the suite (app serves).
+- **23/23 `verify_*` exit 0** in-container (ap/ap_api, ar/ar_api, crumb/crumb_api, crumb_so/so_api,
+  e2e_p8, gelato/api, gelato_ship/api, gl/api, inventory, mousse/api, part_numbering,
+  plum_vendor_paths, purchasing, reports/reports_api) — no FAILs. App-DB (`biznice`) unaffected by the
+  test harness (tests run on `biznice_test`).
+- **Full suite on one shared DB: 217 passed, 0 failed, 0 skipped** (167s). Back-to-back reruns stable
+  (SC4). Non-vacuity proven (Task 10).
+- **Lint gate held:** the syerp test edit introduced one ruff I001 (import order) in
+  `tests/syerp/test_gl.py`; auto-fixed → `ruff check .` exit 0 (Phase-1 zero-violation baseline intact).
 
 ## Non-vacuity proof (Task 10, SC5)
 
@@ -62,3 +75,14 @@ app DB is never touched. `grep -nE '"db"|"localhost"|host="' backend/tests/conft
 (populated during Wave B — every xfail/skip listed with reason + follow-up owner)
 - Container dev-deps install is not durable across rebuild — Phase 3 must bake a test image
   (see Deviations). Documented for SC6 / Task 11.
+- **No xfail/skip was needed** — every one of the 32 first-run failures was TEST drift (fixed) with
+  zero product-code changes. So this section lists no suppressed tests.
+- **Pre-existing, product-side, out of 2a scope (candidates for backlog / 2b):**
+  (1) `SAWarning: unresolvable cycles between crumb_lead, crumb_opportunity` fires on every truncate —
+  mutually-dependent FKs; harmless today but the warning says it "may raise an error in a future
+  release." (2) `StarletteDeprecationWarning: HTTP_422_UNPROCESSABLE_ENTITY is deprecated` at
+  `plum/router.py:277/563/680`. Neither is introduced by this phase.
+- **`_isolate` reseeds auth + roster only, NOT the full app seed set** (modules/settings/COA/location/
+  plum-tags) — deliberate, to keep the per-test baseline minimal so `test_inventory` (29) and other
+  bare-DB-assuming tests stay green. GL tests that need the COA seed it themselves via a syerp-local
+  `seeded_gl_accounts` fixture (mirrors core's `seeded_core_db`). Noted so 2b knows the baseline shape.

@@ -108,7 +108,6 @@ async def test_gl_requires_syerp_read(
       - Token with syerp:read → 200 OK
     """
     from app.modules.auth.service import create_access_token
-
     from tests.auth.conftest_helpers import admin_login_token, create_regular_user
 
     # No token → 401

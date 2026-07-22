@@ -126,7 +126,7 @@ Implements **NFR-5** (`.zj/SRD.md`; roadmap Phase 2, split 2a/2b per D-P2a-2). F
 - **Verify:** in-container run green; `rg -n "localhost\"|\"db\"" backend/tests/conftest.py` shows host comes from settings/env only.
 - **Parallel-ok:** yes
 
-### [ ] 12. Regression keepers: boot + verify_* + full-suite zero-skip green (SC5 + keepers)
+### [x] 12. Regression keepers: boot + verify_* + full-suite zero-skip green (SC5 + keepers)
 - **Files:** none (verification task); may touch nothing beyond re-running gates
 - **Do:** Because this phase rewires shared harness/engine surfaces, prove no regression: (1) **cold boot** — `import app.main` succeeds and the app serves (guards the Phase 12a/13 boot-500 class); (2) all **23 `verify_*` scripts** exit 0 in-container; (3) full `pytest -q` reports **0 skipped among DB-backed tests** and is GREEN. Confirm no change was made to `app/core/db.py`'s production behavior beyond test-time monkeypatch (the app engine still builds at import).
 - **Done when:** app boots + serves; 23/23 verify_* exit 0; full suite green with 0 DB-backed skips.
