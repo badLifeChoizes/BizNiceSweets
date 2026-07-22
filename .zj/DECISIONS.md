@@ -1085,3 +1085,19 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   `create_access_token(subject="admin-user", …)`, so without a `User(id="admin-user")` row those tokens
   authenticate to nothing and every RBAC-gated call 401s. `User.id` is `String(36)`, so `"admin-user"`
   is a legal PK. This is a harness seed, not a product change.
+- **D-P2a-5 (owner, `/zj:build 2a` Wave B):** the ~100 never-run tests were written against a **claim-based
+  token model** (mint `create_access_token(subject=<name>, permissions=[…])` and assume the claim grants
+  access), but shipped RBAC **ignores the claim** and derives permissions from the DB user (D-P2a-4). This
+  surfaced as 32 first-run failures; ~15 are RBAC-identity drift. **Chosen (owner): seed a fixed test-identity
+  roster (min churn) over rewriting every test.** The per-test `_isolate` seed is extended beyond
+  `admin-user`=wildcard to cover every DB-backed static subject the tests mint (`syerp-reader`→role[syerp:read],
+  writers→[…:write], etc.), each bound to a role granting **exactly** the permission its name/intent implies —
+  so positive named-subject tests pass with zero edits and negative tests that probe a *genuinely-limited*
+  seeded identity deny correctly by real DB role. Only the few negatives that mint the **real admin** (wildcard)
+  with a stripped claim are unsalvageable and get rewritten to a genuinely-limited real user. Also mechanical
+  (either way): conftest **forces** `BNS_ADMIN_EMAIL=admin@test.local` / `BNS_ADMIN_PASSWORD=testadminpass`
+  so the hard-coded login-cred tests pass; and ~7 domain/schema drifts (costing math, import-export,
+  create-user body) are fixed per-package. No blanket skips; `xfail(reason=…)` only for a real product bug,
+  logged in PLAN `## Noticed`. *Why roster over rewrite:* faster to green with the least churn on
+  never-run tests, and the seeded roles keep RBAC assertions meaningful (an identity that lacks a perm still
+  denies by real DB role). The roster lives in the shared `_isolate` fixture, so every package inherits it.
