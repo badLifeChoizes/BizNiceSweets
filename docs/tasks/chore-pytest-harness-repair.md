@@ -14,7 +14,7 @@ Branch: `chore-pytest-harness-repair` off `93de57d` (code-identical to `dd401d1`
 - [x] 0. Cut branch and open checklist
 - [x] 1. Fix the DSN probe (SC1)
 - [x] 2. Point the harness at a dedicated, migrated test database (SC6 + isolation foundation)
-- [ ] 3. NullPool test engine + resolve the app's session to it (SC2)
+- [x] 3. NullPool test engine + resolve the app's session to it (SC2)
 - [ ] 4. Per-test truncate+reseed isolation, incl. the `admin-user` identity (SC3 + SC4)
 - [ ] 5. Green the auth package
 - [ ] 6. Green the core package

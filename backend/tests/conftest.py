@@ -48,8 +48,23 @@ os.environ["POSTGRES_DB"] = os.environ.get("TEST_POSTGRES_DB", "biznice_test")
 
 import httpx
 import pytest
+from sqlalchemy import NullPool
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.config import settings
+from app.core.db import get_db
 from app.main import app
+
+# ---------------------------------------------------------------------------
+# NullPool test engine (SC2) — one async engine for the whole session.
+# NullPool opens and closes a fresh connection per checkout, so no pooled
+# connection stays bound to a since-closed event loop. That is the fix for the
+# "attached to a different loop" InterfaceError raised under pytest-asyncio's
+# function-scoped loops. settings.database_url already targets the test DB
+# because POSTGRES_DB was forced before Settings() was instantiated (above).
+# ---------------------------------------------------------------------------
+test_engine = create_async_engine(settings.database_url, poolclass=NullPool)
+TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 # ---------------------------------------------------------------------------
 # DB availability probe
@@ -148,6 +163,47 @@ def _provision_test_database() -> None:
         cwd=backend_root,
         check=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# Resolve the app's session machinery to the NullPool test engine (SC2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _wire_test_engine(_provision_test_database: None):
+    """
+    Bind every path that opens a DB session to the NullPool test engine.
+
+    Two distinct binding paths must both resolve to the test engine:
+      1. Direct-session fixtures do ``from app.core.db import AsyncSessionLocal``
+         (lazily, inside the fixture body) — monkeypatch app.core.db.engine and
+         .AsyncSessionLocal so those lookups return the test objects.
+      2. Route handlers and get_current_user acquire their session via the
+         get_db FastAPI dependency — override it on app.main.app so the client
+         fixture's requests run against a test-engine session.
+
+    Session-scoped + autouse so the wiring is in place for the whole run;
+    depends on _provision_test_database so the DB exists and is migrated first.
+    """
+    import app.core.db as core_db
+
+    core_db.engine = test_engine
+    core_db.AsyncSessionLocal = TestSessionLocal
+
+    async def _override_get_db():
+        async with TestSessionLocal() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    yield
+    app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture
+def test_sessionmaker() -> async_sessionmaker:
+    """Expose the NullPool test sessionmaker to fixtures needing a raw session."""
+    return TestSessionLocal
 
 
 # ---------------------------------------------------------------------------
