@@ -283,25 +283,25 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
-- **Step:** build — **v4.0 Phase 2a (pytest harness repair, NFR-5) IN FLIGHT** on branch
+- **Step:** build — **v4.0 Phase 2a (pytest harness repair, NFR-5) BUILD COMPLETE** on branch
   `chore-pytest-harness-repair` (cut off `93de57d`, code-identical to `zj/good-01-lint-gates-clean`
-  / `dd401d1`; Task-0 deviation to carry PLAN.md). **Wave A (Tasks 1–4) COMPLETE + independently
-  verified:** DSN probe fixed (`_check_db_available` libpq kwargs, `afa5798`); dedicated migrated
-  `biznice_test` DB provisioned (session fixture, head `0017`, app `biznice` untouched, `fe6a223`);
-  NullPool test engine wired to the app's `get_db`/`AsyncSessionLocal` (no InterfaceError/loop
-  errors, `6ad45c9`); per-test `TRUNCATE … RESTART IDENTITY CASCADE` + reseed + seeded
-  `User(id="admin-user")` w/ admin role (back-to-back reruns stable, 0 IntegrityError, `871998c`).
-  Container dev-deps (pytest/httpx/pytest-asyncio) installed into `compose_api_1` as a setup
-  prerequisite (ephemeral — bake a test image in Phase 3). **Wave B (Tasks 5–9) COMPLETE** — first
-  full run was 32 failed / 185 passed / **0 skipped**; all 32 triaged as TEST drift (no product code
-  changed) and greened per-package: auth **65 passed** (`592faac` roster + `7ebf821`), core **13**
-  (`3ce7394`, +ABOUTME), root confirmed (`52e7926`), plum **40** (`39d1ec0`), syerp **99** (`b12d711`).
-  **Owner decision D-P2a-5:** the never-run tests assumed claim-based tokens; shipped RBAC derives perms
-  from the DB user → chose a seeded test-identity roster (min churn) + forced `BNS_ADMIN_*` creds + per-package
-  domain-drift fixes (costing revision-id, import payload shape, reserved-TLD `@*.local`→`@test.example`,
-  GL COA seeded via a syerp-local fixture). **Now:** Wave C — Task 10 non-vacuity, Task 11 env-pointability
-  docs (SC6), Task 12 regression gate (cold boot + 23 `verify_*` + full-suite 0-skip green). Full-suite-on-one-DB
-  gate running. Checklist: `docs/tasks/chore-pytest-harness-repair.md`.
+  / `dd401d1`; Task-0 deviation to carry PLAN.md). **All 13 tasks (0–12) done, atomic commits, tree
+  clean** (only the owner's `.vscode/settings.json` stays unstaged). **Headline: the ~100 never-run
+  DB-backed tests now RUN — full suite 217 passed / 0 failed / 0 skipped on one shared DB, 167s.**
+  Wave A fixed the four D-P7-4 root causes at the harness layer: DSN probe→libpq kwargs (`afa5798`);
+  dedicated migrated `biznice_test` DB (head `0017`, app `biznice` untouched, `fe6a223`); NullPool test
+  engine wired to the app's `get_db`/`AsyncSessionLocal` — no InterfaceError (`6ad45c9`); per-test
+  `TRUNCATE … RESTART IDENTITY CASCADE` + reseed + seeded `User(id="admin-user")` (`871998c`). Wave B
+  greened all packages — first run 32 failed, ALL triaged as TEST drift (zero product-code changes):
+  auth 65 (`592faac`+`7ebf821`), core 13 (`3ce7394`), root (`52e7926`), plum 40 (`39d1ec0`), syerp 99
+  (`b12d711`). **Owner decision D-P2a-5** (the never-run tests assumed claim-based tokens; shipped RBAC
+  derives perms from the DB user): seeded a test-identity roster (min churn) + forced `BNS_ADMIN_*` creds
+  + per-package domain-drift fixes. Wave C: non-vacuity proven (mutate `create_partner.is_vendor` →
+  `test_create_vendor` RED → revert green, Task 10); env-pointability documented, no hard-coded host
+  (SC6, Task 11); **regression gate green — cold boot `BOOT_OK` + 23/23 `verify_*` exit 0 + 217/0/0
+  suite** (Task 12); ruff gate held (one auto-fixed I001). **No xfail/skip needed.** Container dev-deps
+  install is ephemeral (bake a test image → Phase 3). **Next action:** `/zj:verify 2a`.
+  Checklist: `docs/tasks/chore-pytest-harness-repair.md`.
 
 - **Step:** milestone — **v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** (`/zj:milestone`,
   2026-07-19). DoD audited goal-backward — whole money loop on one order end-to-end, all 3 clauses MET,
@@ -503,17 +503,21 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 - **Milestone:** **v3.0 Customer & logistics — CLOSED + tagged `v3.0`** 2026-07-19 (all phases verified +
   retro'd; DoD audited goal-backward, 2 gaps fixed at close; phases archived to `.zj/history/v3.0/`).
   **Next milestone = v4.0 Infra-debt + quality paydown (D-M3-3).** v2.0 + v1.0 closed + tagged.
-- **Branch:** v4.0 Phase 1 **DONE — verified + retro'd** on `chore-lint-gates-clean` (tip `dd401d1`,
-  tag `zj/good-01-lint-gates-clean`). Phase 2a plans off that tip onto a fresh
-  `chore-pytest-harness-repair` (D-P2a-3); unmerged v4.0 stack ships at milestone close. The merged
-  `feature-syerp-ar-invoicing` branch may be deleted.
+- **Branch:** v4.0 Phase 2a **BUILD COMPLETE** on `chore-pytest-harness-repair` (off `93de57d`,
+  code-identical to tag `zj/good-01-lint-gates-clean`/`dd401d1`). All 13 tasks committed, tree clean.
+  Unmerged v4.0 stack (Phase 1 + 2a) ships at milestone close. The merged `feature-syerp-ar-invoicing`
+  branch may be deleted.
 - **Last update:** 2026-07-21
-- **Next action:** **`/zj:build 2a`** — build v4.0 Phase 2a (NFR-5, pytest harness repair) from
-  `.zj/phases/02a-pytest-harness-repair/PLAN.md` (13 tasks). Cut `chore-pytest-harness-repair` off
-  `zj/good-01-lint-gates-clean` @ `dd401d1` (Task 0). Wave A fixes the four D-P7-4 root causes; Wave B
-  greens each existing package (expect + triage latent breakage — these tests have never run); Wave C
-  proves non-vacuity, env-pointability, and no regression (23/23 `verify_*` + cold boot + 0-skip suite).
-  Porting `verify_*` cruxes is **2b**, not here.
+- **Next action:** **`/zj:verify 2a`** — verify v4.0 Phase 2a goal-backward against the 6 SCs:
+  SC1 DSN probe connects (`afa5798`); SC2 no InterfaceError, one loop-safe NullPool engine shared by
+  direct-session fixtures AND the ASGI `client` (`6ad45c9`); SC3 token identities resolve (admin-user +
+  D-P2a-5 roster, `871998c`/`592faac`); SC4 back-to-back reruns, 0 IntegrityError (truncate-reset);
+  SC5 **217 passed / 0 failed / 0 skipped** + non-vacuity proven (Task 10); SC6 env-pointable, no
+  hard-coded host (Task 11). Regression: cold boot `BOOT_OK` + **23/23 `verify_*`** + ruff exit 0.
+  D-P2a-5 recorded (RBAC test-identity roster). **Watch at verify:** container dev-deps are ephemeral
+  (Phase-3 test-image bake); `_isolate` reseeds auth+roster only (GL tests self-seed COA); all 32
+  first-run failures were TEST drift (no product code touched) — confirm none masks a real bug.
+  Porting `verify_*` cruxes stays **2b**.
 
 ## Next action (detail)
 
