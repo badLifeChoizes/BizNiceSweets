@@ -31,7 +31,7 @@ Implements **NFR-5** (`.zj/SRD.md`; roadmap Phase 2, split 2a/2b per D-P2a-2). F
 
 ## Tasks
 
-### [ ] 0. Cut branch and open checklist
+### [x] 0. Cut branch and open checklist
 - **Files:** `docs/tasks/chore-pytest-harness-repair.md` (new)
 - **Do:** `git checkout -b chore-pytest-harness-repair zj/good-01-lint-gates-clean`. Create the checklist file mirroring this task list.
 - **Done when:** branch exists at `dd401d1`; checklist committed (`chore:`).
@@ -41,28 +41,28 @@ Implements **NFR-5** (`.zj/SRD.md`; roadmap Phase 2, split 2a/2b per D-P2a-2). F
 ---
 ### Wave A — repair the four root causes at the harness layer (NFR-5, SC1–SC4, SC6)
 
-### [ ] 1. Fix the DSN probe (SC1)
+### [x] 1. Fix the DSN probe (SC1)
 - **Files:** `backend/tests/conftest.py` (`_check_db_available`, lines ~44-64; add 2-line ABOUTME header while here)
 - **Do:** Replace the `psycopg2.connect(settings.database_url_sync, …)` call with libpq keyword args: `psycopg2.connect(host=settings.postgres_host, port=settings.postgres_port, dbname=settings.postgres_db, user=settings.postgres_user, password=settings.postgres_password.get_secret_value(), connect_timeout=2)`. Keep the `try/except → bool` shape. Add the ABOUTME 2-line header (Phase-1 `## Noticed` cleanup).
 - **Done when:** in-container, `db_available()` returns True and no DB-backed test is skipped for "no live database".
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -c "from tests.conftest import _check_db_available; print(_check_db_available())"` prints `True`. (Depends on Task 2's env forcing for the DB name, but the DSN shape is provable standalone: the old form raised `invalid dsn`, the new form connects.)
 - **Parallel-ok:** no (conftest is edited by Tasks 1-4)
 
-### [ ] 2. Point the harness at a dedicated, migrated test database (SC6 + isolation foundation)
+### [x] 2. Point the harness at a dedicated, migrated test database (SC6 + isolation foundation)
 - **Files:** `backend/tests/conftest.py` (env block ~24-33; new session-scoped setup fixture)
 - **Do:** BEFORE `import app.main`, **force** `os.environ["POSTGRES_DB"] = os.environ.get("TEST_POSTGRES_DB", "biznice_test")` (unconditional — container already exports `POSTGRES_DB=biznice`). Leave `POSTGRES_HOST`/`POSTGRES_PORT` to the environment (no hard-coding — SC6). Add a **sync, session-scoped, autouse** fixture that: (a) connects to the maintenance DB (`dbname="postgres"`) via psycopg2 keyword args and `CREATE DATABASE biznice_test` if absent; (b) runs `alembic upgrade head` against it as a subprocess (`.venv/bin/alembic upgrade head`, cwd `backend/`, inheriting the forced env so `alembic/env.py` targets `biznice_test`). Sync + session-scoped avoids any event-loop-scope conflict.
 - **Done when:** a fresh `biznice_test` exists with the full schema at head; the running app's `biznice` DB is untouched.
 - **Verify:** `podman exec compose_db_1 psql -U app -d biznice_test -c "\dt"` lists `users`, `plum_parts`, `alembic_version` (and confirms head via `select version_num from alembic_version`).
 - **Parallel-ok:** no
 
-### [ ] 3. NullPool test engine + resolve the app's session to it (SC2)
+### [x] 3. NullPool test engine + resolve the app's session to it (SC2)
 - **Files:** `backend/tests/conftest.py` (new engine + session-scoped autouse wiring fixture); reads `backend/app/core/db.py`
 - **Do:** Create one `create_async_engine(settings.database_url, poolclass=NullPool)` and an `async_sessionmaker(test_engine, expire_on_commit=False)`. In a session-scoped autouse fixture, monkeypatch `app.core.db.engine` and `app.core.db.AsyncSessionLocal` to the test objects (so the direct-session fixtures that do `from app.core.db import AsyncSessionLocal` bind to it) AND set `app.main.app.dependency_overrides[get_db]` to yield from the test sessionmaker (so the `client` fixture's routes/`get_current_user` use it). Expose the test sessionmaker for fixtures.
 - **Done when:** a DB-backed test using both `client` and `async_db_session` runs to completion with no `InterfaceError`/"attached to a different loop".
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -m pytest tests/syerp/test_partners.py -q` runs without any `InterfaceError` (assertion failures still allowed at this stage; loop errors are not).
 - **Parallel-ok:** no
 
-### [ ] 4. Per-test truncate+reseed isolation, incl. the `admin-user` identity (SC3 + SC4)
+### [x] 4. Per-test truncate+reseed isolation, incl. the `admin-user` identity (SC3 + SC4)
 - **Files:** `backend/tests/conftest.py` (new function-scoped autouse `_isolate` fixture); reads `app.modules.auth.seed`, `app.modules.auth.models`
 - **Do:** Add a **function-scoped autouse async** fixture that, before each test, on the test engine: (1) `TRUNCATE <all Base.metadata tables except alembic_version> RESTART IDENTITY CASCADE` in one statement; (2) `await seed_admin_user(session)` (roles/permissions + real admin); (3) insert `User(id="admin-user", email="admin-user@test.local", hashed_password=<any hash>, is_active=True)` and append the `admin` role, commit — so tokens minted with `subject="admin-user"` resolve and pass the wildcard RBAC check (D-P2a-4). Enumerate truncatable tables from `Base.metadata.sorted_tables`.
 - **Done when:** running the full suite twice back-to-back yields identical results with zero `uq_plum_part_number`/unique-constraint `IntegrityError`; a plum test that only mints an `admin-user` token (no `seeded_db`) authenticates (no 401).
@@ -140,6 +140,9 @@ Implements **NFR-5** (`.zj/SRD.md`; roadmap Phase 2, split 2a/2b per D-P2a-2). F
 - **pytest-asyncio loop-scope vs a session-scoped engine** — a session-scoped *async* fixture conflicts with function-scoped loops. *Early warning:* `InterfaceError`/"attached to a different loop" persists after Task 3. *Mitigation:* keep DB-create/migrate SYNC and session-scoped; keep the engine a plain (non-async) object; run TRUNCATE in the function loop; NullPool guarantees fresh per-loop connections.
 - **`CREATE DATABASE` / TRUNCATE privileges** for the `app` role on `biznice_test`. *Early warning:* Task 2 session fixture errors on create, or Task 4 truncate raises `permission denied`. *Mitigation:* create via the maintenance connection; document any required `GRANT`; the DB is owned by `app` in compose so this is expected to work.
 - **A latent fix reveals a needed schema change** — forbidden in 2a. *Early warning:* a test wants a column/constraint not at head. *Mitigation:* STOP and flag the owner (do not add an Alembic revision here).
+
+## Deviations
+- **Task 0 branch point:** plan says cut off `dd401d1`; cut off `93de57d` instead (the plan commit, `.zj/`-docs-only, code-identical to `dd401d1` / tag `zj/good-01-lint-gates-clean`) so PLAN.md travels onto the build branch. Same "bare tag drops the plan" precedent logged on phases 12a/12b/13.
 
 ## Noticed
 - Populate during Wave B: every test that ends up `xfail`/`skip` must be listed here with its reason and the follow-up owner (product-bug backlog item, or 2b). Bare deletion is not permitted.

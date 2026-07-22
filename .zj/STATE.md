@@ -283,6 +283,19 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
+- **Step:** build — **v4.0 Phase 2a (pytest harness repair, NFR-5) IN FLIGHT** on branch
+  `chore-pytest-harness-repair` (cut off `93de57d`, code-identical to `zj/good-01-lint-gates-clean`
+  / `dd401d1`; Task-0 deviation to carry PLAN.md). **Wave A (Tasks 1–4) COMPLETE + independently
+  verified:** DSN probe fixed (`_check_db_available` libpq kwargs, `afa5798`); dedicated migrated
+  `biznice_test` DB provisioned (session fixture, head `0017`, app `biznice` untouched, `fe6a223`);
+  NullPool test engine wired to the app's `get_db`/`AsyncSessionLocal` (no InterfaceError/loop
+  errors, `6ad45c9`); per-test `TRUNCATE … RESTART IDENTITY CASCADE` + reseed + seeded
+  `User(id="admin-user")` w/ admin role (back-to-back reruns stable, 0 IntegrityError, `871998c`).
+  Container dev-deps (pytest/httpx/pytest-asyncio) installed into `compose_api_1` as a setup
+  prerequisite (ephemeral — bake a test image in Phase 3). **Next:** Wave B (Tasks 5–9, green each
+  package, triage latent breakage) → Wave C (Tasks 10–12, non-vacuity + env-pointability +
+  regression). Checklist: `docs/tasks/chore-pytest-harness-repair.md`.
+
 - **Step:** milestone — **v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** (`/zj:milestone`,
   2026-07-19). DoD audited goal-backward — whole money loop on one order end-to-end, all 3 clauses MET,
   19/19 + all 23 `verify_*` + build + 131 Vitest; 2 audit gaps BOTH fixed at close (D-M3-1/2, `97b977b`,
