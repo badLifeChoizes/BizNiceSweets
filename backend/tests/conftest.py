@@ -207,6 +207,67 @@ def test_sessionmaker() -> async_sessionmaker:
 
 
 # ---------------------------------------------------------------------------
+# Per-test isolation: truncate + reseed the baseline before every test (SC3/SC4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+async def _isolate():
+    """
+    Give every test a clean, identically-seeded database.
+
+    Before each test, on the NullPool test engine:
+      1. TRUNCATE every Base.metadata table (except alembic_version) with
+         RESTART IDENTITY CASCADE in a single statement — no cross-test row
+         bleed, serial sequences reset, so back-to-back reruns are stable and
+         collision-free (SC3).
+      2. seed_admin_user() — rebuilds roles/permissions and the real admin
+         (BNS_ADMIN_EMAIL) so login-based flows work.
+      3. Insert a fixed-id "admin-user" User carrying the admin role, so tokens
+         minted with subject="admin-user" (used across the syerp/plum tests)
+         resolve to an active admin and pass the wildcard RBAC check
+         (SC4 / D-P2a-4).
+    """
+    from sqlalchemy import select, text
+
+    from app.core.base import Base
+    from app.modules.auth.models import Role, User
+    from app.modules.auth.seed import seed_admin_user
+    from app.modules.auth.service import hash_password
+
+    truncatable = [
+        f'"{table.name}"'
+        for table in Base.metadata.sorted_tables
+        if table.name != "alembic_version"
+    ]
+
+    async with TestSessionLocal() as session:
+        await session.execute(
+            text(f"TRUNCATE {', '.join(truncatable)} RESTART IDENTITY CASCADE")
+        )
+        await session.commit()
+
+        # Baseline: roles/permissions + the real admin (commits internally).
+        await seed_admin_user(session)
+
+        # Fixed-id admin identity for token subjects used across the tests.
+        admin_role = (
+            await session.execute(select(Role).where(Role.name == "admin"))
+        ).scalars().first()
+        admin_user = User(
+            id="admin-user",
+            email="admin-user@test.local",
+            hashed_password=hash_password("admin-user-test-pw"),
+            is_active=True,
+        )
+        admin_user.roles.append(admin_role)
+        session.add(admin_user)
+        await session.commit()
+
+    yield
+
+
+# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
