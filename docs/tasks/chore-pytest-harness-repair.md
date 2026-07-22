@@ -20,7 +20,7 @@ Branch: `chore-pytest-harness-repair` off `93de57d` (code-identical to `dd401d1`
 - [x] 6. Green the core package
 - [ ] 7. Green the plum package
 - [ ] 8. Green the syerp DB-backed tests
-- [ ] 9. Green the root tests
+- [x] 9. Green the root tests
 - [ ] 10. Prove non-vacuity (SC5)
 - [ ] 11. Document + prove env-pointability (SC6)
 - [ ] 12. Regression keepers: boot + verify_* + full-suite zero-skip green (SC5 + keepers)
