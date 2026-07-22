@@ -1,5 +1,25 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-21 (**v4.0 Phase 2a PLANNED — `/zj:plan 2`.** Phase 2 (NFR-5, pytest harness repair)
+Updated: 2026-07-22 (**v4.0 Phase 2a VERIFIED — `/zj:verify 2a`. Verdict PASS**, tag
+`zj/good-02a-pytest-harness-repair`. Verifier + reviewer ran in parallel, both **empirically** (not
+trusting the build report): all 6 SCs PASS — full suite **217 passed / 0 skipped twice back-to-back**
+(SC4/SC5), `git diff zj/good-01..HEAD -- backend/app/` **empty** (the "zero product-code changes" claim
+is TRUE — RBAC test rewrites are genuine strengthenings, not force-green), non-vacuity **re-driven**
+(`partners.py is_vendor=False` → `test_create_vendor` RED → revert GREEN, tree clean), 23/23 `verify_*`
+exit 0, cold boot `boot-ok`, `biznice_test` migrated head 0017 with live `biznice` intact, no hard-coded
+host. **Fix loop closed 1 verifier major + 2 minors + 2 reviewer majors** (commit `a2bb5a6`, TEST-ONLY):
+(1) provisioning shelled out to a bare `python` (absent on standard Debian/CI hosts → `FileNotFoundError`
+aborts the session, defeating SC6) → `sys.executable`; (2) **owner decision — DB is now a HARD
+REQUIREMENT**: no-DB runs `pytest.exit` loud instead of silently skipping; `skip_if_no_db` retired to a
+documented no-op alias (avoids a 28-file param-strip); docstrings de-staled; (3) **new
+`tests/test_harness_selfcheck.py`** asserts `db_available() is True` so a re-introduced DSN break fails
+loud not skips — pins the phase's own zero-silent-skip invariant (verifier's "central deliverable
+unprotected" major); (4) SRD NFR-5 → `partial (2a done/2b pending)` stamped `a2bb5a6`, MAP.md test row
+de-staled. **Re-verified after fix: full suite 219 passed / 0 skipped** (217 + 2 self-check), ruff exit
+0, cold boot ok. SRD NFR-5 stamped; ROADMAP Phase 2a → `[done — verified]`. **Next action:** `/zj:retro
+2a` (bank the fix-loop learnings — the silent-skip-invariant-needs-its-own-test keeper + the
+DB-hard-requirement decision), or `/zj:plan 2b` (port the `verify_*` cruxes). 2b porting stays deferred.)
+
+Prior: 2026-07-21 (**v4.0 Phase 2a PLANNED — `/zj:plan 2`.** Phase 2 (NFR-5, pytest harness repair)
 **split 2a/2b** at plan (owner, D-P2a-2 — mirrors 9a/b/c & 11a/b). **This plan = 2a only:** repair the
 harness so the ~100 already-written-but-silently-skipped auth/plum/syerp/core DB-backed tests RUN
 0-silent-skip green, fixing the four D-P7-4 root causes. **2b** (separate later phase) ports the
@@ -283,6 +303,12 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
+- **Step:** verify — **v4.0 Phase 2a (pytest harness repair, NFR-5) VERIFIED — Verdict PASS**, tag
+  `zj/good-02a-pytest-harness-repair`. All 6 SCs pass empirically; fix loop closed 1 major + 2 minors +
+  2 reviewer majors (commit `a2bb5a6`, test-only — DB now a hard requirement, `sys.executable`,
+  `test_harness_selfcheck.py` self-check); re-verified full suite **219 passed / 0 skipped**, 23/23
+  `verify_*`, cold boot ok. **Next action:** `/zj:retro 2a` or `/zj:plan 2b`. (Prior build detail below.)
+
 - **Step:** build — **v4.0 Phase 2a (pytest harness repair, NFR-5) BUILD COMPLETE** on branch
   `chore-pytest-harness-repair` (cut off `93de57d`, code-identical to `zj/good-01-lint-gates-clean`
   / `dd401d1`; Task-0 deviation to carry PLAN.md). **All 13 tasks (0–12) done, atomic commits, tree
@@ -507,8 +533,10 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
   code-identical to tag `zj/good-01-lint-gates-clean`/`dd401d1`). All 13 tasks committed, tree clean.
   Unmerged v4.0 stack (Phase 1 + 2a) ships at milestone close. The merged `feature-syerp-ar-invoicing`
   branch may be deleted.
-- **Last update:** 2026-07-21
-- **Next action:** **`/zj:verify 2a`** — verify v4.0 Phase 2a goal-backward against the 6 SCs:
+- **Last update:** 2026-07-22
+- **Next action:** **`/zj:retro 2a`** (bank the fix-loop learnings) or **`/zj:plan 2b`** (port the
+  `verify_*` cruxes). Phase 2a is **verified — Verdict PASS**, tag `zj/good-02a-pytest-harness-repair`.
+  (Historical verify target, now satisfied:) verify v4.0 Phase 2a goal-backward against the 6 SCs:
   SC1 DSN probe connects (`afa5798`); SC2 no InterfaceError, one loop-safe NullPool engine shared by
   direct-session fixtures AND the ASGI `client` (`6ad45c9`); SC3 token identities resolve (admin-user +
   D-P2a-5 roster, `871998c`/`592faac`); SC4 back-to-back reruns, 0 IntegrityError (truncate-reset);

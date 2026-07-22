@@ -67,7 +67,7 @@ All verified against config files:
 | Full dev stack (db+api+Vite, containers only) | `./scripts/uat.ps1` (add `-Fresh` to reset DB, `-Down` to stop) | `scripts/uat.ps1:44-158` — requires `pwsh` on Linux |
 | Prod stack | `podman-compose -f compose/compose.yml up -d` (needs `.env` from `.env.example`) | `compose/compose.yml:3-5` |
 | Dev stack (manual) | `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up` | `scripts/uat.ps1:58` |
-| Backend tests | `pytest` from `backend/` (testpaths=tests, asyncio auto) | `backend/pyproject.toml:1-3` |
+| Backend tests | `pytest` from `backend/` (testpaths=tests, asyncio auto). **DB-backed (v4.0 Phase 2a, NFR-5):** the harness provisions a dedicated migrated **`biznice_test`** DB (never the live `biznice`) and requires a live Postgres — no silent-skip mode. In-container: `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest -q'`. Localhost/CI: set `POSTGRES_HOST/POSTGRES_PORT/POSTGRES_PASSWORD/JWT_SECRET/BNS_ADMIN_PASSWORD` (+ optional `TEST_POSTGRES_DB`). | `backend/pyproject.toml:1-3`, `backend/tests/conftest.py:16-33` |
 | Backend lint | `ruff check .` from `backend/` (E,F,I,UP; line-length 100) | `backend/pyproject.toml:5-15` |
 | Migrations | `alembic upgrade head` from `backend/` (auto-run by container entrypoint) | `backend/alembic.ini`, `backend/entrypoint.sh:23` |
 | Frontend dev | `npm run dev` from `frontend/` | `frontend/package.json:7` |

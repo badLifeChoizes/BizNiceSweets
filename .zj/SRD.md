@@ -704,7 +704,8 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Source:** BACKLOG p1 (no CI anywhere — no `.github/`); D-M3-3. The `SyerpPartner` 500 shipped
   through four plans precisely because these checks never ran automatically.
 
-## NFR-5: Runnable integration coverage — pytest harness repair  [traces: PRD-12, PRD-7, PRD-8]  **Status: planned**
+## NFR-5: Runnable integration coverage — pytest harness repair  [traces: PRD-12, PRD-7, PRD-8]  **Status: partial (2a done — harness repaired, ~100 DB-backed tests run 0-silent-skip green; 2b pending — verify_* crux assertions not yet ported)**
+- **Verified (2a portion):** a2bb5a6 (Phase 02a verify, 2026-07-22 — `/zj:verify 2a`: all 6 SCs PASS empirically; full suite 219 passed / 0 skipped twice back-to-back, `git diff -- backend/app/` empty (zero product-code changes), non-vacuity re-driven, 23/23 verify_* exit 0, cold boot ok; tag `zj/good-02a-pytest-harness-repair`. The four D-P7-4 root causes (DSN, event loop, admin-user seed, isolation) are fixed. **2b remains:** porting the verify_* crux assertions into the suite + dropping the "script-only" caveats on the SYERP/MOUSSE/CRUMB/GELATO SRD rows.)
 - **Statement:** The backend `pytest` suite shall execute its DB-backed tests against a live
   PostgreSQL database with **zero silent skips**, and the crux behaviors currently proven only by
   standalone `backend/scripts/verify_*.py` shall be covered by tests that run inside the ordinary
