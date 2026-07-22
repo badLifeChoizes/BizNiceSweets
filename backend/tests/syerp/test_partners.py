@@ -191,8 +191,11 @@ async def test_create_requires_syerp_write(
     """Token with only syerp:read (no syerp:write) → 403 on partner create."""
     from app.modules.auth.service import create_access_token
 
+    # The roster's syerp-reader holds ONLY syerp:read (lacks syerp:write), so a
+    # token minted for it hits a genuine 403 on the write-gated create endpoint.
+    # Shipped RBAC authorizes from the DB user's roles, not the JWT perms claim.
     read_only_token = create_access_token(
-        subject="readonly-user-id", permissions=["syerp:read"]
+        subject="syerp-reader", permissions=["syerp:read"]
     )
 
     response = await client.post(

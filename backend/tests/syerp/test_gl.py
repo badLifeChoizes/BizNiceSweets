@@ -21,6 +21,7 @@ import httpx
 
 async def test_gl_accounts_seeded(
     client: httpx.AsyncClient,
+    seeded_gl_accounts: None,
     skip_if_no_db: None,
 ) -> None:
     """
@@ -59,13 +60,16 @@ async def test_gl_accounts_seeded(
 
 async def test_gl_seed_idempotent(
     client: httpx.AsyncClient,
+    seeded_gl_accounts: None,
     skip_if_no_db: None,
 ) -> None:
     """
     Running seed_gl_accounts() twice does not duplicate GL account rows.
 
     T-04-02: select-before-insert idempotency — re-running seed on every
-    podman-compose up must leave the CoA count unchanged.
+    podman-compose up must leave the CoA count unchanged. The seeded_gl_accounts
+    fixture performs the first seed; this test re-runs it and asserts the count
+    is unchanged.
     """
     from sqlalchemy import func, select
 
@@ -105,15 +109,23 @@ async def test_gl_requires_syerp_read(
     """
     from app.modules.auth.service import create_access_token
 
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
+
     # No token → 401
     no_token_resp = await client.get("/api/v1/syerp/gl/accounts")
     assert no_token_resp.status_code == 401, (
         f"Expected 401 with no token, got {no_token_resp.status_code}"
     )
 
-    # Token with unrelated permission only → 403
+    # A genuinely-limited real user (roleless → holds no permissions at all) → 403.
+    # Shipped RBAC authorizes from the DB user's roles, not the JWT perms claim,
+    # so the subject must exist as a real user that lacks syerp:read.
+    admin_token = await admin_login_token(client)
+    limited_user = await create_regular_user(
+        client, admin_token, "limited@test.example", "limited-pw"
+    )
     wrong_perm_token = create_access_token(
-        subject="limited-user", permissions=["plum:read"]
+        subject=limited_user["id"], permissions=["plum:read"]
     )
     forbidden_resp = await client.get(
         "/api/v1/syerp/gl/accounts",
