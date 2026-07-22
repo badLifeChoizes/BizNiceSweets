@@ -29,8 +29,13 @@ os.environ.setdefault("POSTGRES_PASSWORD", "testpassword")
 # jwt_secret → pydantic-settings env var JWT_SECRET
 # bns_admin_password → pydantic-settings env var BNS_ADMIN_PASSWORD
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-at-least-32-chars-long")
-os.environ.setdefault("BNS_ADMIN_EMAIL", "admin@test.local")
-os.environ.setdefault("BNS_ADMIN_PASSWORD", "testadminpass")
+# FORCE (not setdefault) the admin bootstrap creds: the container exports the
+# live app's BNS_ADMIN_* values, so a setdefault would leave seed_admin_user
+# creating an identity the hard-coded login/refresh tests can't authenticate as
+# (they post admin@test.local / testadminpass). Override unconditionally BEFORE
+# app.main → config.py instantiates Settings() (D-P2a-5, part 1).
+os.environ["BNS_ADMIN_EMAIL"] = "admin@test.local"
+os.environ["BNS_ADMIN_PASSWORD"] = "testadminpass"
 # DEBUG=true so the dev/test-only /_rbac_probe route is reachable in tests
 # (it 404s in production when debug is false — CR-02 guard).
 os.environ.setdefault("DEBUG", "true")
@@ -231,7 +236,7 @@ async def _isolate():
     from sqlalchemy import select, text
 
     from app.core.base import Base
-    from app.modules.auth.models import Role, User
+    from app.modules.auth.models import Permission, Role, User
     from app.modules.auth.seed import seed_admin_user
     from app.modules.auth.service import hash_password
 
@@ -262,6 +267,56 @@ async def _isolate():
         )
         admin_user.roles.append(admin_role)
         session.add(admin_user)
+
+        # ------------------------------------------------------------------
+        # Fixed RBAC identity roster (D-P2a-5).
+        #
+        # DB-backed tests mint tokens for a handful of static subjects that are
+        # NOT the wildcard admin. The shipped RBAC dependency ignores the JWT
+        # `perms` claim and authorizes purely from the subject's DB roles, so
+        # each of those subjects must exist as a real, limited User for negative
+        # tests to get a genuine 403 (and positive read tests a genuine 200).
+        #
+        # Each roster identity is bound to a role granting EXACTLY the single
+        # permission its name/intent implies and NOTHING more. Permission rows
+        # are reused from seed_admin_user; roster roles are created once and
+        # shared by identities needing the same grant. The whole block is
+        # idempotent under the per-test truncate+reseed (it runs before every
+        # test against a freshly-emptied DB).
+        #   syerp-reader    → syerp:read  (tests/syerp/test_gl.py)
+        #   regular-user-id → syerp:read  (tests/auth/test_user_admin.py — a
+        #                     non-admin that has a business perm but lacks
+        #                     users:manage, so the admin gates return 403)
+        roster: list[tuple[str, str]] = [
+            ("syerp-reader", "syerp:read"),
+            ("regular-user-id", "syerp:read"),
+        ]
+        perms_by_code = {
+            perm.code: perm
+            for perm in (await session.execute(select(Permission))).scalars().all()
+        }
+        roster_roles: dict[str, Role] = {}
+        for subject, code in roster:
+            role = roster_roles.get(code)
+            if role is None:
+                role_name = f"roster-{code.replace(':', '-')}"  # e.g. roster-syerp-read
+                role = Role(
+                    name=role_name,
+                    description=f"Test roster role granting exactly {code}",
+                )
+                role.permissions.append(perms_by_code[code])
+                session.add(role)
+                await session.flush()
+                roster_roles[code] = role
+            roster_user = User(
+                id=subject,
+                email=f"{subject}@roster.test.local",
+                hashed_password=hash_password(f"{subject}-test-pw"),
+                is_active=True,
+            )
+            roster_user.roles.append(role)
+            session.add(roster_user)
+
         await session.commit()
 
     yield
