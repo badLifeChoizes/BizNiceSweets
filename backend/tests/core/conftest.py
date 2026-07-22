@@ -1,3 +1,5 @@
+# ABOUTME: Core-package pytest fixtures — seeded_core_db runs the modules + settings seeds.
+# ABOUTME: Builds on the root conftest's DB provisioning and per-test truncate/reseed isolation.
 """
 Shared test helpers for core (modules + settings) integration tests.
 
