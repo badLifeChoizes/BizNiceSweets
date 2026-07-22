@@ -16,7 +16,7 @@ Branch: `chore-pytest-harness-repair` off `93de57d` (code-identical to `dd401d1`
 - [x] 2. Point the harness at a dedicated, migrated test database (SC6 + isolation foundation)
 - [x] 3. NullPool test engine + resolve the app's session to it (SC2)
 - [x] 4. Per-test truncate+reseed isolation, incl. the `admin-user` identity (SC3 + SC4)
-- [ ] 5. Green the auth package
+- [x] 5. Green the auth package
 - [ ] 6. Green the core package
 - [ ] 7. Green the plum package
 - [ ] 8. Green the syerp DB-backed tests

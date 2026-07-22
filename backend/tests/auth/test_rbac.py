@@ -94,33 +94,23 @@ async def test_gated_endpoint_denies_token_without_permission(
     skip_if_no_db: None,
 ) -> None:
     """
-    Token with syerp:read (no users:manage) is denied on GET /auth/users → 403.
+    A real non-admin user (no users:manage) is denied GET /auth/users → 403.
 
-    Requires DB: get_current_user looks up the user by id to validate is_active.
-    Uses the seeded admin user id via login, then tests with a reduced-permission token.
+    Shipped RBAC authorizes from the subject's DB roles, ignoring the JWT
+    `perms` claim, so this must mint a token for a genuinely limited user — NOT
+    the wildcard admin, who would be granted regardless of the claim. A user
+    provisioned with no roles lacks users:manage, so the gate returns a real 403.
     """
-    from sqlalchemy import select
-
-    from app.core.db import AsyncSessionLocal
-    from app.modules.auth.models import User
     from app.modules.auth.service import create_access_token
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
 
-    # Get the real admin user's id from DB so the token resolves
-    async with AsyncSessionLocal() as session:
-        from app.core.config import settings
-        result = await session.execute(
-            select(User).where(User.email == settings.bns_admin_email)
-        )
-        admin = result.scalars().first()
-
-    # Mint a token for the real admin user but strip the admin permission
-    # so require_permission("users:manage") denies them
-    if admin is None:
-        import pytest
-        pytest.skip("Admin user not seeded in DB")
-
-    # Create a user without users:manage for this test
-    token = create_access_token(subject=str(admin.id), permissions=["syerp:read"])
+    admin_token = await admin_login_token(client)
+    user = await create_regular_user(
+        client, admin_token, "gateddeny@test.example", "pass123"
+    )
+    # Even a token carrying syerp:read is denied — the claim is ignored and the
+    # user has no roles granting users:manage.
+    token = create_access_token(subject=user["id"], permissions=["syerp:read"])
     response = await client.get(
         "/api/v1/auth/users",
         headers={"Authorization": f"Bearer {token}"},
@@ -133,28 +123,19 @@ async def test_gated_endpoint_denies_empty_permissions(
     skip_if_no_db: None,
 ) -> None:
     """
-    Token with empty permissions is denied on GET /auth/users → 403.
+    A real non-admin user with an empty-perms token is denied → 403.
 
-    Requires DB: get_current_user validates the user exists in DB.
+    Authorization derives from the user's DB roles, not the token claim; the
+    provisioned user has no roles, so require_permission("users:manage") → 403.
     """
-    from sqlalchemy import select
-
-    from app.core.db import AsyncSessionLocal
-    from app.modules.auth.models import User
     from app.modules.auth.service import create_access_token
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
 
-    async with AsyncSessionLocal() as session:
-        from app.core.config import settings
-        result = await session.execute(
-            select(User).where(User.email == settings.bns_admin_email)
-        )
-        admin = result.scalars().first()
-
-    if admin is None:
-        import pytest
-        pytest.skip("Admin user not seeded in DB")
-
-    token = create_access_token(subject=str(admin.id), permissions=[])
+    admin_token = await admin_login_token(client)
+    user = await create_regular_user(
+        client, admin_token, "gateddenyempty@test.example", "pass123"
+    )
+    token = create_access_token(subject=user["id"], permissions=[])
     response = await client.get(
         "/api/v1/auth/users",
         headers={"Authorization": f"Bearer {token}"},
@@ -203,7 +184,7 @@ async def test_rbac_probe_denies_without_syerp_read(
     admin_token = await admin_login_token(client)
     # Create a regular user (no roles assigned by default → no permissions)
     user = await create_regular_user(
-        client, admin_token, "rbacprobe@test.local", "pass123"
+        client, admin_token, "rbacprobe@test.example", "pass123"
     )
     # Mint a token with only plum:read for this real user_id so DB lookup succeeds
     token = create_access_token(subject=user["id"], permissions=["plum:read"])
@@ -224,7 +205,7 @@ async def test_rbac_probe_denies_no_permissions(
 
     admin_token = await admin_login_token(client)
     user = await create_regular_user(
-        client, admin_token, "rbacnoperms@test.local", "pass123"
+        client, admin_token, "rbacnoperms@test.example", "pass123"
     )
     token = create_access_token(subject=user["id"], permissions=[])
     response = await client.get(
