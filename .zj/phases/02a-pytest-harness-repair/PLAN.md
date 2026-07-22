@@ -74,35 +74,35 @@ Implements **NFR-5** (`.zj/SRD.md`; roadmap Phase 2, split 2a/2b per D-P2a-2). F
 ### Wave B — execute the newly-running suite and make each package green (NFR-5, SC5)
 > These tests have LITERALLY never run; expect latent breakage (drifted assertions, stale API shapes, wrong status codes, changed schemas). For each package: run it, triage failures into (a) test drift → fix the test, (b) real product bug → fix minimally or, if it exceeds harness scope, record as `xfail(reason=…)` in `## Noticed`, (c) genuinely obsolete → `skip(reason=…)` with justification. **No bare deletes, no blanket skips.** Each package is one task; split further only if a package's fix set exceeds ~1h. Wave B tasks are independent of each other once Wave A lands.
 
-### [ ] 5. Green the auth package
+### [x] 5. Green the auth package
 - **Files:** `backend/tests/auth/test_login.py`, `test_rbac.py`, `test_refresh.py`, `test_refresh_rotation.py`, `test_seed_admin.py`, `test_user_admin.py` (pure `test_hashing.py`/`test_service_unit.py` already pass — re-confirm)
 - **Do:** Run the package; fix/triage per the Wave-B policy. Watch for `admin_login_token` depending on the real seeded admin (present via Task 4) and refresh-token family/rotation rows surviving truncate correctly.
 - **Done when:** `pytest tests/auth -q` is green, 0 skipped.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -m pytest tests/auth -q`
 - **Parallel-ok:** yes
 
-### [ ] 6. Green the core package
+### [x] 6. Green the core package
 - **Files:** `backend/tests/core/test_modules.py`, `test_settings.py`, `backend/tests/core/conftest.py` (add 2-line ABOUTME header — Phase-1 `## Noticed` cleanup)
 - **Do:** Run/triage; `seeded_core_db` runs three seeds — confirm order and idempotency under truncate-reset.
 - **Done when:** `pytest tests/core -q` green, 0 skipped; `core/conftest.py` carries the ABOUTME header.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -m pytest tests/core -q`
 - **Parallel-ok:** yes
 
-### [ ] 7. Green the plum package
+### [x] 7. Green the plum package
 - **Files:** `backend/tests/plum/test_avl.py`, `test_bom.py`, `test_costing.py`, `test_import_export.py`, `test_parts.py`, `test_revisions.py` (pure `test_part_number.py` already passes)
 - **Do:** Run/triage per policy. `test_bom` (341L) and `test_costing` (310L) are heavy DB and the original D-P7-4 evidence set — expect the most drift here. AVL rows FK to SYERP partners; ensure their setup seeds a partner.
 - **Done when:** `pytest tests/plum -q` green, 0 skipped.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -m pytest tests/plum -q`
 - **Parallel-ok:** yes
 
-### [ ] 8. Green the syerp DB-backed tests
+### [x] 8. Green the syerp DB-backed tests
 - **Files:** `backend/tests/syerp/test_gl.py`, `test_inventory.py`, `test_partners.py` (pure `test_ap.py`/`test_gl_journal.py`/`test_purchasing.py` already pass — re-confirm they still do)
 - **Do:** Run/triage per policy. `test_inventory` (459L, 29 tests) is the largest DB set. Confirm the three pure files are unaffected by the harness changes.
 - **Done when:** `pytest tests/syerp -q` green, 0 skipped.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python -m pytest tests/syerp -q`
 - **Parallel-ok:** yes
 
-### [ ] 9. Green the root tests
+### [x] 9. Green the root tests
 - **Files:** `backend/tests/test_health.py`, `backend/tests/test_migrations.py`
 - **Do:** Run/triage. `test_migrations` likely asserts head/round-trip against the DB — confirm it targets `biznice_test`.
 - **Done when:** `pytest tests/test_health.py tests/test_migrations.py -q` green, 0 skipped.

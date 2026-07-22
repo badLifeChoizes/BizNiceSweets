@@ -292,9 +292,16 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
   errors, `6ad45c9`); per-test `TRUNCATE … RESTART IDENTITY CASCADE` + reseed + seeded
   `User(id="admin-user")` w/ admin role (back-to-back reruns stable, 0 IntegrityError, `871998c`).
   Container dev-deps (pytest/httpx/pytest-asyncio) installed into `compose_api_1` as a setup
-  prerequisite (ephemeral — bake a test image in Phase 3). **Next:** Wave B (Tasks 5–9, green each
-  package, triage latent breakage) → Wave C (Tasks 10–12, non-vacuity + env-pointability +
-  regression). Checklist: `docs/tasks/chore-pytest-harness-repair.md`.
+  prerequisite (ephemeral — bake a test image in Phase 3). **Wave B (Tasks 5–9) COMPLETE** — first
+  full run was 32 failed / 185 passed / **0 skipped**; all 32 triaged as TEST drift (no product code
+  changed) and greened per-package: auth **65 passed** (`592faac` roster + `7ebf821`), core **13**
+  (`3ce7394`, +ABOUTME), root confirmed (`52e7926`), plum **40** (`39d1ec0`), syerp **99** (`b12d711`).
+  **Owner decision D-P2a-5:** the never-run tests assumed claim-based tokens; shipped RBAC derives perms
+  from the DB user → chose a seeded test-identity roster (min churn) + forced `BNS_ADMIN_*` creds + per-package
+  domain-drift fixes (costing revision-id, import payload shape, reserved-TLD `@*.local`→`@test.example`,
+  GL COA seeded via a syerp-local fixture). **Now:** Wave C — Task 10 non-vacuity, Task 11 env-pointability
+  docs (SC6), Task 12 regression gate (cold boot + 23 `verify_*` + full-suite 0-skip green). Full-suite-on-one-DB
+  gate running. Checklist: `docs/tasks/chore-pytest-harness-repair.md`.
 
 - **Step:** milestone — **v3.0 "Customer & logistics" CLOSED + tagged `v3.0`** (`/zj:milestone`,
   2026-07-19). DoD audited goal-backward — whole money loop on one order end-to-end, all 3 clauses MET,
