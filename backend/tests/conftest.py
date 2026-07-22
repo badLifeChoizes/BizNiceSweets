@@ -10,8 +10,12 @@ Key design decisions:
   before the first `import app.*`.
 - The async test client uses httpx.ASGITransport pointing at the FastAPI
   app — no real HTTP server is started.
-- db_available() pings the database via libpq keyword args synchronously; if
-  unreachable, tests that require a live DB are skipped with a clear message.
+- A live PostgreSQL database is a HARD REQUIREMENT (D-P2a, verify fix loop):
+  db_available() pings the database via libpq keyword args synchronously, and if
+  it is unreachable the session-scoped provisioning fixture FAILS LOUD (pytest
+  aborts the whole run) rather than silently skipping DB-backed tests. Silent
+  skips are the exact D-P7-4 defect this phase repaired; there is no no-DB run
+  mode.
 
 Run modes (SC6 — env-pointable, no hard-coded host):
   The harness reads POSTGRES_HOST / POSTGRES_PORT / POSTGRES_PASSWORD from the
@@ -35,6 +39,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 
 # ---------------------------------------------------------------------------
 # Inject a test password BEFORE any app module is imported.
@@ -147,17 +152,34 @@ def _provision_test_database() -> None:
     asyncio_mode="auto".
 
     Steps:
-      (a) Connect to the maintenance DB ("postgres") and CREATE DATABASE the
+      (a) A live DB is a hard requirement (no silent-skip mode): if db_available()
+          is False, abort the whole session loudly with a clear message instead
+          of letting a raw connection traceback (or, worse, a silent skip)
+          obscure the cause.
+      (b) Connect to the maintenance DB ("postgres") and CREATE DATABASE the
           test DB if it does not already exist. autocommit is REQUIRED —
           CREATE DATABASE cannot run inside a transaction block.
-      (b) Run `alembic upgrade head` as a subprocess with cwd at the backend
-          root, inheriting the forced POSTGRES_DB so alembic/env.py targets
-          the test DB (SC6). check=True so a migration failure fails the run
-          loudly instead of leaving an unmigrated DB.
+      (c) Run `alembic upgrade head` as a subprocess (via sys.executable so it
+          uses the SAME interpreter running pytest — a bare "python" is absent
+          on standard Debian/Ubuntu/CI hosts where pytest is launched via
+          .venv/bin/python) with cwd at the backend root, inheriting the forced
+          POSTGRES_DB so alembic/env.py targets the test DB (SC6). check=True so
+          a migration failure fails the run loudly instead of leaving an
+          unmigrated DB.
     """
     import psycopg2
 
     from app.core.config import settings
+
+    if not db_available():
+        pytest.exit(
+            "A live PostgreSQL database is required but none is reachable at "
+            f"{settings.postgres_host}:{settings.postgres_port} "
+            f"(db={settings.postgres_db}, user={settings.postgres_user}). "
+            "The backend test suite has no no-DB run mode — set POSTGRES_HOST/"
+            "POSTGRES_PORT/POSTGRES_PASSWORD to a reachable Postgres and rerun.",
+            returncode=1,
+        )
 
     conn = psycopg2.connect(
         host=settings.postgres_host,
@@ -182,7 +204,7 @@ def _provision_test_database() -> None:
     # Backend root (holds alembic.ini) — conftest.py lives at <backend>/tests/.
     backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     subprocess.run(
-        ["python", "-m", "alembic", "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=backend_root,
         check=True,
     )
@@ -350,8 +372,11 @@ async def client() -> httpx.AsyncClient:
     """
     Async httpx test client backed by the FastAPI ASGI app.
 
-    No real HTTP server is started. Works without a live database.
-    Liveness tests use this fixture. Readiness tests skip when no DB.
+    No real HTTP server is started; requests are dispatched in-process through
+    ASGITransport. The app's get_db dependency is overridden onto the NullPool
+    test engine (see _wire_test_engine), and a live DB is a hard requirement for
+    the whole session, so both liveness and readiness routes exercise the real
+    test database.
     """
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
@@ -361,11 +386,16 @@ async def client() -> httpx.AsyncClient:
 @pytest.fixture
 def skip_if_no_db() -> None:
     """
-    Skip the test that uses this fixture when no DB is reachable.
+    Retired no-op — retained only as a legacy fixture alias.
 
-    Usage:
-        def test_something(skip_if_no_db):
-            ...  # only runs when DB is available
+    A live DB is now a HARD REQUIREMENT: the session-scoped autouse
+    `_provision_test_database` fixture aborts the whole run (pytest.exit) if no
+    database is reachable, so by the time any test body runs the DB is
+    guaranteed present. This fixture therefore no longer skips anything — its
+    former silent-skip behavior was the D-P7-4 defect this phase repaired.
+
+    It stays as a harmless dependency so the ~28 existing call sites that list
+    `skip_if_no_db` in their signatures keep resolving without a mechanical
+    parameter-strip sweep; new tests need not depend on it.
     """
-    if not db_available():
-        pytest.skip("No live database available — skipping DB-dependent test")
+    return None
