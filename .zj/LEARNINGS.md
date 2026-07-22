@@ -3,6 +3,57 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 02a — Pytest harness repair (v4.0, NFR-5, verified 2026-07-22)
+
+Fixed the four D-P7-4 root causes (psycopg2 DSN, event-loop-bound engine, missing `admin-user`
+DB identity, no per-test isolation) so the ~100 DB-backed tests that had **never run** across 13
+phases now execute 0-silent-skip green. `git diff -- backend/app/` empty — a pure test-harness
+phase. Five keepers, all about the difference between "works now" and "stays working."
+
+### What worked (repeat)
+
+- **Pre-decide the mechanism, not just the diagnosis, when repairing already-diagnosed infra.**
+  The plan pinned all four root causes to `file:line` AND locked the isolation mechanism (D-P2a-1:
+  dedicated `biznice_test` DB + NullPool engine + per-test truncate-reseed) *with the "why over
+  savepoint/rollback" reasoned out* before a line was written. Payoff: Wave A landed the four fixes
+  with the product diff empty and zero build-time surprises; every surprise was in Wave B (drifted
+  tests), exactly where the plan's risk section predicted. When the failure was already diagnosed
+  once (Phase 7, D-P7-4), the planning budget goes to locking the mechanism, not re-exploring.
+- **Parallel empirical verifier + reviewer converged on the same seam.** The no-DB-behavior
+  contradiction was found *independently* by the reviewer (finding #2) and the verifier (gap #1's
+  design fork). Two independent lenses hitting the same seam is high-signal — that's a design
+  contradiction, not a nitpick, and it's worth acting on before anything else.
+
+### Surprises (assumption → corrected truth)
+
+- **"All 6 SCs PASS" is not "the phase is done."** First-pass verify passed every success criterion
+  empirically — yet 1 verifier major + 2 minors + 2 reviewer majors still had to be fixed in the
+  loop. The SCs measured *does the harness work now*; the gaps were *will it keep working / is it
+  self-consistent* — regression protection and design contradiction, both orthogonal to any SC. A
+  green SC sweep is never the finish line; the verify+review fix loop is where durability and
+  internal consistency get caught.
+- **A phase that fixes "X silently passes" MUST ship a test that goes RED when X regresses — or the
+  exact bug recurs invisibly.** The whole phase existed because a DSN bug silently skipped ~100 DB
+  tests while CI stayed green. At first pass *nothing re-caught that*: reverting the DSN fix would
+  still show green, because the autouse provisioning fixtures connect independently of the broken
+  probe. The fix — `tests/test_harness_selfcheck.py` asserting `db_available() is True` — makes the
+  regression fail loud. General rule: when the failure mode is "the safety net silently disappears,"
+  the deliverable is not the repair, it's a standing test that fails when the net disappears again.
+  A one-time manual mutation-proof (non-vacuity by hand) is not that test.
+- **An autouse fixture that needs a resource silently makes that resource mandatory — and turns any
+  graceful-degrade path into a contradiction.** The plan carried `skip_if_no_db` (skip DB tests, run
+  unit tests) forward while adding a *session-autouse* fixture that unconditionally provisions the
+  DB. Those cannot coexist: with no Postgres the autouse fixture errors *every* test, including the
+  pure-unit ones that used to pass, so the graceful-skip promise became dead code the moment
+  provisioning went autouse. Owner resolved it by making DB a hard requirement (fail loud via
+  `pytest.exit`) and retiring `skip_if_no_db` to a no-op alias. Decide required-vs-optional
+  explicitly and delete the losing machinery — don't let an autouse fixture decide it by accident.
+- **`"python"` is not on PATH on standard Debian/CI images (only `python3`) — use `sys.executable`
+  for any "same interpreter as the test" subprocess.** The alembic-migrate subprocess shelled out to
+  a bare `python`; on the exact CI image the phase targets that `FileNotFoundError`s the whole
+  session, defeating the phase's own portability SC (SC6). Any subprocess meant to run the running
+  interpreter takes `sys.executable`, never a bare name.
+
 ## Phase 01 — Lint gates fixed-to-clean (v4.0, verified 2026-07-21)
 
 A mechanical NFR-6 chore — no capability shipped — but three keepers, because the two things

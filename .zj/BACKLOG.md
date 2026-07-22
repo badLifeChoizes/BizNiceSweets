@@ -1,5 +1,8 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-19 (Phase 13 retro — invoice void/credit-memo functional gap, dead
+Updated: 2026-07-22 (Phase 2a retro — the p1 "PLUM live-DB test harness never runs" item
+RESOLVED by 2a and checked off; two residual harness checks the self-check test doesn't cover
+[back-to-back rerun; committed non-vacuity] folded as a note into the p1 CI item, their natural home)
+Prior: 2026-07-19 (Phase 13 retro — invoice void/credit-memo functional gap, dead
 `partially_paid` FE badge, and late-invoice COGS/revenue period split → p3)
 Prior: 2026-07-18 (Phase 12a verify — bin split desyncs after bin-blind movement → p2,
 folds into the cross-path inventory-ledger race item; durable fix is the 12b bin-aware pick/issue)
@@ -26,7 +29,21 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `frontend/.npmrc` (`legacy-peer-deps=true`) so `npm ci` resolves — and that flag is *global*,
   masking peer-dep conflicts for every future bump, so carry a one-line note that it's silencing
   peer resolution.
-- [ ] **PLUM live-DB test harness never runs (4 root causes confirmed 2026-07-04, Phase 7)** —
+  **Phase 2a (2026-07-22) folds two residual harness checks in here** (p3, both cheap): (a) the
+  back-to-back-rerun isolation guarantee (SC4) is proven only by a manual double-run — a CI step
+  that runs `pytest` twice (or `-p no:randomly` + a rerun) would automate it; (b) harness
+  non-vacuity is a manual, uncommitted mutation — the committed `test_harness_selfcheck.py` pins
+  the load-bearing zero-silent-skip invariant, but the "a real product break turns a DB test RED"
+  proof is not itself standing. Low priority; the self-check test guards the invariant that
+  actually bit.
+- [x] **PLUM live-DB test harness never runs (4 root causes confirmed 2026-07-04, Phase 7)** —
+  **RESOLVED by v4.0 Phase 2a (verified 2026-07-22, tag `zj/good-02a-pytest-harness-repair`).**
+  All four root causes fixed at the harness layer (`backend/tests/conftest.py`): libpq-keyword DSN
+  probe, NullPool test engine + app-session monkeypatch, per-test `admin-user` identity seed, and
+  per-test truncate-reseed isolation against a dedicated `biznice_test` DB. The ~100 formerly
+  silent-skip tests now run 0-skip green twice back-to-back; DB is now a *hard* requirement (no-DB
+  fails loud), and `tests/test_harness_selfcheck.py` pins the zero-silent-skip invariant so this
+  exact regression fails loud, never silently. Original diagnosis below, kept for the record.
   deferred by owner (D-P7-4) until blocking/asked. The `skip_if_no_db` suite has *always*
   silently skipped, even inside the API container. Confirmed causes: (1) `tests/conftest.py`
   `_check_db_available()` passes the `postgresql+psycopg2://` SQLAlchemy URL to raw

@@ -1,5 +1,21 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-22 (**v4.0 Phase 2a VERIFIED — `/zj:verify 2a`. Verdict PASS**, tag
+Updated: 2026-07-22 (**v4.0 Phase 2a RETRO'D — `/zj:retro 2a`. Phase CLOSED, ROADMAP `[done — verified]`.**
+Banked **LEARNINGS Phase 02a** — 5 keepers: (repeat) pre-decide the *mechanism* not just the diagnosis
+when repairing already-diagnosed infra (D-P2a-1 locked the isolation model before a line was written →
+zero Wave-A surprises); parallel empirical verifier+reviewer converged on the same design seam (no-DB
+contradiction). (surprises) **"all 6 SCs PASS" ≠ phase done** — first-pass green still needed 1+2+2 fixes,
+because SCs measure *works now* not *stays working/self-consistent*; **a phase fixing "X silently passes"
+MUST ship a test that goes RED when X regresses** — else the exact bug recurs invisibly (the reason
+`test_harness_selfcheck.py` exists); **an autouse fixture needing a resource silently makes it mandatory**
+and turns any graceful-degrade path into dead code (→ DB is a hard requirement, `skip_if_no_db` retired);
+**`"python"` isn't on PATH on standard Debian/CI → `sys.executable`**. Truing-up: the **p1 BACKLOG item
+"PLUM live-DB test harness never runs" → RESOLVED + checked off** (2a paid this exact debt); two residual
+harness checks (back-to-back rerun automation; committed non-vacuity) folded p3 into the CI backlog item,
+their natural home. No roadmap resize — 2b and Phase 3 (CI) stand as-is. **Next action:** `/zj:plan 2b`
+(port the DoD-named `verify_*` cruxes into the repaired suite) — the harness it needs is now green. Optional:
+`/zj:log phase 2a` to file the formal work log.)
+
+Prior: 2026-07-22 (**v4.0 Phase 2a VERIFIED — `/zj:verify 2a`. Verdict PASS**, tag
 `zj/good-02a-pytest-harness-repair`. Verifier + reviewer ran in parallel, both **empirically** (not
 trusting the build report): all 6 SCs PASS — full suite **217 passed / 0 skipped twice back-to-back**
 (SC4/SC5), `git diff zj/good-01..HEAD -- backend/app/` **empty** (the "zero product-code changes" claim
