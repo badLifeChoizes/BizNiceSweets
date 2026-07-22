@@ -16,6 +16,7 @@ Key design decisions:
 from __future__ import annotations
 
 import os
+import subprocess
 
 # ---------------------------------------------------------------------------
 # Inject a test password BEFORE any app module is imported.
@@ -33,6 +34,17 @@ os.environ.setdefault("BNS_ADMIN_PASSWORD", "testadminpass")
 # DEBUG=true so the dev/test-only /_rbac_probe route is reachable in tests
 # (it 404s in production when debug is false — CR-02 guard).
 os.environ.setdefault("DEBUG", "true")
+
+# ---------------------------------------------------------------------------
+# Force the harness onto a DEDICATED test database (SC6).
+# The container exports POSTGRES_DB=biznice (the live app DB); tests must never
+# touch it. OVERRIDE (not setdefault) POSTGRES_DB before app.main → config.py
+# instantiates Settings(), so both the app's async engine and Alembic target
+# the test DB. POSTGRES_HOST/POSTGRES_PORT are left to the environment so the
+# same harness runs against the in-container `db` host or a CI localhost
+# Postgres unchanged.
+# ---------------------------------------------------------------------------
+os.environ["POSTGRES_DB"] = os.environ.get("TEST_POSTGRES_DB", "biznice_test")
 
 import httpx
 import pytest
@@ -79,6 +91,63 @@ def db_available() -> bool:
     if _DB_AVAILABLE is None:
         _DB_AVAILABLE = _check_db_available()
     return _DB_AVAILABLE
+
+
+# ---------------------------------------------------------------------------
+# Test database provisioning (session-scoped, sync, autouse)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _provision_test_database() -> None:
+    """
+    Create the dedicated test database if absent and migrate it to head.
+
+    Runs ONCE per session, synchronously, before any async fixture. Sync +
+    session scope deliberately sidesteps the function-scoped event-loop
+    conflict an async session-scoped fixture would hit under pytest-asyncio's
+    asyncio_mode="auto".
+
+    Steps:
+      (a) Connect to the maintenance DB ("postgres") and CREATE DATABASE the
+          test DB if it does not already exist. autocommit is REQUIRED —
+          CREATE DATABASE cannot run inside a transaction block.
+      (b) Run `alembic upgrade head` as a subprocess with cwd at the backend
+          root, inheriting the forced POSTGRES_DB so alembic/env.py targets
+          the test DB (SC6). check=True so a migration failure fails the run
+          loudly instead of leaving an unmigrated DB.
+    """
+    import psycopg2
+
+    from app.core.config import settings
+
+    conn = psycopg2.connect(
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        dbname="postgres",
+        user=settings.postgres_user,
+        password=settings.postgres_password.get_secret_value(),
+        connect_timeout=5,
+    )
+    conn.autocommit = True  # CREATE DATABASE cannot run in a transaction
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM pg_database WHERE datname = %s",
+                (settings.postgres_db,),
+            )
+            if cur.fetchone() is None:
+                cur.execute(f'CREATE DATABASE "{settings.postgres_db}"')
+    finally:
+        conn.close()
+
+    # Backend root (holds alembic.ini) — conftest.py lives at <backend>/tests/.
+    backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    subprocess.run(
+        ["python", "-m", "alembic", "upgrade", "head"],
+        cwd=backend_root,
+        check=True,
+    )
 
 
 # ---------------------------------------------------------------------------
