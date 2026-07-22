@@ -1,3 +1,5 @@
+# ABOUTME: Root pytest conftest — env forcing, test DB provisioning, engine/session wiring, per-test isolation.
+# ABOUTME: All DB-backed tests run against a dedicated migrated PostgreSQL test database via a NullPool engine.
 """
 pytest conftest for BizNiceSweets backend tests.
 
@@ -55,7 +57,11 @@ def _check_db_available() -> bool:
         from app.core.config import settings
 
         conn = psycopg2.connect(
-            settings.database_url_sync,
+            host=settings.postgres_host,
+            port=settings.postgres_port,
+            dbname=settings.postgres_db,
+            user=settings.postgres_user,
+            password=settings.postgres_password.get_secret_value(),
             connect_timeout=2,
         )
         conn.close()

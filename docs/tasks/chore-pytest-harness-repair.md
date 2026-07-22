@@ -12,7 +12,7 @@ Branch: `chore-pytest-harness-repair` off `93de57d` (code-identical to `dd401d1`
 ## Checklist
 
 - [x] 0. Cut branch and open checklist
-- [ ] 1. Fix the DSN probe (SC1)
+- [x] 1. Fix the DSN probe (SC1)
 - [ ] 2. Point the harness at a dedicated, migrated test database (SC6 + isolation foundation)
 - [ ] 3. NullPool test engine + resolve the app's session to it (SC2)
 - [ ] 4. Per-test truncate+reseed isolation, incl. the `admin-user` identity (SC3 + SC4)
@@ -31,6 +31,13 @@ Branch: `chore-pytest-harness-repair` off `93de57d` (code-identical to `dd401d1`
   commit, `.zj/`-docs-only, code-identical to `dd401d1`) so PLAN.md travels onto the branch.
   Same "bare tag drops the plan" precedent logged on phases 12a/12b/13.
 
+- **Env prerequisite:** container `compose_api_1` python (3.13) lacked pytest/httpx/pytest-asyncio
+  (pytest never ran here — the whole point of NFR-5). Installed `requirements-dev.txt` into the
+  container's system site-packages as root (`podman exec --user root … pip install`). Ephemeral —
+  lost on image rebuild. **Durable fix (bake dev deps into a test image) → Phase 3 / NFR-4.**
+
 ## Noticed
 
 (populated during Wave B — every xfail/skip listed with reason + follow-up owner)
+- Container dev-deps install is not durable across rebuild — Phase 3 must bake a test image
+  (see Deviations). Documented for SC6 / Task 11.
