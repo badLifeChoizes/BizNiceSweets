@@ -704,8 +704,9 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Source:** BACKLOG p1 (no CI anywhere — no `.github/`); D-M3-3. The `SyerpPartner` 500 shipped
   through four plans precisely because these checks never ran automatically.
 
-## NFR-5: Runnable integration coverage — pytest harness repair  [traces: PRD-12, PRD-7, PRD-8]  **Status: partial (2a done — harness repaired, ~100 DB-backed tests run 0-silent-skip green; 2b pending — verify_* crux assertions not yet ported)**
-- **Verified (2a portion):** a2bb5a6 (Phase 02a verify, 2026-07-22 — `/zj:verify 2a`: all 6 SCs PASS empirically; full suite 219 passed / 0 skipped twice back-to-back, `git diff -- backend/app/` empty (zero product-code changes), non-vacuity re-driven, 23/23 verify_* exit 0, cold boot ok; tag `zj/good-02a-pytest-harness-repair`. The four D-P7-4 root causes (DSN, event loop, admin-user seed, isolation) are fixed. **2b remains:** porting the verify_* crux assertions into the suite + dropping the "script-only" caveats on the SYERP/MOUSSE/CRUMB/GELATO SRD rows.)
+## NFR-5: Runnable integration coverage — pytest harness repair + ported cruxes  [traces: PRD-12, PRD-7, PRD-8]  **Status: done (v4.0 Phase 2 — 2a harness repaired + 2b DoD-named cruxes (formerly proven only by standalone `verify_*` scripts) ported into the pytest suite; full suite 232 passed / 0 skipped twice back-to-back, 23/23 `verify_*` scripts still exit 0)**
+- **Verified (2a portion):** a2bb5a6 (Phase 02a verify, 2026-07-22 — `/zj:verify 2a`: all 6 SCs PASS empirically; full suite 219 passed / 0 skipped twice back-to-back, `git diff -- backend/app/` empty (zero product-code changes), non-vacuity re-driven, 23/23 verify_* exit 0, cold boot ok; tag `zj/good-02a-pytest-harness-repair`. The four D-P7-4 root causes (DSN, event loop, admin-user seed, isolation) are fixed.)
+- **Delivered (2b portion, `chore-port-verify-cruxes`):** the DoD-named crux behaviors now run inside the ordinary `pytest` suite as NEW service-layer tests — inventory moving-avg via the SERVICE path (`test_inventory_service.py::test_moving_average_service_crux`), GL posting ties (`test_gl_posting.py::test_gl_posting_ties_crux`), AP GR/IR-clears + control↔subledger equality (`test_ap_posting.py::test_ap_posting_ties_crux`), AR aging↔1120 tie via the REAL ship flow (`test_ar.py::test_ar_posting_ties_crux`), MOUSSE WIP-clears + 5190 residual tie (`tests/mousse/test_work_orders.py`), CRUMB reservation cap (`tests/crumb/test_sales_orders.py::test_reservation_math_crux`), GELATO ship-COGS (`tests/gelato/test_shipments.py::test_gelato_ship_cogs_crux`) — plus one HTTP audit/RBAC test per new module surface (MOUSSE/CRUMB/GELATO/AR) + inventory (401/403/2xx + attributable `AuditLog`). **Non-vacuity proven per crux:** a documented product mutation flips each NAMED pytest test RED, revert restores green (SC2 table in `docs/tasks/chore-port-verify-cruxes.md`). Concurrency mutation-proofs stay in `verify_*` (D-P2a-2/D-P2b-1). Evidence: full suite **232 passed / 0 skipped** ×2, 23/23 verify_* exit 0, ruff exit 0, cold boot ok, `git diff -- backend/app/` empty (TEST-ONLY phase).
 - **Statement:** The backend `pytest` suite shall execute its DB-backed tests against a live
   PostgreSQL database with **zero silent skips**, and the crux behaviors currently proven only by
   standalone `backend/scripts/verify_*.py` shall be covered by tests that run inside the ordinary
@@ -716,7 +717,8 @@ future scope (expanded via `/zj:spec` when their milestones near).
   silently-skipped now run — auth/plum/syerp/core); the ported crux assertions (inventory
   moving-average + audit + RBAC, GL/AP/AR posting ties, MOUSSE WIP-clears, CRUMB reservation,
   GELATO ship COGS) are present and pass; reverting a crux turns a **pytest** test red (not only a
-  `verify_*` script). Then drop the "script-only / UI-flow-UAT-pending" caveats those SRD rows carry.
+  `verify_*` script). The module SRD rows' remaining "UI-flow UAT-pending" caveats are **NFR-8**
+  scope (human UAT), not this requirement, and stay.
 - **Source:** D-P7-4 (BACKLOG p1); "port Phase-8 verify-script assertions into runnable integration
   tests" (BACKLOG p1). Enables NFR-4's live-DB CI job to be meaningful.
 

@@ -151,6 +151,12 @@ at milestone close, never hand-edit it. 134 decisions.
 - **D-P2a-2:** Phase 2 (NFR-5) split 2a/2b; concurrency mutation-proofs STAY in standalone `verify_*` (not ported to pytest), which is what lets 2a skip in-pytest cross-session concurrency…
 - **D-P2a-3:** Branch `chore-pytest-harness-repair` off `zj/good-01-lint-gates-clean` @ `dd401d1`; unmerged v4.0 stack to milestone close…
 - **D-P2a-4:** SC3 needs a seeded `User(id="admin-user")` bound to the admin role — RBAC resolves permissions from the DB user, not the token claim…
+- **D-P2b-1:** Phase 2b is a single phase (not sub-split) — each crux is a bounded sequential assertion, no concurrency to port…
+- **D-P2b-2:** Coverage depth = headline crux assertion + its close supporting sequential asserts (control↔subledger EQUALITY, negative-path rejects) — not a full re-port, not minimal-only…
+- **D-P2b-3:** Audit/RBAC = one HTTP `client`-layer test per NEW module (MOUSSE/CRUMB/GELATO/AR) + inventory; all other accounting cruxes at the service layer…
+- **D-P2b-4:** The HTTP audit/RBAC tests mint their own read/write/noperm Users+Roles in a LOCAL per-test fixture (swept by the next TRUNCATE), NOT via the shared `_isolate` roster…
+- **D-P2b-5:** The ported AR crux seeds shipped SO lines by driving the REAL GELATO/CRUMB ship flow (not hand-stamped `qty_shipped`/hand-posted COGS) — the 11a/11b dead-through-UI keeper…
+- **D-P2b-6:** Ported service cruxes go in NEW test files; the existing pure/no-DB tests are left untouched and stay green…
 
 ## Product & Architecture
 
@@ -1101,3 +1107,32 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   logged in PLAN `## Noticed`. *Why roster over rewrite:* faster to green with the least churn on
   never-run tests, and the seeded roles keep RBAC assertions meaningful (an identity that lacks a perm still
   denies by real DB role). The roster lives in the shared `_isolate` fixture, so every package inherits it.
+- **D-P2b-1 (owner, `/zj:plan 2b`):** **Phase 2b is a single phase, not sub-split.** Each DoD crux is a bounded
+  sequential assertion sharing the repaired-harness pattern; the concurrency scenarios that would have driven a
+  split stay in `verify_*` (D-P2a-2), so the split-driving risk isn't present. *Why:* nothing to parallelize or
+  isolate across a wave boundary — the cruxes differ only by module, not by mechanism.
+- **D-P2b-2 (owner, `/zj:plan 2b`):** **Coverage depth = headline + key supporting asserts per crux.** The headline
+  red-on-revert assertion PLUS its close supporting sequential asserts (control↔subledger EQUALITY, negative-path
+  rejects, tie-outs) — NOT a full re-port of every `verify_*` assertion, NOT minimal-headline-only. *Why:* the
+  headline alone can pass vacuously; the full re-port duplicates the scripts (which stay as the concurrency proof).
+- **D-P2b-3 (owner, `/zj:plan 2b`):** **Audit/RBAC = one HTTP `client`-layer test per NEW module surface**
+  (MOUSSE/CRUMB/GELATO/AR) + inventory (owner named it in the SRD); all other accounting cruxes assert at the
+  service layer via `seeded_ledger_db`/`async_db_session`. *Why:* mirrors the `verify_*`/`verify_*_api` split —
+  one representative HTTP proof of 401/403/2xx + attributable audit per surface is enough; re-driving every route
+  over HTTP is the scripts' job.
+- **D-P2b-4 (architect, `/zj:plan 2b`):** **The four HTTP audit/RBAC tests mint their own read/write/noperm
+  Users+Roles in a LOCAL per-test fixture**, NOT by extending the shared `_isolate` roster. *Why:* three identities
+  × four modules = 12 rows; loading them into `_isolate` taxes all ~230 existing tests on every function-scoped
+  truncate+reseed for no benefit to service-layer tests. Local creation runs after `_isolate` on the clean per-test
+  DB and is swept by the next test's TRUNCATE — no cleanup code. RBAC reads DB roles (D-P2a-4), so a genuine 403
+  needs a real limited seeded User; 401 is only the no-token case.
+- **D-P2b-5 (architect, `/zj:plan 2b`):** **The ported AR crux seeds its shipped SO lines by driving the REAL
+  GELATO/CRUMB ship flow** (`execute_putaway/pick/pack/ship` + `create_sales_order/confirm_sales_order`, the
+  `verify_ar._seed_shipped_line` shape), NOT by hand-stamping `qty_shipped` / hand-posting COGS. *Why:* the 11a/11b
+  keeper — hand-fed shapes the UI never sends have twice certified dead features green; the AR match must run against
+  genuinely-shipped qty and a genuinely-posted COGS JE. (GELATO's own ported crux drives the same real flow.)
+- **D-P2b-6 (architect, `/zj:plan 2b`):** **Ported service cruxes go in NEW test files**
+  (`test_inventory_service.py`, `test_gl_posting.py`, `test_ap_posting.py`, `test_ar.py`, `tests/mousse|crumb|gelato/…`)
+  so the existing pure/no-DB tests (`test_ap.py`, `test_gl.py`, `test_inventory.py`, `test_gl_journal.py`,
+  `test_purchasing.py`) are untouched and stay green. *Why:* the pure tests exercise the helper math with no DB and
+  are a distinct, faster layer; co-mingling the DB-backed cruxes into them would couple two isolation regimes.
