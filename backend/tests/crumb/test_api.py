@@ -51,7 +51,6 @@ from app.modules.syerp.schemas import InventoryItemCreate, PartnerCreate
 from app.modules.syerp.service import create_item, post_receipt
 from app.modules.syerp.service.partners import create_partner
 
-
 # ---------------------------------------------------------------------------
 # Local per-test identity fixture (D-P2b-4) — writer / reader / noperm.
 #
