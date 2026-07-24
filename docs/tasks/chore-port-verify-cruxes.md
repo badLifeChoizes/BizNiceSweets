@@ -23,8 +23,8 @@ Plan: `.zj/phases/02b-port-verify-cruxes/PLAN.md`
 - [x] 12. AR HTTP audit/RBAC test (SC3) — `tests/syerp/test_ar_api.py` (`8cde0fe`)
 - [x] 13. Confirm/add inventory audit/RBAC HTTP test (SC3) — `tests/syerp/test_inventory_api.py` (`13a27cf`, new — no prior HTTP coverage found)
 - [x] 14. Prove non-vacuity per crux (SC2) — 7 mutations each flip a NAMED pytest RED, revert green (transient product mutations, all reverted; `git diff -- backend/app/` empty)
-- [ ] 15. Full-suite regression + verify_* still-green + selfcheck (SC4 + SC5)
-- [ ] 16. Drop the SRD caveats + update requirements-progress + record D-P2b (SC6)
+- [x] 15. Full-suite regression + verify_* still-green + selfcheck (SC4 + SC5) — suite 232 passed ×2 (0 skipped), 23/23 verify_*, ruff exit 0 (fixed I001 `56ae777`), cold boot ok, `backend/app/` clean
+- [x] 16. Drop the SRD caveats + update requirements-progress + record D-P2b (SC6)
 
 ## Non-vacuity table (Task 14)
 

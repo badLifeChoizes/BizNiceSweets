@@ -1,5 +1,14 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-24 (**v4.0 Phase 2b PLANNED — `/zj:plan 2b`.** Phase 2b = **port the DoD-named `verify_*`
+Updated: 2026-07-24 (**v4.0 Phase 2b BUILD COMPLETE — `/zj:build 2b`.** All 17 tasks on branch
+`chore-port-verify-cruxes` (off `3f71900`); TEST-ONLY, **`git diff -- backend/app/` empty**. The DoD-named
+`verify_*` cruxes now run inside the ordinary `pytest` suite (7 new service-layer crux files + 5 HTTP
+audit/RBAC files + shared `seeded_ledger_db` fixture); **SC2 non-vacuity proven** — 7 product mutations each
+flip a NAMED pytest test RED, all reverted. Gates: **full suite 232 passed / 0 skipped ×2**, 23/23 `verify_*`
+exit 0, ruff exit 0, cold boot ok, `test_harness_selfcheck` green. SRD NFR-5 → **done**, D-P2b-1..6 recorded,
+requirements-progress NFR-5 row added. Engineers serialized (shared `biznice_test` DB). **Next action:**
+`/zj:verify 2b`. Full task/commit detail in the `## Position` build-complete entry below.)
+
+Prior: 2026-07-24 (**v4.0 Phase 2b PLANNED — `/zj:plan 2b`.** Phase 2b = **port the DoD-named `verify_*`
 cruxes into the repaired pytest suite** (NFR-5, the 2b half of the D-P2a-2 split) so reverting a crux turns
 a *pytest* test RED, not only a `verify_*` script. **17 tasks** (`.zj/phases/02b-port-verify-cruxes/PLAN.md`),
 3 waves: **A** (Tasks 1–8) = one NEW service-layer test file per crux — inventory moving-avg SERVICE path,
@@ -343,19 +352,23 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
-- **Step:** build — **v4.0 Phase 2b (port `verify_*` cruxes into pytest, NFR-5) BUILD IN FLIGHT**
-  (`/zj:build 2b`, started 2026-07-24). Branch `chore-port-verify-cruxes` cut off `3f71900` (the
-  plan-doc tip carrying PLAN.md, not the bare `f97b21a` — trivial deviation, PLAN `## Deviations`).
-  **WAVE A COMPLETE** (Tasks 1–8, all service-layer cruxes ported green, 0 skips each):
-  Task 0 (`3356138`), 1 scaffold+fixture (`521648f`), 2 inventory moving-avg (`6a50420`),
-  3 GL ties (`0ae185b`), 4 AP GR/IR-clears (`0777467`), 5 AR aging↔1120 tie via REAL ship flow
-  (`e589bbd`), 6 MOUSSE WIP-clears+5190 (`0335fb0`), 7 CRUMB reservation (`6a63194`), 8 GELATO
-  ship-COGS (`e7fcb3a`). **WAVE B COMPLETE** (Tasks 9–13, one HTTP audit/RBAC test per new
-  module surface + inventory, each 401/403/2xx triad + attributable AuditLog, 0 skips): 9 MOUSSE
-  (`6241fa3`), 10 CRUMB (`beff018`), 11 GELATO int-PK audit (`0cadde4`), 12 AR (`8cde0fe`),
-  13 inventory receipt — new, no prior HTTP coverage (`13a27cf`). Serializing engineers (shared
-  `biznice_test` DB). **Current task:** Wave C — non-vacuity sweep + regression gates + SRD
-  caveat-drop (Tasks 14–16, run inline). **Next action:** continue `/zj:build 2b` (Task 14).
+- **Step:** build — **v4.0 Phase 2b (port `verify_*` cruxes into pytest, NFR-5) BUILD COMPLETE**
+  (`/zj:build 2b`, 2026-07-24). Branch `chore-port-verify-cruxes` cut off `3f71900` (the plan-doc
+  tip carrying PLAN.md, not the bare `f97b21a` — trivial deviation, PLAN `## Deviations`). **All 17
+  tasks (0–16) done, atomic commits, tree clean** (only owner's `.vscode/settings.json` unstaged).
+  TEST-ONLY phase — **`git diff -- backend/app/` empty (zero product-code change).**
+  **Wave A** (1–8, service-layer cruxes, 0 skips): scaffold+`seeded_ledger_db` (`521648f`),
+  inventory moving-avg (`6a50420`), GL ties (`0ae185b`), AP GR/IR-clears (`0777467`), AR aging↔1120
+  via REAL ship flow (`e589bbd`), MOUSSE WIP-clears+5190 (`0335fb0`), CRUMB reservation (`6a63194`),
+  GELATO ship-COGS (`e7fcb3a`). **Wave B** (9–13, HTTP audit/RBAC per surface, 401/403/2xx +
+  attributable AuditLog): MOUSSE (`6241fa3`), CRUMB (`beff018`/`56ae777`), GELATO int-PK
+  (`0cadde4`), AR (`8cde0fe`), inventory receipt — new, no prior coverage (`13a27cf`). **Wave C**:
+  SC2 non-vacuity — 7 product mutations each flip a NAMED pytest RED, all reverted, tree clean
+  (`79b56e7`); regression — **full suite 232 passed / 0 skipped ×2**, 23/23 verify_* exit 0, ruff
+  exit 0 (one I001 fixed `56ae777`), cold boot ok; SRD NFR-5 → **done**, D-P2b-1..6 recorded,
+  requirements-progress NFR-5 row added (`15382ae`). Engineers serialized (shared `biznice_test`
+  DB). Checklist: `docs/tasks/chore-port-verify-cruxes.md` (all 17 ticked). **Next action:**
+  `/zj:verify 2b`.
 
 - **Step:** plan — **v4.0 Phase 2b PLANNED** (`/zj:plan 2b`, 2026-07-24). 17 tasks / 3 waves in
   `.zj/phases/02b-port-verify-cruxes/PLAN.md`; TEST-ONLY. Owner decisions: single phase,

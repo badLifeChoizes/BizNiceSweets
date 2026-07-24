@@ -166,14 +166,14 @@ None — the owner answers (1–3) plus D-P2b-4..6 fully bound the scope. If Wav
 ---
 ### Wave C — non-vacuity sweep, regression gates, and the SRD caveat-drop (NFR-5, SC2/SC4/SC5/SC6)
 
-### [ ] 14. Prove non-vacuity per crux (SC2)
+### [x] 14. Prove non-vacuity per crux (SC2)
 - **Files:** none committed (transient product mutations, each reverted); record the table in `docs/tasks/chore-port-verify-cruxes.md`
 - **Do:** For EACH of the 7 cruxes, apply the documented product mutation, confirm the NAMED pytest test turns RED, then revert and confirm green. Suggested mutations (adjust to the real code): **inventory** — break the weighted-average in `service/inventory.py` (return the old avg) → Task-2 test red; **GL** — comment out the receipt auto-post in `service/purchasing.py::receive_line` → Task-3 receipt-JE test red; **AP** — drop the Dr 2150 GR/IR leg in `service/bills.py::post_bill` → Task-4 GR/IR-clears test red; **AR** — credit the wrong account (not 1120) in `service/ar.py::record_receipt` → Task-5 aging-tie test red; **MOUSSE** — credit 1140 by `planned_qty×fg_unit_cost` instead of the exact accumulated WIP in `mousse/service` completion → Task-6 WIP-clears-exact test red; **CRUMB** — reserve `qty_ordered` instead of `min(qty_ordered, available)` in `crumb/service/sales_orders.py::confirm_sales_order` → Task-7 cap test red; **GELATO** — value COGS at `unit_price` instead of `moving_avg` in `gelato/service/shipments.py::execute_ship` → Task-8 balanced-COGS test red. Record each (crux, file+mutation, RED test name, revert→green) in the checklist.
 - **Done when:** all 7 mutations each flip a NAMED pytest test RED and revert to green; `git diff -- backend/app/` is empty afterward (SC5).
 - **Verify:** the checklist table lists 7 rows each with a RED test name and a green-after-revert; final `git status` shows no `backend/app/` change.
 - **Parallel-ok:** no (run after Wave A/B green) — serves SC2 + guards SC5.
 
-### [ ] 15. Full-suite regression + verify_* still-green + selfcheck (SC4 + SC5)
+### [x] 15. Full-suite regression + verify_* still-green + selfcheck (SC4 + SC5)
 - **Files:** none (verification task)
 - **Do:** (1) full `pytest -q` GREEN with **0 skipped**, run **twice back-to-back** (isolation holds); (2) `tests/test_harness_selfcheck.py` passes; (3) all **23 `verify_*` scripts** still exit 0 in-container; (4) `ruff check .` from `backend/` exit 0; (5) cold boot `import app.main` ok; (6) `git diff -- backend/app/` empty.
 - **Done when:** all six gates pass.
@@ -184,7 +184,7 @@ None — the owner answers (1–3) plus D-P2b-4..6 fully bound the scope. If Wav
   - `git diff --stat -- backend/app/` empty.
 - **Parallel-ok:** no (final code gate) — serves SC4 + SC5.
 
-### [ ] 16. Drop the SRD caveats + update requirements-progress + record D-P2b (SC6)
+### [x] 16. Drop the SRD caveats + update requirements-progress + record D-P2b (SC6)
 - **Files:** `.zj/SRD.md` (NFR-5 + the SYERP/MOUSSE/CRUMB/GELATO rows' "script-only / UI-flow-UAT-pending" caveats), `docs/features/requirements-progress.md`, `.zj/DECISIONS.md` (append D-P2b-1..6)
 - **Do:** Flip NFR-5 status `partial (2a done / 2b pending)` → **done** with this phase's evidence (ported crux test names + the 0-skip suite result + 23/23 verify_* green). Drop the "script-only" caveats NFR-5 names on the SYERP/MOUSSE/CRUMB/GELATO SRD rows (their cruxes are now suite-proven). Update `docs/features/requirements-progress.md` accordingly. Append D-P2b-1..6 to `.zj/DECISIONS.md` (owner 1..3 + architect 4..6).
 - **Done when:** NFR-5 reads done; no SRD row still carries a "script-only / verify_*-only" caveat for a now-ported crux; requirements-progress reflects it; D-P2b-1..6 recorded.
