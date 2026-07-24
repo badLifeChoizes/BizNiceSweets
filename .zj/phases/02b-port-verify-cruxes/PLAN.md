@@ -57,7 +57,7 @@ None — the owner answers (1–3) plus D-P2b-4..6 fully bound the scope. If Wav
 
 ## Tasks
 
-### [ ] 0. Cut branch and open checklist
+### [x] 0. Cut branch and open checklist
 - **Files:** `docs/tasks/chore-port-verify-cruxes.md` (new)
 - **Do:** `git checkout -b chore-port-verify-cruxes f97b21a`. Create the checklist file mirroring this task list.
 - **Done when:** branch exists at `f97b21a`; checklist committed (`chore:`).
@@ -68,56 +68,56 @@ None — the owner answers (1–3) plus D-P2b-4..6 fully bound the scope. If Wav
 ### Wave A — port the DoD cruxes at the service layer (NFR-5, SC1 + SC3-service + SC5)
 > Each Wave-A task creates a NEW test file (D-P2b-6), imports the REAL service fns + the repaired fixtures, seeds `seeded_ledger_db` where accounting is involved, and asserts the headline crux + its close supporting asserts (D-P2b-2). Each embeds a red-on-revert note keyed to the SC2 table in Task 14. Wave-A tasks are independent across modules → parallelizable once Task 1 lands.
 
-### [ ] 1. Scaffold the new packages + the shared ledger-seed fixture
+### [x] 1. Scaffold the new packages + the shared ledger-seed fixture
 - **Files:** `backend/tests/mousse/__init__.py`, `backend/tests/crumb/__init__.py`, `backend/tests/gelato/__init__.py` (new, each with a 2-line ABOUTME); `backend/tests/conftest.py` (add ONE opt-in fixture `seeded_ledger_db`).
 - **Do:** Create the three empty test packages. Add a function-scoped, **non-autouse** fixture `seeded_ledger_db` to the root conftest that, on `TestSessionLocal()`, runs `await seed_gl_accounts(session)` then `await seed_default_location(session)` (both idempotent) and yields the session — the single opt-in every accounting/inventory ported test depends on. No autouse (keeps the 219 existing tests' baseline unchanged).
 - **Done when:** the three packages import cleanly; `seeded_ledger_db` seeds ≥40 GL accounts + exactly one "Main" location; the existing suite is unaffected.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/syerp -q'` still green (baseline untouched).
 - **Parallel-ok:** no (Wave A depends on this) — serves SC1/SC3.
 
-### [ ] 2. Port the inventory moving-average SERVICE crux (SC1a)
+### [x] 2. Port the inventory moving-average SERVICE crux (SC1a)
 - **Files:** `backend/tests/syerp/test_inventory_service.py` (new)
 - **Do:** Mirror `verify_inventory.py` scenarios 3–6 via the SERVICE path using `test_sessionmaker`/`async_db_session` + `seeded_ledger_db`: create an item + two locations (`create_item`/`create_location`); `post_receipt` 10@2 then 10@4 → assert `get_item(...).moving_avg_cost == Decimal("3.000000")`; `get_item_onhand` → loc-A qty 20, total 20, value `60.000000`; a `post_adjustment(-999)` raises `HTTPException`, appends NO txn row, avg still `3.000000`; a valid `post_transfer` A→B leaves total 20, moves per-location, avg unchanged, two legs one `transfer_group_id`. This is the gap the pure `compute_new_moving_avg` test (`test_inventory.py`, 29 tests) does not cover.
 - **Done when:** the file passes, 0 skips; the moving-avg assertion is SERVICE-path (goes through `post_receipt`, not the helper).
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/syerp/test_inventory_service.py -q'`
 - **Parallel-ok:** yes — serves SC1a; red-on-revert = SC2 row (inventory).
 
-### [ ] 3. Port the GL posting-ties crux (SC1b)
+### [x] 3. Port the GL posting-ties crux (SC1b)
 - **Files:** `backend/tests/syerp/test_gl_posting.py` (new)
 - **Do:** Mirror `verify_gl.py` (a)(c)(b)(d) via the service layer + `seeded_ledger_db`: two throwaway GL accounts; `post_journal_entry` balanced (Dr A 10/Cr B 10) persists 2 lines, unbalanced (10/5) raises `HTTPException` 422 and persists nothing; post the 10/20/30 series → `derive_account_balance` A==60, B==−60, `get_account_register` running == [10,30,60] with opening 0/closing 60; `reverse_journal_entry` swaps legs + links `reversal_of_id`, original immutable; then the receipt auto-post — build vendor/item/loc/PO/approve, `receive_line` 4@5 → exactly ONE `po_receipt` JE source-linked to the line, balanced Dr 1130 / Cr 2150 == `20.000000`, and 2150 derived balance moved −20 / 1130 +20.
 - **Done when:** the file passes, 0 skips; the receipt auto-post asserts BOTH the 1130 debit and 2150 credit legs (per-account invariant, keeper).
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/syerp/test_gl_posting.py -q'`
 - **Parallel-ok:** yes — serves SC1b; red-on-revert = SC2 row (GL).
 
-### [ ] 4. Port the AP posting-ties crux incl. GR/IR-clears-to-zero (SC1c)
+### [x] 4. Port the AP posting-ties crux incl. GR/IR-clears-to-zero (SC1c)
 - **Files:** `backend/tests/syerp/test_ap_posting.py` (new)
 - **Do:** Mirror `verify_ap.py` (d)(e)(f) + control↔subledger equality via the service layer + `seeded_ledger_db`. Shared vendor/item/location. (d) `post_bill` on a matched 4@5 bill posts ONE balanced JE `source_type='ap_bill'`, Σ debits == Cr 2110 == 20, Dr 2150 == 20; re-post 422. **(e) THE CRUX:** capture `derive_account_balance(2150)` pre-receipt; receive 7@5 (Cr 2150 −35), `make matched bill` + `post_bill` (Dr 2150 35) → 2150 balance EQUALS its pre-receipt value Decimal-exact. (f) `record_payment` partial 20 of 50 → bill 'posted' open 30, JE Dr 2110/Cr 1110 == 20; final 30 → 'paid' open 0. **AP control ↔ subledger EQUALITY (keeper):** assert `derive_account_balance(2110) == Σ(open_balance across posted/unpaid bills)` — not "TB nets zero". Also the overpayment-refused-422-persists-nothing negative path.
 - **Done when:** file passes, 0 skips; the GR/IR crux asserts Decimal-exact equality to the pre-receipt value; the 2110 control is asserted DIRECTLY against the bill subledger.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/syerp/test_ap_posting.py -q'`
 - **Parallel-ok:** yes — serves SC1c; red-on-revert = SC2 row (AP).
 
-### [ ] 5. Port the AR posting-ties crux incl. aging↔1120 tie-out (SC1d)
+### [x] 5. Port the AR posting-ties crux incl. aging↔1120 tie-out (SC1d)
 - **Files:** `backend/tests/syerp/test_ar.py` (new)
 - **Do:** Mirror `verify_ar.py` (B)(C)(D) via the service layer + `seeded_ledger_db`. Seed genuinely-shipped SO lines by driving the REAL flow (D-P2b-5): receipts 100@6+100@9 (moving_avg 7.5), putaway into a pick bin, `create_sales_order`/`confirm_sales_order` order 8 @ 20, `execute_pick`/`execute_pack`/`execute_ship`. Then: `create_invoice` from the shipped SO line → total 160, line price LOCKED to SO unit_price 20, `qty_invoiced` bumped to 8; `post_invoice` → Dr 1120/Cr 4110, aging `grand_total == control_balance` Decimal-exact, control rose exactly 160, open 160 in the 0–30 bucket; `record_receipt` partial 60 (Dr cash/Cr 1120) → open 100, aging still ties; final 100 → 'paid' open 0, aging returns to baseline. (C) over-invoice (6 vs shipped 5) 422 persists nothing; (D) over-receipt (100 vs 80) 422 persists nothing. Assert the aging grand_total DIRECTLY against the debit-normal 1120 control (keeper).
 - **Done when:** file passes, 0 skips; the aging↔1120 tie is asserted Decimal-exact at post, partial, and final stages.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/syerp/test_ar.py -q'`
 - **Parallel-ok:** yes — serves SC1d; red-on-revert = SC2 row (AR).
 
-### [ ] 6. Port the MOUSSE WIP-clears crux (SC1e)
+### [x] 6. Port the MOUSSE WIP-clears crux (SC1e)
 - **Files:** `backend/tests/mousse/test_work_orders.py` (new)
 - **Do:** Mirror `verify_mousse.py` (A) + (D) via the service layer + `seeded_ledger_db`. Build a PLUM part with a Released revision + a 2-child BOM (qty_per 2 & 3), link stocked SYERP items (post_receipt to set moving avgs 3 & 5), `create_work_order` planned 10, `release_work_order` (snapshot 2 lines, qty_required 20 & 30), snapshot the WO's 1140 balance (0), `issue_components` → ONE JE Dr 1140 210 / Cr 1130 −210 (assert BOTH legs), `complete_work_order` → **CRUX:** WO's 1140-attributable balance returns to the pre-issue snapshot Decimal-exact (== 0). Then the under-issue override path (planned 3, issue one component 10@10 → accumulated_wip 100 not divisible by 3): complete with `override_incomplete=True` → 1140 clears exact, 1130 debit == `99.999999` (== FG receipt value), 5190 residual `receipt_value + 5190 == 100` (**1130 control ties the inventory subledger incl. the 5190 rounding residual** — keeper). Reuse the script's own `_wo_account_balance` derivation as the oracle.
 - **Done when:** file passes, 0 skips; both the 1140-clears-exact and the 1130↔subledger+5190 invariants assert.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/mousse/test_work_orders.py -q'`
 - **Parallel-ok:** yes — serves SC1e; red-on-revert = SC2 row (MOUSSE).
 
-### [ ] 7. Port the CRUMB reservation crux (SC1f)
+### [x] 7. Port the CRUMB reservation crux (SC1f)
 - **Files:** `backend/tests/crumb/test_sales_orders.py` (new)
 - **Do:** Mirror `verify_crumb_so.py` scenario (E) via the service layer + `seeded_ledger_db`. One scarce item on-hand 10. SO_E1 qty 6 → `confirm_sales_order` reserves 6 shortage 0; SO_E2 stock qty 8 + a non-stock line → stock capped at `min(8, available 4)` == 4 with shortage 4, non-stock line reserves 0; assert `available == on_hand − Σ qty_reserved across other open (confirmed/fulfilling) SOs` (10 − (6+4) == 0); `cancel_sales_order(SO_E1)` releases 6 (Σ open → 4); SO_E3 qty 5 → reserves 5 (freed capacity genuinely available). Use the script's `_item_reserved_total` as the oracle.
 - **Done when:** file passes, 0 skips; the `min(qty_ordered, available)` cap, the availability formula, the non-stock-reserves-0, and the cancel-releases behaviors all assert.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/crumb/test_sales_orders.py -q'`
 - **Parallel-ok:** yes — serves SC1f; red-on-revert = SC2 row (CRUMB).
 
-### [ ] 8. Port the GELATO ship-COGS crux (SC1g)
+### [x] 8. Port the GELATO ship-COGS crux (SC1g)
 - **Files:** `backend/tests/gelato/test_shipments.py` (new)
 - **Do:** Mirror `verify_gelato_ship.py` (a)(b)(c)(d)(f) via the service layer + `seeded_ledger_db`, driving the REAL `PickRequest`/`PackRequest` schemas (keeper). Receipts 100@6+100@9 (moving_avg 7.5), pick bin 50, confirmed SO order 8; `execute_pick` (net-zero at location) → `execute_pack` → `execute_ship`. Assert: **(b) CRUX** exactly ONE `gelato_shipment` JE, Dr 5100 == Cr 1130 == Σ(qty×moving_avg) == 8×7.5 == `60.000000`, and the −8 issue leg + JE share the shipment source (atomic); (c) reservation relief — shipping SO1 drops its `qty_reserved` by exactly the shipped qty and a second SO's availability is CONSERVED; (d) partial-ship accrual (6 then 4 == 10) + a third ship past qty_ordered 422; **(f) 1130 control move == inventory subledger valuation move Decimal-exact** (keeper, `Δ1130 == Δ(qty×avg)`), NOT "TB nets zero". Use the script's `_account_balance`/`_subledger_valuation` oracles.
 - **Done when:** file passes, 0 skips; the balanced-COGS-JE, reservation-relief, and control↔subledger-tie invariants all assert.
@@ -197,7 +197,19 @@ None — the owner answers (1–3) plus D-P2b-4..6 fully bound the scope. If Wav
 - **A ported crux exposes a genuine product bug** (the cruxes have only ever run against the live `biznice` DB, never a truncate-fresh one). *Early warning:* a headline assert fails on first run with no test-side cause. *Mitigation:* SC5 policy — minimal fix + `## Noticed`; if it needs a schema/Alembic change, STOP + flag owner (forbidden here).
 - **RBAC 403-vs-401 shape drift** — RBAC reads DB roles not the token claim (D-P2a-4); a noperm user might 403 where a test expects 401 (401 is only the no-token case). *Early warning:* Wave-B status-code mismatches. *Mitigation:* mirror `verify_*_api.py` exactly — no token → 401, real limited user → 403.
 
+## Deviations
+- **Task 0 branch point (trivial):** plan Task 0 names `f97b21a`, but PLAN.md was committed in
+  the later plan-doc commit `3f71900` (the actual current tip). Cut off `3f71900` instead so
+  PLAN.md travels onto the build branch — honors the plan's own Context rationale (cut the tip,
+  not the bare tag; 12a/12b/13/2a precedent).
+
 ## Noticed
+- **Pre-existing harness SAWarning (Task 1):** `conftest.py` `_isolate` builds its TRUNCATE
+  order from `Base.metadata.sorted_tables`, which silently drops `crumb_lead` /
+  `crumb_opportunity` from the sort due to an unresolvable FK cycle between them. Those two
+  tables may therefore NOT be truncated between tests. Pre-existing (2a harness), not
+  introduced here. RISK for CRUMB ported tests (Tasks 7/10) if they touch leads/opportunities;
+  watch for cross-test pollution there.
 - Populate during Wave A/B: any product bug found (with the minimal fix + follow-up owner), and any assertion in a `verify_*` script deliberately NOT ported (concurrency scenarios are expected; note any *sequential* assert intentionally dropped under D-P2b-2 so the coverage delta is explicit).
 - Task 13 may find inventory's HTTP audit/RBAC already covered — record which existing file if so.
 

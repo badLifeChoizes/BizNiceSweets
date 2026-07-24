@@ -343,11 +343,20 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
-- **Step:** plan — **v4.0 Phase 2b (port `verify_*` cruxes into pytest, NFR-5) PLANNED** (`/zj:plan 2b`,
-  2026-07-24). 17 tasks / 3 waves in `.zj/phases/02b-port-verify-cruxes/PLAN.md`; TEST-ONLY (zero
-  product-code change expected). Owner decisions: single phase, headline+supporting depth, one HTTP
-  audit/RBAC test per new module. Concurrency stays in `verify_*` (D-P2a-2). Branch
-  `chore-port-verify-cruxes` off `f97b21a`. **Next action:** `/zj:build 2b`.
+- **Step:** build — **v4.0 Phase 2b (port `verify_*` cruxes into pytest, NFR-5) BUILD IN FLIGHT**
+  (`/zj:build 2b`, started 2026-07-24). Branch `chore-port-verify-cruxes` cut off `3f71900` (the
+  plan-doc tip carrying PLAN.md, not the bare `f97b21a` — trivial deviation, PLAN `## Deviations`).
+  **WAVE A COMPLETE** (Tasks 1–8, all service-layer cruxes ported green, 0 skips each):
+  Task 0 (`3356138`), 1 scaffold+fixture (`521648f`), 2 inventory moving-avg (`6a50420`),
+  3 GL ties (`0ae185b`), 4 AP GR/IR-clears (`0777467`), 5 AR aging↔1120 tie via REAL ship flow
+  (`e589bbd`), 6 MOUSSE WIP-clears+5190 (`0335fb0`), 7 CRUMB reservation (`6a63194`), 8 GELATO
+  ship-COGS (`e7fcb3a`). Serializing engineers (shared `biznice_test` DB). **Current task:**
+  Wave B — HTTP audit/RBAC tests (Tasks 9–13). **Next action:** continue `/zj:build 2b` (Task 9).
+
+- **Step:** plan — **v4.0 Phase 2b PLANNED** (`/zj:plan 2b`, 2026-07-24). 17 tasks / 3 waves in
+  `.zj/phases/02b-port-verify-cruxes/PLAN.md`; TEST-ONLY. Owner decisions: single phase,
+  headline+supporting depth, one HTTP audit/RBAC test per new module. Concurrency stays in
+  `verify_*` (D-P2a-2).
 
 - **Step:** verify — **v4.0 Phase 2a (pytest harness repair, NFR-5) VERIFIED — Verdict PASS**, tag
   `zj/good-02a-pytest-harness-repair`. All 6 SCs pass empirically; fix loop closed 1 major + 2 minors +

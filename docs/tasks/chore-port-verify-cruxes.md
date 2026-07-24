@@ -10,13 +10,13 @@ Plan: `.zj/phases/02b-port-verify-cruxes/PLAN.md`
 
 - [x] 0. Cut branch `chore-port-verify-cruxes` and open this checklist
 - [ ] 1. Scaffold new packages (mousse/crumb/gelato) + shared `seeded_ledger_db` fixture
-- [ ] 2. Port inventory moving-average SERVICE crux (SC1a) — `tests/syerp/test_inventory_service.py`
-- [ ] 3. Port GL posting-ties crux (SC1b) — `tests/syerp/test_gl_posting.py`
-- [ ] 4. Port AP posting-ties crux incl. GR/IR-clears-to-zero (SC1c) — `tests/syerp/test_ap_posting.py`
-- [ ] 5. Port AR posting-ties crux incl. aging↔1120 tie-out (SC1d) — `tests/syerp/test_ar.py`
-- [ ] 6. Port MOUSSE WIP-clears crux (SC1e) — `tests/mousse/test_work_orders.py`
-- [ ] 7. Port CRUMB reservation crux (SC1f) — `tests/crumb/test_sales_orders.py`
-- [ ] 8. Port GELATO ship-COGS crux (SC1g) — `tests/gelato/test_shipments.py`
+- [x] 2. Port inventory moving-average SERVICE crux (SC1a) — `tests/syerp/test_inventory_service.py` (`6a50420`)
+- [x] 3. Port GL posting-ties crux (SC1b) — `tests/syerp/test_gl_posting.py` (`0ae185b`)
+- [x] 4. Port AP posting-ties crux incl. GR/IR-clears-to-zero (SC1c) — `tests/syerp/test_ap_posting.py` (`0777467`)
+- [x] 5. Port AR posting-ties crux incl. aging↔1120 tie-out (SC1d) — `tests/syerp/test_ar.py` (`e589bbd`)
+- [x] 6. Port MOUSSE WIP-clears crux (SC1e) — `tests/mousse/test_work_orders.py` (`0335fb0`)
+- [x] 7. Port CRUMB reservation crux (SC1f) — `tests/crumb/test_sales_orders.py` (`6a63194`)
+- [x] 8. Port GELATO ship-COGS crux (SC1g) — `tests/gelato/test_shipments.py` (`e7fcb3a`)
 - [ ] 9. MOUSSE HTTP audit/RBAC test (SC3) — `tests/mousse/test_api.py`
 - [ ] 10. CRUMB HTTP audit/RBAC test (SC3) — `tests/crumb/test_api.py`
 - [ ] 11. GELATO HTTP audit/RBAC test (SC3) — `tests/gelato/test_api.py`
