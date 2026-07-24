@@ -128,35 +128,35 @@ None — the owner answers (1–3) plus D-P2b-4..6 fully bound the scope. If Wav
 ### Wave B — one HTTP audit/RBAC test per NEW module surface (NFR-5, SC3-HTTP)
 > Each drives the `client` fixture and asserts 401 (no token) / 403 (wrong-permission real user) / 200-or-201 (authorized) + an attributable `AuditLog` row after a successful mutation. Identities are minted locally per D-P2b-4 (real read/write/noperm Users+Roles created after `_isolate`, swept by the next TRUNCATE). Wave-B tasks are independent → parallelizable once their Wave-A fixtures exist.
 
-### [ ] 9. MOUSSE HTTP audit/RBAC test (SC3)
+### [x] 9. MOUSSE HTTP audit/RBAC test (SC3)
 - **Files:** `backend/tests/mousse/test_api.py` (new)
 - **Do:** Mirror `verify_mousse_api.py` at the `client` layer. Local fixture mints writer (`mousse:read`+`mousse:write`), reader (`mousse:read`), noperm (no roles) Users+Roles. Build a buildable PLUM part + stocked items (service layer). Assert `POST /api/v1/mousse/work-orders`: writer token → 201 Draft WO; reader token → 403; no token → 401. After the 201, assert an `AuditLog` row `action="work_order.created"`, `actor_id==writer.id`, `target_type=="work_order"`, `target_id==wo.id`. Add one READ route (`GET /work-orders`): reader → 200, noperm → 403, no token → 401.
 - **Done when:** file passes, 0 skips; the 401/403/201 triad + attributable audit row assert.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/mousse/test_api.py -q'`
 - **Parallel-ok:** yes — serves SC3 (MOUSSE surface).
 
-### [ ] 10. CRUMB HTTP audit/RBAC test (SC3)
+### [x] 10. CRUMB HTTP audit/RBAC test (SC3)
 - **Files:** `backend/tests/crumb/test_api.py` (new)
 - **Do:** As Task 9 but for the sales-order surface: `POST /api/v1/crumb/sales-orders` with `crumb:write`/`crumb:read`/noperm; assert 201/403/401 and an `AuditLog` `action="sales_order.created"` attributable to the writer targeting the SO; plus a read route 200/403/401.
 - **Done when:** file passes, 0 skips.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/crumb/test_api.py -q'`
 - **Parallel-ok:** yes — serves SC3 (CRUMB surface).
 
-### [ ] 11. GELATO HTTP audit/RBAC test (SC3)
+### [x] 11. GELATO HTTP audit/RBAC test (SC3)
 - **Files:** `backend/tests/gelato/test_api.py` (new)
 - **Do:** As Task 9 but for the shipment surface: seed a confirmed SO + stocked pick bin (service layer), then `POST /api/v1/gelato/shipments/pick` with `gelato:write`/`gelato:read`/noperm; assert 2xx/403/401 and an `AuditLog` `action="shipment.picked"`, `target_type=="shipment"`, attributable to the writer; plus a read route 200/403/401. (Use `shipment.picked` as the representative mutation — `shipment.shipped` optional if cheap.)
 - **Done when:** file passes, 0 skips.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/gelato/test_api.py -q'`
 - **Parallel-ok:** yes — serves SC3 (GELATO surface).
 
-### [ ] 12. AR HTTP audit/RBAC test (SC3)
+### [x] 12. AR HTTP audit/RBAC test (SC3)
 - **Files:** `backend/tests/syerp/test_ar_api.py` (new)
 - **Do:** As Task 9 but for the AR surface: seed a shipped SO line (reuse the Task-5 helper / real ship flow), then `POST /api/v1/syerp/ar/invoices` with `syerp:write`/`syerp:read`/noperm; assert 2xx/403/401 and an `AuditLog` `action="invoice.created"` attributable to the writer targeting the invoice; plus a read route (`GET /ar/aging` or `/ar/invoices`) 200/403/401.
 - **Done when:** file passes, 0 skips.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest tests/syerp/test_ar_api.py -q'`
 - **Parallel-ok:** yes — serves SC3 (AR surface).
 
-### [ ] 13. Confirm/add the inventory audit/RBAC HTTP test (SC3, owner decision 3)
+### [x] 13. Confirm/add the inventory audit/RBAC HTTP test (SC3, owner decision 3)
 - **Files:** `backend/tests/syerp/test_inventory_api.py` (new, unless an equivalent is found in `tests/syerp/`)
 - **Do:** First check whether an existing syerp test already drives an inventory mutation route over HTTP with the 401/403/2xx triad + audit assertion; if so, cite it in the checklist and this task is a no-op confirmation. If not, add one: a representative inventory mutation route (e.g. `POST /api/v1/syerp/inventory/…/receipt` or the adjustment route — confirm the exact path in `app/modules/syerp/router.py`) with `syerp:write`/`syerp:read`/noperm → 2xx/403/401 and its `AuditLog` row.
 - **Done when:** inventory's audit/RBAC is proven by a suite test (found-and-cited or newly added), 0 skips.

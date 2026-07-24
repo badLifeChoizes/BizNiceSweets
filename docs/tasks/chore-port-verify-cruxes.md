@@ -17,11 +17,11 @@ Plan: `.zj/phases/02b-port-verify-cruxes/PLAN.md`
 - [x] 6. Port MOUSSE WIP-clears crux (SC1e) — `tests/mousse/test_work_orders.py` (`0335fb0`)
 - [x] 7. Port CRUMB reservation crux (SC1f) — `tests/crumb/test_sales_orders.py` (`6a63194`)
 - [x] 8. Port GELATO ship-COGS crux (SC1g) — `tests/gelato/test_shipments.py` (`e7fcb3a`)
-- [ ] 9. MOUSSE HTTP audit/RBAC test (SC3) — `tests/mousse/test_api.py`
-- [ ] 10. CRUMB HTTP audit/RBAC test (SC3) — `tests/crumb/test_api.py`
-- [ ] 11. GELATO HTTP audit/RBAC test (SC3) — `tests/gelato/test_api.py`
-- [ ] 12. AR HTTP audit/RBAC test (SC3) — `tests/syerp/test_ar_api.py`
-- [ ] 13. Confirm/add inventory audit/RBAC HTTP test (SC3) — `tests/syerp/test_inventory_api.py`
+- [x] 9. MOUSSE HTTP audit/RBAC test (SC3) — `tests/mousse/test_api.py` (`6241fa3`)
+- [x] 10. CRUMB HTTP audit/RBAC test (SC3) — `tests/crumb/test_api.py` (`beff018`)
+- [x] 11. GELATO HTTP audit/RBAC test (SC3) — `tests/gelato/test_api.py` (`0cadde4`)
+- [x] 12. AR HTTP audit/RBAC test (SC3) — `tests/syerp/test_ar_api.py` (`8cde0fe`)
+- [x] 13. Confirm/add inventory audit/RBAC HTTP test (SC3) — `tests/syerp/test_inventory_api.py` (`13a27cf`, new — no prior HTTP coverage found)
 - [ ] 14. Prove non-vacuity per crux (SC2) — 7 mutations each flip a NAMED pytest RED, revert green
 - [ ] 15. Full-suite regression + verify_* still-green + selfcheck (SC4 + SC5)
 - [ ] 16. Drop the SRD caveats + update requirements-progress + record D-P2b (SC6)

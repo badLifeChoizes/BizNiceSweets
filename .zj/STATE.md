@@ -350,8 +350,12 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
   Task 0 (`3356138`), 1 scaffold+fixture (`521648f`), 2 inventory moving-avg (`6a50420`),
   3 GL ties (`0ae185b`), 4 AP GR/IR-clears (`0777467`), 5 AR aging↔1120 tie via REAL ship flow
   (`e589bbd`), 6 MOUSSE WIP-clears+5190 (`0335fb0`), 7 CRUMB reservation (`6a63194`), 8 GELATO
-  ship-COGS (`e7fcb3a`). Serializing engineers (shared `biznice_test` DB). **Current task:**
-  Wave B — HTTP audit/RBAC tests (Tasks 9–13). **Next action:** continue `/zj:build 2b` (Task 9).
+  ship-COGS (`e7fcb3a`). **WAVE B COMPLETE** (Tasks 9–13, one HTTP audit/RBAC test per new
+  module surface + inventory, each 401/403/2xx triad + attributable AuditLog, 0 skips): 9 MOUSSE
+  (`6241fa3`), 10 CRUMB (`beff018`), 11 GELATO int-PK audit (`0cadde4`), 12 AR (`8cde0fe`),
+  13 inventory receipt — new, no prior HTTP coverage (`13a27cf`). Serializing engineers (shared
+  `biznice_test` DB). **Current task:** Wave C — non-vacuity sweep + regression gates + SRD
+  caveat-drop (Tasks 14–16, run inline). **Next action:** continue `/zj:build 2b` (Task 14).
 
 - **Step:** plan — **v4.0 Phase 2b PLANNED** (`/zj:plan 2b`, 2026-07-24). 17 tasks / 3 waves in
   `.zj/phases/02b-port-verify-cruxes/PLAN.md`; TEST-ONLY. Owner decisions: single phase,
