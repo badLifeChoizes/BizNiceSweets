@@ -1,5 +1,29 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-22 (**v4.0 Phase 2a RETRO'D — `/zj:retro 2a`. Phase CLOSED, ROADMAP `[done — verified]`.**
+Updated: 2026-07-24 (**v4.0 Phase 2b PLANNED — `/zj:plan 2b`.** Phase 2b = **port the DoD-named `verify_*`
+cruxes into the repaired pytest suite** (NFR-5, the 2b half of the D-P2a-2 split) so reverting a crux turns
+a *pytest* test RED, not only a `verify_*` script. **17 tasks** (`.zj/phases/02b-port-verify-cruxes/PLAN.md`),
+3 waves: **A** (Tasks 1–8) = one NEW service-layer test file per crux — inventory moving-avg SERVICE path,
+GL/AP/AR posting ties, MOUSSE WIP-clears (+1130↔subledger+5190), CRUMB reservation math, GELATO ship-COGS —
+plus a shared opt-in `seeded_ledger_db` fixture (the repaired `_isolate` truncates the CoA/location every
+test, seeds auth only); **B** (Tasks 9–13) = one HTTP audit/RBAC test per NEW module surface
+(MOUSSE/CRUMB/GELATO/AR) + inventory, driving the `client` fixture for 401/403/2xx + attributable `AuditLog`;
+**C** (Tasks 14–16) = per-crux non-vacuity sweep (7 documented product mutations each flip a NAMED pytest RED,
+then revert — `git diff -- backend/app/` empty), full-suite 0-skip ×2 + 23/23 verify_* still-green + selfcheck +
+cold boot, then drop the SRD "script-only" caveats (NFR-5 → done) + `requirements-progress`. **TEST-ONLY phase**
+— zero product-code change expected; a surfaced product bug gets a minimal flagged fix, a schema/Alembic need
+STOPS-and-flags. **Owner calls at plan (3 AskUserQuestion):** (1) **single phase 2b** (no sub-split — each crux
+is a bounded sequential assertion, no concurrency to port); (2) coverage depth = **headline + key supporting
+asserts** per crux (control↔subledger EQUALITY, negative-path rejects — not a full re-port, not minimal-only);
+(3) audit/RBAC = **one HTTP test per NEW module** + inventory (rest service-layer). Concurrency mutation-proofs
+STAY in `verify_*` (D-P2a-2). **6 decisions D-P2b-1..6** (owner 1–3 + architect: local RBAC identities not the
+shared roster; AR fixture drives the REAL ship flow — the 11a/11b dead-through-UI keeper; new test files leave
+the pure ones untouched) captured in PLAN `## Decisions`, recorded to DECISIONS.md at Task 16. No
+`## Decisions needed` open; plan checked goal-backward (every SC → ≥1 task, every task → an SC + NFR-5, real
+files + runnable `pytest` verify). **Branch (D-P2b):** build on a fresh `chore-port-verify-cruxes` off the
+current `chore-pytest-harness-repair` tip `f97b21a` (retro docs atop verified 2a code `14d838b`, tag
+`zj/good-02a-pytest-harness-repair`); unmerged v4.0 stack. **Next action:** `/zj:build 2b`.)
+
+Prior: 2026-07-22 (**v4.0 Phase 2a RETRO'D — `/zj:retro 2a`. Phase CLOSED, ROADMAP `[done — verified]`.**
 Banked **LEARNINGS Phase 02a** — 5 keepers: (repeat) pre-decide the *mechanism* not just the diagnosis
 when repairing already-diagnosed infra (D-P2a-1 locked the isolation model before a line was written →
 zero Wave-A surprises); parallel empirical verifier+reviewer converged on the same design seam (no-DB
@@ -318,6 +342,12 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 `/zj:verify 12b`.)
 
 ## Position
+
+- **Step:** plan — **v4.0 Phase 2b (port `verify_*` cruxes into pytest, NFR-5) PLANNED** (`/zj:plan 2b`,
+  2026-07-24). 17 tasks / 3 waves in `.zj/phases/02b-port-verify-cruxes/PLAN.md`; TEST-ONLY (zero
+  product-code change expected). Owner decisions: single phase, headline+supporting depth, one HTTP
+  audit/RBAC test per new module. Concurrency stays in `verify_*` (D-P2a-2). Branch
+  `chore-port-verify-cruxes` off `f97b21a`. **Next action:** `/zj:build 2b`.
 
 - **Step:** verify — **v4.0 Phase 2a (pytest harness repair, NFR-5) VERIFIED — Verdict PASS**, tag
   `zj/good-02a-pytest-harness-repair`. All 6 SCs pass empirically; fix loop closed 1 major + 2 minors +
