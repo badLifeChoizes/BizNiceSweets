@@ -384,6 +384,31 @@ async def client() -> httpx.AsyncClient:
 
 
 @pytest.fixture
+async def seeded_ledger_db():
+    """
+    Opt-in session seeded with the standard chart of accounts + default location.
+
+    The per-test _isolate baseline TRUNCATEs every table and reseeds auth only,
+    so the CoA and the "Main" stock location are absent by default. Every ported
+    accounting/inventory crux test needs both, so it depends on this ONE fixture
+    instead of re-seeding ad hoc. Non-autouse (the 219 existing tests' baseline
+    stays unchanged) and function-scoped: it opens its own NullPool session via
+    TestSessionLocal(), runs the two idempotent seeds (each commits internally),
+    and yields that session for the test to use.
+
+      seed_gl_accounts     → >= 40 GL accounts across all 5 GAAP types
+      seed_default_location → exactly one StockLocation named "Main"
+    """
+    from app.modules.syerp.coa_seed import seed_gl_accounts
+    from app.modules.syerp.inventory_seed import seed_default_location
+
+    async with TestSessionLocal() as session:
+        await seed_gl_accounts(session)
+        await seed_default_location(session)
+        yield session
+
+
+@pytest.fixture
 def skip_if_no_db() -> None:
     """
     Retired no-op — retained only as a legacy fixture alias.
