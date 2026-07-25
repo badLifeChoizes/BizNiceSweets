@@ -1148,3 +1148,31 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   Test-infra only (`backend/tests/conftest.py`); no product-code (`backend/app/`) change. Alternative considered and
   rejected: a `CREATE DATABASE` step in `ci.yml` — leaves the self-provisioning claim false and adds a latent trap
   every fresh run must remember. Surfaced as a MATERIAL deviation during T2 build; owner chose the probe fix.
+
+## v4.0 Phase 4 plan (inventory ledger race-safety, 2026-07-25)
+
+- **D-P4-1 (owner, `/zj:plan 4`):** **Bin semantics on draw paths = explicit-or-unbinned.** All three
+  newly bin-aware draw primitives (`post_adjustment`, `post_transfer`, MOUSSE `issue_components`)
+  take an optional `bin_id`; `NULL` draws ONLY the unbinned pool and floor-guards it (422 when
+  insufficient — the operator must name a bin). No server-side auto-allocation. Why: mirrors 12b's
+  operator-selected staging bin (D-P12b-9); traceability-first (medical-device origin) — the ledger
+  records what the operator actually did, not what an allocator guessed. Accepted behavior change:
+  an adjust/transfer/issue at a fully-binned location now requires a bin (build sweep found zero
+  existing fixtures affected).
+- **D-P4-2 (owner, `/zj:plan 4`):** **Single phase, no 4a/4b sub-split.** The lock discipline and
+  bin-awareness touch the same four functions; splitting would ship each file twice.
+- **D-P4-3 (owner, `/zj:plan 4`):** **GELATO pick-path Q1/Q2 shipment-header races stay BACKLOG p2.**
+  Outside NFR-7 — they don't corrupt the inventory ledger.
+- **D-P4-4 (`/zj:plan 4`):** **Branch = fresh `chore-inventory-race-safety` off the Phase-3 tip
+  `db725fd`**, continuing the unmerged v4.0 stack (D-P3 precedent). At T0 the cut was made from the
+  plan-carrying docs-only tip `7a71fd0` (code-identical; 12a/12b/P3 precedent so PLAN.md rides the
+  branch).
+- **D-P4-5 (owner-confirmed, `/zj:plan 4`):** **Transfer in-leg lands UNBINNED at the destination**
+  (`bin_id=NULL` on the `+qty` leg); only `from_bin_id` is added to the payload. Why: destination
+  bins belong to a different location's bin set — naming one server-side would be auto-allocation
+  (forbidden by D-P4-1). Stock arrives in the destination's unbinned pool and is directed by
+  putaway, exactly the receive→putaway flow 12a/12b established.
+- **D-P4-6 (owner-confirmed, `/zj:plan 4`):** **Positive adjustments may target a bin** (cycle-count
+  "found in bin" case, adds directly to that bin's pool); `NULL` adds to the unbinned pool (prior
+  behavior). Additions take NO pool floor guard — a pool cannot be overdrawn by adding; only
+  negative deltas floor-guard the named pool.

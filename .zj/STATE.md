@@ -1,5 +1,37 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-25 (**v4.0 Phase 4 PLANNED — `/zj:plan 4`.** Phase 4 = **inventory ledger
+Updated: 2026-07-25 (**v4.0 Phase 4 BUILD COMPLETE — `/zj:build 4`.** All 14 tasks (0–13) on branch
+`chore-inventory-race-safety` (cut at T0 `378fb34` off the plan-carrying tip `7a71fd0`,
+code-identical to the D-P4-4 base `db725fd`); checklist archived to
+`docs/tasks/_completed/2026-07-25-chore-inventory-race-safety.md`. **NFR-7 delivered in two waves:**
+(locks, `73e45c2`/`e1dc5c0`) `post_receipt`/`post_adjustment`/`post_transfer` take the item-master
+`SELECT … FOR UPDATE` before any floor/aggregate read — post_receipt additionally re-reads the row
+under the lock (T1 trivial fix-forward: the identity map would otherwise serve a stale
+`moving_avg_cost`, leaving the lost-update it claims to fix) — and `receive_line` locks the PO
+header via `_get_po_row(for_update=True)` (PO→item lock order documented); (bin-aware,
+`4285202`/`b80cb37`/`455cf5c`/`4ae2b2c`) `AdjustmentCreate.bin_id`, `TransferCreate.from_bin_id`
+(out leg binned, in leg lands unbinned per D-P4-5), MOUSSE per-line `IssueComponentLine.bin_id`
+(floor key widened to item/location/bin via `get_bin_on_hand`), trust-boundary docs trued up.
+**Proofs:** NEW `verify_inventory_race.py` (`f394408`) runs 4 `asyncio.Barrier` races (MOUSSE-issue
+× SYERP-adjust — the SRD-named pair; adjust × transfer; receive×receive on one PO line;
+receipt×receipt moving-avg) — **all 4 mutations EXECUTED RED→GREEN** (M1 on-hand −4 both writers
+landed — proves the discipline is SHARED; M2 source pool −4; M3 both receives landed + double GL
+post with the accumulator lying at 7; M4 avg 10.000000 vs correct 9.583333), table filled in the
+archived checklist; `verify_gelato.py` scenario E flipped from pinning the desync to asserting the
+fix (`ad6a35d`). **T9 sweep (`2692b47`): 15/15 non-API + 9/9 API `verify_*` exit 0, pytest 232
+passed / 0 skipped, TB nets zero — ZERO D-P4-1 fixture reconciliations needed** (the plan's top
+risk didn't materialize). **FE (SC4):** bin pickers on StockAdjust/StockTransfer/IssueComponents
+dialogs with real-payload Vitests both ways (`6d55d72`/`b270161`/`886193a`; T12 wired a required
+`targetLocationId` prop from WorkOrderDetail — the dialog had no location in scope); full FE gate
+44 files / 139 Vitest + eslint + `tsc -b` + build exit 0. **No GL/JE change, no migration — both
+tripwires unfired.** Deviations all trivial (logged in PLAN `## Deviations`); engineers serialized
+per 2b precedent (shared test DB + git index). Noticed (triage at verify/retro): identity-map
+staleness shape in transfer/putaway/issue `unit_cost` legs (valuation metadata only); product-wide
+`HTTP_422_UNPROCESSABLE_ENTITY` deprecation warnings; `verify_purchasing.py` leaves orphan JEs;
+`useBins` lacks `retry: false`. SRD NFR-7 → done pending verify; requirements-progress NFR-7 row;
+D-P4-1..6 appended to DECISIONS.md. Branch pushed, all four CI jobs green on the tip (the new race
+script auto-ran in `verify-scripts`). **Next action:** `/zj:verify 4`.)
+
+Prior: 2026-07-25 (**v4.0 Phase 4 PLANNED — `/zj:plan 4`.** Phase 4 = **inventory ledger
 race-safety (NFR-7)** — the shared sorted-id `SELECT … FOR UPDATE` discipline extended to the four
 still-unlocked writers (`post_receipt`/`post_adjustment`/`post_transfer` in
 `syerp/service/inventory.py`; purchasing `receive_line` via a PO-header lock), AND the three
@@ -511,10 +543,13 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
-- **Step:** plan — **v4.0 Phase 4 (inventory ledger race-safety, NFR-7) PLANNED**
-  (`/zj:plan 4`, 2026-07-25). PLAN.md ready (14 tasks, status: ready), D-P4-1..6 bound at plan,
-  BACKLOG p2 items claimed. Build branch (to cut at T0): `chore-inventory-race-safety` off
-  `db725fd`. **Next action:** `/zj:build 4`.
+- **Step:** build — **v4.0 Phase 4 (inventory ledger race-safety, NFR-7) BUILD COMPLETE**
+  (`/zj:build 4`, 2026-07-25). All 14 tasks done on `chore-inventory-race-safety` (T0 `378fb34` off
+  the plan-carrying tip `7a71fd0`, code-identical to the D-P4-4 base `db725fd`); atomic commits
+  `73e45c2`/`e1dc5c0` (locks), `4285202`/`b80cb37`/`455cf5c`/`4ae2b2c` (bin-aware + doc truth-up),
+  `f394408` (verify_inventory_race.py, 4 mutations RED→GREEN), `ad6a35d` (scenario E), `2692b47`
+  (sweep: 24/24 verify_*, pytest 232/0, zero reconciliations), `6d55d72`/`b270161`/`886193a` (FE
+  pickers). Checklist archived. CI green on the pushed tip. **Next action:** `/zj:verify 4`.
 
 - **Step:** retro — **v4.0 Phase 3 (CI pipeline, NFR-4) CLOSED** (`/zj:retro 3`, 2026-07-25; verified
   PASS 2026-07-25, tag `zj/good-03-ci-pipeline`, reviewer 0 findings). Branch `chore-ci-pipeline` off

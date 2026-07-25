@@ -748,7 +748,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
   **Pending for NFR-4/Phase 3:** wiring both as CI jobs + ruff into the container image + `.npmrc`
   `legacy-peer-deps=true` for reproducible `npm ci`.
 
-## NFR-7: Concurrency-safe inventory ledger  [traces: PRD-12, PRD-7, PRD-8]  **Status: planned**
+## NFR-7: Concurrency-safe inventory ledger  [traces: PRD-12, PRD-7, PRD-8]  **Status: done — pending `/zj:verify 4`**
 - **Statement:** Every floor-guarded write to the inventory ledger — issue, adjust, receive,
   transfer, ship — shall serialize on the contended row(s) under one shared `SELECT … FOR UPDATE`
   lock discipline (sorted-id order, the `create_bill`/`record_payment` template) so the hard
@@ -765,6 +765,23 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Source:** BACKLOG p2 (inventory-ledger read-check-write race, trigger now live with 3+ writers;
   bin-blind-desync inbound half). Accepted-risk single-shop until now; hardened as the multi-writer
   DoD clause.
+- **Delivery (v4.0 Phase 4 build, 2026-07-25, branch `chore-inventory-race-safety`):**
+  `post_receipt`/`post_adjustment`/`post_transfer` take the item-master `SELECT … FOR UPDATE`
+  before any floor/aggregate read (`73e45c2`; post_receipt also re-reads the row under the lock so
+  the moving-average recompute can't lose an update); `receive_line` locks the PO header
+  (`_get_po_row(for_update=True)`, PO→item lock order documented, `e1dc5c0`). Bin-aware draws per
+  D-P4-1/5/6: `post_adjustment` `bin_id` (`4285202`), `post_transfer` `from_bin_id` out-leg /
+  unbinned in-leg (`b80cb37`), MOUSSE `issue_components` per-line `bin_id` with the floor key
+  widened to `(item, location, bin)` (`455cf5c`); trust-boundary docs trued up (`4ae2b2c`). NEW
+  `backend/scripts/verify_inventory_race.py` (`f394408`) — 4 barrier races incl. the SRD-named
+  MOUSSE-issue × SYERP-adjust pair, **all 4 mutations executed RED→GREEN** (M1 on-hand −4 both
+  writers landed; M2 source pool −4; M3 both receives landed / double GL post; M4 moving-avg
+  10.000000 vs correct 9.583333) — table in `docs/tasks/` checklist. `verify_gelato.py` scenario E
+  flipped to assert the fix (`ad6a35d`). Regression sweep (`2692b47`): 15/15 non-API + 9/9 API
+  `verify_*` exit 0, pytest 232 passed / 0 skipped, TB nets zero, **zero D-P4-1 fixture
+  reconciliations needed**. FE bin pickers wired end-to-end with real-payload Vitests
+  (`6d55d72`/`b270161`/`886193a`); full FE gate 44 files / 139 tests + lint + `tsc -b` + build
+  exit 0. No GL/JE change, no migration (both tripwires unfired).
 
 ## NFR-8: Human-verified release readiness  [traces: PRD-12, PRD-5, PRD-7, PRD-8]  **Status: planned**
 - **Statement:** Before the milestone closes, every shipped user-facing flow — v1.0 PLUM

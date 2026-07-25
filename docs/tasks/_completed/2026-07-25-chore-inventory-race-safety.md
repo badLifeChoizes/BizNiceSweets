@@ -24,7 +24,9 @@ Every floor-guarded inventory-ledger write serializes on the shared sorted-id
 - [x] 10. FE: bin picker on StockAdjustDialog + Vitest payload assertion (SC4)
 - [x] 11. FE: from-bin picker on StockTransferDialog + Vitest payload assertion (SC4)
 - [x] 12. FE: per-line bin picker on IssueComponentsDialog + Vitest payload assertion (SC4)
-- [ ] 13. Full-gate run + bookkeeping (SC5, SC6)
+- [x] 13. Full-gate run + bookkeeping (SC5, SC6) — SRD NFR-7 → done pending verify;
+  requirements-progress NFR-7 row; D-P4-1..6 appended to DECISIONS.md; STATE updated; branch
+  pushed, four CI jobs confirmed green on the tip (run IDs in the build report)
 
 ## Mutation-proof record (Task 7 — fill during build)
 
