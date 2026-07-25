@@ -20,7 +20,7 @@ Every floor-guarded inventory-ledger write serializes on the shared sorted-id
 - [x] 6. Truth-up the bin trust-boundary documentation (SC3 closure)
 - [x] 7. Write verify_inventory_race.py — mixed-path concurrency, mutation-proven (SC2, SC1)
 - [x] 8. Revise verify_gelato.py scenario (E) to assert the fix (SC3)
-- [ ] 9. Behavior-change regression sweep — reconcile every breakage (SC5)
+- [x] 9. Behavior-change regression sweep — reconcile every breakage (SC5)
 - [ ] 10. FE: bin picker on StockAdjustDialog + Vitest payload assertion (SC4)
 - [ ] 11. FE: from-bin picker on StockTransferDialog + Vitest payload assertion (SC4)
 - [ ] 12. FE: per-line bin picker on IssueComponentsDialog + Vitest payload assertion (SC4)
@@ -38,3 +38,23 @@ Every floor-guarded inventory-ledger write serializes on the shared sorted-id
 ## Task-9 reconciliation log
 
 <!-- every breakage classified (a) D-P4-1 intended change vs (b) regression -->
+
+**Zero breakages — no reconciliation needed.** Full sweep run 2026-07-25 against the
+Tasks 1–8 tree (`ad6a35d`), all in-container (`compose_api_1`):
+
+- **Non-API verify scripts (15/15 exit 0):** verify_ap, verify_ar, verify_crumb,
+  verify_crumb_so, verify_e2e_p8, verify_gelato, verify_gelato_ship, verify_gl,
+  verify_inventory, verify_inventory_race, verify_mousse, verify_part_numbering,
+  verify_plum_vendor_paths, verify_purchasing, verify_reports — each printed
+  "All assertions PASSED."; the plan's exact `for s in scripts/verify_*.py` loop
+  exited 0.
+- **API verify scripts (9/9 exit 0):** verify_ap_api, verify_ar_api, verify_crumb_api,
+  verify_crumb_so_api, verify_gelato_api, verify_gelato_ship_api, verify_gl_api,
+  verify_mousse_api, verify_reports_api — run per their headers against the serving api.
+- **Full pytest:** `232 passed, 0 failed, 0 skipped` (200.22s in-container).
+- **Trial Balance nets zero:** verify_reports.py — "PASS: trial_balance total_debit
+  EXACTLY equals total_credit and in_balance is True — the whole ledger balances (SC3)";
+  verify_gl.py balanced-entry assertions also green.
+- No fixture putaways-then-draws-bin-blind and no binned-location bin-less draw
+  surfaced anywhere, so the D-P4-1 (a)-class revisions anticipated by the plan were
+  not required, and no (b)-class regressions were found.
