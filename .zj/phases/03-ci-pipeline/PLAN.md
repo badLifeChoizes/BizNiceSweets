@@ -138,6 +138,11 @@ None — all resolved above.
 - **`legacy-peer-deps` peer-masking (D-P1-1)** can hide an incompatible transitive peer so `npm ci` "resolves" a broken tree. Not blocking this phase (lockfile is pinned), but a green `npm ci` is not proof of peer sanity on future bumps — noted for Phase 4+.
 - **Postgres service readiness race** — pytest/alembic can connect before Postgres is ready. Mitigated by the service `health-cmd`/`pg_isready` options; sign of trouble = intermittent connection-refused on `backend-tests`.
 
+## Noticed  (Phase-3 build)
+- **Node 20 deprecation warning (p3, non-blocking):** the runs annotate that `actions/checkout@v4`,
+  `actions/setup-python@v5`, `actions/setup-node@v4` target Node 20 (force-run on Node 24 by GitHub);
+  a future bump to the `@v5`/latest action majors clears the warning. Cosmetic — all jobs pass green.
+
 ## Noticed  (Phase-1/2a homed items — not blocking, for backlog)
 - **Standing automated lint enforce-smoke** (p3): SC4 here is a one-time manual demo; a permanent, self-restoring "inject → expect red → revert" smoke is a future nicety, not built this phase.
 - **Back-to-back pytest rerun step** (p3): a second `pytest` invocation to catch order/state leakage — deferred.
