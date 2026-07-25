@@ -556,11 +556,15 @@ async def post_transfer_endpoint(
     transfer_group_id — a `-qty` leg at `from_location_id` and a `+qty` leg at
     `to_location_id`, both valued at the item's current moving-average cost. Total
     item on-hand nets to zero and the moving-average is left untouched (only
-    receipts move it, AC10-5). Rejects with 422 if the source and destination are
-    the same, `qty` <= 0, or the transfer would over-draw the source location
-    (per-location negative-stock guard) — no rows are written. Requires
-    syerp:write. Returns 404 if the item or either location does not exist. Writes
-    an inventory.transfer audit row.
+    receipts move it, AC10-5). `from_bin_id` is explicit-or-unbinned (D-P4-1): a
+    concrete bin draws the out leg from that bin's pool, None draws ONLY the
+    source location's unbinned pool; the in leg always lands UNBINNED at the
+    destination — putaway directs it later (D-P4-5). Rejects with 422 if the
+    source and destination are the same, `qty` <= 0, or the transfer would
+    over-draw the source location (per-location negative-stock guard) or the
+    named source pool — no rows are written. Requires syerp:write. Returns 404
+    if the item or either location does not exist. Writes an inventory.transfer
+    audit row.
     """
     txns = await post_transfer(
         db,
@@ -569,7 +573,9 @@ async def post_transfer_endpoint(
         to_location_id=data.to_location_id,
         qty=data.qty,
         actor_id=str(current_user.id),
+        from_bin_id=data.from_bin_id,
     )
+    bin_note = "unbinned pool" if data.from_bin_id is None else f"bin {data.from_bin_id}"
     await write_audit(
         db,
         actor_id=str(current_user.id),
@@ -578,7 +584,7 @@ async def post_transfer_endpoint(
         target_id=str(txns[0].id),
         detail=(
             f"Transfer: {data.qty} of item {item_id} from location "
-            f"{data.from_location_id} to location {data.to_location_id}"
+            f"{data.from_location_id} ({bin_note}) to location {data.to_location_id}"
         ),
     )
     return txns

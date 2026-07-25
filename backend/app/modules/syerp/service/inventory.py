@@ -514,33 +514,48 @@ async def post_transfer(
     to_location_id: int,
     qty: Decimal,
     actor_id: str,
+    from_bin_id: int | None = None,
 ) -> list[TransactionRead]:
     """
     Post a stock transfer: append the two paired `transfer` ledger legs.
 
-    In a single transaction (AC10-4,6; D-P8-7; NFR-7):
+    In a single transaction (AC10-4,6; D-P8-7; D-P4-1; D-P4-5; NFR-7):
       1. Reject with 422 if from_location_id == to_location_id (a self-transfer is
          a no-op) or qty <= 0 (a transfer is a positive movement) — NO rows.
-      2. LOCK the item-master row FOR UPDATE *before* the floor read (mirrors
+      2. LOCK the item-master row FOR UPDATE *before* the floor reads (mirrors
          post_putaway step 3). The append-only InventoryTxn rows cannot be
          locked to serialize concurrent inserts — the item-master row is the
          correct single contention point, so two concurrent out-transfers
          cannot both pass the source floor. One item, so the sorted-id ordering
-         is trivial, but the lock must precede the read. Held until this
+         is trivial, but the lock must precede the reads. Held until this
          function's single commit.
       3. Derive `current_from_onhand` = the item's on-hand AT from_location_id
          (SUM of that item's InventoryTxn.quantity WHERE location_id matches).
       4. Reject with 422 if the `-qty` leg would drive the source location on-hand
          below zero (over-draw, _adjustment_violates_floor(from_onhand, -qty)) —
-         NO rows are appended.
-      5. Append EXACTLY TWO immutable `transfer` InventoryTxn rows sharing a fresh
-         transfer_group_id: `-qty` at from_location_id, `+qty` at to_location_id,
-         both valued at the item's CURRENT moving_avg_cost.
+         NO rows are appended. This location-level floor is kept alongside the
+         pool floor (D-P8-7 contract): it defends legacy data whose per-bin
+         split has already desynced from the location total.
+      5. ALSO floor-guard the SOURCE pool named by `from_bin_id` (D-P4-1
+         explicit-or-unbinned): derive its on-hand via get_bin_on_hand
+         (from_bin_id=None is the source location's UNBINNED pool) and reject
+         with 422 if the `-qty` leg would drive it below zero. The server never
+         auto-allocates across bins — transferring out of a fully-binned
+         location requires naming the bin.
+      6. Append EXACTLY TWO immutable `transfer` InventoryTxn rows sharing a fresh
+         transfer_group_id: `-qty` at from_location_id carrying
+         bin_id=from_bin_id, `+qty` at to_location_id carrying bin_id=None —
+         the in leg always lands in the destination's UNBINNED pool, and
+         putaway directs it into a bin later (D-P4-5). Both legs are valued at
+         the item's CURRENT moving_avg_cost.
 
     The signed pair nets to zero, so total item on-hand is unchanged; the item's
     moving_avg_cost is deliberately left UNTOUCHED (only receipts move it, AC10-5).
     Raises 404 if the item or either location does not exist (via get_item /
-    get_location). The 422 status mirrors the receipt/adjustment guards.
+    get_location). The BIN is NOT validated here: bin existence +
+    location-membership is GELATO's domain and the caller's job (D-P12a-3); the
+    DB FK on bin_id is the backstop. The 422 status mirrors the
+    receipt/adjustment guards.
 
     Returns the two created rows as TransactionRead (joined location names), out
     leg first then in leg. The router writes the inventory.transfer audit row.
@@ -595,6 +610,20 @@ async def post_transfer(
             ),
         )
 
+    # The `-qty` leg draws the NAMED source pool only (D-P4-1): from_bin_id=None
+    # is the source location's unbinned pool, a concrete from_bin_id that single
+    # bin. Same floor predicate as the location guard, applied at pool grain.
+    source_pool_onhand = await get_bin_on_hand(db, item_id, from_location_id, from_bin_id)
+    if _adjustment_violates_floor(source_pool_onhand, -qty):
+        pool_label = "the unbinned pool" if from_bin_id is None else f"bin {from_bin_id}"
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Transfer of {qty} exceeds {pool_label} at location "
+                f"{from_location_id} (current {source_pool_onhand})."
+            ),
+        )
+
     # Both legs share one freshly-generated group id and the CURRENT average cost.
     transfer_group_id = str(uuid.uuid4())
     unit_cost = item.moving_avg_cost
@@ -606,8 +635,11 @@ async def post_transfer(
         quantity=-qty,
         unit_cost=unit_cost,
         actor_id=actor_id,
+        bin_id=from_bin_id,
         transfer_group_id=transfer_group_id,
     )
+    # The in leg lands UNBINNED at the destination (bin_id=None) — putaway
+    # directs it into a bin later (D-P4-5).
     in_leg = InventoryTxn(
         item_id=item_id,
         location_id=to_location_id,
@@ -615,6 +647,7 @@ async def post_transfer(
         quantity=qty,
         unit_cost=unit_cost,
         actor_id=actor_id,
+        bin_id=None,
         transfer_group_id=transfer_group_id,
     )
     db.add(out_leg)

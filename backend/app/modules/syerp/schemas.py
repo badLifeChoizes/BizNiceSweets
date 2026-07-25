@@ -380,18 +380,28 @@ class TransferCreate(BaseModel):
     on-hand nets to zero and the moving-average is left untouched (only receipts
     move it, AC10-5).
 
+    `from_bin_id` is EXPLICIT-OR-UNBINNED (D-P4-1): a concrete bin draws the
+    `-qty` leg from that single bin's pool at the source; None (the default)
+    draws ONLY the source location's UNBINNED pool — the server never
+    auto-allocates across bins, so transferring out of a fully-binned location
+    requires naming the bin. There is deliberately NO `to_bin_id`: the `+qty`
+    in leg always lands UNBINNED at the destination and putaway directs it into
+    a bin later (D-P4-5).
+
     `qty` must be > 0 (a transfer is a positive movement between locations; the
     sign is applied per-leg by the service). The remaining guards depend on live
     DB state and are enforced in the service:
       - `from_location_id == to_location_id` is rejected (422) — a self-transfer
         is a no-op.
       - source-location on-hand < `qty` (over-draw) is rejected (422, AC10-6) so
-        a transfer can never drive the source location negative.
+        a transfer can never drive the source location negative; the source
+        POOL named by `from_bin_id` is floor-guarded the same way (422).
     """
 
     from_location_id: int
     to_location_id: int
     qty: Decimal = Field(..., gt=0)
+    from_bin_id: int | None = None
 
 
 class TransactionRead(BaseModel):
