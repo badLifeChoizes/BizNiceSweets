@@ -124,7 +124,9 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   traceability is a first-class medical-device-origin concern: if strict audit-with-mutation
   atomicity is wanted, thread `commit=False` through the audit insert so it shares the mutation's
   transaction (one commit). Revisit before CRISP (QMS) or any compliance sign-off.
-- [ ] **Concurrency races on the inventory ledger** (Phase 8 review, accepted-risk for
+- [ ] **Concurrency races on the inventory ledger** — **CLAIMED by v4.0 Phase 4 (NFR-7,
+  planned 2026-07-25, `.zj/phases/04-inventory-race-safety/PLAN.md`; check off at verify).**
+  (Phase 8 review, accepted-risk for
   single-shop, Plan Risk #4) — moving-average recompute, the over-receipt guard, and the
   negative-stock guards each read-check-write **without a row lock**. Single-threaded every path
   is correct (verified); under concurrent writers the moving average *drifts* (self-heals on the
@@ -141,7 +143,8 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   The narrow phase invariant ("two concurrent issues can't overdraw") holds; the ledger-wide floor
   guarantee does not. Fix is the shared lock across every floor-guarded path (issue/adjust/receive/
   transfer), not a MOUSSE-only lock. Still accepted-risk single-shop.
-- [ ] **Bin split desyncs after any bin-blind movement** (Phase 12a review MAJOR, 2026-07-18) —
+- [ ] **Bin split desyncs after any bin-blind movement** — **inbound half CLAIMED by v4.0
+  Phase 4 (NFR-7, planned 2026-07-25; check off at verify).** (Phase 12a review MAJOR, 2026-07-18) —
   12a made ONLY putaway bin-aware. The pre-existing draw primitives — `post_transfer`,
   `post_adjustment` (`syerp/service/inventory.py`), and MOUSSE `issue_components` — all write
   `bin_id=NULL` and floor-guard **per-location**, not per-bin. So once stock is put into a bin,

@@ -1,5 +1,31 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-25 (**v4.0 Phase 3 RETRO'D — `/zj:retro 3`. Phase CLOSED**, ROADMAP Phase 3 →
+Updated: 2026-07-25 (**v4.0 Phase 4 PLANNED — `/zj:plan 4`.** Phase 4 = **inventory ledger
+race-safety (NFR-7)** — the shared sorted-id `SELECT … FOR UPDATE` discipline extended to the four
+still-unlocked writers (`post_receipt`/`post_adjustment`/`post_transfer` in
+`syerp/service/inventory.py`; purchasing `receive_line` via a PO-header lock), AND the three
+remaining bin-blind draw primitives (`post_adjustment`, `post_transfer`, MOUSSE `issue_components`)
+made bin-aware. **14 tasks** (`.zj/phases/04-inventory-race-safety/PLAN.md`): T0 branch → lock wave
+(T1–2) → bin-aware wave (T3–5 + T6 doc truth-up) → verify wave (T7 NEW
+`verify_inventory_race.py` — 4 mixed-path `asyncio.Barrier` races incl. the SRD-named MOUSSE-issue
+× SYERP-adjust pair, each mutation-proven per a 4-row M1–M4 table; T8 `verify_gelato.py` scenario E
+revised from pinning the desync to asserting the fix; T9 behavior-change sweep classifying every
+breakage intended-change vs regression) → FE wave (T10–12 bin pickers + real-payload Vitests) →
+T13 full gate + bookkeeping. **6 decisions at plan (owner via AskUserQuestion ×2 rounds):**
+D-P4-1 bin semantics = **explicit-or-unbinned** (optional `bin_id`; NULL draws ONLY the unbinned
+pool, 422 when insufficient — no auto-allocation; accepted behavior change at fully-binned
+locations); D-P4-2 **single phase** (no 4a/4b — same four functions); D-P4-3 GELATO pick-path Q1/Q2
+races stay BACKLOG p2; D-P4-4 branch = fresh `chore-inventory-race-safety` off the Phase-3 tip
+`db725fd` (unmerged v4.0 stack); D-P4-5 transfer in-leg lands UNBINNED at destination (putaway
+directs it — confirmed); D-P4-6 positive adjustments may target a bin, additions take no floor
+guard (confirmed). Recorded in PLAN `## Decisions`, appended to DECISIONS.md at T13. **No GL/JE
+change, no migration expected — both STOP-and-flag tripwires.** Top risk: D-P4-1 ripples through
+GELATO/MOUSSE fixtures that putaway-then-draw-bin-blind (T9 owns the reconciliation). BACKLOG p2
+inventory-race + bin-desync(inbound) items marked claimed. Keepers baked in: only-the-guard-under-
+test-can-reject fixtures (12b), indivisible-remainder quantities (2b), verify-recipe run-in-env
+(P3), dead-through-UI wiring per FE task. CI from Phase 3 now guards every push of this branch;
+the new verify script auto-runs in the `verify-scripts` job. **Next action:** `/zj:build 4`.)
+
+Prior: 2026-07-25 (**v4.0 Phase 3 RETRO'D — `/zj:retro 3`. Phase CLOSED**, ROADMAP Phase 3 →
 `[done — verified + retro'd 2026-07-25]`, tag `zj/good-03-ci-pipeline` stands. **LEARNINGS Phase 03
 banked (2 surprises + 4 repeats):** (surprise 1, the headline) *"X self-provisions from a bare server"
 is unproven until run against a genuinely EMPTY environment* — conftest's probe targeted `biznice_test`,
@@ -484,6 +510,11 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 `/zj:verify 12b`.)
 
 ## Position
+
+- **Step:** plan — **v4.0 Phase 4 (inventory ledger race-safety, NFR-7) PLANNED**
+  (`/zj:plan 4`, 2026-07-25). PLAN.md ready (14 tasks, status: ready), D-P4-1..6 bound at plan,
+  BACKLOG p2 items claimed. Build branch (to cut at T0): `chore-inventory-race-safety` off
+  `db725fd`. **Next action:** `/zj:build 4`.
 
 - **Step:** retro — **v4.0 Phase 3 (CI pipeline, NFR-4) CLOSED** (`/zj:retro 3`, 2026-07-25; verified
   PASS 2026-07-25, tag `zj/good-03-ci-pipeline`, reviewer 0 findings). Branch `chore-ci-pipeline` off
