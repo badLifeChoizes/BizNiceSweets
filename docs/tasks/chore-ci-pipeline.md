@@ -10,7 +10,7 @@ postgres + non-API `verify_*`) — red blocks merge.
 - [x] 0. Cut `chore-ci-pipeline` branch + open this checklist
 - [x] 1. Author `frontend` + `backend-lint` jobs of `.github/workflows/ci.yml` (SC1, SC7)
 - [x] 2. Add `backend-tests` job — pytest vs `postgres:17` service (SC1, SC2, SC5)
-- [ ] 3. Add `verify-scripts` job — 14 non-API `verify_*` vs migrated `biznice` (SC1, SC5)
+- [x] 3. Add `verify-scripts` job — 14 non-API `verify_*` vs migrated `biznice` (SC1, SC5)
 - [ ] 4. Commit workflow + push; prove all jobs green on real Actions run (SC2)
 - [ ] 5. Demonstrate red on deliberately-broken backend test, then revert (SC3)
 - [ ] 6. Demonstrate red on lint violation (ruff AND eslint), then revert (SC4)

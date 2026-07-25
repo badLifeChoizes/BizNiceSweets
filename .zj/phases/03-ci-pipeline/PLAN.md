@@ -121,6 +121,17 @@ None — all resolved above.
   `postgres` maintenance DB still exists for the CREATE step). Same correction applies to the T3
   verify-scripts service.
 
+- **T3 (build correction, no owner call — obvious required steps the plan omitted):** The plan claimed the
+  non-API `verify_*` scripts need only a "pre-migrated `biznice`". Running them against a migrated-only DB
+  surfaced two missing preconditions (the plan's local-verify was evidently never executed): (1) the scripts
+  do `from app...` and need the backend root importable — their own docstrings run them with `PYTHONPATH=/app`;
+  added `PYTHONPATH: ${{ github.workspace }}/backend` to the job env. (2) They assume the reference seeds the
+  app runs at lifespan startup (notably the GL Chart of Accounts — "GL account 5100 not seeded" otherwise);
+  alembic migrates schema only. Added a seed step that calls `app.core.seed.run_seeds` exactly as
+  `app.main`'s lifespan does, after migrate and before the loop. Also switched the loop from a hardcoded
+  14-name list to a dynamic `scripts/verify_*.py` glob excluding `*_api.py` (maintenance-proof). Verified on a
+  fresh `postgres:17` (`POSTGRES_DB=biznice`): migrate → seed → 14/14 scripts exit 0.
+
 ## Risks
 - **DB-naming collision (the one real integration risk) — RESOLVED by job isolation.** pytest wants a maintenance `postgres` DB and self-creates/migrates `biznice_test`; the non-API `verify_*` scripts assume a pre-existing, already-migrated `biznice` and do **not** self-create or migrate (confirmed: no `create_all`/`CREATE DATABASE`/`alembic` in the scripts). Resolution: put them in **separate jobs, each with its own `postgres:17` service** — `backend-tests` leaves `POSTGRES_DB` unset (default `postgres` present → conftest makes `biznice_test`); `verify-scripts` sets the service `POSTGRES_DB: biznice` and runs `alembic upgrade head` before the loop. No shared container, no collision. **Early-warning sign:** a verify script erroring with `relation "…" does not exist` or `database "biznice" does not exist` = the migrate step or service `POSTGRES_DB` env is missing.
 - **Exact check names for branch protection** aren't known until a run completes — Task 7 reads them from `gh pr checks` before PUTting protection, rather than guessing. Sign of trouble: protection PUT accepted but PR still mergeable → context name mismatch.

@@ -87,3 +87,78 @@ jobs:
             backend/requirements-dev.txt
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: pytest -q
+
+  verify-scripts:
+    name: verify-scripts
+    runs-on: ubuntu-latest
+    # The non-API verify_*.py scripts build their own engine against `biznice`
+    # (config default DB) and do NOT self-create or migrate it. So this service
+    # creates `biznice` at init (POSTGRES_DB) and the job migrates it (alembic
+    # upgrade head) before running the scripts. The 9 *_api.py scripts are
+    # excluded (they need a booted uvicorn; ported to the pytest HTTP suite in 2b).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: ci_test_pw
+          POSTGRES_DB: biznice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: biznice
+      POSTGRES_PASSWORD: ci_test_pw
+      JWT_SECRET: ci_test_jwt_secret_at_least_32_chars_long
+      BNS_ADMIN_PASSWORD: ci_test_pw
+      # The scripts do `from app...`; the backend root must be importable
+      # (their docstrings run them with PYTHONPATH=/app inside the container).
+      PYTHONPATH: ${{ github.workspace }}/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Migrate biznice to head
+        run: python -m alembic upgrade head
+      - name: Seed reference data (Chart of Accounts, admin, etc.)
+        # The scripts assume the seeds the app runs at lifespan startup (e.g. the
+        # GL Chart of Accounts) — alembic migrates schema only. Run them here,
+        # idempotently, exactly as app.main's lifespan does.
+        run: |
+          python - <<'PY'
+          import asyncio
+          from app.core.db import AsyncSessionLocal
+          from app.core.seed import run_seeds
+
+          async def main():
+              async with AsyncSessionLocal() as db:
+                  await run_seeds(db)
+
+          asyncio.run(main())
+          print("seeds applied")
+          PY
+      - name: Run non-API verify_* scripts
+        run: |
+          set -e
+          for s in scripts/verify_*.py; do
+            case "$s" in
+              *_api.py) continue ;;
+            esac
+            echo "== $s =="
+            python "$s"
+          done
