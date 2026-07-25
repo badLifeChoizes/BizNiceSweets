@@ -1,5 +1,21 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-24 (**v4.0 Phase 2b VERIFIED — `/zj:verify 2b`. Verdict PASS**, tag
+Updated: 2026-07-24 (**v4.0 Phase 2b RETRO'D — `/zj:retro 2b`. Phase closed `[done]`.** Roadmap
+Phase 2b flipped `[verified]` → `[done — verified + retro'd]`. **LEARNINGS Phase 02b banked (2
+surprises + 2 repeats):** (1) *a crux whose arithmetic divides evenly can't guard its own advertised
+mutation* — the wrong formula yields the right number (MOUSSE 210/10), so the residual sibling
+(100/3) is the real red-on-revert guard; pick indivisible-remainder fixtures or the happy-path test
+is decorative; (2) *the SC2 mutation table is the highest-signal audit artifact* — the one real
+defect surfaced from reading its claims against the arithmetic, not from re-running (a green suite
+hides a vacuous test); (repeat) lift the `verify_*` fixture builders + independent oracles verbatim;
+(repeat) spend known keepers (drive-the-real-flow D-P2b-5) at plan time, not after a bug. **Deferred
+→ BACKLOG p2:** CRUMB `crumb_lead`/`crumb_opportunity` latent TRUNCATE-skip (FK cycle drops them from
+`sorted_tables`; mitigated this phase, will bite the first ported test that touches
+leads/opportunities). Nothing changed the roadmap picture — Phase 3 (CI, NFR-4) unchanged. **Next
+action:** `/zj:plan 3` (CI pipeline — ruff + eslint + `tsc -b` + vitest + `npm run build` + `pytest`
+on push/PR, NFR-4, D-M4-2). Optional: `/zj:log phase 2b` to file the formal work log. Verify detail
+in the prior entry below.)
+
+Prior: 2026-07-24 (**v4.0 Phase 2b VERIFIED — `/zj:verify 2b`. Verdict PASS**, tag
 `zj/good-02b-port-verify-cruxes`. Verifier + reviewer ran in parallel, both **empirically** (not
 trusting the build report): all 6 SCs PASS — verifier ran the full suite twice in-container
 (**232 passed / 0 skipped** both runs), read all 7 crux tests (each headline Decimal asserted via

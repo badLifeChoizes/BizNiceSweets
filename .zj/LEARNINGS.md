@@ -3,6 +3,61 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 02b — Port the verify_* cruxes into the pytest suite (v4.0, NFR-5, verified 2026-07-24)
+
+Ported the 7 DoD-named crux behaviors (inventory moving-avg, GL/AP/AR ties, MOUSSE WIP-clears,
+CRUMB reservation, GELATO ship-COGS) from the live-DB `verify_*` scripts into the repaired
+pytest suite, plus 5 HTTP audit/RBAC tests — so reverting a crux now turns a *pytest* test red,
+not only a script. TEST-ONLY: `git diff -- backend/app/` empty; 232 passed / 0 skipped ×2. Two
+keepers about how a passing test can still fail to guard what it advertises.
+
+### Surprises (assumption → corrected truth)
+
+- **A crux whose arithmetic divides evenly cannot guard its own advertised mutation — the wrong
+  formula produces the right number.** MOUSSE `test_wip_clears_to_zero_crux` runs planned_qty 10
+  against accumulated WIP 210; the documented regression (credit 1140 by `planned_qty×fg_unit_cost`
+  instead of the exact accumulated WIP) leaves it **green**, because `210/10 == 21.000000` divides
+  evenly so the rounded-FG credit *coincides* with the exact credit. The real red-on-revert guard is
+  the sibling **residual** case `test_under_issue_override_clears_wip_and_ties_subledger` (100/3),
+  where the remainder strands `Decimal('0.000001')` in 1140 and the assert flips. General rule: a
+  non-vacuity scenario only distinguishes right-formula from wrong-formula when the numbers *don't*
+  divide cleanly. Pick crux fixtures with an indivisible remainder (or a residual sibling), or the
+  happy-path test is decorative on the exact logic it names. "It passes red-on-revert" must be
+  proven per test, never assumed from the headline number matching.
+- **The SC2 mutation table is the highest-signal audit artifact in a test-porting phase — read its
+  claims against the arithmetic, don't just trust the RED/green column.** The one real defect (the
+  vacuous MOUSSE happy-path) surfaced *not* from re-running tests but from the reviewer reading the
+  documented "this mutation turns this test RED" claim and noticing the even division made it false.
+  A green suite hides a vacuous test completely; the mutation table is where vacuity becomes
+  visible — so a critical read of that table catches what the suite cannot. (Verifier re-drove only
+  a 3/7 sample independently and would have trusted the MOUSSE row; the *reviewer's* read of the
+  claim caught it. Both lenses earned their keep.)
+
+### What worked (repeat)
+
+- **Lift the `verify_*` scripts' own fixture builders and oracles verbatim.** The plan flagged the
+  heavy multi-step setups (AR/GELATO/MOUSSE each need receipts → bins → SO → ship) as the top cost
+  risk and pre-authorized copying the scripts' proven builders (`_seed_shipped_line`,
+  `_wo_account_balance`, `_subledger_valuation`) near-verbatim. Payoff: the ports landed without the
+  predicted >1h blowups, and reusing each script's *independent oracle* (aging from Invoice rows vs
+  control from JournalLine rows; `_subledger_valuation` vs `derive_account_balance`) kept every
+  headline assert from being self-fulfilling — the invariant is checked against a value computed a
+  different way, anchored to a literal.
+- **Drive the REAL flow, never hand-stamp the shape (D-P2b-5) — now applied prophylactically at
+  plan time, not learned from a bug.** The AR crux seeds its shipped SO lines by running the actual
+  `execute_pick/pack/ship` + `create/confirm_sales_order`, not by stamping `qty_shipped`/hand-posting
+  COGS. This is the 11a/11b keeper (hand-fed shapes twice certified dead features green); here it was
+  a *plan decision* before any code, and the ports match genuinely-shipped qty against a
+  genuinely-posted COGS JE. When a keeper is known, spend it in the plan.
+
+### Deferred (homed)
+
+- **CRUMB FK-cycle latent TRUNCATE gap** → BACKLOG p2. `_isolate` builds its truncate order from
+  `Base.metadata.sorted_tables`, which silently drops `crumb_lead`/`crumb_opportunity` (unresolvable
+  FK cycle) — those two tables may not be truncated between tests. Mitigated *this* phase (the CRUMB
+  ports create no leads/opportunities), but it *will* pollute any future test that does. Homed rather
+  than re-discovered per phase.
+
 ## Phase 02a — Pytest harness repair (v4.0, NFR-5, verified 2026-07-22)
 
 Fixed the four D-P7-4 root causes (psycopg2 DSN, event-loop-bound engine, missing `admin-user`

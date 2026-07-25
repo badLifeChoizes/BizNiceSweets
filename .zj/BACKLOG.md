@@ -1,5 +1,8 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-22 (Phase 2a retro — the p1 "PLUM live-DB test harness never runs" item
+Updated: 2026-07-24 (Phase 2b retro — CRUMB `crumb_lead`/`crumb_opportunity` latent
+TRUNCATE-skip harness gap → p2; mitigated this phase, will bite the first ported test that
+touches leads/opportunities)
+Prior: 2026-07-22 (Phase 2a retro — the p1 "PLUM live-DB test harness never runs" item
 RESOLVED by 2a and checked off; two residual harness checks the self-check test doesn't cover
 [back-to-back rerun; committed non-vacuity] folded as a note into the p1 CI item, their natural home)
 Prior: 2026-07-19 (Phase 13 retro — invoice void/credit-memo functional gap, dead
@@ -94,6 +97,15 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p2 — architecture & docs
 
+- [ ] **CRUMB `crumb_lead`/`crumb_opportunity` silently skipped by the test-harness TRUNCATE**
+  (Phase 2b, 2026-07-24) — `tests/conftest.py` `_isolate` builds its truncate order from
+  `Base.metadata.sorted_tables`, which drops those two tables from the sort because of an
+  unresolvable FK cycle between them (SAWarning). They may therefore **not** be reset between
+  tests. Latent, not yet bitten: the Phase-2b CRUMB ports build sales orders from partner+item and
+  create **no** lead/opportunity rows, so no cross-test pollution today (0-skip suite green ×2
+  confirms it). But the first ported test that touches leads/opportunities will inherit rows from a
+  prior test. Fix: break the FK cycle for sort purposes (e.g. deferrable constraint or an explicit
+  truncate list that includes both tables), or add them to a manual TRUNCATE tail in `_isolate`.
 - [ ] **Split `backend/app/modules/plum/service.py` (~3,000 lines)** before MOUSSE/CRISP copy
   the pattern — the monolith-file smell the prototypes suffered from. Target: before/at
   Phase 10 (MOUSSE). **Note (Phase 8):** `syerp/service.py` has now grown to ~1,800 lines
