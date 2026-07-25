@@ -18,7 +18,7 @@ Every floor-guarded inventory-ledger write serializes on the shared sorted-id
 - [x] 4. Make post_transfer bin-aware (from_bin_id), wired schema→router (SC3)
 - [x] 5. Make MOUSSE issue_components bin-aware, wired schema→router (SC3)
 - [x] 6. Truth-up the bin trust-boundary documentation (SC3 closure)
-- [ ] 7. Write verify_inventory_race.py — mixed-path concurrency, mutation-proven (SC2, SC1)
+- [x] 7. Write verify_inventory_race.py — mixed-path concurrency, mutation-proven (SC2, SC1)
 - [ ] 8. Revise verify_gelato.py scenario (E) to assert the fix (SC3)
 - [ ] 9. Behavior-change regression sweep — reconcile every breakage (SC5)
 - [ ] 10. FE: bin picker on StockAdjustDialog + Vitest payload assertion (SC4)
@@ -30,10 +30,10 @@ Every floor-guarded inventory-ledger write serializes on the shared sorted-id
 
 | # | Lock removed (revert) | RED observed | GREEN restored |
 |---|---|---|---|
-| M1 | Task-1 lock in `post_adjustment` | — | — |
-| M2 | Task-1 lock in `post_transfer` | — | — |
-| M3 | Task-2 PO lock in `receive_line` | — | — |
-| M4 | Task-1 lock in `post_receipt` | — | — |
+| M1 | Task-1 lock in `post_adjustment` | (A) both writers succeeded, on-hand driven to −4 (loc and pool) at iter 0 — MOUSSE's own lock could not save it; (B) collaterally breached too (−4, shares the adjust path) | (A) exactly one 422, on-hand 3; all 5 scenarios PASS, exit 0 |
+| M2 | Task-1 lock in `post_transfer` | (B) both writers succeeded, source on-hand −4 (loc and pool) at iter 0; (A)/(C)/(D) stayed green (mutation isolated) | (B) exactly one 422, source on-hand 3; exit 0 |
+| M3 | Task-2 PO lock in `receive_line` (`for_update=True` → `False`) | (C) BOTH receives succeeded (successes=2, no 422) at iter 0: 14 units + two GL posts landed against an order of 10, while the `qty_received` accumulator itself lost an update (read 7, not 14) | (C) exactly one success + one over-receipt 422, qty_received 7 ≤ 10, ONE receipt txn; exit 0 |
+| M4 | Task-1 lock in `post_receipt` | Lock ALONE removed (refresh kept): (D) RED at iter 0 — moving_avg_cost 10.000000 instead of 9.583333 (lost update; on-hand still 12). Lock + refresh both removed: identical RED signature. Documented: the lock alone was sufficient to go RED; refresh without the lock cannot serialize | (D) both receipts succeed, final avg 9.583333 == 115/12 exactly; exit 0 |
 
 ## Task-9 reconciliation log
 
