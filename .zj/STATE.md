@@ -1,5 +1,30 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-25 (**v4.0 Phase 3 VERIFIED — `/zj:verify 3`. Verdict PASS**, tag
+Updated: 2026-07-25 (**v4.0 Phase 3 RETRO'D — `/zj:retro 3`. Phase CLOSED**, ROADMAP Phase 3 →
+`[done — verified + retro'd 2026-07-25]`, tag `zj/good-03-ci-pipeline` stands. **LEARNINGS Phase 03
+banked (2 surprises + 4 repeats):** (surprise 1, the headline) *"X self-provisions from a bare server"
+is unproven until run against a genuinely EMPTY environment* — conftest's probe targeted `biznice_test`,
+the very DB provisioning was about to create, so fresh CI aborted before provisioning; 2a/2b's "232
+passed" only worked because the DB persisted locally (D-P3-4). Keepers: probe a resource that exists
+*before* bootstrap (maintenance `postgres` DB), and CI's fresh-per-run service is itself the standing
+protection for the bootstrap path — a class local dev can't provide. (surprise 2) *a recipe derived by
+READING code confirms what code doesn't do, not what the environment must already have* — the plan's
+verify-scripts recipe missed `PYTHONPATH` + the lifespan seeds because its own Verify line was never
+executed at plan time; run the plan's verify command once before trusting it. (repeats) engineer out the
+check-name↔branch-protection footgun (explicit `name:` + read contexts from a real run before the PUT);
+a CI phase's deliverable is proven RED, not just green (SC3/SC4 demos); job isolation dissolves
+DB-contract collisions (per-job `postgres:17` services); verify-the-verifier (authed `gh` live re-check +
+fresh-container reproduction with `pg_database` before/after). **BACKLOG trued up:** p1 **CI pipeline**
+item → RESOLVED (Phase 3); its Phase-1/2a folded residuals + the verify's 4 minors → new **p3 "CI
+hardening niceties"** (enforce-smoke, 0-skipped guard, pytest rerun, ci.yml meta-test, Node-20 action
+bump, duplicate push+PR runs, `.npmrc` peer-mask caveat); true-up: p1 "Port Phase-8 verify-script
+assertions" was delivered by Phase 2b → checked off. **No roadmap resize** — Phase 4 (NFR-7 inventory
+ledger race-safety) stands, now guarded by this CI; PR #4 stays OPEN (merge via `/zj:ship`, out of
+phase scope). **Next action:** `/zj:plan 4` (NFR-7 — shared FOR-UPDATE lock across
+issue/adjust/receive/transfer/ship + make `post_transfer`/`post_adjustment`/MOUSSE-issue bin-aware,
+mutation-proven mixed-path concurrency). Optional: `/zj:log phase 3` for the formal work log. Verify
+detail in the prior entry below.)
+
+Prior: 2026-07-25 (**v4.0 Phase 3 VERIFIED — `/zj:verify 3`. Verdict PASS**, tag
 `zj/good-03-ci-pipeline`. Verifier + reviewer ran in parallel, both **empirically**. **All 7 SCs PASS:**
 the verifier's authed `gh` re-confirmed **live** (not on trust) every claimed run ID — all-green
 **30140504003**, broken-test **30140642516**→revert **30140733237**, lint **30140870255**→revert
@@ -460,13 +485,15 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 
 ## Position
 
-- **Step:** build — **v4.0 Phase 3 (CI pipeline, NFR-4) BUILD COMPLETE** (`/zj:build 3`, 2026-07-24).
-  Branch `chore-ci-pipeline` off the plan tip `8a27a46`. All 9 tasks done; `.github/workflows/ci.yml`
-  with four blocking jobs proven green on real Actions runs (all-green 30140504003; 232 passed / 0
-  skipped; 14/14 verify_*), broken-test red (30140642516) + lint red (30140870255) each reverted
-  green, and a required-status-gated PR #4 → master (BLOCKED→CLEAN). D-P3-4 (owner): conftest DB probe
-  → maintenance `postgres` DB so a fresh CI Postgres self-provisions (test-infra only). SRD NFR-4 →
-  done (pending `/zj:verify 3`). PR #4 left open — merge out of scope. **Next action:** `/zj:verify 3`.
+- **Step:** retro — **v4.0 Phase 3 (CI pipeline, NFR-4) CLOSED** (`/zj:retro 3`, 2026-07-25; verified
+  PASS 2026-07-25, tag `zj/good-03-ci-pipeline`, reviewer 0 findings). Branch `chore-ci-pipeline` off
+  the plan tip `8a27a46`. `.github/workflows/ci.yml` with four independent blocking jobs proven green
+  AND red on real Actions runs (all-green 30140504003; 232 passed / 0 skipped; 14/14 verify_*;
+  broken-test red 30140642516; lint red 30140870255; each reverted green), required-status branch
+  protection gating PR #4 → master. D-P3-4: conftest probe → maintenance `postgres` DB so a fresh CI
+  Postgres self-provisions (test-infra only; product boundary clean). SRD NFR-4 verified. LEARNINGS
+  Phase 03 banked; BACKLOG p1 CI item resolved, residuals → p3 "CI hardening niceties". PR #4 left
+  open — merge via `/zj:ship`, out of phase scope. **Next action:** `/zj:plan 4` (NFR-7).
 
 - **Step:** build — **v4.0 Phase 2b (port `verify_*` cruxes into pytest, NFR-5) BUILD COMPLETE**
   (`/zj:build 2b`, 2026-07-24). Branch `chore-port-verify-cruxes` cut off `3f71900` (the plan-doc

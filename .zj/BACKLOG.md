@@ -1,5 +1,9 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-24 (Phase 2b retro — CRUMB `crumb_lead`/`crumb_opportunity` latent
+Updated: 2026-07-25 (Phase 3 retro — the p1 **CI pipeline** item RESOLVED (NFR-4 verified,
+tag `zj/good-03-ci-pipeline`); its residual niceties + the phase's 4 minor verify gaps folded
+into a new p3 "CI hardening" item. True-up: the p1 "Port Phase-8 verify-script assertions"
+item was actually resolved by Phase 2b (NFR-5) — checked off now)
+Prior: 2026-07-24 (Phase 2b retro — CRUMB `crumb_lead`/`crumb_opportunity` latent
 TRUNCATE-skip harness gap → p2; mitigated this phase, will bite the first ported test that
 touches leads/opportunities)
 Prior: 2026-07-22 (Phase 2a retro — the p1 "PLUM live-DB test harness never runs" item
@@ -21,24 +25,17 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p1 — quality/infra debt that already bit once
 
-- [ ] **CI pipeline** — no CI exists anywhere (no `.github/`, no pipeline config). Lint/test
-  are manual; the `SyerpPartner` bug shipped through 4 plans because live-DB tests never ran.
-  Minimum: ruff + pytest + eslint + vitest on push; stretch: a live-Postgres test job so
-  `skip_if_no_db` tests actually run.
-  **Phase 1 (2026-07-21) folds two items in here:** (a) SC4 has no *standing* automated
-  enforce-test — "gate exits non-zero on a violation" is proven only by a one-time manual
-  red→green proof; a tiny plant→expect-fail→revert smoke would automate it (low priority, the
-  gate's presence in CI is conventionally sufficient). (b) The CI runner must honor the tracked
-  `frontend/.npmrc` (`legacy-peer-deps=true`) so `npm ci` resolves — and that flag is *global*,
-  masking peer-dep conflicts for every future bump, so carry a one-line note that it's silencing
-  peer resolution.
-  **Phase 2a (2026-07-22) folds two residual harness checks in here** (p3, both cheap): (a) the
-  back-to-back-rerun isolation guarantee (SC4) is proven only by a manual double-run — a CI step
-  that runs `pytest` twice (or `-p no:randomly` + a rerun) would automate it; (b) harness
-  non-vacuity is a manual, uncommitted mutation — the committed `test_harness_selfcheck.py` pins
-  the load-bearing zero-silent-skip invariant, but the "a real product break turns a DB test RED"
-  proof is not itself standing. Low priority; the self-check test guards the invariant that
-  actually bit.
+- [x] **CI pipeline** — **RESOLVED by v4.0 Phase 3 (verified 2026-07-25, tag
+  `zj/good-03-ci-pipeline`, NFR-4).** `.github/workflows/ci.yml`: four independent blocking jobs
+  (`frontend` npm ci→lint→tsc→vitest→build; `backend-lint` ruff; `backend-tests` pytest vs a live
+  `postgres:17` service, 232 passed / 0 skipped, self-provisioned `biznice_test` per D-P3-4;
+  `verify-scripts` migrate+seed `biznice` then the 14 non-API `verify_*`) on every push/PR,
+  red-proven on real runs (broken test + ruff/eslint violations), and required-status branch
+  protection on `master` (PR #4). The runner honors `frontend/.npmrc` (SC7). The stretch goal
+  ("live-Postgres job so DB tests actually run") landed too. Residual niceties folded in here by
+  Phases 1/2a (standing enforce-smoke; pytest double-run; committed non-vacuity note) moved to the
+  p3 **CI hardening** item below — including the standing caveat that `legacy-peer-deps=true` is a
+  *global* peer-mask silencing conflicts on every future dep bump.
 - [x] **PLUM live-DB test harness never runs (4 root causes confirmed 2026-07-04, Phase 7)** —
   **RESOLVED by v4.0 Phase 2a (verified 2026-07-22, tag `zj/good-02a-pytest-harness-repair`).**
   All four root causes fixed at the harness layer (`backend/tests/conftest.py`): libpq-keyword DSN
@@ -59,15 +56,14 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   collisions on rerun against the persistent dev DB. This is the exact silent-skip that let
   the `SyerpPartner` 500 ship. Until fixed, PLUM fixes are proven by human-verify (D-P7-1) +
   standalone async scripts, not the pytest suite.
-- [ ] **Port Phase-8 verify-script assertions into runnable integration tests** (Phase 8 verify,
-  2026-07-08, owner-accepted deferral). SYERP-10/11's crux behaviors have **no automated regression
-  protection** — their only proof is standalone `backend/scripts/verify_{inventory,purchasing,e2e_p8}.py`
-  that no suite runs: (1) the receive→on-hand→moving-average integration (SYERP-11.4), (2) audit rows
-  written at the router (SYERP-10.7/11.7 — the verify scripts call service fns directly, bypassing
-  where `write_audit` lives), (3) a syerp-endpoint 401/403 test (SYERP-10.8/11.8 — only the generic
-  `tests/auth/test_rbac.py` covers the mechanism). Blocked on the async live-DB harness repair above;
-  once that lands, port the script assertions into pytest integration tests and drop the "UI flow UAT
-  pending / script-only" caveats from the SRD. A silent break in the crux currently passes every gate.
+- [x] **Port Phase-8 verify-script assertions into runnable integration tests** (Phase 8 verify,
+  2026-07-08, owner-accepted deferral) — **RESOLVED by v4.0 Phase 2b (verified 2026-07-24, tag
+  `zj/good-02b-port-verify-cruxes`, NFR-5); checked off at the Phase 3 retro true-up.** All three
+  named gaps closed: (1) the receive→on-hand→moving-average crux ported as a service-path pytest test
+  (`test_moving_average_service_crux`, mutation-proven RED); (2)+(3) HTTP-level audit + 401/403 tests
+  per module surface including the inventory receipt endpoint (Wave B, `13a27cf`). The SRD
+  "script-only" caveats were dropped at 2b; the cruxes now also run on every push via the Phase-3
+  `backend-tests` CI job. Original text kept in git history.
 - [x] **Neither lint gate runs (Phases 6/7/8 — recurring)** — RESOLVED in v4.0 Phase 1
   (`chore-lint-gates-clean`, NFR-6, verified). Frontend now runs on a flat `frontend/eslint.config.js`
   (`npm run lint` exit 0); `ruff` installed at `backend/.venv/bin/ruff` (`ruff check .` exit 0); both
@@ -243,6 +239,23 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **CI hardening niceties** (Phase 3 retro, 2026-07-25 — owner chose close-as-is; these are
+  the phase's homed minors plus the residuals folded into the old p1 CI item by Phases 1/2a).
+  All low-priority; the standing protection today is that the four jobs run on every push:
+  (a) **standing enforce-smoke** — SC3/SC4 red demos were one-time manual pushes; a
+  self-restoring inject→expect-red→revert smoke would continuously prove the gates still fail on
+  a violation; (b) **"0 skipped" guard on the pytest job** — a future silently-`skip`ped test
+  leaves `backend-tests` green (2a's `test_harness_selfcheck.py` pins the DSN-class regression,
+  not arbitrary new skips); e.g. assert on the pytest summary or a collected-count check;
+  (c) **back-to-back pytest rerun step** — the isolation guarantee is proven only by manual
+  double-runs; (d) **meta-test on `ci.yml` shape** — deleting a job/check silently stops checking
+  it; branch protection would go stale-but-satisfied only if the context vanished (GitHub then
+  blocks, so partial inherent cover); (e) **Node-20 action deprecation** — bump
+  `checkout`/`setup-node`/`setup-python` majors to clear the cosmetic warning; (f) **duplicate
+  push+PR runs** — both triggers fire for same-repo PR branches; scope `push` to `master` (or
+  add concurrency groups) to halve runner minutes. Standing caveat carried from Phase 1:
+  `frontend/.npmrc` `legacy-peer-deps=true` is a *global* peer-mask — a green `npm ci` is not
+  proof of peer sanity on future dep bumps.
 - [ ] **Invoice void / credit memos** (Phase 13 retro, 2026-07-19) — AR has no reversal path:
   `qty_invoiced` only ever increments (matches Phase 13 out-of-scope), so a mistaken invoice
   cannot be voided and an over-bill cannot be credited back. A real functional gap for any

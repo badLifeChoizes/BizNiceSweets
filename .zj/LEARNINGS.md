@@ -3,6 +3,74 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 03 — CI pipeline (GitHub Actions) (v4.0, NFR-4, verified 2026-07-25)
+
+Shipped `.github/workflows/ci.yml`: four independent blocking jobs (`frontend`, `backend-lint`,
+`backend-tests` vs a live `postgres:17` service, `verify-scripts` over the 14 non-API scripts),
+proven green AND red on real Actions runs, gated behind required-status branch protection on a
+real PR (#4). Infra-only — product boundary clean (`git diff -- backend/app/ frontend/src/`
+empty; only the authorized D-P3-4 conftest fix). Reviewer: 0 findings.
+
+### Surprises (assumption → corrected truth)
+
+- **"X self-provisions from a bare server" is unproven until it has run against a genuinely
+  empty environment — persistent local state can satisfy a precondition the code never
+  establishes.** The plan's core assumption ("pytest self-provisions; the Postgres service just
+  needs to exist") was wrong on a *fresh* server: conftest's reachability probe connected to
+  `biznice_test` — the very DB that provisioning was about to create — so on CI's always-empty
+  service the probe returned False and aborted the session before provisioning ever ran. The
+  2a/2b "232 passed" runs never exercised this path; they worked only because `biznice_test`
+  persisted from earlier local sessions (D-P3-4). Two keepers: (1) a reachability probe must
+  target a resource that exists *before* bootstrap (the maintenance `postgres` DB), never the
+  thing being bootstrapped; (2) CI's fresh-per-run service is itself the standing regression
+  protection for the bootstrap path — a protection class local dev structurally cannot provide,
+  and a genuine argument for CI beyond "runs the tests automatically."
+- **A recipe derived by *reading* code confirms what the code doesn't do — not what the
+  environment must already have. Execute the plan's verify command before trusting it.** The
+  plan grepped the `verify_*` scripts and correctly concluded they don't self-create/migrate the
+  DB, then wrote a "migrate `biznice`, run the loop" recipe whose own local-verify was evidently
+  never run: execution immediately surfaced two missing preconditions the scripts' docstrings
+  state — `PYTHONPATH` so `from app…` resolves, and the app-lifespan reference seeds ("GL
+  account 5100 not seeded"; alembic migrates schema only). Cheap discipline: for any
+  "run-existing-things-in-a-new-environment" task, actually run the plan's Verify line once at
+  plan time (or first thing at build); static analysis cannot enumerate runtime preconditions.
+
+### What worked (repeat)
+
+- **Engineer out the check-name ↔ branch-protection footgun instead of hoping.** Every job got
+  an explicit `name:` equal to its key, and Task 7 read the exact context names from a completed
+  run's `gh pr checks` *before* PUTting protection — never guessing. The classic silent failure
+  (protection PUT accepted, PR still mergeable on a name mismatch) was designed out; verify
+  confirmed `required_status_checks.contexts` matches the four reported names exactly.
+- **A CI phase's deliverable is proven red, not just green.** SC3/SC4 mandated deliberate
+  breakage (failing assert; ruff + eslint violations) pushed to real Actions runs, shown red,
+  then reverted and shown green again. A pipeline demonstrated only green is unproven *as a
+  gate* — the red demos are what showed `backend-tests` red doesn't mask the others (no
+  `needs:`) and that both lint jobs actually block.
+- **Job isolation dissolved the DB-contract collision.** pytest wants a maintenance `postgres`
+  DB and self-creates `biznice_test`; the `verify_*` scripts want a pre-migrated, pre-seeded
+  `biznice` and self-create nothing. Rather than sequencing one service through both contracts,
+  each job got its own `postgres:17` service configured for its contract (one bare; one
+  `POSTGRES_DB: biznice` + migrate + `run_seeds`). No shared state, no ordering, and a glob
+  (`verify_*.py` minus `*_api.py`) keeps the script list maintenance-proof.
+- **Verify-the-verifier discipline paid again:** the verifier re-confirmed every claimed run ID,
+  PR #4, and the protection contexts live via authed `gh` (not on trust) AND reproduced every
+  check locally on a fresh container — querying `pg_database` before/after to prove the D-P3-4
+  provisioning genuinely happened, not merely that pytest passed.
+
+### Deferred (homed)
+
+- **CI-hardening niceties → BACKLOG p3 (new item):** standing enforce-smoke (SC3/SC4 red demos
+  are one-time; standing protection = the jobs run every push), a "0 skipped" guard on the
+  pytest job (a future silent skip stays green today; 2a's `test_harness_selfcheck.py` pins the
+  DSN-class regression but not arbitrary new skips), a meta-test on workflow shape (deleting a
+  job silently drops its check), the Node-20 action-major bump (cosmetic warning), and
+  duplicate push+PR runs on same-repo branches. Owner chose close-as-is; all p3.
+- **BACKLOG p1 "CI pipeline" item → RESOLVED** by this phase (its folded Phase-1/2a sub-notes
+  carried into the new p3 item, including the standing `.npmrc legacy-peer-deps` peer-masking
+  caveat). The p1 "Port Phase-8 verify-script assertions" item was retroactively closed too —
+  Phase 2b delivered exactly it (true-up recorded there).
+
 ## Phase 02b — Port the verify_* cruxes into the pytest suite (v4.0, NFR-5, verified 2026-07-24)
 
 Ported the 7 DoD-named crux behaviors (inventory moving-avg, GL/AP/AR ties, MOUSSE WIP-clears,
