@@ -1,6 +1,6 @@
 // ABOUTME: Issue-components dialog (MOUSSE-01, SC7) — consume quantities of a work
 // ABOUTME: order's snapshot components from stock, POST /mousse/work-orders/{id}/issue.
-// ABOUTME: Each line draws off the WO's target location by default; 4xx surface a toast.
+// ABOUTME: Per-line optional bin picker (D-P4-1) at the WO's target location; 4xx toast.
 
 /**
  * IssueComponentsDialog — issues one or more of a work order's snapshot components
@@ -10,18 +10,25 @@
  *   workOrderId — the WO being issued against.
  *   components  — the WO's resolved component lines (with qty_required / issued_so_far
  *                 / on_hand), used to seed the per-line quantities and label the rows.
+ *   targetLocationId — the WO's target_location_id: every line draws from this
+ *                 location (the lines carry no location of their own), so it feeds
+ *                 the per-line bin picker's useBins query.
  *   partName    — resolver child_part_id → display label.
  *   open / onOpenChange — Radix-controlled visibility.
  *   onSuccess   — called after a successful issue; the host invalidates the detail + list.
  *
- * Each row offers a "issue this line" checkbox and an editable quantity, seeded to the
- * line's remaining (qty_required − issued_so_far, floored at 0). Location defaults to the
- * WO's target_location_id server-side, so it is omitted here. Decimal quantities are kept
- * as STRINGS and sent verbatim (D-11).
+ * Each row offers a "issue this line" checkbox, an editable quantity seeded to the
+ * line's remaining (qty_required − issued_so_far, floored at 0), and an optional bin
+ * Select (D-P4-1) defaulting to "Unbinned pool" → bin_id: null (draw from unbinned
+ * stock only). The bin column hides — and null is sent — when the bins query errors
+ * (GELATO off) or the location has no bins. Location defaults to the WO's
+ * target_location_id server-side, so it is omitted from the payload. Decimal
+ * quantities are kept as STRINGS and sent verbatim (D-11).
  *
  * Mutation: POST /api/v1/mousse/work-orders/{id}/issue with { lines: [{ component_id,
- *   quantity }] }. Success: onSuccess(), toast, close. Error (e.g. 4xx insufficient
- *   stock): toast.error(server detail) and DO NOT close.
+ *   quantity, bin_id }] }. Success: onSuccess(), toast, close. Error (e.g. 4xx
+ *   insufficient stock / insufficient unbinned pool): toast.error(server detail)
+ *   and DO NOT close.
  */
 
 import { useState, useEffect } from 'react'
@@ -40,14 +47,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { apiClient } from '@/api/client'
+import { useBins } from '@/routes/gelato/hooks'
 import type { WorkOrderComponentRead } from '../hooks'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+// Sentinel Select value for the "no bin — unbinned pool" default (Radix Select
+// forbids an empty-string item value).
+const UNBINNED_POOL = 'unbinned'
+
 interface IssueComponentsDialogProps {
   workOrderId: string
   components: WorkOrderComponentRead[]
+  targetLocationId: number
   partName: (childPartId: string) => string
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -57,6 +77,7 @@ interface IssueComponentsDialogProps {
 interface IssueLinePayload {
   component_id: string
   quantity: string
+  bin_id: number | null
 }
 
 interface IssuePayload {
@@ -67,6 +88,7 @@ interface IssuePayload {
 interface LineDraft {
   checked: boolean
   quantity: string
+  binId: string
 }
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
@@ -109,6 +131,7 @@ function remainingOf(c: WorkOrderComponentRead): string {
 export function IssueComponentsDialog({
   workOrderId,
   components,
+  targetLocationId,
   partName,
   open,
   onOpenChange,
@@ -117,13 +140,23 @@ export function IssueComponentsDialog({
   // Per-component draft state, keyed by component id.
   const [drafts, setDrafts] = useState<Record<string, LineDraft>>({})
 
+  // ── Bins at the WO's target location (per-line optional picker, D-P4-1) ──
+  // Every line draws from the WO's target location, so one bins query feeds all
+  // rows. NULL bin_id = draw from the unbinned pool only; at a binned location
+  // the operator should name a bin. When the bins query errors (GELATO off) or
+  // the location has no bins, the column hides and the draw stays unbinned.
+  // Gated on `open` (useBins disables on a falsy location id).
+  const { data: bins = [], isError: binsUnavailable } = useBins(open ? targetLocationId : 0)
+  const activeBins = bins.filter((b) => b.active)
+  const showBinSelect = !binsUnavailable && activeBins.length > 0
+
   // ── Seed the drafts each time the dialog opens ──
   useEffect(() => {
     if (!open) return
     const seeded: Record<string, LineDraft> = {}
     for (const c of components) {
       const remaining = remainingOf(c)
-      seeded[c.id] = { checked: remaining !== '', quantity: remaining }
+      seeded[c.id] = { checked: remaining !== '', quantity: remaining, binId: UNBINNED_POOL }
     }
     setDrafts(seeded)
   }, [open, components])
@@ -157,10 +190,14 @@ export function IssueComponentsDialog({
 
   function handleSubmit() {
     if (!canSubmit) return
-    const lines: IssueLinePayload[] = checkedLines.map((c) => ({
-      component_id: c.id,
-      quantity: (drafts[c.id]?.quantity ?? '').trim(),
-    }))
+    const lines: IssueLinePayload[] = checkedLines.map((c) => {
+      const binId = drafts[c.id]?.binId ?? UNBINNED_POOL
+      return {
+        component_id: c.id,
+        quantity: (drafts[c.id]?.quantity ?? '').trim(),
+        bin_id: showBinSelect && binId !== UNBINNED_POOL ? Number(binId) : null,
+      }
+    })
     issueMutation.mutate({ lines })
   }
 
@@ -181,19 +218,34 @@ export function IssueComponentsDialog({
             <p className="text-sm text-muted-foreground">This work order has no components.</p>
           ) : (
             <>
-              <div className="grid grid-cols-[2rem_1fr_6rem_6rem_7rem] items-center gap-2 text-xs font-medium text-muted-foreground">
+              <div
+                className={`grid ${
+                  showBinSelect
+                    ? 'grid-cols-[2rem_1fr_5rem_5rem_6rem_8rem]'
+                    : 'grid-cols-[2rem_1fr_6rem_6rem_7rem]'
+                } items-center gap-2 text-xs font-medium text-muted-foreground`}
+              >
                 <span />
                 <span>Component</span>
                 <span className="text-right">Required</span>
                 <span className="text-right">On hand</span>
                 <span className="text-right">Issue qty</span>
+                {showBinSelect && <span>Bin</span>}
               </div>
               {components.map((c) => {
-                const draft = drafts[c.id] ?? { checked: false, quantity: '' }
+                const draft = drafts[c.id] ?? {
+                  checked: false,
+                  quantity: '',
+                  binId: UNBINNED_POOL,
+                }
                 return (
                   <div
                     key={c.id}
-                    className="grid grid-cols-[2rem_1fr_6rem_6rem_7rem] items-center gap-2"
+                    className={`grid ${
+                      showBinSelect
+                        ? 'grid-cols-[2rem_1fr_5rem_5rem_6rem_8rem]'
+                        : 'grid-cols-[2rem_1fr_6rem_6rem_7rem]'
+                    } items-center gap-2`}
                   >
                     <input
                       type="checkbox"
@@ -213,6 +265,28 @@ export function IssueComponentsDialog({
                       onChange={(e) => updateDraft(c.id, { quantity: e.target.value })}
                       placeholder="0"
                     />
+                    {/* Optional bin (D-P4-1) — "Unbinned pool" draws unbinned stock only */}
+                    {showBinSelect && (
+                      <Select
+                        value={draft.binId}
+                        onValueChange={(v) => updateDraft(c.id, { binId: v })}
+                      >
+                        <SelectTrigger
+                          className="h-8"
+                          aria-label={`Bin for ${partName(c.child_part_id)}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={UNBINNED_POOL}>Unbinned pool</SelectItem>
+                          {activeBins.map((bin) => (
+                            <SelectItem key={bin.id} value={String(bin.id)}>
+                              {bin.code}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 )
               })}

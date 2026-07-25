@@ -106,6 +106,9 @@ function mockGetByUrl(wo: ReturnType<typeof makeWorkOrder>) {
   mockGet.mockImplementation((url: string) => {
     if (url.includes('/mousse/work-orders/')) return Promise.resolve({ data: wo })
     if (url.includes('/plum/parts')) return Promise.resolve({ data: PARTS })
+    // The issue dialog's useBins query (Phase 4, Task 12) — no bins here, so the
+    // per-line bin pickers stay hidden and issue lines carry bin_id: null.
+    if (url.includes('/bins')) return Promise.resolve({ data: [] })
     return Promise.reject(new Error(`unexpected GET ${url}`))
   })
 }
@@ -170,8 +173,8 @@ describe('WorkOrderDetail screen', () => {
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith('/api/v1/mousse/work-orders/wo1/issue', {
         lines: [
-          { component_id: 'c1', quantity: '20' },
-          { component_id: 'c2', quantity: '10' },
+          { component_id: 'c1', quantity: '20', bin_id: null },
+          { component_id: 'c2', quantity: '10', bin_id: null },
         ],
       })
     })

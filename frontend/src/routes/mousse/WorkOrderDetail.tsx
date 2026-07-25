@@ -364,6 +364,7 @@ export function WorkOrderDetail() {
       <IssueComponentsDialog
         workOrderId={id}
         components={wo.components}
+        targetLocationId={wo.target_location_id}
         partName={partName}
         open={issueOpen}
         onOpenChange={setIssueOpen}
