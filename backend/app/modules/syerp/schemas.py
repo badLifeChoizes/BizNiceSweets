@@ -352,13 +352,22 @@ class AdjustmentCreate(BaseModel):
     carry a unit_cost and never move the item's moving-average — only receipts
     do (AC10-5).
 
-    The negative-stock guard (resulting LOCATION on-hand would be < 0) is
-    enforced in the service, not here, because it depends on live DB state.
+    `bin_id` is EXPLICIT-OR-UNBINNED (D-P4-1, D-P4-6): a concrete bin targets
+    that single bin's pool; None (the default) targets ONLY the location's
+    UNBINNED pool — the server never auto-allocates across bins. A positive
+    delta lands stock directly in the named bin (or the unbinned pool); a
+    negative delta may only draw the named pool, so a write-off at a
+    fully-binned location must name the bin it draws from.
+
+    The negative-stock guards (resulting LOCATION on-hand < 0, and for a
+    negative delta the named POOL on-hand < 0) are enforced in the service, not
+    here, because they depend on live DB state.
     """
 
     location_id: int
     qty_delta: Decimal
     reason: str = Field(..., min_length=1, max_length=255)
+    bin_id: int | None = None
 
 
 class TransferCreate(BaseModel):

@@ -505,11 +505,14 @@ async def post_adjustment_endpoint(
 
     Appends one immutable signed `adjustment` ledger row with a required `reason`.
     A negative `qty_delta` covers the manual write-off / "issue" case (the `issue`
-    txn_type stays reserved for MOUSSE). Rejects with 422 if the resulting
-    location on-hand would go below zero (per-location negative-stock guard) —
-    no row is written. The item's moving-average is left untouched (only receipts
-    move it, AC10-5). Requires syerp:write. Returns 404 if the item or location
-    does not exist. Writes an inventory.adjustment audit row.
+    txn_type stays reserved for MOUSSE). `bin_id` is explicit-or-unbinned
+    (D-P4-1, D-P4-6): a concrete bin targets that bin's pool, None targets ONLY
+    the location's unbinned pool. Rejects with 422 if the resulting location
+    on-hand would go below zero (per-location negative-stock guard) or, for a
+    negative delta, if the named pool cannot cover the draw — no row is written.
+    The item's moving-average is left untouched (only receipts move it, AC10-5).
+    Requires syerp:write. Returns 404 if the item or location does not exist.
+    Writes an inventory.adjustment audit row.
     """
     txn = await post_adjustment(
         db,
@@ -518,7 +521,9 @@ async def post_adjustment_endpoint(
         qty_delta=data.qty_delta,
         reason=data.reason,
         actor_id=str(current_user.id),
+        bin_id=data.bin_id,
     )
+    bin_note = "unbinned pool" if data.bin_id is None else f"bin {data.bin_id}"
     await write_audit(
         db,
         actor_id=str(current_user.id),
@@ -527,7 +532,7 @@ async def post_adjustment_endpoint(
         target_id=str(txn.id),
         detail=(
             f"Adjustment: {data.qty_delta} of item {item_id} at location "
-            f"{data.location_id} ({data.reason})"
+            f"{data.location_id} ({bin_note}) ({data.reason})"
         ),
     )
     return txn

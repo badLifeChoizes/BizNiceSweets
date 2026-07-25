@@ -365,30 +365,45 @@ async def post_adjustment(
     qty_delta: Decimal,
     reason: str,
     actor_id: str,
+    bin_id: int | None = None,
 ) -> TransactionRead:
     """
     Post a stock adjustment: append one signed `adjustment` ledger row.
 
-    In a single transaction (AC10-4,6; D-P8-7; NFR-7):
-      1. LOCK the item-master row FOR UPDATE *before* the floor read (mirrors
+    In a single transaction (AC10-4,6; D-P8-7; D-P4-1; D-P4-6; NFR-7):
+      1. LOCK the item-master row FOR UPDATE *before* the floor reads (mirrors
          post_putaway step 3). The append-only InventoryTxn rows cannot be
          locked to serialize concurrent inserts — the item-master row is the
          correct single contention point, so two concurrent negative
          adjustments cannot both pass the floor. One item, so the sorted-id
-         ordering is trivial, but the lock must precede the read. Held until
+         ordering is trivial, but the lock must precede the reads. Held until
          this function's single commit.
       2. Derive `current_loc_onhand` = the item's on-hand AT `location_id`
          (SUM of that item's InventoryTxn.quantity WHERE location_id matches).
       3. Reject with 422 if the resulting location on-hand
          (`current_loc_onhand + qty_delta`) would be < 0 — NO row is appended
-         (per-location negative-stock guard, _adjustment_violates_floor).
-      4. Append ONE immutable `adjustment` InventoryTxn with the SIGNED
-         `qty_delta`, no unit_cost, the `reason`, and the actor.
+         (per-location negative-stock guard, _adjustment_violates_floor). This
+         location-level floor is kept alongside the pool floor (D-P8-7
+         contract): it defends legacy data whose per-bin split has already
+         desynced from the location total.
+      4. For a NEGATIVE delta only, ALSO floor-guard the NAMED pool (D-P4-1
+         explicit-or-unbinned): derive that pool's on-hand via get_bin_on_hand
+         (bin_id=None is the location's UNBINNED pool) and reject with 422 if
+         the delta would drive it below zero — the server never auto-allocates
+         across bins, so a write-off at a fully-binned location must name the
+         bin. Positive deltas take NO pool floor (D-P4-6): they simply land
+         stock in the named bin or the unbinned pool.
+      5. Append ONE immutable `adjustment` InventoryTxn with the SIGNED
+         `qty_delta`, the `bin_id` (or None for the unbinned pool), no
+         unit_cost, the `reason`, and the actor.
 
     The item's moving_avg_cost is deliberately left UNTOUCHED — only costed
     receipts move the average (AC10-5); a positive adjustment adds quantity at
     the current average. Raises 404 if the item or location does not exist (via
-    get_item / get_location). The 422 status mirrors the receipt guard.
+    get_item / get_location). The BIN is NOT validated here: bin existence +
+    location-membership is GELATO's domain and the caller's job (D-P12a-3);
+    the DB FK on bin_id is the backstop. The 422 status mirrors the receipt
+    guard.
 
     Returns the created row as a TransactionRead (joined location name). The
     router writes the inventory.adjustment audit row.
@@ -427,6 +442,22 @@ async def post_adjustment(
             ),
         )
 
+    # A NEGATIVE delta draws the NAMED pool only (D-P4-1): bin_id=None is the
+    # location's unbinned pool, a concrete bin_id that single bin. Same floor
+    # predicate as the location guard, applied at pool grain. Positive deltas
+    # take no pool floor (D-P4-6) — they add stock to the named pool.
+    if qty_delta < 0:
+        pool_onhand = await get_bin_on_hand(db, item_id, location_id, bin_id)
+        if _adjustment_violates_floor(pool_onhand, qty_delta):
+            pool_label = "the unbinned pool" if bin_id is None else f"bin {bin_id}"
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Adjustment of {qty_delta} exceeds {pool_label} at location "
+                    f"{location_id} (current {pool_onhand})."
+                ),
+            )
+
     txn = InventoryTxn(
         item_id=item_id,
         location_id=location_id,
@@ -435,6 +466,7 @@ async def post_adjustment(
         unit_cost=None,
         actor_id=actor_id,
         reason=reason,
+        bin_id=bin_id,
     )
     db.add(txn)
     # moving_avg_cost is intentionally NOT touched — only receipts move it (AC10-5).
