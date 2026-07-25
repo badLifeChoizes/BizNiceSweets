@@ -165,6 +165,14 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `post_issue` (draws from the chosen staging bin), and pick uses bin-aware `post_putaway`, so the
   pick→ship path keeps the bin dimension consistent. Still open on the INBOUND/adjust side:
   `post_transfer`, `post_adjustment`, and MOUSSE `issue_components` remain bin-blind.
+  **Update (v4.0 Phase 4 build, 2026-07-25): INBOUND/adjust half closed in code** —
+  `post_adjustment` (bin_id), `post_transfer` (from_bin_id), and MOUSSE `issue_components`
+  (per-line bin_id) are now bin-aware (D-P4-1 explicit-or-unbinned: None draws ONLY the
+  unbinned pool, per-POOL floor guard), so no primitive writes bin-blind draws anymore and
+  the split no longer rots; pre-Phase-4 desync'd rows remain as historical artifacts (the
+  `list_unbinned_stock` `>0` filter now only masks that legacy data, never a live negative).
+  `get_bin_on_hand`'s trust-boundary note rewritten to the new invariant. Final check-off of
+  this item happens at Phase 4 verify (scenario (E) flip, `verify_gelato.py`).
 - [ ] **GELATO pick-path shipment-header races** (Phase 12b review Q1/Q2, 2026-07-19) — the
   *ship* path is now hardened (shipment row `SELECT … FOR UPDATE` before the FSM gate — no double
   COGS post; `verify_gelato_ship.py` scenario h), but the *pick* path takes no shipment/SO lock:

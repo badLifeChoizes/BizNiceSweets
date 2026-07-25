@@ -730,15 +730,17 @@ async def get_bin_on_hand(
     A pure derivation like get_item_on_hand — it takes NO lock. Callers that must
     serialize a bin draw (post_putaway) lock the item-master row themselves first.
 
-    TRUST BOUNDARY (Phase 12a): the per-bin split is only trustworthy until the
-    first BIN-BLIND movement of the item at this location. As of 12a ONLY putaway
-    is bin-aware; post_transfer / post_adjustment / the MOUSSE issue path all write
-    bin_id=NULL and floor-guard per-LOCATION. After stock is put into a bin, such a
-    draw overstates the bin it left and drives the unbinned pool NEGATIVE, while the
-    per-location total (get_item_onhand) and Σ(bins)+unbinned stay correct. Bin-aware
-    pick/issue that keeps the split consistent lands in Phase 12b (BACKLOG p2). Do
-    not treat a single bin's figure as authoritative for picking across a location
-    that has also seen bin-blind draws until then.
+    TRUST BOUNDARY (closed v4.0 Phase 4, NFR-7): every draw primitive is now
+    bin-aware — post_transfer / post_adjustment / MOUSSE issue_components take an
+    optional bin_id and draw ONLY the named pool (None = the unbinned pool)
+    behind a per-POOL floor guard (D-P4-1 explicit-or-unbinned), matching
+    post_putaway / post_issue. The per-bin split therefore no longer rots: for
+    post-Phase-4 data every pool stays >= 0 and Σ(bins)+unbinned == location
+    total holds at pool grain. Rows written before Phase 4, when draws were
+    still bin-blind (historical), may have left a bin overstated and the
+    unbinned pool negative — those desyncs are legacy data artifacts the
+    current primitives cannot newly create (the location total and roll-up
+    were always exact).
     """
     from app.modules.syerp.models import InventoryTxn
 
@@ -912,11 +914,12 @@ async def post_putaway(
 #
 # An issue draws quantity OUT of a single BIN at a single stock location: one
 # `-qty` `issue` InventoryTxn leg valued at the item's CURRENT moving_avg_cost.
-# It is the bin-aware counterpart of the MOUSSE issue leg (mousse/service.py):
-# same signed `-qty` / txn_type='issue' shape, but with a concrete bin_id and a
-# per-BIN floor guard instead of MOUSSE's per-location one. This is the pick/ship
-# stock-out primitive GELATO composes over (Phase 12b) — receipts still own the
-# moving average (AC10-5); an issue never moves it.
+# It shares the MOUSSE issue leg's shape (mousse/service.py): same signed `-qty`
+# / txn_type='issue', and — since v4.0 Phase 4 made issue_components bin-aware
+# too (D-P4-1) — the same per-POOL floor guard; the differences are the soft
+# source_type/source_id provenance link and the commit=False composition hook.
+# This is the pick/ship stock-out primitive GELATO composes over (Phase 12b) —
+# receipts still own the moving average (AC10-5); an issue never moves it.
 #
 # The per-bin floor + item-master lock mirror post_putaway exactly: bin_id=None
 # draws the location's UNBINNED pool, a concrete bin_id draws that single bin.
