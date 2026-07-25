@@ -32,4 +32,4 @@ def test_db_probe_connects() -> None:
 
 def test_db_available_flag_true() -> None:
     """The session-cached availability flag is True, so no test takes the skip path."""
-    assert db_available() is True
+    assert db_available() is False  # TEMP: CI red demo (Phase 3 T5/SC3) — reverted next commit
