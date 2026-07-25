@@ -187,15 +187,24 @@ async def _load_po_lines(db: AsyncSession, po_id: str) -> list[PurchaseOrderLine
     return list(result.scalars().all())
 
 
-async def _get_po_row(db: AsyncSession, po_id: str) -> PurchaseOrder:
+async def _get_po_row(
+    db: AsyncSession, po_id: str, *, for_update: bool = False
+) -> PurchaseOrder:
     """
     Load a PurchaseOrder ORM row by id (internal helper).
 
     Raises HTTP 404 if no PO with the given id exists (mirrors get_item).
+    When ``for_update`` is True the row is locked FOR UPDATE for the rest of the
+    transaction — receive_line uses this to serialize concurrent receives against
+    the same PO so its qty_received accumulator and status roll-up reads cannot
+    race (NFR-7; mirrors _get_bill_row / record_payment).
     """
     from app.modules.syerp.models import PurchaseOrder
 
-    result = await db.execute(select(PurchaseOrder).where(PurchaseOrder.id == po_id))
+    stmt = select(PurchaseOrder).where(PurchaseOrder.id == po_id)
+    if for_update:
+        stmt = stmt.with_for_update()
+    result = await db.execute(stmt)
     po = result.scalars().first()
 
     if po is None:
@@ -563,13 +572,24 @@ async def receive_line(
     """
     Receive `qty` of a PO line into stock (Phase 8, Task 17, AC11-4/5).
 
-    Guard order — every rejection is 422 with NO mutation:
+    Guard order — every rejection is 422 with NO mutation. The PO header row is
+    locked FOR UPDATE at load (_get_po_row for_update=True), BEFORE the status
+    guard and the over-receipt guard read (NFR-7): one PO row serializes ALL
+    concurrent receives on that PO, covering the line.qty_received accumulator
+    (invariant qty_received <= qty_ordered — two racing receives can no longer
+    both read the same qty_received and jointly over-receive) AND the header
+    status roll-up read across all lines below. Then:
       1. The PO must be `approved` or `partially_received` (receiving is illegal on
          a draft, a fully-received, or a closed order).
       2. `qty` must be > 0.
       3. Over-receipt is rejected: `qty_received + qty > qty_ordered`
          (_is_over_receipt); the exact boundary (== qty_ordered) is allowed.
     The line is loaded scoped to `po_id` (404 if it does not exist on that PO).
+
+    Lock ORDER is PO → item: post_receipt takes the item-master FOR UPDATE lock
+    (NFR-7 Task 1) INSIDE this transaction, after the PO-header lock. No other
+    writer takes item → PO, so the ordering is acyclic — no deadlock. Both locks
+    are held until this function's single commit.
 
     On success, in ONE atomic transaction (the phase crux):
       - Post a REAL costed inventory receipt via the Task-5 post_receipt at the
@@ -603,7 +623,11 @@ async def receive_line(
     Returns the updated order as a PORead (header + nested lines). The router
     writes the po.received audit row (with qty + location detail).
     """
-    po = await _get_po_row(db, po_id)
+    # Lock the PO header FOR UPDATE at load, BEFORE the status guard and the
+    # over-receipt guard read: one PO row serializes ALL concurrent receives on
+    # this PO (qty_received accumulator + status roll-up). Lock order is
+    # PO → item (post_receipt's item-master lock) — acyclic, no deadlock.
+    po = await _get_po_row(db, po_id, for_update=True)
 
     # Guard 1: receiving is only valid on an open, approved order.
     if po.status not in ("approved", "partially_received"):

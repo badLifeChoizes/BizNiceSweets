@@ -13,7 +13,7 @@ Every floor-guarded inventory-ledger write serializes on the shared sorted-id
 
 - [x] 0. Cut branch and checklist
 - [x] 1. Serialize the three unlocked inventory.py writers on the item-master lock (SC1)
-- [ ] 2. Serialize receive_line on the PO-header lock (SC1)
+- [x] 2. Serialize receive_line on the PO-header lock (SC1)
 - [ ] 3. Make post_adjustment bin-aware, wired schema→router (SC3)
 - [ ] 4. Make post_transfer bin-aware (from_bin_id), wired schema→router (SC3)
 - [ ] 5. Make MOUSSE issue_components bin-aware, wired schema→router (SC3)
