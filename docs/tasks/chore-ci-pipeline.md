@@ -17,5 +17,7 @@ postgres + non-API `verify_*`) — red blocks merge.
       — run 30140642516 **failure** (only backend-tests red, injected assert); revert run 30140733237 green
 - [x] 6. Demonstrate red on lint violation (ruff AND eslint), then revert (SC4)
       — run 30140870255 **failure** (backend-lint F401 + frontend no-unused-vars both red); revert run 30140959653 green
-- [ ] 7. Open PR → `master` + configure required-status branch protection (SC6)
-- [ ] 8. Flip NFR-4 status + `requirements-progress.md`; archive this checklist (SC1–7)
+- [x] 7. Open PR → `master` + configure required-status branch protection (SC6)
+      — PR #4; four required checks green; PR BLOCKED→CLEAN; protection contexts = the four job names
+- [x] 8. Flip NFR-4 status + `requirements-progress.md`; archive this checklist (SC1–7)
+      — SRD NFR-4 → done (pending `/zj:verify 3`); requirements-progress NFR-4 row added. Archive at finish/ship.
