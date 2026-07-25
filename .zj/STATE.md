@@ -1,5 +1,27 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-24 (**v4.0 Phase 2b RETRO'D — `/zj:retro 2b`. Phase closed `[done]`.** Roadmap
+Updated: 2026-07-24 (**v4.0 Phase 3 PLANNED — `/zj:plan 3`.** Phase 3 = **CI pipeline (GitHub
+Actions, NFR-4, D-M4-2)** — every push/PR runs a blocking pipeline: ruff + eslint + `tsc -b` +
+vitest + `npm run build` + `pytest`-against-live-`postgres:17` (0 silent skips, 232 passed) + a
+**service-layer `verify_*` regression job** (the D-P2a-2 concurrency-proof CI home). **9 tasks**
+(`.zj/phases/03-ci-pipeline/PLAN.md`), sequential (one shared `ci.yml` + live-demo deps): T0 branch
+cut → T1 frontend+backend-lint jobs → T2 backend-tests job → T3 verify-scripts job → T4 push+prove
+all-green → T5 broken-test-red → T6 broken-lint-red → T7 real PR→master + required-status branch
+protection → T8 flip NFR-4 → done. **3 owner decisions (AskUserQuestion, all Rec.) → D-P3-1..3:**
+(1) CI runs the **14 non-API `verify_*` only** (the 9 `*_api.py` need a booted uvicorn; their
+RBAC/audit was ported to pytest in 2b — redundant); (2) backend runner = **setup-python@3.13 + pip
++ `postgres:17` service** (not a baked image — matches conftest's documented localhost invocation,
+self-provisions `biznice_test`); (3) **full live demo + branch protection** (gh authed as
+`badLifeChoizes`; owner-authorized outward push of the unmerged stack's branch). **DB-naming risk
+resolved:** pytest self-creates/migrates `biznice_test` off the maintenance `postgres` DB; the
+non-API `verify_*` assume a pre-migrated `biznice` and self-create nothing → **separate jobs, each
+its own `postgres:17` service** (verify job sets service `POSTGRES_DB=biznice` + runs `alembic
+upgrade head` first). Secrets are test-only throwaway `env:` values (no repo Secrets). No
+`## Decisions needed` open; plan checked goal-backward (every SC → ≥1 task, every task → SC + NFR-4,
+real files + runnable verify). **Branch (D-P3):** fresh `chore-ci-pipeline` off the 2b tip
+`chore-port-verify-cruxes` HEAD (`4960d32`) so the repaired harness + ported cruxes are present for a
+meaningful `pytest` run; unmerged v4.0 stack. **Next action:** `/zj:build 3`.)
+
+Prior: 2026-07-24 (**v4.0 Phase 2b RETRO'D — `/zj:retro 2b`. Phase closed `[done]`.** Roadmap
 Phase 2b flipped `[verified]` → `[done — verified + retro'd]`. **LEARNINGS Phase 02b banked (2
 surprises + 2 repeats):** (1) *a crux whose arithmetic divides evenly can't guard its own advertised
 mutation* — the wrong formula yields the right number (MOUSSE 210/10), so the residual sibling
