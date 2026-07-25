@@ -94,3 +94,14 @@ None (blocker/major/minor). Observations only, no action required for this phase
   `crumb_opportunity` rows (confirmed `tests/crumb/test_api.py:34-35,153`), so the unresolvable
   FK-cycle that drops those two tables from the TRUNCATE sort cannot pollute across tests. The
   0-skip suite passing twice back-to-back confirms no cross-test pollution.
+
+## Fix-loop re-verification (2026-07-24, post-verify)
+The one minor finding (MOUSSE happy-path `test_wip_clears_to_zero_crux` divides evenly at
+210/10, so the documented WIP credit-source mutation leaves it green — its SC2 guard is the
+sibling residual test `test_under_issue_override_clears_wip_and_ties_subledger`, which DOES flip
+RED) was fixed **docstring-only** in `0cb625f`: the file-header red-on-revert claim now points at
+the (D) residual test, and the checklist `## Noticed` records both that correction and the
+confirmation that no *sequential* `verify_*` assertion was dropped under D-P2b-2. The change is
+behavior-inert (a docstring in a test file). Per the fix-loop rule, the full suite was re-run
+after the change: `python -m pytest -q` ×2 → **232 passed / 0 skipped** both runs (197.84s /
+196.00s); the MOUSSE file re-ran green in isolation (2 passed). Verdict unchanged: **PASS**.
