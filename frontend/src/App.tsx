@@ -1,4 +1,8 @@
 import { Navigate, Routes, Route } from 'react-router-dom'
+
+// TEMP: eslint no-unused-vars for CI red demo (Phase 3 T6/SC4) — reverted next commit
+const ciLintDemoUnused = 42
+
 import { Login } from '@/routes/Login'
 import { AppShell } from '@/components/AppShell'
 
