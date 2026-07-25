@@ -231,6 +231,12 @@ async def _component_onhand(
     Returns Decimal("0") when the component has no linked item yet (pre-release)
     or when it has no movements at that location — on-hand is DERIVED, never
     stored (mirrors get_item_onhand / post_adjustment's per-location read).
+
+    Deliberately LOCATION-level, not per-pool: this figure is informational
+    availability (release-time / WO-detail display), not a floor guard. The
+    issue-time floor guard is per-POOL (explicit-or-unbinned, D-P4-1), so a
+    location whose stock is fully in bins can show availability here yet still
+    require bin_ids on the issue lines — accepted behavior change (D-P4-1).
     """
     from app.modules.syerp.models import InventoryTxn
 
@@ -596,21 +602,28 @@ async def issue_components(
          resumed first, and draft/completed/cancelled cannot consume stock.
       2. Resolve each requested component (404 if it is not a line of THIS WO);
          a component with no linked item (not released) is rejected 422. The draw
-         location defaults to the WO's target_location_id.
+         location defaults to the WO's target_location_id. Each line's bin_id is
+         EXPLICIT-OR-UNBINNED (D-P4-1): a concrete bin draws that single bin's
+         pool, None draws ONLY the location's unbinned pool — the server never
+         auto-allocates across bins. Bin existence + location-membership is NOT
+         validated here (caller's job, D-P12a-3); the DB FK on bin_id is the
+         backstop.
       3. **Lock the contended InventoryItem rows FOR UPDATE in sorted-id order
          BEFORE any on-hand read** (SC5 — copies the create_bill template): a
          concurrent issue against the same item blocks until this transaction
          commits and then re-reads the true on-hand, so two issues can never
          drive on-hand negative or double-consume.
-      4. Per line, derive per-location on-hand and apply the SAME per-location
-         floor guard SYERP adjustments use (_adjustment_violates_floor); an
-         insufficient-stock line is rejected 422. Duplicate (item, location) lines
-         within one request accumulate so they cannot jointly overdraw.
+      4. Per line, derive the NAMED pool's on-hand (SYERP's null-aware
+         get_bin_on_hand — bin_id=None is the unbinned pool) and apply the SAME
+         floor guard SYERP adjustments use (_adjustment_violates_floor) at pool
+         grain; an insufficient-pool line is rejected 422 naming the pool.
+         Duplicate (item, location, bin) lines within one request accumulate so
+         they cannot jointly overdraw.
       5. Append one signed `issue` InventoryTxn per line (quantity = -qty,
-         unit_cost = item.moving_avg_cost, txn_type='issue',
-         source_type='mousse_work_order', source_id=wo.id) — added directly, NOT
-         via post_adjustment (which lacks commit control and would not value at
-         moving_avg).
+         unit_cost = item.moving_avg_cost, txn_type='issue', bin_id = the
+         line's pool, source_type='mousse_work_order', source_id=wo.id) — added
+         directly, NOT via post_adjustment (which lacks commit control and
+         would not value at moving_avg).
       6. Post ONE balanced JE Dr 1140 WIP / Cr 1130 Inventory for the total issued
          value = Σ(qty × moving_avg, quantized to _COST_QUANTUM), dated wo.wo_date,
          source-linked to the WO (post_journal_entry(commit=False)).
@@ -626,6 +639,7 @@ async def issue_components(
         _COST_QUANTUM,
         _adjustment_violates_floor,
         _gl_account_id_by_code,
+        get_bin_on_hand,
         post_journal_entry,
     )
 
@@ -644,7 +658,7 @@ async def issue_components(
         )
 
     # Resolve every requested component against THIS WO before any write.
-    resolved: list[tuple[WorkOrderComponent, Decimal, int]] = []
+    resolved: list[tuple[WorkOrderComponent, Decimal, int, int | None]] = []
     for line in request.lines:
         comp_result = await db.execute(
             select(WorkOrderComponent).where(
@@ -670,13 +684,13 @@ async def issue_components(
                 ),
             )
         location_id = line.location_id if line.location_id is not None else wo.target_location_id
-        resolved.append((comp, line.quantity, location_id))
+        resolved.append((comp, line.quantity, location_id, line.bin_id))
 
     # SC5: lock the contended InventoryItem rows FOR UPDATE in sorted-id order
     # BEFORE any on-hand read (create_bill template). Loading the full row also
     # gives the moving_avg_cost each issue values at.
     item_by_id: dict[str, InventoryItem] = {}
-    for locked_id in sorted({comp.item_id for comp, _, _ in resolved}):
+    for locked_id in sorted({comp.item_id for comp, _, _, _ in resolved}):
         item = (
             await db.execute(
                 select(InventoryItem).where(InventoryItem.id == locked_id).with_for_update()
@@ -684,25 +698,27 @@ async def issue_components(
         ).scalars().first()
         item_by_id[locked_id] = item
 
-    # Per-location floor guard, then append the signed issue txns. Base on-hand is
-    # read once per (item, location); duplicate lines accumulate consumed qty so
-    # they cannot jointly overdraw (D-P8-7 per-location floor).
-    base_onhand: dict[tuple[str, int], Decimal] = {}
-    consumed: dict[tuple[str, int], Decimal] = {}
+    # Per-pool floor guard (D-P4-1), then append the signed issue txns. Base
+    # pool on-hand is read once per (item, location, bin) via SYERP's null-aware
+    # get_bin_on_hand (bin_id=None = the unbinned pool); duplicate lines on the
+    # same pool accumulate consumed qty so they cannot jointly overdraw.
+    base_onhand: dict[tuple[str, int, int | None], Decimal] = {}
+    consumed: dict[tuple[str, int, int | None], Decimal] = {}
     total_value = Decimal("0")
     created: list[tuple[WorkOrderComponent, Decimal, int, Decimal, InventoryTxn]] = []
-    for comp, qty, location_id in resolved:
-        key = (comp.item_id, location_id)
+    for comp, qty, location_id, bin_id in resolved:
+        key = (comp.item_id, location_id, bin_id)
         if key not in base_onhand:
-            base_onhand[key] = await _component_onhand(db, comp.item_id, location_id)
+            base_onhand[key] = await get_bin_on_hand(db, comp.item_id, location_id, bin_id)
             consumed[key] = Decimal("0")
         available = base_onhand[key] - consumed[key]
         if _adjustment_violates_floor(available, -qty):
+            pool_label = "the unbinned pool" if bin_id is None else f"bin {bin_id}"
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
-                    f"Issue of {qty} for component {comp.id} exceeds location "
-                    f"{location_id} on-hand ({available}) for item {comp.item_id}."
+                    f"Issue of {qty} for component {comp.id} exceeds {pool_label} at "
+                    f"location {location_id} (available {available}) for item {comp.item_id}."
                 ),
             )
         consumed[key] += qty
@@ -719,6 +735,7 @@ async def issue_components(
             quantity=-qty,
             unit_cost=unit_cost,
             actor_id=actor_id,
+            bin_id=bin_id,
             source_type="mousse_work_order",
             source_id=wo.id,
         )

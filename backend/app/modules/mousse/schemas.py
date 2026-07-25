@@ -147,11 +147,17 @@ class IssueComponentLine(BaseModel):
     zero/negative issue is not a consumption, so the > 0 guard is enforced here
     (Field(gt=0)). `location_id` is optional — the service defaults it to the
     work order's `target_location_id` when omitted. Decimal (never float — D-11).
+
+    `bin_id` is EXPLICIT-OR-UNBINNED (D-P4-1): a concrete bin draws that single
+    bin's pool at the location; None (the default) draws ONLY the location's
+    UNBINNED pool — the server never auto-allocates across bins, so issuing at
+    a fully-binned location requires naming the bin per line.
     """
 
     component_id: str
     quantity: Decimal = Field(..., gt=0)
     location_id: int | None = None
+    bin_id: int | None = None
 
 
 class IssueComponentsRequest(BaseModel):
@@ -159,8 +165,10 @@ class IssueComponentsRequest(BaseModel):
     Issue-components payload (POST /mousse/work-orders/{id}/issue).
 
     Consumes one or more components against the work order in a single atomic
-    posting. Each line names a component, a positive quantity, and optionally the
-    location to draw from (defaulting to the WO's target_location_id).
+    posting. Each line names a component, a positive quantity, optionally the
+    location to draw from (defaulting to the WO's target_location_id), and
+    optionally the bin to draw from (None = the location's unbinned pool only,
+    D-P4-1 explicit-or-unbinned).
     """
 
     lines: list[IssueComponentLine] = Field(..., min_length=1)

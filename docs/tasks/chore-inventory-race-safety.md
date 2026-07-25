@@ -16,7 +16,7 @@ Every floor-guarded inventory-ledger write serializes on the shared sorted-id
 - [x] 2. Serialize receive_line on the PO-header lock (SC1)
 - [x] 3. Make post_adjustment bin-aware, wired schema→router (SC3)
 - [x] 4. Make post_transfer bin-aware (from_bin_id), wired schema→router (SC3)
-- [ ] 5. Make MOUSSE issue_components bin-aware, wired schema→router (SC3)
+- [x] 5. Make MOUSSE issue_components bin-aware, wired schema→router (SC3)
 - [ ] 6. Truth-up the bin trust-boundary documentation (SC3 closure)
 - [ ] 7. Write verify_inventory_race.py — mixed-path concurrency, mutation-proven (SC2, SC1)
 - [ ] 8. Revise verify_gelato.py scenario (E) to assert the fix (SC3)

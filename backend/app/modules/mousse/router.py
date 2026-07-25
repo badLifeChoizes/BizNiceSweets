@@ -180,12 +180,14 @@ async def issue_components_endpoint(
     Issue one or more components against a work order (consume stock into WIP).
 
     Atomically posts a signed `issue` InventoryTxn per line (at each item's
-    moving-average cost, floor-guarded) and ONE balanced JE Dr 1140 WIP /
-    Cr 1130 Inventory for the total; a released WO flips to In Progress on the
-    first issue. Rejects (nothing persisted) a WO not in Released/In Progress
-    (409), an unknown component (404), or an insufficient-stock line (422).
-    Requires mousse:write. Writes a work_order.issued audit row after the issue
-    commits.
+    moving-average cost, floor-guarded per POOL — each line's optional bin_id is
+    explicit-or-unbinned, D-P4-1: a concrete bin draws that bin, None draws only
+    the location's unbinned pool) and ONE balanced JE Dr 1140 WIP / Cr 1130
+    Inventory for the total; a released WO flips to In Progress on the first
+    issue. Rejects (nothing persisted) a WO not in Released/In Progress (409),
+    an unknown component (404), or an insufficient-pool line (422 naming the
+    pool). Requires mousse:write. Writes a work_order.issued audit row after
+    the issue commits.
     """
     result = await issue_components(db, wo_id, data, str(current_user.id))
     await write_audit(
