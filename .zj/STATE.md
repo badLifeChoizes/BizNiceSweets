@@ -1,5 +1,24 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-24 (**v4.0 Phase 2b BUILD COMPLETE — `/zj:build 2b`.** All 17 tasks on branch
+Updated: 2026-07-24 (**v4.0 Phase 2b VERIFIED — `/zj:verify 2b`. Verdict PASS**, tag
+`zj/good-02b-port-verify-cruxes`. Verifier + reviewer ran in parallel, both **empirically** (not
+trusting the build report): all 6 SCs PASS — verifier ran the full suite twice in-container
+(**232 passed / 0 skipped** both runs), read all 7 crux tests (each headline Decimal asserted via
+the REAL service path against an independent oracle anchored to a literal), independently re-drove
+**3/7 SC2 mutations** (inventory/CRUMB/GELATO — each flips a NAMED pytest test RED, all reverted,
+`backend/app/` clean), 23/23 `verify_*` exit 0, ruff exit 0, cold boot ok, `git diff -- backend/app/`
+**empty** (TEST-ONLY honored), NFR-5 caveats dropped + D-P2b-1..6 recorded (SC6). **Reviewer: 0
+blocker / 0 major / 1 minor** — MOUSSE happy-path `test_wip_clears_to_zero_crux` divides evenly
+(210/10) so the documented WIP credit-source mutation leaves it green; its SC2 regression guard is
+the sibling residual test `test_under_issue_override_clears_wip_and_ties_subledger` (100/3), which
+DOES flip RED — the crux stays protected. **Fix loop (minor, `0cb625f`, docstring-only):** corrected
+the file-header red-on-revert claim to point at the (D) test, confirmed no sequential `verify_*`
+assert was dropped under D-P2b-2, logged both to `## Noticed`; MOUSSE file re-run green (2 passed).
+SRD NFR-5 stamped `- **Verified (2b portion):** 0cb625f`; ROADMAP Phase 2b → `[verified]`; artifacts
+`VERIFICATION.md` + `REVIEW.md` committed. **Next action:** `/zj:retro 2b` (bank the
+"a crux that divides evenly can't guard its own residual mutation — the residual sibling is the real
+guard" keeper) or `/zj:plan 3` (CI pipeline, NFR-4). Full build detail in the prior entry below.)
+
+Prior: 2026-07-24 (**v4.0 Phase 2b BUILD COMPLETE — `/zj:build 2b`.** All 17 tasks on branch
 `chore-port-verify-cruxes` (off `3f71900`); TEST-ONLY, **`git diff -- backend/app/` empty**. The DoD-named
 `verify_*` cruxes now run inside the ordinary `pytest` suite (7 new service-layer crux files + 5 HTTP
 audit/RBAC files + shared `seeded_ledger_db` fixture); **SC2 non-vacuity proven** — 7 product mutations each
