@@ -217,14 +217,24 @@ async def post_receipt(
     """
     Post a costed receipt: append one ledger row and recompute the moving average.
 
-    In a single transaction (AC10-4,5,7,8):
-      1. Derive `qty_before` = the item's TOTAL on-hand across ALL locations
+    In a single transaction (AC10-4,5,7,8; NFR-7):
+      1. LOCK the item-master row FOR UPDATE *before* the on-hand read (mirrors
+         post_putaway step 3). The append-only InventoryTxn rows cannot be locked
+         to serialize concurrent inserts — the item-master row is the correct
+         single contention point. One item, so the sorted-id ordering is trivial,
+         but the lock must precede the read. The lock also serializes the
+         moving-average read-recompute-write (steps 2-3 + 5): the item row is
+         refreshed once the lock is held, so a concurrent receipt cannot lose an
+         update to item.moving_avg_cost. With commit=False the lock rides the
+         CALLER's transaction (receive_line holds it until its single commit —
+         correct: the receipt + accumulator bump stay serialized end to end).
+      2. Derive `qty_before` = the item's TOTAL on-hand across ALL locations
          (SUM of every InventoryTxn.quantity for the item) — the moving average
          is item-level, not per-location.
-      2. Compute the new item-level moving average via compute_new_moving_avg.
-      3. Append ONE immutable `receipt` InventoryTxn (positive signed quantity,
+      3. Compute the new item-level moving average via compute_new_moving_avg.
+      4. Append ONE immutable `receipt` InventoryTxn (positive signed quantity,
          unit_cost set, actor + optional source link).
-      4. Update item.moving_avg_cost to the recomputed value.
+      5. Update item.moving_avg_cost to the recomputed value.
 
     Rejects qty <= 0 or unit_cost < 0 with 422 (mirrors the ReceiptCreate schema
     guard; defends the service against non-HTTP callers too). Raises 404 if the
@@ -242,7 +252,7 @@ async def post_receipt(
     Returns the created row as a TransactionRead (joined location name), mirroring
     list_item_transactions. The router writes the inventory.receipt audit row.
     """
-    from app.modules.syerp.models import InventoryTxn
+    from app.modules.syerp.models import InventoryItem, InventoryTxn
     from app.modules.syerp.schemas import TransactionRead
 
     if qty <= 0:
@@ -259,6 +269,21 @@ async def post_receipt(
     # 404s if either does not exist (mirrors get_item / get_location).
     item = await get_item(db, item_id)
     location = await get_location(db, location_id)
+
+    # LOCK the item-master row FOR UPDATE *before* the on-hand read (mirror
+    # post_putaway). Locking the append-only ledger rows would not serialize
+    # concurrent inserts; the item-master row is the single contention point.
+    # Held until the single commit — the CALLER's commit when commit=False
+    # (receive_line holds it through its one atomic transaction).
+    await db.execute(
+        select(InventoryItem.id).where(InventoryItem.id == item_id).with_for_update()
+    )
+    # Re-read the item NOW the lock is held: a concurrent receipt may have
+    # committed a new moving_avg_cost between get_item's load and lock
+    # acquisition, and the identity-mapped `item` would still carry that stale
+    # value. The refresh makes the read-recompute-write below race-free (no
+    # lost update on the moving average).
+    await db.refresh(item)
 
     # qty_before = total on-hand across ALL locations (item-level average).
     result = await db.execute(
@@ -344,13 +369,20 @@ async def post_adjustment(
     """
     Post a stock adjustment: append one signed `adjustment` ledger row.
 
-    In a single transaction (AC10-4,6; D-P8-7):
-      1. Derive `current_loc_onhand` = the item's on-hand AT `location_id`
+    In a single transaction (AC10-4,6; D-P8-7; NFR-7):
+      1. LOCK the item-master row FOR UPDATE *before* the floor read (mirrors
+         post_putaway step 3). The append-only InventoryTxn rows cannot be
+         locked to serialize concurrent inserts — the item-master row is the
+         correct single contention point, so two concurrent negative
+         adjustments cannot both pass the floor. One item, so the sorted-id
+         ordering is trivial, but the lock must precede the read. Held until
+         this function's single commit.
+      2. Derive `current_loc_onhand` = the item's on-hand AT `location_id`
          (SUM of that item's InventoryTxn.quantity WHERE location_id matches).
-      2. Reject with 422 if the resulting location on-hand
+      3. Reject with 422 if the resulting location on-hand
          (`current_loc_onhand + qty_delta`) would be < 0 — NO row is appended
          (per-location negative-stock guard, _adjustment_violates_floor).
-      3. Append ONE immutable `adjustment` InventoryTxn with the SIGNED
+      4. Append ONE immutable `adjustment` InventoryTxn with the SIGNED
          `qty_delta`, no unit_cost, the `reason`, and the actor.
 
     The item's moving_avg_cost is deliberately left UNTOUCHED — only costed
@@ -361,12 +393,20 @@ async def post_adjustment(
     Returns the created row as a TransactionRead (joined location name). The
     router writes the inventory.adjustment audit row.
     """
-    from app.modules.syerp.models import InventoryTxn
+    from app.modules.syerp.models import InventoryItem, InventoryTxn
     from app.modules.syerp.schemas import TransactionRead
 
     # 404s if either does not exist (mirrors get_item / get_location).
     item = await get_item(db, item_id)  # noqa: F841 — loaded to 404 on missing item
     location = await get_location(db, location_id)
+
+    # LOCK the item-master row FOR UPDATE *before* the floor read (mirror
+    # post_putaway). Locking the append-only ledger rows would not serialize
+    # concurrent inserts; the item-master row is the single contention point.
+    # Held until this function's single commit.
+    await db.execute(
+        select(InventoryItem.id).where(InventoryItem.id == item_id).with_for_update()
+    )
 
     # Per-location on-hand: signed SUM of this item's txns AT this location.
     result = await db.execute(
@@ -446,15 +486,22 @@ async def post_transfer(
     """
     Post a stock transfer: append the two paired `transfer` ledger legs.
 
-    In a single transaction (AC10-4,6; D-P8-7):
+    In a single transaction (AC10-4,6; D-P8-7; NFR-7):
       1. Reject with 422 if from_location_id == to_location_id (a self-transfer is
          a no-op) or qty <= 0 (a transfer is a positive movement) — NO rows.
-      2. Derive `current_from_onhand` = the item's on-hand AT from_location_id
+      2. LOCK the item-master row FOR UPDATE *before* the floor read (mirrors
+         post_putaway step 3). The append-only InventoryTxn rows cannot be
+         locked to serialize concurrent inserts — the item-master row is the
+         correct single contention point, so two concurrent out-transfers
+         cannot both pass the source floor. One item, so the sorted-id ordering
+         is trivial, but the lock must precede the read. Held until this
+         function's single commit.
+      3. Derive `current_from_onhand` = the item's on-hand AT from_location_id
          (SUM of that item's InventoryTxn.quantity WHERE location_id matches).
-      3. Reject with 422 if the `-qty` leg would drive the source location on-hand
+      4. Reject with 422 if the `-qty` leg would drive the source location on-hand
          below zero (over-draw, _adjustment_violates_floor(from_onhand, -qty)) —
          NO rows are appended.
-      4. Append EXACTLY TWO immutable `transfer` InventoryTxn rows sharing a fresh
+      5. Append EXACTLY TWO immutable `transfer` InventoryTxn rows sharing a fresh
          transfer_group_id: `-qty` at from_location_id, `+qty` at to_location_id,
          both valued at the item's CURRENT moving_avg_cost.
 
@@ -468,7 +515,7 @@ async def post_transfer(
     """
     import uuid
 
-    from app.modules.syerp.models import InventoryTxn
+    from app.modules.syerp.models import InventoryItem, InventoryTxn
     from app.modules.syerp.schemas import TransactionRead
 
     if from_location_id == to_location_id:
@@ -486,6 +533,14 @@ async def post_transfer(
     item = await get_item(db, item_id)
     from_location = await get_location(db, from_location_id)
     to_location = await get_location(db, to_location_id)
+
+    # LOCK the item-master row FOR UPDATE *before* the floor read (mirror
+    # post_putaway). Locking the append-only ledger rows would not serialize
+    # concurrent inserts; the item-master row is the single contention point.
+    # Held until this function's single commit.
+    await db.execute(
+        select(InventoryItem.id).where(InventoryItem.id == item_id).with_for_update()
+    )
 
     # Per-location source on-hand: signed SUM of this item's txns AT the source.
     result = await db.execute(
