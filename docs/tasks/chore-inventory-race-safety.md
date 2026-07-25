@@ -22,7 +22,7 @@ Every floor-guarded inventory-ledger write serializes on the shared sorted-id
 - [x] 8. Revise verify_gelato.py scenario (E) to assert the fix (SC3)
 - [x] 9. Behavior-change regression sweep — reconcile every breakage (SC5)
 - [x] 10. FE: bin picker on StockAdjustDialog + Vitest payload assertion (SC4)
-- [ ] 11. FE: from-bin picker on StockTransferDialog + Vitest payload assertion (SC4)
+- [x] 11. FE: from-bin picker on StockTransferDialog + Vitest payload assertion (SC4)
 - [ ] 12. FE: per-line bin picker on IssueComponentsDialog + Vitest payload assertion (SC4)
 - [ ] 13. Full-gate run + bookkeeping (SC5, SC6)
 

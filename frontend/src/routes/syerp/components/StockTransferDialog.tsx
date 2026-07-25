@@ -1,6 +1,6 @@
 // ABOUTME: Transfer-Stock dialog for a SYERP inventory item (Phase 8, Task 13) —
-// ABOUTME: from-location + to-location Selects + positive qty → POST …/transfers.
-// ABOUTME: A 422 over-draw / same-location rejection surfaces a toast, dialog stays.
+// ABOUTME: from-location + optional from-bin (D-P4-1) + to-location Selects + positive
+// ABOUTME: qty → POST …/transfers. A 422 rejection surfaces a toast, dialog stays.
 
 /**
  * StockTransferDialog — posts a from→to stock transfer for an inventory item.
@@ -15,16 +15,24 @@
  * Fields:
  *   1. From location — required. Populated from GET
  *                      /api/v1/syerp/inventory/locations (active only).
- *   2. To location   — required. Same source. Must differ from the source; a
+ *   2. From bin      — optional (D-P4-1). Populated from useBins(source) once a
+ *                      source is chosen; defaults to "Unbinned pool" →
+ *                      from_bin_id: null (draw from unbinned stock only). Hidden —
+ *                      and null sent — when the bins query errors (GELATO off) or
+ *                      the source has no bins.
+ *   3. To location   — required. Same source. Must differ from the source; a
  *                      from==to selection is blocked client-side (submit disabled
- *                      + inline error) and never POSTed.
- *   3. Quantity      — required, positive. Kept as a raw string and sent verbatim
+ *                      + inline error) and never POSTed. There is deliberately NO
+ *                      destination bin control: transfers arrive in the
+ *                      destination's unbinned pool (D-P4-5) — direct with Putaway.
+ *   4. Quantity      — required, positive. Kept as a raw string and sent verbatim
  *                      so the backend parses it as a Decimal (no JS float mangling).
  *
  * Mutation: POST /api/v1/syerp/inventory/items/{itemId}/transfers
  *   Success: onSuccess() (host invalidates onhand+transactions), close, toast.
- *   Error (esp. 422 source over-draw): toast.error with the server `detail` and
- *          DO NOT close — let the user fix the input (AC10-6).
+ *   Error (esp. 422 source over-draw, incl. an insufficient unbinned pool):
+ *          toast.error with the server `detail` and DO NOT close — let the user
+ *          fix the input (AC10-6).
  */
 
 import { useState, useEffect } from 'react'
@@ -51,8 +59,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { apiClient } from '@/api/client'
+import { useBins } from '@/routes/gelato/hooks'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+// Sentinel Select value for the "no bin — unbinned pool" default (Radix Select
+// forbids an empty-string item value).
+const UNBINNED_POOL = 'unbinned'
 
 interface LocationOption {
   id: number
@@ -130,13 +143,24 @@ export function StockTransferDialog({
 
   // ── Form state ──
   const [fromLocationId, setFromLocationId] = useState('')
+  const [fromBinId, setFromBinId] = useState(UNBINNED_POOL)
   const [toLocationId, setToLocationId] = useState('')
   const [qty, setQty] = useState('')
+
+  // ── Bins at the SOURCE location (optional from-bin picker, D-P4-1) ──
+  // NULL from_bin_id = draw from the source's unbinned pool only; at a binned
+  // source the operator should name a bin. When the bins query errors (GELATO
+  // off) or the source has no bins, the picker hides and the draw stays unbinned.
+  // The destination gets no bin control — transfers arrive unbinned (D-P4-5).
+  const { data: fromBins = [], isError: binsUnavailable } = useBins(Number(fromLocationId))
+  const activeFromBins = fromBins.filter((b) => b.active)
+  const showFromBinSelect = !!fromLocationId && !binsUnavailable && activeFromBins.length > 0
 
   // ── Reset the form each time the dialog opens ──
   useEffect(() => {
     if (!open) return
     setFromLocationId('')
+    setFromBinId(UNBINNED_POOL)
     setToLocationId('')
     setQty('')
   }, [open])
@@ -153,6 +177,7 @@ export function StockTransferDialog({
   // ── Mutation ──
   interface TransferPayload {
     from_location_id: number
+    from_bin_id: number | null
     to_location_id: number
     qty: string
   }
@@ -183,6 +208,8 @@ export function StockTransferDialog({
     if (formInvalid) return
     transferMutation.mutate({
       from_location_id: Number(fromLocationId),
+      from_bin_id:
+        showFromBinSelect && fromBinId !== UNBINNED_POOL ? Number(fromBinId) : null,
       to_location_id: Number(toLocationId),
       qty: qty.trim(),
     })
@@ -204,7 +231,13 @@ export function StockTransferDialog({
           {/* From location */}
           <div className="space-y-2">
             <Label htmlFor="transfer-from">From location</Label>
-            <Select value={fromLocationId} onValueChange={setFromLocationId}>
+            <Select
+              value={fromLocationId}
+              onValueChange={(v) => {
+                setFromLocationId(v)
+                setFromBinId(UNBINNED_POOL) // a bin belongs to one location — never carry it over
+              }}
+            >
               <SelectTrigger id="transfer-from">
                 <SelectValue placeholder="Select a source location" />
               </SelectTrigger>
@@ -218,6 +251,29 @@ export function StockTransferDialog({
             </Select>
             {fromError && <p className="text-sm text-destructive">Select a source location.</p>}
           </div>
+
+          {/* From bin (optional — shown only when the source has active bins) */}
+          {showFromBinSelect && (
+            <div className="space-y-2">
+              <Label htmlFor="transfer-from-bin">From bin</Label>
+              <Select value={fromBinId} onValueChange={setFromBinId}>
+                <SelectTrigger id="transfer-from-bin">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNBINNED_POOL}>Unbinned pool</SelectItem>
+                  {activeFromBins.map((bin) => (
+                    <SelectItem key={bin.id} value={String(bin.id)}>
+                      {bin.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Optional — "Unbinned pool" draws from stock not yet put away.
+              </p>
+            </div>
+          )}
 
           {/* To location */}
           <div className="space-y-2">
@@ -242,6 +298,9 @@ export function StockTransferDialog({
                 Source and destination must be different.
               </p>
             )}
+            <p className="text-xs text-muted-foreground">
+              Arrives in the destination's unbinned pool — direct it with Putaway.
+            </p>
           </div>
 
           {/* Quantity */}
