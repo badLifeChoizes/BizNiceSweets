@@ -65,13 +65,13 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
       ONE succeeds and the other raises 422 (7+7 > 10); the pool and bin never go
       negative; final unbinned == 3 and bin == 7 EXACTLY. Repeated several
       iterations (fresh item each) to make the race reliable.
-  (E) BIN-BLIND MOVEMENT BOUNDARY (Phase 12a review MAJOR, documented): 12a makes
-      ONLY putaway bin-aware; the pre-existing bin-BLIND draws (post_transfer /
-      post_adjustment / MOUSSE issue) leave the bin figure stale and the unbinned
-      pool negative. This PINS that known limitation (12b closes it) AND proves the
-      SC3 location roll-up identity (Σ bins + unbinned == location total) and
-      location on-hand still hold exactly after a bin-blind draw — the split lies,
-      but location truth is intact. See BACKLOG p2 + PLAN Risk.
+  (E) BIN-AWARE ADJUSTMENT (SC3, D-P4-1 — the Phase 4 fix): receive 10 unbinned,
+      putaway all 10 into bin E1. (E1) a bin-blind post_adjustment(-10,
+      bin_id=None) draws ONLY the now-empty UNBINNED pool and is rejected 422
+      with NO ledger rows written; (E2) naming the bin — post_adjustment(-10,
+      bin_id=E1) — succeeds: the bin pool falls to 0, the unbinned pool stays 0,
+      neither ever negative; (E3) the roll-up identity Σ bins + unbinned ==
+      per-location total == 0 still holds Decimal-EXACT.
 
 The script uses uniquely-suffixed throwaway SYERP items / GELATO bins and CLEANS
 UP after itself (inventory txns -> bins -> inventory items) in a finally block, so
@@ -390,19 +390,15 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
         await run_concurrency(session_factory, unique, actor_id, main_id, item_ids, bin_ids)
 
         # ===================================================================
-        # (E) BIN-BLIND MOVEMENT BOUNDARY (Phase 12a review MAJOR, documented)
+        # (E) BIN-AWARE ADJUSTMENT (SC3, D-P4-1 — the Phase 4 fix)
         # ===================================================================
-        # 12a makes ONLY putaway bin-aware. The pre-existing SYERP/MOUSSE draw
-        # primitives (post_transfer / post_adjustment / MOUSSE issue) are bin-BLIND:
-        # they write bin_id=NULL and floor-guard per-LOCATION, not per-bin. So after
-        # stock is put into a bin, a bin-blind draw out of the location leaves the
-        # bin figure STALE (overstated) and the unbinned pool NEGATIVE. This is the
-        # known boundary 12b closes (bin-aware pick/issue). This scenario PINS that
-        # behavior so 12b's fix visibly changes it, and — the load-bearing part —
-        # proves the LOCATION roll-up identity (SC3) survives a bin-blind draw: the
-        # split lies, but Σ bins + unbinned == location total still holds exactly,
-        # and location/total on-hand stay correct. See BACKLOG p2 (bin-aware
-        # transfer/issue/adjust) and PLAN Risk "Bin split desyncs...".
+        # Phase 4 (NFR-7 / D-P4-1) made post_adjustment bin-aware under the
+        # explicit-or-unbinned contract: bin_id=None draws ONLY the location's
+        # UNBINNED pool (and floor-guards it), and a negative delta naming a bin
+        # floor-guards THAT bin's pool — the server never auto-allocates across
+        # bins, so a write-off at a fully-binned location must name the bin.
+        # This replaces the 12a-era pin of the old bin-blind behavior (stale bin
+        # figure + negative unbinned pool): the desync path is now a 422.
         item_e = await _make_item(session_factory, unique, "E")
         item_ids.add(item_e)
         bin_e = await _make_bin(session_factory, main_id, f"E1-{unique}")
@@ -418,27 +414,57 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
                 ),
                 actor_id,
             )
-        # A BIN-BLIND draw of the full 10 out of the location (per-location floor
-        # guard sees 10 on hand, so it passes) — writes a bin_id=NULL leg.
+        # (E1) A bin-blind draw of the full 10 (bin_id=None) targets the now-EMPTY
+        # unbinned pool — rejected 422 with NO ledger rows written. Row-count
+        # oracle as in (C): receipt + two putaway legs == 3 rows before and after.
+        e_rows_before = await _ledger_rows(session_factory, item_e)
+        try:
+            async with session_factory() as session:
+                await post_adjustment(
+                    session, item_e, main_id, Decimal("-10"),
+                    "bin-blind draw against an empty unbinned pool", actor_id,
+                    bin_id=None,
+                )
+            check(
+                "(E1/SC3/D-P4-1) bin-blind adjustment (-10, bin_id=None) against an "
+                "empty unbinned pool is rejected",
+                False, "adjustment succeeded over the unbinned-pool floor",
+            )
+        except HTTPException as exc:
+            check(
+                "(E1/SC3/D-P4-1) bin-blind adjustment (-10, bin_id=None) draws ONLY "
+                "the empty unbinned pool and is rejected 422",
+                exc.status_code == 422,
+                f"status={exc.status_code}",
+            )
+        e_rows_after = await _ledger_rows(session_factory, item_e)
+        check(
+            "(E1/SC3) the rejected bin-blind adjustment wrote NO ledger rows "
+            "(row count unchanged after the rejected call)",
+            e_rows_after == e_rows_before == 3,
+            f"before={e_rows_before!r} after={e_rows_after!r}",
+        )
+        # (E2) Naming the bin succeeds: the bin pool falls to 0 and the unbinned
+        # pool stays 0 — neither ever goes negative.
         async with session_factory() as session:
             await post_adjustment(
                 session, item_e, main_id, Decimal("-10"),
-                "bin-blind draw (12a boundary characterization)", actor_id,
+                "bin-aware write-off from bin E1", actor_id,
+                bin_id=bin_e,
             )
         async with session_factory() as session:
             e_bin = await get_bin_on_hand(session, item_e, main_id, bin_e)
             e_unbinned = await get_bin_on_hand(session, item_e, main_id, None)
         e_loc_total = await _location_total(session_factory, item_e, main_id)
         check(
-            "(E/boundary) after a bin-blind draw the bin figure is STALE (bin_e still "
-            "reports 10, unbinned pool is -10) — the documented 12a limitation 12b closes",
-            e_bin == Decimal("10") and e_unbinned == Decimal("-10"),
+            "(E2/SC3/D-P4-1) bin-aware adjustment (-10, bin_id=E1) succeeds: the bin "
+            "pool falls to 0 and the unbinned pool stays 0 — never negative",
+            e_bin == Decimal("0") and e_unbinned == Decimal("0"),
             f"bin_e={e_bin!r} unbinned={e_unbinned!r}",
         )
         check(
-            "(E/SC3 preserved) the LOCATION roll-up identity survives the bin-blind draw: "
-            "Σ bins + unbinned == per-location total (10 + -10 == 0) Decimal-EXACT, and the "
-            "location total is correct (0) — the split lies but location truth is intact",
+            "(E3/SC3) the roll-up identity holds after the bin-aware draw: "
+            "Σ bins + unbinned == per-location total == 0 Decimal-EXACT",
             (e_bin + e_unbinned) == e_loc_total == Decimal("0"),
             f"rollup={(e_bin + e_unbinned)!r} location_total={e_loc_total!r}",
         )

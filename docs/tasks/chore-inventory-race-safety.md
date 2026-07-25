@@ -19,7 +19,7 @@ Every floor-guarded inventory-ledger write serializes on the shared sorted-id
 - [x] 5. Make MOUSSE issue_components bin-aware, wired schema→router (SC3)
 - [x] 6. Truth-up the bin trust-boundary documentation (SC3 closure)
 - [x] 7. Write verify_inventory_race.py — mixed-path concurrency, mutation-proven (SC2, SC1)
-- [ ] 8. Revise verify_gelato.py scenario (E) to assert the fix (SC3)
+- [x] 8. Revise verify_gelato.py scenario (E) to assert the fix (SC3)
 - [ ] 9. Behavior-change regression sweep — reconcile every breakage (SC5)
 - [ ] 10. FE: bin picker on StockAdjustDialog + Vitest payload assertion (SC4)
 - [ ] 11. FE: from-bin picker on StockTransferDialog + Vitest payload assertion (SC4)
