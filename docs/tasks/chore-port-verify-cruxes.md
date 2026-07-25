@@ -9,7 +9,7 @@ Plan: `.zj/phases/02b-port-verify-cruxes/PLAN.md`
 ## Checklist
 
 - [x] 0. Cut branch `chore-port-verify-cruxes` and open this checklist
-- [ ] 1. Scaffold new packages (mousse/crumb/gelato) + shared `seeded_ledger_db` fixture
+- [x] 1. Scaffold new packages (mousse/crumb/gelato) + shared `seeded_ledger_db` fixture (`521648f`)
 - [x] 2. Port inventory moving-average SERVICE crux (SC1a) — `tests/syerp/test_inventory_service.py` (`6a50420`)
 - [x] 3. Port GL posting-ties crux (SC1b) — `tests/syerp/test_gl_posting.py` (`0ae185b`)
 - [x] 4. Port AP posting-ties crux incl. GR/IR-clears-to-zero (SC1c) — `tests/syerp/test_ap_posting.py` (`0777467`)
@@ -55,4 +55,13 @@ Final: `git diff --stat -- backend/app/` empty — every mutation reverted (SC5)
 
 ## Noticed
 
-- (populate during Wave A/B)
+- **No sequential `verify_*` assertion was intentionally dropped under D-P2b-2.** Only the
+  concurrency scenarios (`asyncio.gather`/`Barrier` + `FOR UPDATE`) stayed in the scripts per
+  D-P2a-2/D-P2b-1; every *sequential* crux assertion named in the PLAN crux-source map was
+  ported. Coverage delta vs the scripts = concurrency-only, as designed.
+- **MOUSSE happy-path `test_wip_clears_to_zero_crux` does not independently catch the WIP
+  credit-source mutation** — planned_qty 10 / WIP 210 divides evenly (210/10 == 21.000000), so
+  the rounded-FG-value credit coincides with the exact-accumulated-WIP credit. The crux's SC2
+  regression guard is the sibling residual test `test_under_issue_override_clears_wip_and_ties_subledger`
+  (100/3 case), which flips RED on the mutation (per the Task-14 table). File-header docstring
+  corrected at verify to point the red-on-revert claim at the (D) test.

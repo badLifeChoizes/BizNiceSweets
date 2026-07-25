@@ -22,7 +22,11 @@ WHY THIS EXISTS:
 
 SC2 red-on-revert: crediting 1140 by ``planned_qty × fg_unit_cost`` (the rounded FG
 receipt value) instead of the EXACT accumulated WIP in mousse completion strands a
-sub-quantum residual on 1140 — it turns the (A) WIP-clears-exact assertion RED.
+sub-quantum residual on 1140 — it turns the scenario (D) test
+``test_under_issue_override_clears_wip_and_ties_subledger`` RED (its 100/3 case makes
+the two credit sources diverge). The scenario (A) happy path below divides evenly
+(210/10 == 21.000000), so the two credit sources coincide and it does NOT independently
+catch that mutation — (D) is this crux's regression guard.
 
 Concurrency mutation-proof (verify_mousse scenario F) stays in the script per
 D-P2a-2; only the sequential cruxes are ported here (D-P2b-2).
