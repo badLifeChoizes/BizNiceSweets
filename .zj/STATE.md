@@ -1,5 +1,30 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-24 (**v4.0 Phase 3 BUILD COMPLETE — `/zj:build 3`.** Branch `chore-ci-pipeline` cut
+Updated: 2026-07-25 (**v4.0 Phase 3 VERIFIED — `/zj:verify 3`. Verdict PASS**, tag
+`zj/good-03-ci-pipeline`. Verifier + reviewer ran in parallel, both **empirically**. **All 7 SCs PASS:**
+the verifier's authed `gh` re-confirmed **live** (not on trust) every claimed run ID — all-green
+**30140504003**, broken-test **30140642516**→revert **30140733237**, lint **30140870255**→revert
+**30140959653** — plus **PR #4** (base `master`, CLEAN, four required checks pass) and branch-protection
+`required_status_checks.contexts=[frontend, backend-lint, backend-tests, verify-scripts]`; AND it
+**reproduced every CI check locally against a FRESH `postgres:17`** (podman): `pytest` **232 passed / 0
+skipped** with `biznice_test` self-provisioning confirmed by querying `pg_database` before/after (proves
+the D-P3-4 probe fix genuinely works on an empty server), **14/14** non-API `verify_*` exit 0, FE
+lint/tsc/vitest(131)/build all exit 0. **Product-code boundary CLEAN** — `git diff 4960d32..cf2a805 --
+backend/app/ frontend/src/` **empty** (only `backend/tests/conftest.py` changed, the authorized D-P3-4
+test-infra fix). **Reviewer: 0 blocker / 0 major / 0 minor** — traced every gate-masking vector and none
+holds: no `continue-on-error`/`|| true`/masking `if:`; verify-scripts loop runs under `set -e` with
+scripts that `sys.exit(main())`; the four job `name:` values exactly match the branch-protection contexts
+(classic footgun avoided); both Postgres services have `pg_isready` health checks; the conftest repoint
+only governs the loud-abort gate so it can't turn "DB unreachable" into a silent skip. **4 minor items,
+none blocking, all already homed** (p3 in PLAN `## Noticed` / backlog): no meta-test on workflow shape;
+SC3/SC4 red-demos are one-time (standing protection = the jobs run every push; 0-skip invariant already
+pinned by 2a's `test_harness_selfcheck.py`); Node-20 action-deprecation warning (cosmetic). Owner chose
+**close out as-is** (no enforce-smoke nicety built). SRD NFR-4 → **verified**, stamped `cf2a805`; ROADMAP
+Phase 3 → `[verified]`; requirements-progress NFR-4 row flipped; artifacts `VERIFICATION.md` + `REVIEW.md`
+committed. **Next action:** `/zj:retro 3` (bank the CI-gate keepers — job-name↔branch-protection-context
+alignment, fresh-DB provisioning as the D-P3-4 protection) or `/zj:plan 4` (NFR-7 inventory ledger
+race-safety). Full build detail in the prior entry below.)
+
+Prior: 2026-07-24 (**v4.0 Phase 3 BUILD COMPLETE — `/zj:build 3`.** Branch `chore-ci-pipeline` cut
 off the plan-carrying tip `8a27a46` (code-identical to `4960d32` + the plan doc; trivial T0 deviation,
 matches 2a/2b). **All 9 tasks (0–8) done, atomic commits; tree clean** (only the owner's
 `.vscode/settings.json` unstaged). **`.github/workflows/ci.yml` live** — 4 independent jobs (no `needs:`):
