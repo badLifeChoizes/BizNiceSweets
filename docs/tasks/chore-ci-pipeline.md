@@ -15,6 +15,7 @@ postgres + non-API `verify_*`) — red blocks merge.
       — run 30140504003 = **success** (4/4 green); backend-tests 232 passed / 0 skipped; 14/14 verify_*
 - [x] 5. Demonstrate red on deliberately-broken backend test, then revert (SC3)
       — run 30140642516 **failure** (only backend-tests red, injected assert); revert run 30140733237 green
-- [ ] 6. Demonstrate red on lint violation (ruff AND eslint), then revert (SC4)
+- [x] 6. Demonstrate red on lint violation (ruff AND eslint), then revert (SC4)
+      — run 30140870255 **failure** (backend-lint F401 + frontend no-unused-vars both red); revert run 30140959653 green
 - [ ] 7. Open PR → `master` + configure required-status branch protection (SC6)
 - [ ] 8. Flip NFR-4 status + `requirements-progress.md`; archive this checklist (SC1–7)
