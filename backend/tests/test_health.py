@@ -6,7 +6,6 @@ Maps to CORE-01 (liveness, /docs reachable) and CORE-09 (readiness checks DB).
 test_liveness: passes without a live database.
 test_readiness: passes when a DB is reachable; skipped otherwise.
 """
-import math  # TEMP: ruff F401 unused-import for CI red demo (Phase 3 T6/SC4) — reverted next commit
 import httpx
 
 
