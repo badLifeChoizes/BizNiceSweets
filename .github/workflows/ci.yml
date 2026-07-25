@@ -43,3 +43,47 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - run: ruff check .
+
+  backend-tests:
+    name: backend-tests
+    runs-on: ubuntu-latest
+    # conftest.py connects to the default `postgres` maintenance DB, then
+    # CREATE DATABASE "biznice_test" + runs alembic upgrade head itself. So the
+    # service just needs to exist with the default DB and matching creds; do NOT
+    # set POSTGRES_DB here (conftest force-sets biznice_test).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          # The app (and conftest) connect as role `app` (config default). The
+          # image creates this superuser + a default `app` DB; the maintenance
+          # `postgres` DB still exists for conftest to CREATE biznice_test.
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: ci_test_pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_PASSWORD: ci_test_pw
+      JWT_SECRET: ci_test_jwt_secret_at_least_32_chars_long
+      BNS_ADMIN_PASSWORD: ci_test_pw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: pytest -q

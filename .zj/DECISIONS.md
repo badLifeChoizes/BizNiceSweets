@@ -157,6 +157,7 @@ at milestone close, never hand-edit it. 134 decisions.
 - **D-P2b-4:** The HTTP audit/RBAC tests mint their own read/write/noperm Users+Roles in a LOCAL per-test fixture (swept by the next TRUNCATE), NOT via the shared `_isolate` roster…
 - **D-P2b-5:** The ported AR crux seeds shipped SO lines by driving the REAL GELATO/CRUMB ship flow (not hand-stamped `qty_shipped`/hand-posted COGS) — the 11a/11b dead-through-UI keeper…
 - **D-P2b-6:** Ported service cruxes go in NEW test files; the existing pure/no-DB tests are left untouched and stay green…
+- **D-P3-4:** (owner, `/zj:build 3`) conftest's DB-reachability probe checks the maintenance `postgres` DB (always exists), not the not-yet-created `biznice_test` — fixes a fresh-server abort that would break the CI backend-tests job…
 
 ## Product & Architecture
 
@@ -1136,3 +1137,14 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   so the existing pure/no-DB tests (`test_ap.py`, `test_gl.py`, `test_inventory.py`, `test_gl_journal.py`,
   `test_purchasing.py`) are untouched and stay green. *Why:* the pure tests exercise the helper math with no DB and
   are a distinct, faster layer; co-mingling the DB-backed cruxes into them would couple two isolation regimes.
+- **D-P3-4 (owner, `/zj:build 3`):** **conftest's DB-reachability probe (`_check_db_available`) connects to the
+  maintenance `postgres` database, not the test database (`settings.postgres_db` = `biznice_test`).** *Why:* the probe
+  ran before `_provision_test_database` creates `biznice_test`, so on a fresh server — exactly the ephemeral CI
+  `postgres:17` service — it connected to a non-existent DB, returned False, and aborted the whole session
+  ("no live PostgreSQL … reachable") before provisioning could run. The 2a/2b "232 passed" runs only worked because
+  `biznice_test` persisted from earlier sessions. Probing the always-present `postgres` maintenance DB realizes the
+  harness's documented self-provisioning contract and is strictly more robust (the CREATE-DATABASE step already
+  targets `postgres`). Verified: fresh `postgres:17` (no `biznice_test`) → self-provisions → 232 passed / 0 skipped.
+  Test-infra only (`backend/tests/conftest.py`); no product-code (`backend/app/`) change. Alternative considered and
+  rejected: a `CREATE DATABASE` step in `ci.yml` — leaves the self-provisioning claim false and adds a latent trap
+  every fresh run must remember. Surfaced as a MATERIAL deviation during T2 build; owner chose the probe fix.

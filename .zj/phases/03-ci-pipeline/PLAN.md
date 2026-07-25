@@ -103,6 +103,24 @@ None — all resolved above.
 - **Verify:** `grep -n "NFR-4" .zj/SRD.md docs/features/requirements-progress.md` shows `done` + evidence; `git log --oneline` shows a `docs(zj):` closing commit.
 - **Parallel-ok:** no
 
+## Deviations
+- **T0 (trivial):** Branch cut from the plan-carrying tip `8a27a46` (code-identical to `4960d32` + the
+  Phase-3 plan doc) rather than the bare `4960d32`, so `PLAN.md` is present on the build branch — same
+  pattern as phases 2a/2b Task 0.
+- **T2 (MATERIAL → owner, D-P3-4):** The plan's core assumption — "pytest is self-provisioning; the
+  Postgres service just needs to exist" — was wrong on a *fresh* server. conftest's reachability probe
+  (`_check_db_available`) connected to `biznice_test`, which does not exist until `_provision_test_database`
+  creates it, so on the always-empty CI `postgres:17` service the probe returned False and aborted the
+  session before provisioning. The 2a/2b "232 passed" runs only worked because `biznice_test` persisted
+  from earlier local sessions. **Fix (owner-chosen):** point the probe at the maintenance `postgres` DB
+  (test-infra only, `backend/tests/conftest.py`; no product-code change). Verified: fresh `postgres:17`
+  self-provisions → 232 passed / 0 skipped / exit 0. Recorded as D-P3-4.
+- **T2 (trivial):** The plan's backend-tests service config (and its local-verify command) omitted
+  `POSTGRES_USER: app`; conftest connects as role `app` (config default), so the `postgres:17` service must
+  create that role. Added `POSTGRES_USER: app` to the service env (image also makes an `app` DB; the
+  `postgres` maintenance DB still exists for the CREATE step). Same correction applies to the T3
+  verify-scripts service.
+
 ## Risks
 - **DB-naming collision (the one real integration risk) — RESOLVED by job isolation.** pytest wants a maintenance `postgres` DB and self-creates/migrates `biznice_test`; the non-API `verify_*` scripts assume a pre-existing, already-migrated `biznice` and do **not** self-create or migrate (confirmed: no `create_all`/`CREATE DATABASE`/`alembic` in the scripts). Resolution: put them in **separate jobs, each with its own `postgres:17` service** — `backend-tests` leaves `POSTGRES_DB` unset (default `postgres` present → conftest makes `biznice_test`); `verify-scripts` sets the service `POSTGRES_DB: biznice` and runs `alembic upgrade head` before the loop. No shared container, no collision. **Early-warning sign:** a verify script erroring with `relation "…" does not exist` or `database "biznice" does not exist` = the migrate step or service `POSTGRES_DB` env is missing.
 - **Exact check names for branch protection** aren't known until a run completes — Task 7 reads them from `gh pr checks` before PUTting protection, rather than guessing. Sign of trouble: protection PUT accepted but PR still mergeable → context name mismatch.

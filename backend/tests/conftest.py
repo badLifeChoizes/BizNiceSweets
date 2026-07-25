@@ -111,10 +111,15 @@ def _check_db_available() -> bool:
 
         from app.core.config import settings
 
+        # Probe the maintenance "postgres" DB, which always exists — NOT the
+        # test DB (settings.postgres_db), which _provision_test_database has
+        # not created yet on a fresh server (e.g. a fresh CI postgres:17
+        # service). Probing the test DB here would make the reachability check
+        # fail on first run and abort the session before provisioning could run.
         conn = psycopg2.connect(
             host=settings.postgres_host,
             port=settings.postgres_port,
-            dbname=settings.postgres_db,
+            dbname="postgres",
             user=settings.postgres_user,
             password=settings.postgres_password.get_secret_value(),
             connect_timeout=2,
