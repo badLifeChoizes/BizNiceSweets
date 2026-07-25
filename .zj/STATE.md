@@ -1,5 +1,31 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-24 (**v4.0 Phase 3 PLANNED — `/zj:plan 3`.** Phase 3 = **CI pipeline (GitHub
+Updated: 2026-07-24 (**v4.0 Phase 3 BUILD COMPLETE — `/zj:build 3`.** Branch `chore-ci-pipeline` cut
+off the plan-carrying tip `8a27a46` (code-identical to `4960d32` + the plan doc; trivial T0 deviation,
+matches 2a/2b). **All 9 tasks (0–8) done, atomic commits; tree clean** (only the owner's
+`.vscode/settings.json` unstaged). **`.github/workflows/ci.yml` live** — 4 independent jobs (no `needs:`):
+`frontend` (npm ci→lint→tsc -b→vitest→build, Node 22), `backend-lint` (`ruff check .`, Py 3.13),
+`backend-tests` (`pytest -q` vs a live `postgres:17` service — **232 passed / 0 skipped**; conftest
+self-provisions `biznice_test`), `verify-scripts` (migrate+seed `biznice`, then the **14 non-API
+`verify_*` — 14/14 exit 0**; glob excludes `*_api.py`). **All 6 SCs proven on REAL Actions runs:**
+all-green **run 30140504003** (SC1/2/5); broken test → **30140642516** red (only `backend-tests`) →
+revert **30140733237** green (SC3); lint violation (ruff F401 + eslint no-unused-vars) → **30140870255**
+red (`backend-lint`+`frontend`) → revert **30140959653** green (SC4); **PR #4 → `master`** required-status
+gated — four checks green, PR **BLOCKED→CLEAN**, branch protection `contexts=[frontend, backend-lint,
+backend-tests, verify-scripts]` (SC6); final wrap-up **run 30141201881** all-green. **Two build deviations:**
+(1) **MATERIAL → owner, D-P3-4** — the plan's "pytest self-provisions from a bare postgres" was wrong on a
+*fresh* server: conftest's reachability probe hit the not-yet-created `biznice_test` and aborted before
+provisioning (2a/2b "232 passed" only worked because the DB persisted locally); owner chose to fix the probe
+to target the maintenance `postgres` DB (test-infra only, no `backend/app/` change) — verified fresh
+`postgres:17` self-provisions → 232/0. (2) **build correction** — the plan's verify-scripts recipe omitted
+`PYTHONPATH` (scripts do `from app…`) and the **seed step** (scripts need the app-lifespan CoA seeds — "GL
+account 5100 not seeded" otherwise); added both. **Noticed:** Node-20 action-deprecation warning
+(cosmetic); duplicate check runs per PR (both `push`+`pull_request` fire for a same-repo branch) — Phase 4+
+scoping nicety. Checklist `docs/tasks/chore-ci-pipeline.md` (all 9 ticked; archive at finish/ship). SRD NFR-4
+→ **done (pending `/zj:verify 3`)**, requirements-progress NFR-4 row + footer added, D-P3-4 recorded. **PR #4
+left OPEN — merge is out of scope** (Phase 3 delivers the demonstrated blocking pipeline, not the merge).
+**Next action:** `/zj:verify 3`.)
+
+Prior: 2026-07-24 (**v4.0 Phase 3 PLANNED — `/zj:plan 3`.** Phase 3 = **CI pipeline (GitHub
 Actions, NFR-4, D-M4-2)** — every push/PR runs a blocking pipeline: ruff + eslint + `tsc -b` +
 vitest + `npm run build` + `pytest`-against-live-`postgres:17` (0 silent skips, 232 passed) + a
 **service-layer `verify_*` regression job** (the D-P2a-2 concurrency-proof CI home). **9 tasks**
@@ -408,6 +434,14 @@ FK-race on `syerp_inventory_txn.bin_id→gelato_bin` (production unaffected). **
 `/zj:verify 12b`.)
 
 ## Position
+
+- **Step:** build — **v4.0 Phase 3 (CI pipeline, NFR-4) BUILD COMPLETE** (`/zj:build 3`, 2026-07-24).
+  Branch `chore-ci-pipeline` off the plan tip `8a27a46`. All 9 tasks done; `.github/workflows/ci.yml`
+  with four blocking jobs proven green on real Actions runs (all-green 30140504003; 232 passed / 0
+  skipped; 14/14 verify_*), broken-test red (30140642516) + lint red (30140870255) each reverted
+  green, and a required-status-gated PR #4 → master (BLOCKED→CLEAN). D-P3-4 (owner): conftest DB probe
+  → maintenance `postgres` DB so a fresh CI Postgres self-provisions (test-infra only). SRD NFR-4 →
+  done (pending `/zj:verify 3`). PR #4 left open — merge out of scope. **Next action:** `/zj:verify 3`.
 
 - **Step:** build — **v4.0 Phase 2b (port `verify_*` cruxes into pytest, NFR-5) BUILD COMPLETE**
   (`/zj:build 2b`, 2026-07-24). Branch `chore-port-verify-cruxes` cut off `3f71900` (the plan-doc
