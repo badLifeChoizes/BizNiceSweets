@@ -49,7 +49,14 @@ Closes: SRD **NFR-8** (§800) and the final clause of the v4.0 DoD. **Final phas
 - Dev overlay (`compose/compose.dev.yml`) bind-mounts `../backend:/app`, which **shadows** the image's `/app/frontend/dist`; `backend/app/main.py:118-124` only mounts the SPA when the dir exists — so under the dev overlay **:8000 serves no SPA**. That is why the click-through runs on **:5173** (D-P5-2 / D-P7-1) and why SC7's smoke must use `compose/compose.yml` **alone**.
 - The prod image builds the SPA itself (`Containerfile` stage `frontend-builder` runs `npm run build`), so SC7 needs `podman-compose -f compose/compose.yml build api`, not just a host `npm run build`. The host `frontend/dist` is rebuilt too (the other half of the backlog item, and `npm run build` is part of the FE gate anyway).
 - The backend bind mount means **edits to `backend/scripts/*.py` are live in the container with no rebuild** — the seed script can be iterated in seconds.
-- Verified commands: dev `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`; fresh volume `podman-compose -f compose/compose.yml down -v` first; in-container script `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/<name>.py`; in-container pytest `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest -q'`; `backend/.venv/bin/ruff check .` from `backend/`; `npm run lint` / `npm run test` / `npm run build` from `frontend/`. Confirm the container name with `podman ps` before the first `exec`.
+- Verified commands: dev `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`; fresh volume `podman-compose -f compose/compose.yml down -v` first; in-container script `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/<name>.py`; in-container pytest — **THIS COMMAND DOES NOT WORK, corrected at Task 8a.** `pytest` is absent from the
+api image (`Containerfile:52-53` installs `requirements.txt` only, never `requirements-dev.txt`), so
+`python -m pytest` gives `No module named pytest`; the dev overlay's bind-mounted
+`/app/.venv/bin/pytest` exists but its shebang and `python` symlink point at host paths absent in the
+container. **Run pytest from the host venv against a reachable Postgres instead** (the compose `db` is
+deliberately not port-mapped, so use a throwaway `postgres:17-alpine` on a spare port — the same shape
+as CI's `postgres` service). Third firing of the Phase-3 keeper: a recipe derived by reading is not a
+runnable recipe; `backend/.venv/bin/ruff check .` from `backend/`; `npm run lint` / `npm run test` / `npm run build` from `frontend/`. Confirm the container name with `podman ps` before the first `exec`.
 - `seed_uat_fixtures.py` is deliberately **not** named `verify_*`, so the CI glob will not pick it up.
 
 ### Baselines to hold (regression gate)
@@ -204,7 +211,7 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && alembic current'` prints `0017 (head)`; the two-run diff is empty.
 - **Parallel-ok:** no (blocks Tasks 11–14 and every owner task).
 
-### [ ] 8a. Fix `U0` — the fresh-volume deploy blocker (ADDED mid-build, D-P5-10)
+### [x] 8a. Fix `U0` — the fresh-volume deploy blocker (ADDED mid-build, D-P5-10)
 - **Files:** `compose/compose.yml`, `.env.db.example` (new), `.env.example`, `.gitignore`,
   `compose/compose.dev.yml` (only if it overrides db env), `README.md` / deploy docs, plus a pinning test
 - **Do:** Implement D-P5-10. Give `db` `env_file: ../.env.db` and **remove** the
@@ -528,10 +535,20 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
    the source of the phantom 4950.00. Already BACKLOG p3 from Phase 4; Task 8 measured it at exactly
    50.00 per twelve-script sweep and it makes any "TB on a shared dev DB" literal untrustworthy.
 
-7. **Seeding takes ~40 s on an empty database** (all create paths) — state it in the Task-11 runbook so
+7. **Three follow-ups from the `U0` fix** (Task 8a): (a) the commented-out module stubs at
+   `compose/compose.yml:111-157` all carry `env_file: ../.env` — whoever uncomments `plum-worker` etc.
+   will reintroduce U0 in a new service; the pin covers only `db` and `api`, so extending it to any
+   uncommented service is a cheap follow-up. (b) **`.env.example` no longer defines
+   `POSTGRES_PASSWORD`, so anyone with an existing `.env` and no `.env.db` gets a broken stack after
+   pulling `4ace2c4`** — the api starts and fails to authenticate. A troubleshooting row covers the db
+   symptom; an upgrade note belongs in the release path (`CHANGELOG.md` is generated, so not edited
+   here). (c) **`pytest` is absent from the api image** — see the corrected verified-commands entry in
+   `## Context`; Task 33's regression gate must use the host venv, not `podman exec`.
+
+8. **Seeding takes ~40 s on an empty database** (all create paths) — state it in the Task-11 runbook so
    the owner does not assume it has hung.
 
-8. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
+9. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
 ## Deviations
 
@@ -666,6 +683,30 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   drift if any `verify_*` runs against the same DB; the fixture-specific literals (document numbers,
   aging buckets, 1120/2110 controls) do not move. The volume was reset a third time and seeded once so
   the live stack matches the recorded manifest byte-for-byte.
+- **T8a — `U0` fixed per D-P5-10** (`4ace2c4` fix + `d870233` pin). Three forced deviations beyond the
+  task block, all necessary rather than scope creep: (1) the db `environment:` block was removed
+  **entirely**, not just the password line — an `environment:` entry takes precedence over `env_file`, so
+  leaving `POSTGRES_DB`/`POSTGRES_USER` would have kept overriding `.env.db` with their *defaults*;
+  (2) the **healthcheck** interpolated `${POSTGRES_USER:-app}`/`${POSTGRES_DB:-biznice}`, which resolved
+  only because those values were shell-visible in `.env` — once they live solely in `.env.db` it would
+  silently fall back to defaults, so a non-default user/db would make `db` never go healthy and `api`
+  (`depends_on: service_healthy`) never start; rewritten to `$$POSTGRES_USER`/`$$POSTGRES_DB` (verified
+  unescaped correctly by podman-compose 1.0.6); (3) the three DB keys were stripped from the real `.env`,
+  because leaving duplicates there would have let `api` work even if `.env.db` were not wired to it,
+  making the `podman inspect` verification prove nothing. `api` reads **both** env files (it must
+  authenticate to Postgres). `compose/compose.dev.yml` was checked first and has **no `db` service**.
+  **Proof:** clean shell (`env | grep POSTGRES` → 0 matches), documented command alone on a fresh volume
+  → `/health/ready` ok, `alembic current` `0017 (head)`, no `set -a` workaround; `podman inspect` shows
+  `POSTGRES_PASSWORD` non-empty on `db` and **zero** `JWT_SECRET`/`BNS_ADMIN_*` on `db`; re-seeded
+  manifest **byte-identical** to the Task-8 record. **Pin** `backend/tests/test_compose_config.py` (4
+  tests, structural-textual not PyYAML — PyYAML is in the local venv but declared in neither
+  requirements file, so `import yaml` would `ImportError` in CI, a RED for the wrong reason). The test
+  **strips comments before matching**, which is load-bearing: the pre-fix file carried the comment
+  *"POSTGRES_PASSWORD comes from ../.env (env_file)"*, so a naive substring search would have **passed
+  against the broken config**. RED-on-revert executed with the corrected header comment left in place so
+  the RED cannot come from prose; RED is an `AssertionError` on the empty `env_files` list, and the
+  secret-spread guard on the line above **passed**, confirming it did not hijack red. Full suite
+  **236 passed** (232 + 4).
 
 ## Out of scope
 
