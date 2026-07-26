@@ -402,7 +402,322 @@ ends as `pass`, `pass (U# fixed <commit>)`, or `U# → BACKLOG`.
 
 ## 6. The checks
 
-*(authored in Tasks 12–15)*
+### 6.1 CORE — the platform (6 checks)
+
+Start here: `C-CORE-01` also validates the login every later check depends on.
+
+---
+
+#### C-CORE-01 · Login + bad-password copy · CORE-02
+
+**Fixture:** the admin from `.env`.
+
+- ✅ **Machine already proved:** `tests/auth/test_login.py::test_login_success`,
+  `::test_login_bad_password`, `::test_login_unknown_email`;
+  `src/auth/Login.test.tsx "calls setAccessToken and navigates on successful login"`,
+  `"shows bad-credentials error copy on 401"`.
+- **Do:** log in with a deliberately wrong password, read the error, then log in properly.
+- 👁 **You are confirming:**
+  - the wrong-password error's **actual wording** — is it useful, or a raw status code?
+  - there is **no** "Create account" and **no** "Forgot password" affordance anywhere on the
+    form (D-01/D-13: accounts are admin-provisioned).
+  - after a successful login you land somewhere sensible, and the password field's
+    show/hide toggle works.
+- ✗ **Would be wrong:** a stack trace, a bare `401`, or a self-service signup link.
+
+#### C-CORE-02 · Session survives access-token expiry · CORE-03
+
+**Fixture:** any logged-in session. **This check needs a ~15-minute wait** — start it, go do
+`C-CORE-03` onward, and come back.
+
+- ✅ **Machine already proved:** `tests/auth/test_refresh.py::test_token_refresh`;
+  `tests/auth/test_refresh_rotation.py::test_refresh_rotation_invalidates_old_token`,
+  `::test_reuse_detection_revokes_chain`. The token *does* rotate — that is settled.
+- **Do:** log in, leave the tab open more than 15 minutes (the access-token lifetime), then
+  click into any list.
+- 👁 **You are confirming:** the refresh is **invisible**. No flash of the login page, no
+  bounce to `/login` and back, no spurious error toast, no lost scroll position.
+- ✗ **Would be wrong:** being thrown to the login screen, or a "session expired" toast
+  appearing even though the click succeeded.
+
+#### C-CORE-03 · Users admin: list, create, assign role, deactivate · CORE-04
+
+**Fixture:** existing users are the admin and `uat-plum-user@example.invalid`.
+
+- ✅ **Machine already proved:** `tests/auth/test_user_admin.py::test_admin_create_user`,
+  `::test_admin_list_users`, `::test_admin_update_user_full_name`, `::test_admin_assign_role`,
+  `::test_user_deactivation`, `::test_deactivation_revokes_refresh_tokens`;
+  `src/auth/Users.test.tsx "renders users in a table when data is returned"`.
+- **Do:** create a user with a **normal** address (e.g. `checkme@example.com`), assign it a
+  role, then deactivate it.
+- 👁 **You are confirming:**
+  - the role picker offers `UAT-PLUM-ONLY` as a choice.
+  - a **deactivated** user is *visibly* distinguishable in the list — greyed, badged,
+    something. Not silently identical to an active one.
+  - what the Users screen shows when a field is left blank.
+- ✗ **Would be wrong:** a deactivated user looking exactly like an active one.
+- ⚠ **Watch for:** if you mistype the role name, the create may still succeed with **no**
+  role attached — which leaves that user with an empty sidebar. If you see that, report it;
+  it is a known suspicion, not yet a logged defect.
+
+#### C-CORE-04 · Users admin duplicate-email re-entry · CORE-04
+
+**Fixture:** any address that already exists — reuse the one you just made in `C-CORE-03`.
+
+- ✅ **Machine already proved:** `tests/auth/test_user_duplicate_email.py` pins the API:
+  409, an actionable message, and **nothing persisted** (no partial row, no audit row).
+- **Do:** create a user, then try to create a **second** user with the *same* email.
+- 👁 **You are confirming:** the UI surfaces the rejection **legibly** — a message naming the
+  address, not a raw 500 toast, not a silent no-op, not a spinner that never stops. Then
+  confirm the original user is untouched in the list.
+- ✗ **Would be wrong:** *"Internal Server Error"*, or nothing at all happening.
+- ⓘ **This was defect `U1`** — it returned HTTP 500 until `f508554`. It is fixed; you are
+  confirming the *user-visible* half of the fix. Expect a clean **409**.
+
+#### C-CORE-05 · RBAC nav filtering as the non-admin user · CORE-05
+
+**Fixture:** `uat-plum-user@example.invalid` / `uat-plum-user-pw`, role `UAT-PLUM-ONLY`,
+permission `plum:read` only.
+
+- ✅ **Machine already proved:** `src/components/AppShell.test.tsx` covers the filter
+  (`"returns only enabled modules the user has <key>:read for"`,
+  `"treats the admin role as a wildcard over enabled modules"`,
+  `"excludes a disabled module even from an admin"`); backend side
+  `tests/auth/test_login.py::test_me_includes_permissions`,
+  `tests/auth/test_rbac.py::test_admin_wildcard_in_permissions`.
+- **Do:** log out, log in as the fixture user, look at the sidebar. Then type
+  `/syerp/vendors` straight into the address bar.
+- 👁 **You are confirming:**
+  - the sidebar shows **PLUM and nothing else** — the other suites are *absent*, not merely
+    greyed out.
+  - what happens on the direct URL. There is **no server-side module gate**, so a filtered-out
+    route may well still load. Record what you actually see.
+  - log back in as admin afterwards and confirm the full sidebar returns.
+- ✗ **Would be wrong:** seeing SYERP/CRUMB/GELATO in the sidebar as this user.
+
+#### C-CORE-06 · Settings save + persist · CORE-06
+
+**Fixture:** Settings screen, any editable setting.
+
+- ✅ **Machine already proved:** `tests/core/test_settings.py::test_list_settings_admin`,
+  `::test_update_setting`, `::test_seed_defaults`.
+- ⓘ `routes/admin/Settings.tsx` has **no vitest** — this screen's wiring is genuinely
+  unproven. Weight it accordingly.
+- **Do:** change a setting, save, then **hard-reload the page**.
+- 👁 **You are confirming:** the save gives feedback you can actually see, and the value
+  survives the reload. Not "the request 200'd" — that a machine knows.
+- ✗ **Would be wrong:** a save that silently does nothing, or a value that reverts on reload.
+
+#### C-CORE-07 · Home / nav shell + unknown-path fallback · CORE-08
+
+**Fixture:** the app shell as admin.
+
+- ✅ **Machine already proved:** `src/auth/ProtectedRoute.test.tsx
+  "redirects to /login when user is null (unauthenticated)"`,
+  `"renders Outlet (children) when user is authenticated"`,
+  `"renders loading spinner while auth state is being determined"`.
+- ⓘ `routes/Home.tsx` has **no vitest**.
+- **Do:** land on Home; then navigate to `/no-such-page`.
+- 👁 **You are confirming:** Home renders something useful (not an empty frame), the sidebar
+  and topbar are present and usable, and an unknown path lands on a sane fallback rather than
+  a blank screen or a crash.
+- ✗ **Would be wrong:** a white page, or a React error overlay, on the unknown path.
+
+> `CORE-01` (self-hostable deploy), `CORE-07` (module registry) and `CORE-09` (audit trail)
+> are exercised structurally rather than by a click of their own: `CORE-01` by §1.1's
+> fresh-volume bring-up (and defect `U0`, which it caught), `CORE-07` by `C-SC6-d`'s module
+> toggle, and `CORE-09` by the audit assertions cited throughout — see `PREFLIGHT.md`.
+
+---
+
+### 6.2 PLUM — product lifecycle (12 checks)
+
+`C-PLUM-01` … `C-PLUM-08` are **read-only** — run them first and re-run them freely.
+`C-PLUM-09` … `C-PLUM-12` **mutate**, so they come after.
+
+---
+
+#### C-PLUM-01 · Parts list: search, filter, empty state · PLUM-01
+
+**Fixture:** 15 `UAT-P…` parts.
+
+- ✅ **Machine already proved:** `src/routes/plum/PartsList.test.tsx
+  "renders the Parts heading and Create Part button"`,
+  `"renders the No parts yet empty state when API returns an empty array"`.
+- **Do:** search `UAT-P10`, then search something that matches nothing (`ZZZZZ`), then filter
+  by status.
+- 👁 **You are confirming:** the **empty-state copy** when a search matches nothing — and
+  whether it differs from the no-parts-at-all state (it should; "no results for ZZZZZ" and
+  "no parts yet" are different situations). Whether the active filter is visibly indicated.
+- ✗ **Would be wrong:** a bare blank table with no explanation.
+
+#### C-PLUM-02 · Part detail header + revision selector · PLUM-02, PLUM-03
+
+**Fixture:** `UAT-P104`.
+
+- ✅ **Machine already proved:** `src/routes/plum/PartDetail.test.tsx` (5 assertions).
+- **Do:** open `UAT-P104`.
+- 👁 **You are confirming:** the header shows revision **`A`** with status **`draft`**, and the
+  revision selector lists only this part's own revisions.
+- ✗ **Would be wrong:** another part's revisions leaking into the selector.
+
+#### C-PLUM-03 · BOM tree expand / collapse · PLUM-04
+
+**Fixture:** `UAT-P104`'s BOM card, tree view.
+
+- ✅ **Machine already proved:** `src/routes/plum/components/BomTree.test.tsx
+  "renders a child row when API returns one BOM node"`,
+  `"renders empty state when API returns no children"`.
+- **Do:** expand every node.
+- 👁 **You are confirming:** `UAT-P102` appears **twice** in the *tree* — once nested under
+  `UAT-P103`, once as a direct child of `UAT-P104`. The tree must **not** dedupe; that is the
+  flat view's job. Expand/collapse actually toggles rather than doing nothing.
+- ✗ **Would be wrong:** `UAT-P102` shown once in the tree (that would be the flat view's
+  behaviour leaking in).
+
+#### C-PLUM-04 · Flat BOM dedupe + Total-BOM-Cost footer · PLUM-05 · v1.0 **D1**
+
+**Fixture:** `UAT-P104`'s BOM card, **flat** view.
+
+- ✅ **Machine already proved:** `src/routes/plum/components/BomTree.test.tsx
+  "flat footer shows the rolled-up cost, not the sum of the rows"`,
+  `"flat footer shows an em dash when no rolled-up cost is available"`.
+- **Do:** switch to the flat view and read the footer.
+- 👁 **You are confirming:**
+  - `UAT-P102` appears on **exactly one row**, quantity **`11`**.
+  - the footer **displays `99.15`**.
+  - all four rows are present: `UAT-P101` `33`, `UAT-P102` `11`, `UAT-P103` `3`,
+    `UAT-P105` `7`.
+- ✗ **Would be wrong:** a footer reading **`239.40`** — that is the sum of the rows' extended
+  costs, and it is precisely the v1.0 **D1** defect (it showed `280` then). Two rows for
+  `UAT-P102` would also be wrong.
+
+#### C-PLUM-05 · Where-Used direct / indirect labels + sort order · PLUM-06 · v1.0 **G1**
+
+**Fixture:** `UAT-P203`.
+
+- ✅ **Machine already proved:** `src/routes/plum/PartDetail.test.tsx "labels a direct parent "`,
+  `"labels a transitive ancestor "`, `"does not label every parent as direct"`,
+  `"sorts the direct parent above the indirect ancestor"`.
+- **Do:** open `UAT-P203` and read its Where-Used card.
+- 👁 **You are confirming:** `UAT-P202` is labelled **direct** and `UAT-P201` **indirect via
+  UAT-P202** — and that the direct one appears **above** the indirect one. Read the label
+  wording verbatim.
+- ✗ **Would be wrong:** both parents labelled "Direct parent" — the v1.0 **G1** defect.
+
+#### C-PLUM-06 · Cost & Margin across all three sources · PLUM-08
+
+**Fixture:** `UAT-P104` (roll-up), `UAT-P402` (vendor price), plus any manual-cost part
+(`UAT-P101` carries material cost `2.75`).
+
+- ✅ **Machine already proved:** the arithmetic is asserted by the seed's own oracle, and the
+  vendor path by `verify_plum_vendor_paths.py
+  "commit_import upserts the AVL link against the resolved vendor_id"`.
+- **Do:** open the Cost & Margin card on `UAT-P104`, then on `UAT-P402`.
+- 👁 **You are confirming:**
+  - `UAT-P104`'s source **label** reads `roll-up` and its effective cost **displays `99.15`**.
+  - `UAT-P402`'s source **label** reads `vendor price` and its effective cost **displays
+    `6.15`**.
+  - which figure the screen presents as "effective" is unambiguous.
+- ✗ **Would be wrong:** `UAT-P402` showing `9.99` (its manual cost — the wrong rule won) or
+  `7.30` (price-break index 0 instead of the selected index 1).
+
+#### C-PLUM-07 · Below-cost margin rendered red · PLUM-09
+
+**Fixture:** `UAT-P104` (below cost) vs `UAT-P301` (above cost).
+
+- ✅ **Machine already proved:** *nothing, and deliberately so* — colour is not assertable.
+  This check is pure residue.
+- **Do:** compare the margin display on `UAT-P104` and `UAT-P301`.
+- 👁 **You are confirming:** `UAT-P104`'s margin (`-59.15`, `-59.66 %`) is **visibly
+  red / negative-styled**, and `UAT-P301`'s (`8.6`) is **not**. The contrast is the check —
+  red everywhere or red nowhere both fail.
+- ✗ **Would be wrong:** a negative margin rendered in the same colour as a positive one.
+
+#### C-PLUM-08 · Released revision: BOM + cost read-only · PLUM-03, PLUM-06
+
+**Fixture:** `UAT-P301` — revision `A`, `released`, snapshot `26.4`.
+
+- ✅ **Machine already proved:** driven live at build time — `add_bom_line` **and**
+  `update_cost` against this revision both raise **422** *"BOM lines can only be edited on
+  Draft revisions."*
+- **Do:** open `UAT-P301` and look for any way to change its BOM or its cost.
+- 👁 **You are confirming:** the **Add Part and edit-cost affordances are absent**, not
+  present-and-failing. A visible button that 422s when clicked is a *different* (and worse)
+  defect than a hidden one. Also confirm the frozen snapshot `26.4` is shown alongside the
+  live roll-up `26.4`.
+- ✗ **Would be wrong:** an enabled Add Part button on a Released revision.
+- ⓘ v1.0 could never run this check — there was no Released part in the database. This is its
+  first execution.
+- ⓘ If you *do* trigger the rejection, its message says **"BOM lines"** even when you were
+  editing a *cost*. Known wrong noun; note it rather than treating it as new.
+
+---
+
+*The remaining PLUM checks **mutate**. Run them after 01–08.*
+
+#### C-PLUM-09 · New revision + FSM advance · PLUM-03
+
+**Fixture:** any Draft `UAT-P…` part — use `UAT-P105` (a leaf; nothing depends on its
+revisions).
+
+- ✅ **Machine already proved:** the FSM is driven by the seed itself (`draft → in_review →
+  released` on `UAT-P301`/`UAT-P501`); numbering by `verify_part_numbering.py`.
+- **Do:** create a new revision, then advance it `draft → in_review → released`.
+- 👁 **You are confirming:** each status **badge's wording**, and that only *legal*
+  transitions are offered at each step (no "release" button on a draft).
+- ✗ **Would be wrong:** an illegal transition being offered and then erroring.
+
+#### C-PLUM-10 · BOM add / remove on a Draft · PLUM-04
+
+**Fixture:** `UAT-P105` (Draft, no children).
+
+- ✅ **Machine already proved:** `src/routes/plum/components/BomTree.test.tsx`; cycle
+  rejection by the service's `_would_create_cycle`.
+- **Do:** add a child, remove it. Then try to add **`UAT-P105` to itself**.
+- 👁 **You are confirming:** the child picker **excludes the part itself**, and the
+  cycle-rejection **toast wording** if it does not.
+- ✗ **Would be wrong:** being able to add a part to its own BOM.
+
+#### C-PLUM-11 · AVL add + Preferred badge + duplicate re-add · PLUM-07 · v1.0 **D2**
+
+**Fixture:** `UAT-P401` (**0** links — the happy path) and `UAT-P402` (`UAT-VEND-1`
+preferred, `UAT-VEND-2` not).
+
+- ✅ **Machine already proved:** `verify_plum_vendor_paths.py
+  "validate_import accepts a resolvable vendor_code (no ImportError)"`,
+  `"validate_import reports an unknown vendor_code (lookup really ran)"`; the 409-on-active /
+  reactivate-on-removed branches exist in `add_avl_link`.
+- **Do:** on `UAT-P402`, read the badges. Then **re-add `UAT-VEND-1`**, which is already
+  linked. Then on `UAT-P401`, add a vendor from scratch.
+- 👁 **You are confirming:**
+  - `UAT-VEND-1` carries a visible **Preferred** badge and `UAT-VEND-2` does **not**.
+  - the duplicate re-add gives a clean *"already linked"* message.
+  - the vendor picker on `UAT-P401` offers vendors and **excludes** `UAT-VEND-ARCH`.
+- ✗ **Would be wrong:** a **500** on the re-add. That was the v1.0 **D2** defect exactly.
+
+#### C-PLUM-12 · Import / export + list refresh without F5 · PLUM-10 · v1.0 **D3**/**G2**
+
+**Fixture:** the Import/Export screen.
+
+- ✅ **Machine already proved:** `src/routes/plum/ImportExport.test.tsx
+  "the Choose File button opens the hidden file input"`,
+  `"selects a file dropped onto the dropzone (enables Upload and Preview)"`,
+  `"rejects an unsupported dropped file (Upload stays disabled)"`,
+  `"renders the Export as JSON button"`, `"renders the Export as Excel button"`,
+  `"invalidates the plum parts query after a successful commit"`,
+  `"does NOT invalidate when the commit fails"`.
+- **Do:** export JSON. Export **Excel**. Click **Choose File**. **Drag** the exported JSON
+  onto the dropzone. Re-import it, confirm, then look at the parts list.
+- 👁 **You are confirming:**
+  - **Choose File actually opens the OS file dialog.** A vitest can only prove the click
+    reaches the hidden input — whether a dialog *appears* is the residue.
+  - the dropzone **visibly highlights** on dragover, and the dropped file is selected.
+  - the re-import previews **0 errors** and Confirm reports no deletions.
+  - the parts list repaints **without a manual reload**.
+- ✗ **Would be wrong:** a dead Choose File button or a dropzone with no drag feedback — the
+  v1.0 **D3** defect. Excel export 500ing is the v1.0 **G2** defect (a stale image lacking
+  `openpyxl`).
 
 ---
 
