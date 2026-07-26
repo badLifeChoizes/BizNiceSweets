@@ -186,7 +186,7 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Verify:** two consecutive runs → identical block; `verify_gl.py`, `verify_ap.py`, `verify_ar.py`, `verify_reports.py` all exit 0.
 - **Parallel-ok:** no.
 
-### [ ] 8. Prove the seed idempotent on a genuinely fresh volume
+### [x] 8. Prove the seed idempotent on a genuinely fresh volume
 - **Files:** `docs/tasks/chore-human-uat.md` (record the two manifests)
 - **Do:** `podman-compose -f compose/compose.yml down -v`, then `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`, wait for `alembic current` == head (`0017`), then run the seed **twice**, capturing both manifests. Diff them. Fix any non-idempotent builder (Phase-03 keeper: this is the first run against a genuinely empty environment — expect it to find something). Paste both manifests into the checklist file as the authoritative literals source.
 - **Done when:** `diff manifest1 manifest2` is empty, on a volume created minutes earlier; the manifests are recorded.
@@ -480,7 +480,30 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
    (n) Number formats/widths differ across suites (`QUOTE-####`, `SO-####`, `WO-######`, `PO-####`,
    `ITEM-####`) — quote them exactly in the checklist so an owner doesn't flag a "wrong" width.
 
-5. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
+5. **`U0` (blocker, deploy config) — the compose stack cannot start on a fresh volume.** Found at Task 8,
+   verified independently by the manager. `db` receives `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}` by
+   **interpolation only** (`compose/compose.yml:36`); only `api` carries `env_file: ../.env` (line 62);
+   `compose/.env` does not exist (the real `.env` is at the repo root), so podman-compose interpolates
+   it to **empty** and Postgres refuses to initialize: *"Database is uninitialized and superuser
+   password is not specified."* Confirmed by `podman inspect compose_db_1` showing `POSTGRES_PASSWORD=`
+   empty while `compose_api_1` has it. The header comment at line 19 documents an intent
+   ("POSTGRES_PASSWORD comes from ../.env (env_file)") that is never implemented for `db`.
+   **Invisible for the life of a volume** — an initialized `PGDATA` doesn't need the password at
+   start-up — which is why five phases never hit it. The Phase-03 keeper firing on the deploy layer.
+   **Blocks Task 35 / SC7**, and blocks any first-ever self-hosted deploy following `.env.example`'s
+   documented `cp .env.example .env` + `podman-compose -f compose/compose.yml up -d`. Task 8 unblocked
+   itself user-side (`set -a; . ./.env; set +a`) without touching product config, so the fresh-volume
+   proof stands. Fix approach is an owner decision (secret-spread trade-off) — see `## Deviations`.
+
+6. **`verify_purchasing.py` leaks `po_receipt` journal entries** — its `_cleanup` removes the PO, lines
+   and inventory txns but not the auto-posted JE, so every run permanently adds to 1130/2150. This is
+   the source of the phantom 4950.00. Already BACKLOG p3 from Phase 4; Task 8 measured it at exactly
+   50.00 per twelve-script sweep and it makes any "TB on a shared dev DB" literal untrustworthy.
+
+7. **Seeding takes ~40 s on an empty database** (all create paths) — state it in the Task-11 runbook so
+   the owner does not assume it has hung.
+
+8. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
 ## Deviations
 
@@ -594,6 +617,27 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   (8 rows)** spanning assets/liabilities/revenue/expense, net exactly zero. `_expect` asserts the zero
   net, `in_balance`, and **both** aging tie-outs every run, so a later layer that unbalances the books
   fails the seed rather than surfacing as a phantom defect at Task 23.
+- **T8 (MATERIAL → owner) — `U0`: the stack cannot start on a fresh volume at all.** See
+  `## Noticed` #6. Escalated to the owner rather than fixed in a fixtures task; blocks Task 35 / SC7.
+- **T8 (trivial) — the fixture needed an opening capital contribution.** On a fresh volume the books
+  balanced but the Balance Sheet reported **negative total assets** (−258.25): the fixture pays a bill
+  (36.50) and a professional-services expense (412.75) out of a 1110 Cash account that was never
+  funded, collecting only 55.25. No assertion caught it because the books *were* in balance, and dev
+  data's 4950.00 of GR/IR inventory had masked it. An owner reading that at Task 23 would reasonably
+  report "total assets is negative" — a **false** defect, same class as T7's manual-JE-on-a-control
+  problem. Fixed by posting `Dr 1110 / Cr 3110 Capital Contributions 8,250.00` through the real
+  service: touches neither the 1120/2110 controls (both aging tie-outs still 84.25 / 57.75,
+  `in_balance`) nor revenue/expense (net income still −316). `report()` now asserts
+  `total_assets > 0` so the state cannot return silently. The volume was destroyed and the whole cycle
+  redone post-fix, so the recorded diff proves the *shipped* fixture.
+- **T8 (finding) — the dev DB's 4950.00 GR/IR was litter, not data.** `verify_purchasing.py`'s cleanup
+  drops the PO, its lines and its stock txns but **not** the auto-posted `po_receipt` journal entry.
+  Measured: running the twelve verify scripts against the fresh seeded volume added exactly 50.00 to
+  total debit, total credit and total liabilities and left an orphaned JE with no PO. Repeated over
+  many phases, that is the whole 4950.00. Consequence: **aggregate** TB/BS figures are whole-ledger and
+  drift if any `verify_*` runs against the same DB; the fixture-specific literals (document numbers,
+  aging buckets, 1120/2110 controls) do not move. The volume was reset a third time and seeded once so
+  the live stack matches the recorded manifest byte-for-byte.
 
 ## Out of scope
 
