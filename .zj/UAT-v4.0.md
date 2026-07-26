@@ -31,15 +31,32 @@ podman-compose -f compose/compose.yml -f compose/compose.dev.yml down -v
 #    if .env.db is missing the database will not initialize at all.
 podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d
 
-# 3. Wait for ready (a few seconds), then confirm the schema is at head.
-curl -sS http://localhost:8000/health/ready          # {"status":"ok","db":"connected"}
-podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && alembic current'
-#                                                   → 0017 (head)
+# 3. WAIT for the API to come up. Do not skip this line: run straight after
+#    `up -d`, the health check below fails with
+#      curl: (56) Recv failure: Connection reset by peer
+#    because the entrypoint is still waiting on Postgres and running migrations.
+#    That error means "not up yet", not "broken". This loop waits for you.
+until curl -sf -o /dev/null http://localhost:8000/health/ready; do sleep 2; done
 
-# 4. Seed the named fixtures. Takes about 40 seconds on an empty database —
-#    it is not hung. Run it TWICE if you like; the second run changes nothing.
+# 4. Confirm health and schema.
+curl -sS http://localhost:8000/health/ready
+#   → {"status":"ok","db":"connected"}
+podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && alembic current'
+#   → INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+#     INFO  [alembic.runtime.migration] Will assume transactional DDL.
+#     0017 (head)
+#   The two INFO lines are normal; `0017 (head)` is the answer.
+
+# 5. Seed the named fixtures. Takes about 5 seconds. Run it TWICE if you like;
+#    the second run changes nothing.
 podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py
+#   → one line on stderr:  mode: seed + manifest; layers: core+partners, plum, …
+#     then ~360 lines of manifest on stdout. Exit 0 and a "## derived literals"
+#     table at the end is success.
 ```
+
+> Every command above was executed end-to-end at build time against a genuinely fresh
+> volume — see the log in `docs/tasks/chore-human-uat.md`. Copy-paste it as printed.
 
 ### 1.2 Open the app and log in
 
@@ -47,6 +64,11 @@ Click through at **http://localhost:5173** — the Vite dev server, not `:8000`
 (D-P5-2 / D-P7-1). Under the dev overlay `:8000` serves the API only and **no SPA at all**,
 because the `../backend:/app` bind mount shadows the image's built bundle. HMR also means a
 fix can be re-checked in seconds.
+
+> Confirmed at build time: `http://localhost:8000/` returns **404** under the dev overlay.
+> That is expected, not a fault. `http://localhost:8000/health/ready` and `/api/v1/*` work
+> normally, and `:5173` proxies `/api` through to them — so the browser you click in talks to
+> the same backend.
 
 Log in as the admin, using the values in your `.env`:
 
@@ -311,7 +333,7 @@ Build-time observations, so you do not report them as findings:
 | Receipts and payments have **no document number** — only a reference string | they genuinely have no number field; the reference is the identifier |
 | `SO-0002` shows **reserved `0`** although it shipped `9` | the reservation is consumed by the pick |
 | Quote lines number from **0**, PO lines from **1** | a real inconsistency, but cosmetic and known |
-| Seeding takes **~40 s** on an empty database | it is not hung |
+| Seeding takes only **~5 s** | it really is that quick — an earlier draft of this runbook said ~40 s, which was wrong; measured at build time on a fresh volume |
 
 And one **known candidate minor** — recognise it, do not re-report it as new:
 

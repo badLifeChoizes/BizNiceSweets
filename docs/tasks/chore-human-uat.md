@@ -483,7 +483,169 @@ matches the record below exactly — so these literals describe the running stac
 
 ### Task 16 — runbook command execution log
 
-*(pending)*
+Every command `.zj/UAT-v4.0.md` §1 asks the owner to run, executed in order **from a clean
+shell** (`env -i`, `env | grep -c POSTGRES` → `0`) against a genuinely fresh volume, copy-pasted
+exactly as the doc printed it. The Phase-03 keeper: a recipe derived by reading is not a
+runnable recipe.
+
+**Three doc bugs found and corrected. One was a real, reproducible failure.**
+
+#### 1. `down -v` — destroy the volume
+
+```
+$ podman-compose -f compose/compose.yml -f compose/compose.dev.yml down -v
+podman volume rm compose_pgdata
+exit=0
+```
+
+#### 2. `up -d` — bring the stack up
+
+```
+$ podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d
+ba34e49ef129… exit code: 0     (db)
+a5717a5dd4aa… exit code: 0     (frontend)
+9693060c58cb… exit code: 0     (api)
+```
+
+#### 3. 🔴 **BUG 1 — the health check as written FAILED**
+
+The doc said *"Wait for ready (a few seconds), then confirm the schema is at head"* — as
+**prose** — and then printed a bare `curl`. Run as an owner would (paste the block), it fails:
+
+```
+$ curl -sS http://localhost:8000/health/ready
+curl: (56) Recv failure: Connection reset by peer          [exit=56]
+```
+
+The entrypoint is still waiting on Postgres and running `alembic upgrade head`. The window is
+only a few seconds, but an owner pasting the block gets a connection error and reasonably
+concludes the stack is broken. **A prose "wait a few seconds" is not a command.**
+
+**Fixed** by giving an actual wait, and by documenting the error so it reads as "not yet"
+rather than "broken":
+
+```bash
+until curl -sf -o /dev/null http://localhost:8000/health/ready; do sleep 2; done
+```
+
+#### 4. Health + schema, once actually ready
+
+```
+$ curl -sS http://localhost:8000/health/ready
+{"status":"ok","db":"connected"}
+
+$ podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && alembic current'
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+0017 (head)
+```
+
+**BUG 3 (cosmetic):** the doc's inline comment implied clean output. `alembic current` emits
+two `INFO` lines first. The doc now shows the real three-line output and says the INFO lines
+are normal.
+
+#### 5. 🔴 **BUG 2 — the seed is ~5 s, not ~40 s**
+
+```
+$ podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py
+mode: seed + manifest; layers: core+partners, plum, syerp-inventory+purchasing, gelato-bins, mousse+crumb, syerp-gl+ap+ar
+exit=0 ; elapsed=5s ; 361 lines of manifest on stdout
+```
+
+The runbook (and the Task-8 report's Noticed #3) claimed **~40 s** on an empty database.
+Measured on a genuinely fresh volume, exercising every create path: **5 s**. The claim was
+simply wrong. Both places in the doc corrected, with the error acknowledged in the
+"things that look like defects but are not" table so the number is not re-inflated later.
+
+#### 6. **The manifest matches the Task-8 record of truth — byte for byte**
+
+```
+$ diff <task-8 manifest of record> <this run's manifest>
+(no output)
+IDENTICAL — no document number and no aggregate figure changed
+```
+
+So `.zj/UAT-v4.0.md`'s literals and `docs/tasks/chore-human-uat.md`'s manifest still agree.
+Nothing to reconcile.
+
+#### 7. `--manifest` — the read-only re-read
+
+```
+$ podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py --manifest
+mode: manifest-only (read-only); layers: …
+exit=0
+$ diff <seed run stdout> <--manifest stdout>
+(no output — same output, writes nothing)
+```
+
+#### 8. The `C-SC6-d` restore verifier
+
+```
+$ podman exec compose_db_1 psql -U app -d biznice -tAc "select key, enabled from modules where key='gelato'"
+gelato|t
+```
+
+#### 9. `:5173` serves the SPA; `:8000` deliberately does not
+
+```
+$ curl -sSf -o /dev/null -w '%{http_code}\n' http://localhost:5173
+200
+$ curl -sS http://localhost:5173 | head -c 120
+<!doctype html><html lang="en"><head><script type="module">import { injectIntoGlobalHook } …
+$ curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:8000/
+404          ← expected under the dev overlay; now stated in the doc
+```
+
+SPA deep links all serve the shell (client-side routed): `/`, `/login`, `/plum/parts`,
+`/gelato/bins`, `/no-such-page` → all `200`.
+
+#### 10. Admin login — and the credentials are still where the doc says
+
+Task 8a moved the **database** keys into `.env.db`; the **admin** keys were checked to be
+still in `.env`, which is what §1.2 tells the owner:
+
+```
+keys in .env    : POSTGRES_HOST POSTGRES_PORT DEBUG JWT_SECRET BNS_ADMIN_EMAIL BNS_ADMIN_PASSWORD
+keys in .env.db : POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD
+BNS_ADMIN_EMAIL = admin@example.com   ← matches the default the doc quotes
+
+$ POST /api/v1/auth/login  (form-encoded username/password from .env)   -> HTTP 200
+  token_type: bearer | access_token length: 411
+$ GET  /api/v1/auth/me                                                  -> 200
+  email: admin@example.com | roles: ['admin'] | wildcard: True
+```
+
+**And through the browser's own path** — `:5173` serving 200 does not prove login works from
+the browser, which needs the Vite `/api` proxy:
+
+```
+$ POST http://localhost:5173/api/v1/auth/login   -> HTTP 200  {"access_token":"eyJhbGci…
+$ GET  http://localhost:5173/api/v1/core/modules -> HTTP 401  (correctly rejects no auth)
+```
+
+#### 11. The corrected block, re-run verbatim end-to-end
+
+The whole of §1.1 as **now written**, pasted into one clean shell against another fresh volume:
+
+```
+{"status":"ok","db":"connected"}
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+0017 (head)
+mode: seed + manifest; layers: core+partners, plum, syerp-inventory+purchasing, gelato-bins, mousse+crumb, syerp-gl+ap+ar
+seed exit=0 ; manifest lines=361
+TOTAL elapsed: 29s          (down -v + up -d + wait + migrate + seed)
+$ diff <task-8 record> <this manifest>   → identical
+```
+
+**Final state — left up and seeded for Task 18:**
+
+```
+compose_db_1=Up (healthy)  compose_frontend_1=Up  compose_api_1=Up
+:5173 → 200   /health/ready → {"status":"ok","db":"connected"}   admin login via proxy → 200
+```
+
+**Whole-runbook bring-up is ~30 s**, not the several minutes the old wording implied.
 
 ### Task 19 — scenario (G) RED signature
 
