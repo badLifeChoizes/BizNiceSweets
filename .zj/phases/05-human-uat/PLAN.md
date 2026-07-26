@@ -165,7 +165,7 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Verify:** two consecutive runs → identical manifest block; `verify_inventory.py` still exits 0 afterwards.
 - **Parallel-ok:** no.
 
-### [ ] 5. Seed the GELATO bins fixture layer
+### [x] 5. Seed the GELATO bins fixture layer
 - **Files:** `backend/scripts/seed_uat_fixtures.py`
 - **Do:** Get-or-create bins via the real GELATO service: at least two active bins plus one archived bin in one location, and **fully put away** one item's stock at that location so its unbinned pool is exactly zero — the fixture that makes the "must name a bin" pool floor (D-P4-1) observable in the pickers. Leave a second location with **no** bins at all, so the pickers' hide-when-no-bins branch is exercisable. Record bin codes, per-bin on-hand, and the zero unbinned pool as literals.
 - **Done when:** manifest prints bin codes with per-bin on-hand and the exactly-zero unbinned pool for the fully-binned item.
@@ -457,6 +457,12 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
    correct, not as a defect.
    (f) On-hand quantities also come over HTTP at raw column scale (`"7.000000"`) — same screen-vs-payload
    eye as (b).
+   (g) **The pool-floor rejection names the location by numeric id** — *"exceeds the unbinned pool at
+   location 374"*, not `UAT-LOC-A`. If that string reaches a toast verbatim the owner sees `374`.
+   Strong candidate minor defect for Task 25; flagged now so it is recognised as known, not new.
+   (h) `UAT-BIN-A3` is archived and holds 0. The pickers call `list_bins(include_archived=False)`, so
+   it must be **absent** from the picker while still visible on the Bins screen with the toggle on —
+   the manifest records it so "correctly hidden" is distinguishable from "missing".
 
 5. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
@@ -507,6 +513,23 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   `receive_line` does (Dr 1130 / Cr 2150), and neither PO has been received. Proven, not assumed
   (`JEs from UAT PO lines: 0`; TB `4950.00 = 4950.00`, all pre-existing dev data). Task 7 inherits a
   clean slate.
+- **T5 (trivial) — a third location (`UAT-LOC-NOBIN`) and a fourth item (`UAT-ITEM-4`) added.** The
+  zero-pool crux and the no-bins branch both need stock that cannot disturb Task 4's literals, so this
+  layer uses its own item rather than fully binning a Task-4 one (ITEM-1/2 stay 7/6 and 4). Bonus: at
+  `UAT-LOC-A`, `UAT-ITEM-4` is fully binned (pool 0 → must name a bin) while `UAT-ITEM-1`'s 6 sit
+  entirely unbinned (pool 6 → drawable with none named) — **the same dialog must behave differently for
+  two items one row apart**. Bin-free location is a dedicated `UAT-LOC-NOBIN`, not `Main` (the
+  `verify_*` scripts create/clean bins there, so its bin-free-ness isn't guaranteeable) and not
+  `UAT-LOC-ARCH` (an archived location may not be offered at all, testing nothing). Consequence: the
+  inventory reporter describes the whole DB, so the Task-4 manifest block grew to 4 items / 3 locations.
+- **T5 (trivial) — putaway idempotency keyed on the resulting ledger leg**, not the bin's current
+  on-hand, so an owner moving that stock mid-UAT doesn't make a re-seed 422 against an empty pool.
+- **T5 (crux proven, not assumed) — the zero unbinned pool genuinely rejects.** A NULL-bin `-1`
+  adjustment against `UAT-ITEM-4 @ UAT-LOC-A` returns `HTTP 422: Adjustment of -1 exceeds the unbinned
+  pool at location 374 (current 0).` — the **D-P4-1 pool floor**, not the per-location floor (which
+  could not have fired: the location holds 15). Red for the intended reason, per the Phase-4 keeper;
+  the rejection wrote no ledger row (6 before, 6 after). Roll-up invariant asserted every run:
+  `Σ(bins) 15 + unbinned 0 == location total 15`; putaway legs sum to exactly 0 at location grain.
 
 ## Out of scope
 
