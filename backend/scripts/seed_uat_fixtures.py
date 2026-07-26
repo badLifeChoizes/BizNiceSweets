@@ -109,6 +109,8 @@ from app.modules.auth.service import (
     get_user_by_email,
     write_audit,
 )
+from app.modules.gelato.schemas import BinCreate, PutawayRequest
+from app.modules.gelato.service import archive_bin, create_bin, execute_putaway, list_bins
 from app.modules.plum.schemas import (
     AvlLinkCreate,
     BomItemCreate,
@@ -142,7 +144,7 @@ from app.modules.syerp.schemas import (
     StockLocationCreate,
     StockLocationUpdate,
 )
-from app.modules.syerp.service.inventory import get_item_onhand, post_receipt
+from app.modules.syerp.service.inventory import get_bin_on_hand, get_item_onhand, post_receipt
 from app.modules.syerp.service.items import create_item, list_items, update_item
 from app.modules.syerp.service.locations import create_location, list_locations, update_location
 from app.modules.syerp.service.partners import create_partner, list_partners, update_partner
@@ -1440,17 +1442,274 @@ INVENTORY_PURCHASING_LAYER = FixtureLayer(
 )
 
 
+# ---------------------------------------------------------------------------
+# Layer: GELATO bins (Task 5)
+# ---------------------------------------------------------------------------
+#
+# THE MOST LOAD-BEARING FIXTURE IN THE PHASE. SC6's three Phase-4 bin pickers are v4.0's
+# only new UI surface and have never been human-driven; this layer is what makes their
+# behavior observable, and in particular what makes the D-P4-1 pool floor BITE.
+#
+# THE CRUX — an EXACTLY-ZERO unbinned pool. Under D-P4-1 (explicit-or-unbinned) a NULL
+# bin_id draws ONLY the location's unbinned pool and 422s when that pool is short. So an
+# item whose stock at a location has been FULLY put away into bins must be IMPOSSIBLE to
+# draw without naming a bin — that rejection is precisely what Task 25 asks the owner to
+# see as a toast. A pool that merely reads zero in the manifest but is still drawable would
+# silently void the whole SC6 check, so report_gelato ASSERTS the zero, and the build-time
+# probe (recorded in the task report) drives a real NULL-bin negative adjustment and
+# confirms the actual 422.
+#
+# A DEDICATED ITEM, on purpose. UAT-ITEM-4 is this layer's own item, so fully binning it
+# cannot move UAT-ITEM-1/2's per-location on-hand literals that Task 24's read-only checks
+# quote. Better still, it puts a contrast INSIDE one location: at UAT-LOC-A, UAT-ITEM-4 is
+# fully binned (pool 0, must name a bin) while UAT-ITEM-1's 6 sit entirely unbinned (pool 6,
+# drawable with no bin named). Two items, one location, opposite picker behavior.
+#
+# THE BIN-FREE LOCATION is UAT-LOC-NOBIN — a THIRD, dedicated location, not "Main" and not
+# Task 4's archived UAT-LOC-ARCH. Main is out because the verify_*.py scripts create and
+# clean up bins there, so its bin-free-ness is not a property this fixture can guarantee;
+# UAT-LOC-ARCH is out because an archived location may not be offered by the pickers at all,
+# which would test nothing. UAT-ITEM-4 also holds stock at UAT-LOC-NOBIN, so the SAME item
+# shows both branches: switch the dialog's location and the bin picker must appear at
+# UAT-LOC-A and vanish at UAT-LOC-NOBIN. (PLAN ## Noticed #1 records that the dialogs'
+# docstrings are probably wrong about WHY the picker hides — not resolved here; this layer
+# only makes the branch reachable.)
+#
+# THE BIN SPLIT is UNEVEN on purpose: 9 into UAT-BIN-A1, 6 into UAT-BIN-A2 out of 15. Neither
+# bin quantity equals the other, and neither equals the location total, so a picker that
+# showed one bin's on-hand as the location total, or split evenly at 7.5, is visibly wrong.
+# 9 + 6 + 0 == 15 is the roll-up invariant this layer asserts at pool grain.
+
+GELATO_BIN_LOCATION = UAT_LOC_A
+GELATO_NOBIN_LOCATION = "UAT-LOC-NOBIN"
+GELATO_BIN_1 = "UAT-BIN-A1"
+GELATO_BIN_2 = "UAT-BIN-A2"
+GELATO_BIN_ARCHIVED = "UAT-BIN-A3"
+
+GELATO_ITEM = "UAT-ITEM-4"
+GELATO_ITEM_COST = Decimal("3.10")
+GELATO_BINNED_QTY = Decimal("15")  # received into UAT-LOC-A, then fully put away
+GELATO_UNBINNED_QTY = Decimal("4")  # received into UAT-LOC-NOBIN, left unbinned
+GELATO_PUTAWAY = ((GELATO_BIN_1, Decimal("9")), (GELATO_BIN_2, Decimal("6")))
+
+
+async def _bin_by_code(session: AsyncSession, location_id: int, code: str):
+    """Resolve a bin by its natural key (location, code) through the real list service."""
+    bins = await list_bins(session, location_id, include_archived=True)
+    return next((b for b in bins if b.code == code), None)
+
+
+async def _ensure_bin(
+    ctx: SeedContext, location_id: int, code: str, description: str, archived: bool = False
+) -> int:
+    """Get-or-create one bin; archive only on the run that created it."""
+    async with ctx.session_factory() as session:
+        existing = await _bin_by_code(session, location_id, code)
+        if existing is not None:
+            return existing.id
+
+        bin_ = await create_bin(
+            session, BinCreate(location_id=location_id, code=code, description=description)
+        )
+        await write_audit(
+            session,
+            actor_id=ctx.actor_id,
+            action="bin.created",
+            target_type="bin",
+            target_id=str(bin_.id),
+            detail=f"Bin created: {bin_.code}",
+        )
+        if archived:
+            await archive_bin(session, bin_.id)
+            await write_audit(
+                session,
+                actor_id=ctx.actor_id,
+                action="bin.archived",
+                target_type="bin",
+                target_id=str(bin_.id),
+                detail=f"Bin archived: {bin_.code}",
+            )
+        return bin_.id
+
+
+async def _ensure_putaway(
+    ctx: SeedContext, item_id: str, location_id: int, to_bin_id: int, qty: Decimal
+) -> None:
+    """
+    Put `qty` away from the unbinned pool into one bin, keyed on the resulting ledger leg.
+
+    Like a receipt, a putaway leg has no natural key, so the value tuple IS the key: an
+    existing `+qty` putaway row into this bin means the move already happened. Keying on
+    the LEDGER rather than on the bin's current on-hand matters — if the owner moves that
+    stock elsewhere mid-UAT, a re-seed must NOT try to put it away again and 422 against an
+    empty pool.
+    """
+    async with ctx.session_factory() as session:
+        existing = await session.execute(
+            text(
+                "SELECT count(*) FROM syerp_inventory_txn WHERE item_id = :item_id "
+                "AND location_id = :location_id AND bin_id = :bin_id "
+                "AND txn_type = 'putaway' AND quantity = :qty"
+            ),
+            {"item_id": item_id, "location_id": location_id, "bin_id": to_bin_id, "qty": qty},
+        )
+        if int(existing.scalar_one()) > 0:
+            return
+
+        await execute_putaway(
+            session,
+            PutawayRequest(
+                item_id=item_id,
+                location_id=location_id,
+                from_bin_id=None,  # draw the unbinned pool
+                to_bin_id=to_bin_id,
+                qty=qty,
+            ),
+            ctx.actor_id,
+        )
+        await write_audit(
+            session,
+            actor_id=ctx.actor_id,
+            action="inventory.putaway",
+            target_type="item",
+            target_id=str(item_id),
+            detail=f"Putaway {qty} into bin {to_bin_id} at location {location_id}",
+        )
+
+
+async def build_gelato(ctx: SeedContext) -> None:
+    """Get-or-create the bins, the bin-free location, and the fully-binned item."""
+    nobin_location_id = await _ensure_location(ctx, GELATO_NOBIN_LOCATION)
+
+    async with ctx.session_factory() as session:
+        bin_location_id = (await _location_by_name(session, GELATO_BIN_LOCATION)).id
+
+    bin_ids = {
+        GELATO_BIN_1: await _ensure_bin(
+            ctx, bin_location_id, GELATO_BIN_1, "UAT active bin (holds the larger split)"
+        ),
+        GELATO_BIN_2: await _ensure_bin(
+            ctx, bin_location_id, GELATO_BIN_2, "UAT active bin (holds the smaller split)"
+        ),
+    }
+    await _ensure_bin(
+        ctx, bin_location_id, GELATO_BIN_ARCHIVED, "UAT archived bin", archived=True
+    )
+
+    item_id = await _ensure_item(ctx, GELATO_ITEM, "UAT fully-binned stock item")
+    await _ensure_receipt(ctx, item_id, bin_location_id, GELATO_BINNED_QTY, GELATO_ITEM_COST)
+    await _ensure_receipt(
+        ctx, item_id, nobin_location_id, GELATO_UNBINNED_QTY, GELATO_ITEM_COST
+    )
+
+    # Fully put the UAT-LOC-A stock away — 9 + 6 == 15 leaves the unbinned pool at EXACTLY
+    # zero, which is the entire point of this layer.
+    for code, qty in GELATO_PUTAWAY:
+        await _ensure_putaway(ctx, item_id, bin_location_id, bin_ids[code], qty)
+
+
+async def report_gelato(ctx: SeedContext) -> None:
+    """Read the bin-grain literals back out of the REAL services, and assert the crux."""
+    manifest = ctx.manifest
+
+    async with ctx.session_factory() as session:
+        bin_location = await _location_by_name(session, GELATO_BIN_LOCATION)
+        nobin_location = await _location_by_name(session, GELATO_NOBIN_LOCATION)
+        item = await _item_by_code(session, GELATO_ITEM)
+        if bin_location is None or item is None:
+            return
+
+        for bin_ in await list_bins(session, bin_location.id, include_archived=True):
+            if not bin_.code.startswith(FIXTURE_PREFIX):
+                continue
+            code = manifest.key("gelato.bin", bin_.code)
+            manifest.value(f"gelato.bin.{code}.location", bin_location.name)
+            manifest.value(f"gelato.bin.{code}.active", str(bin_.active).lower())
+            manifest.value(
+                f"gelato.bin.{code}.onhand.{GELATO_ITEM}",
+                await get_bin_on_hand(session, item.id, bin_location.id, bin_.id),
+            )
+
+        # THE CRUX — the unbinned pool at the fully-binned location must be EXACTLY zero.
+        pool = await get_bin_on_hand(session, item.id, bin_location.id, None)
+        manifest.value(f"gelato.unbinned.{GELATO_BIN_LOCATION}.{GELATO_ITEM}", pool)
+        _expect(f"{GELATO_ITEM} unbinned pool at {GELATO_BIN_LOCATION}", pool, Decimal("0"))
+
+        # Putaway is net-zero at location grain: the location total still equals the
+        # RECEIPT quantity, and Σ(bins) + unbinned reconstructs it exactly.
+        onhand = await get_item_onhand(session, item.id)
+        by_location = {row.location_name: row.quantity for row in onhand.locations}
+        binned_total = by_location.get(GELATO_BIN_LOCATION, Decimal("0"))
+        _expect(
+            f"{GELATO_ITEM} location total at {GELATO_BIN_LOCATION} (putaway is net-zero)",
+            binned_total,
+            GELATO_BINNED_QTY,
+        )
+        bin_sum = Decimal("0")
+        for bin_ in await list_bins(session, bin_location.id, include_archived=True):
+            bin_sum += await get_bin_on_hand(session, item.id, bin_location.id, bin_.id)
+        _expect(
+            f"{GELATO_ITEM} roll-up at {GELATO_BIN_LOCATION} (Σbins + unbinned == total)",
+            bin_sum + pool,
+            binned_total,
+        )
+        manifest.value(
+            f"gelato.rollup.{GELATO_BIN_LOCATION}.{GELATO_ITEM}",
+            f"bins {decimal_str(bin_sum)} + unbinned {decimal_str(pool)} "
+            f"== location total {decimal_str(binned_total)}",
+        )
+
+        # The bin-free location: the SAME item, all of it unbinned, and zero bins. Its
+        # syerp.location key is recorded by the inventory layer's reporter (which reports
+        # every UAT- location), so only the bin-grain facts are added here.
+        if nobin_location is not None:
+            name = nobin_location.name
+            manifest.value(
+                f"gelato.bins_at.{name}",
+                len(await list_bins(session, nobin_location.id, include_archived=True)),
+            )
+            manifest.value(
+                f"gelato.unbinned.{name}.{GELATO_ITEM}",
+                await get_bin_on_hand(session, item.id, nobin_location.id, None),
+            )
+        # …and the bin-bearing location's own bin count, for the same picker branch.
+        manifest.value(
+            f"gelato.bins_at.{GELATO_BIN_LOCATION}",
+            len(await list_bins(session, bin_location.id, include_archived=True)),
+        )
+
+        # The contrast case, same location, different item: UAT-ITEM-1's stock at
+        # UAT-LOC-A is entirely UNBINNED, so it IS drawable without naming a bin.
+        contrast = await _item_by_code(session, INV_ITEM_LINKED)
+        if contrast is not None:
+            manifest.value(
+                f"gelato.unbinned.{GELATO_BIN_LOCATION}.{INV_ITEM_LINKED}",
+                await get_bin_on_hand(session, contrast.id, bin_location.id, None),
+            )
+
+
+GELATO_LAYER = FixtureLayer(
+    name="gelato-bins",
+    tables=(
+        TableSpec("gelato_bin", "code LIKE 'UAT-%'", "gelato_bin (UAT-)"),
+    ),
+    build=build_gelato,
+    report=report_gelato,
+)
+
+
 def _layers() -> tuple[FixtureLayer, ...]:
     """
     The registered fixture layers, in DEPENDENCY order (builders run in this order).
 
     PLUM depends on core+partners (AVL links point at the UAT vendors); inventory depends
-    on both (its PLUM-linked item points at UAT-P101, its POs at the UAT vendors).
+    on both (its PLUM-linked item points at UAT-P101, its POs at the UAT vendors); GELATO
+    depends on inventory (its bins subdivide UAT-LOC-A and it stocks its own item).
 
-    Tasks 5-7 append here:
-      5. GELATO bins   6. MOUSSE + CRUMB   7. SYERP GL / AP / AR
+    Tasks 6-7 append here:
+      6. MOUSSE + CRUMB   7. SYERP GL / AP / AR
     """
-    return (CORE_PARTNERS_LAYER, PLUM_LAYER, INVENTORY_PURCHASING_LAYER)
+    return (CORE_PARTNERS_LAYER, PLUM_LAYER, INVENTORY_PURCHASING_LAYER, GELATO_LAYER)
 
 
 # ---------------------------------------------------------------------------
