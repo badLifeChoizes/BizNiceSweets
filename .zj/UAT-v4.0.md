@@ -4,9 +4,15 @@
 `.zj/UAT-v1.0.md` (PLUM) and `.zj/UAT-v2.0.md` (SYERP inventory & purchasing) for
 *execution*; both are retained as history. Closes SRD **NFR-8**.
 
-**48 checks.** Budget ~2–3 h of clicking. You can stop at any point — the
-[status table](#status-table--the-resumable-state) is the resumable state, so a paused run
+**59 checks** — 7 CORE · 12 PLUM · 20 SYERP · 4 MOUSSE · 8 CRUMB · 4 GELATO · 4 SC6.
+That is the top of every per-suite range the phase plan specified. Budget **~3 h** of
+clicking, and expect to split it across sittings. You can stop at any point — the
+[status table](#4-status-table--the-resumable-state) is the resumable state, so a paused run
 picks up exactly where it left off.
+
+Suggested sittings: CORE → PLUM read-only → PLUM mutating → SYERP financial read-only →
+SYERP inventory (+ SC6 a/b) → module toggle (SC6 d) → purchasing → MOUSSE (+ SC6 c) →
+CRUMB → GELATO → the money-loop tail.
 
 ---
 
@@ -1401,6 +1407,165 @@ email with the quote`, then `call: UAT-COMM-1 first contact call`.
 - ✗ **Would be wrong:** a shipment you cannot navigate to from the order it fulfils.
 - ⓘ **Reserved will now read `0`.** The reservation is consumed by the pick — correct, not a
   defect. `SO-0002` in the fixture table shows the same thing.
+
+---
+
+### 6.7 SC6 — the Phase-4 bin pickers (4 checks)
+
+**These are the reason this phase exists in its current shape.** The three bin pickers are
+v4.0's **only new UI surface**. They are unit-tested and have **never been driven by a human**.
+Everything else in this runbook re-confirms shipped behaviour; these four checks are the ones
+looking at something genuinely new.
+
+The fixture that makes them observable is the **unbinned pool**. Under D-P4-1
+(*explicit-or-unbinned*) a draw with **no bin named** takes stock **only** from the location's
+unbinned pool — the server never auto-allocates across bins. So:
+
+| Item @ `UAT-LOC-A` | Pool | Draw with no bin named |
+|---|---|---|
+| `UAT-ITEM-4` | **`0`** | **rejected** — you must name a bin |
+| `UAT-ITEM-1` | `6` | succeeds |
+| `UAT-ITEM-5` | **`0`** | **rejected** — you must name a bin |
+| `UAT-ITEM-6` | `30` | succeeds |
+
+Two items one row apart in the same dialog, behaving oppositely. That contrast *is* the check.
+
+---
+
+#### C-SC6-a · `StockAdjustDialog` bin picker + the pool floor · SC6
+
+**Dialog:** `frontend/src/routes/syerp/components/StockAdjustDialog.tsx`.
+**Fixture:** `UAT-ITEM-4` @ `UAT-LOC-A` (pool `0`; `9` in `UAT-BIN-A1`, `6` in `UAT-BIN-A2`)
+vs `UAT-ITEM-1` @ `UAT-LOC-A` (pool `6`). **Run together with `C-SYERP-07`.**
+
+- ✅ **Machine already proved:** `src/routes/syerp/components/StockAdjustDialog.test.tsx
+  "POSTs bin_id when a bin is chosen (D-P4-1)"`,
+  `"POSTs bin_id: null when the bin picker is left on "`,
+  `"hides the bin picker and POSTs bin_id: null when the bins query fails"`;
+  `verify_gelato.py (E)`, `(F3)`. The pool floor itself was driven live at build time:
+  `HTTP 422: Adjustment of -1 exceeds the unbinned pool at location 374 (current 0)`.
+- **Do, in this order:**
+  1. Open Adjust Stock on `UAT-ITEM-4`. **Before** choosing a location, look for the bin
+     picker.
+  2. Choose `UAT-LOC-A`. Look at the picker and its default.
+  3. Change the location to `Main` (no bins), then back to `UAT-LOC-A`.
+  4. Leave the picker on its default and submit a **negative** adjustment (`-1`).
+  5. Now name `UAT-BIN-A1` and submit `-1` again.
+  6. Repeat step 4 on **`UAT-ITEM-1`** instead.
+- 👁 **You are confirming:**
+  - the bin picker **appears only once a location with active bins is chosen** — not before
+  - it **defaults to "Unbinned pool"**
+  - it **resets** when the location changes (step 3 must not leave `UAT-BIN-A1` selected while
+    `Main` is chosen)
+  - `UAT-BIN-A3` (archived) is **absent** from the picker, though it is visible on the Bins
+    screen
+  - step 4 is **rejected with a visible toast**; step 5 **succeeds**; step 6 **succeeds**
+    without naming a bin
+- ✗ **Would be wrong:** the picker offering the archived bin; the picker keeping a stale
+  selection after the location changes; step 4 succeeding (that would mean the server
+  auto-allocated across bins, breaking D-P4-1); or step 6 being rejected.
+- ⓘ **Known candidate minor:** the rejection toast names the location by **numeric id**
+  (*"…at location 374"*) rather than `UAT-LOC-A`. Already logged — note "as expected" rather
+  than raising it as new.
+
+#### C-SC6-b · `StockTransferDialog` from-bin picker · SC6
+
+**Dialog:** `frontend/src/routes/syerp/components/StockTransferDialog.tsx`.
+**Fixture:** `UAT-ITEM-4` @ `UAT-LOC-A` → `UAT-LOC-NOBIN`. **Run together with `C-SYERP-08`.**
+
+- ✅ **Machine already proved:** `src/routes/syerp/components/StockTransferDialog.test.tsx
+  "POSTs from_bin_id when a source bin is chosen (D-P4-1)"`,
+  `"POSTs from_bin_id: null when the picker is left on "`,
+  `"hides the from-bin picker and POSTs from_bin_id: null when the bins query fails"`;
+  `verify_gelato.py (F)`, `(F2)` — `(F2)` proves the destination leg lands **unbinned** and
+  both location totals stay Decimal-exact.
+- **Do:** note `UAT-ITEM-4`'s total (**`19`**). Transfer `2` from `UAT-LOC-A` to
+  `UAT-LOC-NOBIN` **without** naming a source bin. Then transfer `2` naming `UAT-BIN-A1`.
+  Re-read the totals and the bin contents.
+- 👁 **You are confirming:**
+  - the **from-bin** picker has the same shape as (a): appears after a location with bins is
+    chosen, defaults to "Unbinned pool", resets on location change
+  - the no-bin transfer is **rejected** (pool `0` at `UAT-LOC-A`), and the named-bin transfer
+    **succeeds**
+  - after the successful transfer the **total on-hand is visibly unchanged at `19`** — only
+    the split moved
+  - the stock now at `UAT-LOC-NOBIN` is **unbinned** (D-P4-5: the destination leg never lands
+    in a bin, and `UAT-LOC-NOBIN` has none anyway)
+- ✗ **Would be wrong:** the total changing across a transfer, or a no-bin transfer draining a
+  bin the server was never told to touch.
+
+#### C-SC6-c · `IssueComponentsDialog` per-line bin picker · SC6
+
+**Dialog:** `frontend/src/routes/mousse/components/IssueComponentsDialog.tsx`.
+**Fixture:** `WO-000001` @ `UAT-LOC-A` — two component lines with **opposite** requirements:
+
+| Line | Item | Required | Pool @ `UAT-LOC-A` | Needs a bin? |
+|---|---|---|---|---|
+| 1 | `UAT-ITEM-5` | `8` | **`0`** (all `20` in `UAT-BIN-A1`) | **yes** |
+| 2 | `UAT-ITEM-6` | `12` | `30` | no |
+
+**Run together with `C-MOUSSE-03`.**
+
+- ✅ **Machine already proved:** `src/routes/mousse/components/IssueComponentsDialog.test.tsx
+  "POSTs bin_id on the line whose bin is chosen, null on the untouched line (D-P4-1)"`,
+  `"drops an unchecked line from the posted body"`,
+  `"hides the bin pickers and POSTs bin_id: null when the bins query fails"`;
+  `verify_mousse.py (G)`.
+- **Do:** open the issue dialog on `WO-000001`. First submit **both** lines with **neither**
+  bin named. Then name `UAT-BIN-A1` on line 1 only, and submit again.
+- 👁 **You are confirming:**
+  - the bin column appears **per line**, not once for the whole dialog
+  - **each line's bin is independently selectable** — choosing a bin on line 1 must not
+    change line 2's selection
+  - the first submit is **rejected because of line 1** (pool `0`) while line 2 would have been
+    fine — read the message and confirm it identifies **which line** failed
+  - the second submit **succeeds**
+- ✗ **Would be wrong:** one bin picker governing both lines; a bin chosen on line 1 also
+  applying to line 2; or a rejection message that does not say which line was short.
+
+#### C-SC6-d · GELATO-off degraded path + module-toggle propagation · SC6, CORE-07
+
+**⚠ This check is an OBSERVATION, not a confirmation.** Do not try to make it pass. Record
+what actually happens, verbatim. There is **no server-side module gate** — disabling GELATO
+only filters the sidebar; `/api/v1/gelato/*` keeps serving an authorised user. The three
+dialogs' own code comments claim their bin pickers are "hidden when the bins query errors
+(GELATO off)", and that explanation is **probably wrong about the cause**: the real trigger is
+an RBAC 403 or a network failure, not a module toggle. So the pickers may well still list
+bins. If they do, that is a defect (expected severity **minor**) — report it and it goes
+through the protocol.
+
+**Fixture:** Settings → Modules; then all three dialogs above.
+
+- ✅ **Machine already proved:** `tests/core/test_modules.py::test_list_modules_returns_enabled_flag`,
+  `::test_toggle_module`, `::test_cannot_disable_always_on`, `::test_toggle_requires_admin`;
+  `src/components/AppShell.test.tsx "excludes a disabled module even from an admin"` — the nav
+  filter hides a disabled module **even from an admin**, so the toggle is meaningful;
+  `src/routes/crumb/SalesOrderDetail.test.tsx
+  "hides Fulfill / Ship when the GELATO module is disabled"`.
+- **Do, in this order:**
+  1. Settings → Modules. Toggle **GELATO off**.
+  2. Look at the sidebar. Does GELATO disappear — and does it do so **without** a manual
+     reload?
+  3. Navigate directly to **`/gelato/bins`**. Record what loads.
+  4. Open `StockAdjustDialog` (`C-SC6-a`'s fixture). **Record** whether the bin picker is
+     present, and whether it lists bins.
+  5. Open `StockTransferDialog`. Same — record.
+  6. Open `IssueComponentsDialog` on `WO-000001`. Same — record.
+  7. Also try to disable an **always-on** module (SYERP). Record whether it is even offered.
+  8. **Toggle GELATO back ON.** Confirm the sidebar restores it.
+- 👁 **You are recording** (not confirming): for each of steps 2–7, exactly what you saw. "The
+  picker still listed `UAT-BIN-A1` and `UAT-BIN-A2`" is a perfect answer. So is "the picker
+  vanished".
+- 🔴 **You MUST finish step 8.** `C-GELATO-01` … `C-GELATO-04` and `C-SYERP-20` all need
+  GELATO enabled. If you stop this check half-way, leave a note in the status table that
+  GELATO is **off**, so whoever resumes knows to re-enable it before continuing.
+- **Verifying the restore from outside the UI**, if you want certainty:
+
+  ```bash
+  podman exec compose_db_1 psql -U app -d biznice -tAc \
+    "select key, enabled from modules where key='gelato'"
+  # → gelato|t
+  ```
 
 ---
 

@@ -31,11 +31,20 @@ reason and a disposition.
 
 | | count |
 |---|---|
-| Planned checks | **48** |
-| Rows with a machine citation | **41** |
-| Rows marked `machine-unproven` | **7** |
+| Planned checks enumerated below | **58** |
+| Checks with a machine citation | **49** |
+| Checks marked `machine-unproven` | **9** (in **7** register rows — `C-CRUMB-02/04/05` share one) |
 | … of which probed in Task 10 | **1** (`C-CORE-05`, `getVisibleModules`) |
-| … of which deliberately left unprobed | **6** (all pure-appearance or human-judgment; reasons per row) |
+| … of which deliberately left unprobed | **8** (all pure-appearance or human-judgment; reasons per row) |
+
+> **Corrected 2026-07-26.** This table first read "48 planned checks / 41 cited / 7
+> unproven" — the aggregate was copied from D-P5-1's "~40–50" target instead of being counted
+> from the rows below, which enumerate **58**. The per-row content was and is correct; only
+> the summary arithmetic was wrong. `.zj/UAT-v4.0.md` carries **59**: these 58 plus
+> `C-SYERP-20` (the money-loop tail), added while authoring Task 13 because the plan's Task 13
+> requires it and Task 31 is its owner sitting. 59 is the sum of the *maxima* of the plan's own
+> per-suite ranges (6 + 13 + 20 + 4 + 8 + 4 + 4), so the count is faithful to the per-suite
+> instructions even though it exceeds D-P5-1's aggregate estimate.
 
 Two findings the pre-flight produced *before* any human clicked — both recorded in the rows
 that own them, and both worth reading before the owner run starts:
