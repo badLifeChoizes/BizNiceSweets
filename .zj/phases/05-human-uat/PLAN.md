@@ -246,7 +246,7 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Verify:** `cd frontend && npm run test` — file/test count is above the 44/139 baseline and 0 failures.
 - **Parallel-ok:** no (depends on Task 9).
 
-### [ ] 10a. Fix `U1` — HTTP 500 on duplicate-email user creation (ADDED mid-build)
+### [x] 10a. Fix `U1` — HTTP 500 on duplicate-email user creation (ADDED mid-build)
 - **Files:** `backend/app/modules/auth/service.py` (and/or `router.py`), plus a pinning test
 - **Do:** Found by the Task-9 pre-flight, not by a human: `POST` a second user with an existing email
   returns **500** (`IntegrityError` → `UniqueViolationError` on `ix_users_email`) because nothing guards
@@ -573,7 +573,15 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
    matches the check ID `C-CORE-05` as well as the requirement, so requirement coverage would prove
    nothing. Tasks 12–14 must use a delimited pattern (e.g. `grep -qF "(CORE-05)"`) instead.
 
-10. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
+10. **Two follow-ups from the `U1` fix** (Task 10a): (a) **`PREFLIGHT.md`'s `C-CORE-04` row is now stale**
+    — it tells the owner to expect a **500** and marks the row known-failing. Task 12 must true it up to
+    "expect a clean 409 naming the address", or the two documents contradict each other in front of the
+    owner. (b) **`create_user` silently ignores an unknown `role_name`** (`if role:` with no else): an
+    admin who typos a role gets a 201 and a user with *no* role, which via `getVisibleModules` means an
+    **empty sidebar**. Not U1 and not in scope there, but the same "ordinary operator mistake handled
+    badly" family — `C-CORE-03` may surface it.
+
+11. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
 ## Deviations
 
@@ -747,6 +755,24 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   the feature was broken. FE suite 44/139 → **45/148**, lint exit 0.
 - **T9 (transient product-code touch, disclosed) —** `AppShell.tsx` was mutated and reverted for the
   mutation proof. Nothing ships (`git diff --stat` empty); recorded so it cannot surface as a surprise.
+- **T10a — `U1` fixed** (`f508554` fix + `f67f085` pin), **409** matching the house convention: every
+  sibling rejecting a caller-supplied unique key uses `409 "<Thing> '<value>' already exists."`
+  (`partners.py:112`, `items.py:154`, `locations.py:49`, `plum/service.py:334`); the lone 422 outlier
+  (`bins.py:59`) is a composite-key pre-check. Mechanism is a **pre-check plus a narrowed
+  `IntegrityError` backstop** for the read-then-write race — explicitly *not* a broad except, because
+  `users` carries **two** unique indexes (`users_pkey`, `ix_users_email`, confirmed against the live
+  schema), so a broad handler would report a PK collision or role-FK failure as "that email already
+  exists" and send the operator to debug the wrong thing — the Phase-13 `create_invoice` failure in
+  miniature. The constraint name's location was **measured, not guessed**: the outer `IntegrityError`
+  does not carry it, `exc.orig.__cause__.constraint_name` does. `update_user` was checked and does
+  **not** share the hole (`UserUpdate` has no email field; no route can move one user's address onto
+  another's) — pinned anyway by `test_update_user_cannot_change_an_email` so the guard travels if anyone
+  adds email editing. **No-partial-row proven** rather than inferred: users 2→3 across a 201 then a 409,
+  exactly one row for the address carrying the **first** request's `full_name`, exactly one
+  `user.created` audit row. **RED signature is U1 itself** — an unhandled `UniqueViolationError` on
+  `ix_users_email` propagating out of the `INSERT`, with the two non-DB tests staying green under the
+  revert, which is the discriminator that the failure is localised to the missing guard. Full suite
+  **240 passed** (236 + 4).
 
 ## Out of scope
 
