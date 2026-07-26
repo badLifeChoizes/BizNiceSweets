@@ -179,7 +179,7 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Verify:** two consecutive runs → identical block; `verify_mousse.py` and `verify_crumb_so.py` exit 0.
 - **Parallel-ok:** no.
 
-### [ ] 7. Seed the SYERP GL / AP / AR fixture layer
+### [x] 7. Seed the SYERP GL / AP / AR fixture layer
 - **Files:** `backend/scripts/seed_uat_fixtures.py`
 - **Do:** Get-or-create via real services: one posted manual journal entry (so the register and JE list are non-empty and reversal is reachable), one **Draft** and one **Posted** AP bill (one PO-matched), one partial payment, one **posted** invoice from a shipment plus one partially-allocated receipt. Aim so that AP aging, AR aging, TB, BS, and IS all render non-trivially and the TB nets zero. Record every bill/invoice/receipt number, aging bucket total, control-account balance, and the TB net as literals.
 - **Done when:** manifest prints those literals; the TB net is exactly zero.
@@ -467,7 +467,17 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
    WO check needs a sentence saying so, or an empty component table reads as a broken fixture.
    (j) Quote line `sort_order` is **0-based** while PO lines are **1-based**. Harmless, but if the UI
    surfaces raw sort order the two screens number their lines differently.
-   (k) Number formats/widths differ across suites (`QUOTE-####`, `SO-####`, `WO-######`, `PO-####`,
+   (k) **Receipts and payments have no human document number.** `ReceiptRead`/`PaymentRead` expose only
+   `id`, date, amount and a free-text `reference` — unlike `BILL-####` / `INV-####`. The Receipts and
+   Payments screens have nothing else to identify a row by, and nothing enforces reference uniqueness.
+   Task 23's receipts-list check should look deliberately: "the list shows a UUID" would be a real
+   finding.
+   (l) **`2150 GR/IR` carries 4950.00 of pre-existing dev data** (receipts never billed) — the dominant
+   TB line, and not the fixture's. On Task 8's fresh volume it will be only the fixture's 94.25, so the
+   very different fresh-volume totals must not be read as a regression.
+   (m) `SO-0002` shows `qty_reserved 0` after shipping — the reservation is consumed by the pick.
+   Correct, but a checklist quoting "reserved" for a shipped SO would be quoting a zero.
+   (n) Number formats/widths differ across suites (`QUOTE-####`, `SO-####`, `WO-######`, `PO-####`,
    `ITEM-####`) — quote them exactly in the checklist so an owner doesn't flag a "wrong" width.
 
 5. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
@@ -563,6 +573,27 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   the check fails the seed instead. Money-loop head proven reachable, not just seeded: GELATO's own
   pick-list builder resolves `SO-0001` to `UAT-BIN-A2` holding 25 against a reserved 11. Soft
   reservation posts **no** JE (tripwire clear).
+- **T7 (trivial) — the manual JE posts to 5290/1110, not to a control account.** Both aging reports tie
+  their subledger total to the GL control (1120 / 2110); a manual JE on a control would move it without
+  a matching subledger document, breaking `in_balance` and **manufacturing a false defect** for the
+  owner to report at Task 23. Fixture-design choice, not a posting-rule change.
+- **T7 (trivial) — AR/AP run on their own documents, keeping the money loop pristine.** AR uses its own
+  `SO-0002` / `UAT-ITEM-10` / shipment; AP uses its own third PO (`UAT-PO-BILLED`) / `UAT-ITEM-9`.
+  Proven, not asserted: `SO-0001` still `confirmed, picked 0, shipped 0, invoiced 0` with its
+  `UAT-BIN-A2` stock of 25 unconsumed, and `PO-0002` still `approved, received 0`. Task 27's receive
+  subject and Task 30/31's ship→invoice subject are untouched while Task 23 gets fully posted books.
+- **T7 (trivial) — a fourth bin `UAT-BIN-STAGE`** (`execute_pick` requires a staging bin), so the Task-5
+  literal `gelato.bins_at.UAT-LOC-A` becomes **4, not 3**. Convenient: Task 30's owner pick needs one.
+- **T7 (trivial) — the P&L uses a rolling 365-day window**, not YTD (a YTD window would silently drop
+  the 70-day-old invoice if the seed ran in early January). Window length recorded as a literal.
+  Aging ages are **relative offsets**, never fixed dates, so buckets don't drift as the calendar moves.
+- **T7 (trivial) — three read-schema gaps worked around in the script, no product change:** `BillRead`
+  has no `paid_amount` (derived `total − open_balance`), `JournalEntryRead` has no
+  `total_debit`/`total_credit` (summed from lines), `profit_loss()` needs an explicit window.
+- **T7 (TB proven either side)** — before `4950.00 = 4950.00` (2 rows), after **`5541.25 = 5541.25`
+  (8 rows)** spanning assets/liabilities/revenue/expense, net exactly zero. `_expect` asserts the zero
+  net, `in_balance`, and **both** aging tie-outs every run, so a later layer that unbalances the books
+  fails the seed rather than surfacing as a phantom defect at Task 23.
 
 ## Out of scope
 
