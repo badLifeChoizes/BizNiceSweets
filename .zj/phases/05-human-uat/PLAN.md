@@ -151,7 +151,7 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Verify:** run the script twice; `diff <(run1) <(run2)` is empty for the partner/user lines.
 - **Parallel-ok:** no.
 
-### [ ] 3. Seed the PLUM fixture layer
+### [x] 3. Seed the PLUM fixture layer
 - **Files:** `backend/scripts/seed_uat_fixtures.py`
 - **Do:** Build, via the real PLUM service: the **cost / shared-sub-assembly tree** and the **where-used chain** in the shapes `.zj/UAT-v1.0.md:19-30` specifies (a 3-level BOM where one sub-assembly is shared, so the flat view must dedupe; a 3-level chain so Where-Used has one direct and one indirect parent), with explicit material costs and a below-cost sale price; one **Released** revision (v1.0 had none — check 8's read-only assertions need one); one Draft part with **no** AVL link (the happy-path Add-Vendor target) and one **with** a link plus a price break (so the vendor-price cost source is reachable). Use `UAT-P…` part numbers so auto-numbering checks are not perturbed. Compute and record the exact rolled-up cost / margin / margin-% Decimals in the manifest.
 - **Done when:** the manifest prints the tree's part numbers with their rolled-up cost, the flat-BOM dedupe quantity, the sale price, the margin and margin-%, and the Released part number.
@@ -442,7 +442,18 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
 1. **There is no server-side module gate.** `backend/app/core/modules_router.py` only stores the `enabled` flag; no router carries a module-enabled dependency (`grep -rn 'require_module\|module_enabled' backend/app/` → nothing), and `frontend/src/App.tsx` has no per-module route guard. Disabling GELATO therefore only filters the sidebar via `getVisibleModules` (`AppShell.tsx:37-46`) — `/api/v1/gelato/*` still serves an authorized user and `/gelato/bins` stays directly reachable. Consequently the three Phase-4 dialogs' docstring claim — "Hidden … when the bins query errors (GELATO off)" (`StockAdjustDialog.tsx:20-21`, mirrored in `StockTransferDialog.tsx:20`, `IssueComponentsDialog.tsx:149-151`) — is **probably wrong about the cause**: the real `isError` trigger is an RBAC 403 or a network failure, not a module toggle. Task 15/26 record the truth; the docstrings likely need correcting either way.
 2. **Seven route screens have no colocated vitest** — `Home.tsx`, `admin/Settings.tsx`, `admin/Modules.tsx`, `syerp/GLAccounts.tsx`, `crumb/LeadDetail.tsx`, `crumb/OpportunityDetail.tsx`, `crumb/Quotes.tsx` — plus `getVisibleModules`. Task 10 adds the `getVisibleModules` probe; the rest are the genuinely machine-unproven surfaces and get the heaviest human weight.
 3. **Under the dev overlay, `:8000` serves no SPA at all** (the `../backend:/app` bind mount shadows the image's `/app/frontend/dist`; `main.py:118` mounts only if the dir exists). This is the mechanical reason D-P7-1 chose `:5173`, and the reason SC7's smoke must use `compose.yml` alone.
-4. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
+4. **Build-time observations from the fixture layers** (candidate UAT checks / minor defects, not acted on):
+   (a) `update_cost` rejects a Released revision with *"BOM lines can only be edited on Draft revisions."*
+   (`plum/service.py:2029`) — copy-pasted from `add_bom_line`; correct behavior, wrong noun. If it ever
+   reaches a toast the owner is told about BOM lines while editing a cost. Candidate minor.
+   (b) Flat-BOM rows come back over HTTP with raw column scale (`qty = 33.000000000000000000`) — the
+   PLUM read-only check must confirm the **screen** shows `33`, not the raw scale.
+   (c) `POST /api/v1/auth/login` takes **OAuth2 form-encoded** `username`/`password`, not JSON (a JSON
+   body 422s naming a missing `username`) — bake into the Task-11 runbook and Task 16.
+   (d) The seeded `user` role grants all ten business read/write permissions, so it is unusable as an
+   RBAC nav-filter subject; that is why T2 mints its own single-permission `UAT-PLUM-ONLY` role.
+
+5. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
 ## Deviations
 
@@ -460,6 +471,21 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
 - **T2 (trivial) — archiving drives `update_partner(PartnerUpdate(active=False))`, not the
   `archive_partner()` alias.** `PATCH /syerp/partners/{id}` (`router.py:299`) routes archiving through
   `update_partner`; nothing calls `archive_partner`. The fixture takes the path the UI takes.
+- **T3 (trivial) — the PLUM cost tree departs from `.zj/UAT-v1.0.md`'s literals on purpose.** A fifth
+  part (`UAT-P105`, a **second costed leaf**) was added, moving the rolled-up total from v1.0's
+  `110.00` to **`99.15`**. Reason is the Phase-2b keeper: with a single costed leaf the roll-up total
+  is structurally identical to that leaf's extended cost, so a footer printing one flat row would look
+  correct. With two costed leaves no single flat row equals `99.15`, and the v1.0 D1 triple-count bug
+  now yields `239.40` — unmistakably distinct. Other wrong formulas land on 57.90 / 90.75 / 27.95.
+- **T3 (trivial) — a second, non-preferred AVL link** (`UAT-VEND-2` on `UAT-P402`) beyond the one the
+  task asked for: a Preferred-badge check with a single row cannot fail.
+- **T3 (trivial) — lossless Decimal formatting in `Manifest.value()`.** `Numeric(_,6)` roll-ups return
+  `99.150000000000000000000000`; the manifest strips trailing zeros with no rounding or quantize, so a
+  genuine `99.154` still prints in full and Task 8's diff still catches drift. The single rounded
+  literal is the separately-labelled `margin_pct_2dp` (the exact percentage is 28 non-terminating
+  digits; the UI paints `-59.66`).
+- **T3 (trivial) — `_ensure_cost` skips the write when values already match.** An unconditional PATCH
+  appends a `part.cost_updated` audit row every run — manifest-identical but not actually idempotent.
 
 ## Out of scope
 
