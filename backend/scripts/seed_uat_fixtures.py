@@ -89,7 +89,7 @@ import os
 import sys
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select, text
@@ -136,8 +136,22 @@ from app.modules.crumb.service import (
     list_quotes,
     list_sales_orders,
 )
-from app.modules.gelato.schemas import BinCreate, PutawayRequest
-from app.modules.gelato.service import archive_bin, create_bin, execute_putaway, list_bins
+from app.modules.gelato.schemas import (
+    BinCreate,
+    PackRequest,
+    PickLineRequest,
+    PickRequest,
+    PutawayRequest,
+)
+from app.modules.gelato.service import (
+    archive_bin,
+    create_bin,
+    execute_pack,
+    execute_pick,
+    execute_putaway,
+    execute_ship,
+    list_bins,
+)
 from app.modules.mousse.schemas import WorkOrderCreate
 from app.modules.mousse.service import (
     create_work_order,
@@ -169,17 +183,38 @@ from app.modules.plum.service import (
 )
 from app.modules.syerp.inventory_seed import DEFAULT_LOCATION_NAME
 from app.modules.syerp.schemas import (
+    BillLineCreate,
     InventoryItemCreate,
     InventoryItemUpdate,
+    InvoiceLineCreate,
+    JournalLineCreate,
     PartnerCreate,
     PartnerUpdate,
+    PaymentAllocationCreate,
     POCreate,
     POLineCreate,
+    ReceiptAllocationCreate,
     StockLocationCreate,
     StockLocationUpdate,
 )
+from app.modules.syerp.service.accounts import _gl_account_id_by_code
+from app.modules.syerp.service.ar import (
+    create_invoice,
+    list_invoices,
+    list_receipts,
+    post_invoice,
+    record_receipt,
+)
+from app.modules.syerp.service.bills import (
+    create_bill,
+    list_bills,
+    list_payments,
+    post_bill,
+    record_payment,
+)
 from app.modules.syerp.service.inventory import get_bin_on_hand, get_item_onhand, post_receipt
 from app.modules.syerp.service.items import create_item, list_items, update_item
+from app.modules.syerp.service.journal import list_journal_entries, post_journal_entry
 from app.modules.syerp.service.locations import (
     create_location,
     get_location,
@@ -187,7 +222,20 @@ from app.modules.syerp.service.locations import (
     update_location,
 )
 from app.modules.syerp.service.partners import create_partner, list_partners, update_partner
-from app.modules.syerp.service.purchasing import add_line, advance_po_status, create_po, list_pos
+from app.modules.syerp.service.purchasing import (
+    add_line,
+    advance_po_status,
+    create_po,
+    list_pos,
+    receive_line,
+)
+from app.modules.syerp.service.reports import (
+    ap_aging_report,
+    ar_aging_report,
+    balance_sheet,
+    profit_loss,
+    trial_balance,
+)
 
 # Every natural key this script mints carries this prefix, so its rows are identifiable
 # in the UI, in the database, and in the manifest.
@@ -2294,6 +2342,447 @@ MOUSSE_CRUMB_LAYER = FixtureLayer(
 )
 
 
+# ---------------------------------------------------------------------------
+# Layer: SYERP GL / AP / AR (Task 7)
+# ---------------------------------------------------------------------------
+#
+# The books. Everything here is posted by DRIVING the real posting services — no posting
+# rule, account or amount logic in backend/app/ is touched (the GL tripwire is about
+# CHANGING posting rules, not about posting).
+#
+# DISJOINT FROM THE OWNER'S MONEY LOOP. Task 6 left SO-0001 confirmed but UNSHIPPED and
+# Task 4 left UAT-PO-APPROVED fully outstanding, because Tasks 27/30/31 have the owner
+# drive receive → bill → pay and pick → pack → ship → invoice → collect through the UI.
+# Consuming either would destroy those checks. So this layer builds its OWN documents
+# end to end:
+#   * AP: a THIRD purchase order UAT-PO-BILLED, on its own item UAT-ITEM-9, which the
+#     fixture approves and receives in full — UAT-PO-APPROVED is never touched.
+#   * AR: a SECOND sales order UAT-SO-2, on its own item UAT-ITEM-10, which the fixture
+#     confirms, picks, packs and ships through the real GELATO flow — SO-0001 keeps its
+#     reservation intact and its stock (UAT-ITEM-8 in UAT-BIN-A2) unconsumed.
+# Task 23 therefore has posted books to read while Task 31's write path stays pristine.
+#
+# WHY THE MANUAL JE USES 5290/1110 AND NOT 1120/2110: both aging reports tie their
+# subledger grand total to the GL control balance (1120 for AR, 2110 for AP). A manual
+# journal entry touching a control account would move the control WITHOUT a matching
+# subledger document and break `in_balance` — turning a healthy tie-out into a false
+# defect the owner would report at Task 23. The fixture JE therefore posts entirely
+# outside the controls: Dr 5290 Professional Services / Cr 1110 Cash.
+#
+# AGING BUCKETS ARE DELIBERATELY DIFFERENT so neither report is a single column:
+#   * the AP bill is dated today − 45 → the 31-60 bucket;
+#   * the AR invoice is dated today − 70 → the 61-90 bucket.
+# Ages are RELATIVE offsets, never fixed dates: a fixed date would drift into another
+# bucket as the calendar moved and the manifest would change on its own. The dates
+# themselves are never printed (they vary run to run); only the bucket TOTALS are.
+#
+# THE PREPAYMENT TRAP (D-M3-1 / verify_ar scenario G) IS DELIBERATELY NOT REBUILT: the
+# receipt is dated TODAY, its invoice today − 70, so the cash lands strictly AFTER the
+# receivable is recognised. A receipt predating its invoice_date used to trip a false
+# negative on the 1120 tie-out; that state is left to the verify script that pins it.
+#
+# THE NUMBERS (anti-coincidence, as with every other layer):
+#   AP  13 @ 7.25 = 94.25 billed, 36.50 paid → 57.75 open. 13 is prime; the total
+#       without the payment (94.25), the payment alone (36.50) and the quantity (13)
+#       are all visibly different from 57.75.
+#   AR  9 @ 15.50 = 139.50 invoiced, 55.25 received → 84.25 open. Again none of
+#       139.50 / 55.25 / 9 can be mistaken for 84.25, and no even division lands on it.
+#   The DRAFT bill (264.50, expense line) must be ABSENT from AP aging — a draft is not
+#   posted to 2110, so including it would break the tie-out (the D-P9c-1 divergence
+#   guard). Its exclusion is itself a check worth handing the owner.
+
+GL_JE_MEMO = "UAT-JE-1 manual journal entry (professional services accrual)"
+GL_JE_AMOUNT = Decimal("412.75")
+GL_JE_DEBIT_CODE = "5290"
+GL_JE_CREDIT_CODE = "1110"
+
+AP_PO_KEY = "UAT-PO-BILLED"
+AP_ITEM = "UAT-ITEM-9"
+AP_QTY = Decimal("13")
+AP_UNIT_COST = Decimal("7.25")
+AP_BILL_AGE_DAYS = 45  # → the 31-60 aging bucket
+AP_PAYMENT = Decimal("36.50")
+AP_DRAFT_BILL_REF = "UAT-BILL-DRAFT"
+AP_POSTED_BILL_REF = "UAT-BILL-POSTED"
+AP_DRAFT_BILL_AMOUNT = Decimal("264.50")
+AP_DRAFT_EXPENSE_CODE = "5280"
+
+AR_SO_MARKER = "UAT-SO-2"
+AR_ITEM = "UAT-ITEM-10"
+AR_STOCK_QTY = Decimal("20")
+AR_ITEM_COST = Decimal("4.75")
+AR_SHIP_QTY = Decimal("9")
+AR_UNIT_PRICE = Decimal("15.50")
+AR_INVOICE_AGE_DAYS = 70  # → the 61-90 aging bucket
+AR_RECEIPT = Decimal("55.25")
+GELATO_BIN_STAGING = "UAT-BIN-STAGE"
+
+
+async def _bill_by_ref(session: AsyncSession, ref: str):
+    """Resolve a bill by its vendor_invoice_ref — a BILL-#### number is generated."""
+    for bill in await list_bills(session):
+        if bill.vendor_invoice_ref == ref:
+            return bill
+    return None
+
+
+async def build_gl_ap_ar(ctx: SeedContext) -> None:
+    """Post the manual JE, the AP documents and the AR documents, all get-or-create."""
+    async with ctx.session_factory() as session:
+        vendors = {p.code: p.id for p in await list_partners(session, include_archived=True)}
+        main_id = (await _location_by_name(session, DEFAULT_LOCATION_NAME)).id
+        loc_a = (await _location_by_name(session, GELATO_BIN_LOCATION)).id
+        cash_id = await _gl_account_id_by_code(session, GL_JE_CREDIT_CODE)
+        je_debit_id = await _gl_account_id_by_code(session, GL_JE_DEBIT_CODE)
+        draft_expense_id = await _gl_account_id_by_code(session, AP_DRAFT_EXPENSE_CODE)
+
+    today = date.today()
+
+    # -- 1. one posted manual journal entry (register + JE list non-empty, reversal
+    #       reachable). Outside the AR/AP controls, so no tie-out is disturbed.
+    async with ctx.session_factory() as session:
+        entries = await list_journal_entries(session)
+        if not any(entry.memo == GL_JE_MEMO for entry in entries):
+            await post_journal_entry(
+                session,
+                entry_date=today,
+                memo=GL_JE_MEMO,
+                lines=[
+                    JournalLineCreate(account_id=je_debit_id, debit=GL_JE_AMOUNT),
+                    JournalLineCreate(account_id=cash_id, credit=GL_JE_AMOUNT),
+                ],
+                actor_id=ctx.actor_id,
+            )
+
+    # -- 2. AP: its OWN purchase order, approved and fully received ---------------------
+    ap_item = await _ensure_item(ctx, AP_ITEM, "UAT AP-matched stock item")
+    await _ensure_po(
+        ctx,
+        AP_PO_KEY,
+        vendors["UAT-VEND-1"],
+        ((AP_ITEM, AP_QTY, AP_UNIT_COST),),
+        {AP_ITEM: ap_item},
+        approve=True,
+    )
+    async with ctx.session_factory() as session:
+        po = await _po_by_notes(session, AP_PO_KEY)
+        po_line = po.lines[0]
+        needs_receipt = po_line.qty_received < po_line.qty_ordered
+    if needs_receipt:
+        async with ctx.session_factory() as session:
+            await receive_line(
+                session,
+                po.id,
+                po_line.id,
+                main_id,
+                po_line.qty_ordered - po_line.qty_received,
+                ctx.actor_id,
+            )
+
+    # -- 3. AP: one POSTED bill matched to that receipt, plus a partial payment --------
+    async with ctx.session_factory() as session:
+        po = await _po_by_notes(session, AP_PO_KEY)
+        po_line_id = po.lines[0].id
+        posted_bill = await _bill_by_ref(session, AP_POSTED_BILL_REF)
+        if posted_bill is None:
+            posted_bill = await create_bill(
+                session,
+                vendor_id=vendors["UAT-VEND-1"],
+                vendor_invoice_ref=AP_POSTED_BILL_REF,
+                bill_date=today - timedelta(days=AP_BILL_AGE_DAYS),
+                lines=[
+                    BillLineCreate(
+                        line_type="matched", po_line_id=po_line_id, matched_qty=AP_QTY
+                    )
+                ],
+                actor_id=ctx.actor_id,
+            )
+    async with ctx.session_factory() as session:
+        bill = await _bill_by_ref(session, AP_POSTED_BILL_REF)
+        if bill.status == "draft":
+            await post_bill(session, bill.id, ctx.actor_id)
+    async with ctx.session_factory() as session:
+        bill = await _bill_by_ref(session, AP_POSTED_BILL_REF)
+        payment_ref = f"{AP_POSTED_BILL_REF}-PAY-1"
+        if not any(p.reference == payment_ref for p in await list_payments(session)):
+            await record_payment(
+                session,
+                payment_date=today,
+                cash_account_id=cash_id,
+                reference=payment_ref,
+                allocations=[
+                    PaymentAllocationCreate(bill_id=bill.id, amount=AP_PAYMENT)
+                ],
+                actor_id=ctx.actor_id,
+            )
+
+    # -- 4. AP: one DRAFT bill (must be ABSENT from the aging — D-P9c-1) ---------------
+    async with ctx.session_factory() as session:
+        if await _bill_by_ref(session, AP_DRAFT_BILL_REF) is None:
+            await create_bill(
+                session,
+                vendor_id=vendors["UAT-VEND-2"],
+                vendor_invoice_ref=AP_DRAFT_BILL_REF,
+                bill_date=today,
+                lines=[
+                    BillLineCreate(
+                        line_type="expense",
+                        account_id=draft_expense_id,
+                        amount=AP_DRAFT_BILL_AMOUNT,
+                    )
+                ],
+                actor_id=ctx.actor_id,
+            )
+
+    # -- 5. AR: its OWN sales order, genuinely shipped through the real GELATO flow ----
+    ar_item = await _ensure_item(ctx, AR_ITEM, "UAT AR-invoiced stock item")
+    staging_bin = await _ensure_bin(
+        ctx, loc_a, GELATO_BIN_STAGING, "UAT staging bin for pick/pack/ship"
+    )
+    async with ctx.session_factory() as session:
+        pick_bin = (await _bin_by_code(session, loc_a, GELATO_BIN_1)).id
+    await _ensure_receipt(ctx, ar_item, loc_a, AR_STOCK_QTY, AR_ITEM_COST)
+    await _ensure_putaway(ctx, ar_item, loc_a, pick_bin, AR_STOCK_QTY)
+
+    async with ctx.session_factory() as session:
+        customers = {p.code: p.id for p in await list_partners(session, include_archived=True)}
+        so = await _so_by_line_marker(session, AR_SO_MARKER)
+    if so is None:
+        async with ctx.session_factory() as session:
+            so = await create_sales_order(
+                session,
+                SalesOrderCreate(
+                    partner_id=customers["UAT-CUST-2"],
+                    lines=[
+                        SalesOrderLineCreate(
+                            item_id=ar_item,
+                            description=AR_SO_MARKER,
+                            qty_ordered=AR_SHIP_QTY,
+                            unit_price=AR_UNIT_PRICE,
+                        )
+                    ],
+                ),
+                ctx.actor_id,
+            )
+            await confirm_sales_order(session, so.id, ctx.actor_id)
+
+    async with ctx.session_factory() as session:
+        so = await _so_by_line_marker(session, AR_SO_MARKER)
+        so_line = so.lines[0]
+        needs_ship = so_line.qty_shipped < AR_SHIP_QTY
+    if needs_ship:
+        async with ctx.session_factory() as session:
+            shipment = await execute_pick(
+                session,
+                PickRequest(
+                    sales_order_id=so.id,
+                    staging_bin_id=staging_bin,
+                    lines=[
+                        PickLineRequest(
+                            sales_order_line_id=so_line.id,
+                            from_bin_id=pick_bin,
+                            qty=AR_SHIP_QTY,
+                        )
+                    ],
+                ),
+                ctx.actor_id,
+            )
+        async with ctx.session_factory() as session:
+            await execute_pack(session, shipment.id, PackRequest(), ctx.actor_id)
+        async with ctx.session_factory() as session:
+            await execute_ship(session, shipment.id, ctx.actor_id)
+
+    # -- 6. AR: one POSTED invoice off that shipment + one PARTIAL receipt -------------
+    async with ctx.session_factory() as session:
+        so = await _so_by_line_marker(session, AR_SO_MARKER)
+        so_line_id = so.lines[0].id
+        invoices = await list_invoices(session)
+        invoice = next((inv for inv in invoices if inv.sales_order_id == so.id), None)
+        if invoice is None:
+            invoice = await create_invoice(
+                session,
+                customer_id=customers["UAT-CUST-2"],
+                sales_order_id=so.id,
+                invoice_date=today - timedelta(days=AR_INVOICE_AGE_DAYS),
+                lines=[
+                    InvoiceLineCreate(
+                        sales_order_line_id=so_line_id, invoiced_qty=AR_SHIP_QTY
+                    )
+                ],
+                actor_id=ctx.actor_id,
+            )
+    async with ctx.session_factory() as session:
+        invoices = await list_invoices(session)
+        invoice = next((inv for inv in invoices if inv.sales_order_id == so.id), None)
+        if invoice.status == "draft":
+            await post_invoice(session, invoice.id, ctx.actor_id)
+    async with ctx.session_factory() as session:
+        receipts = await list_receipts(session)
+        reference = f"{AR_SO_MARKER}-RCPT-1"
+        if not any(r.reference == reference for r in receipts):
+            await record_receipt(
+                session,
+                # Dated TODAY, strictly AFTER the invoice_date — the D-M3-1 prepayment
+                # state is deliberately NOT rebuilt here.
+                receipt_date=today,
+                cash_account_id=cash_id,
+                reference=reference,
+                allocations=[
+                    ReceiptAllocationCreate(invoice_id=invoice.id, amount=AR_RECEIPT)
+                ],
+                actor_id=ctx.actor_id,
+            )
+
+
+async def report_gl_ap_ar(ctx: SeedContext) -> None:
+    """Read the books back out of the REAL report services."""
+    manifest = ctx.manifest
+
+    async with ctx.session_factory() as session:
+        # -- the manual journal entry ---------------------------------------------------
+        entry = next(
+            (e for e in await list_journal_entries(session) if e.memo == GL_JE_MEMO), None
+        )
+        if entry is not None:
+            manifest.value("syerp.gl.manual_je.memo", entry.memo)
+            manifest.value("syerp.gl.manual_je.line_count", len(entry.lines))
+            manifest.value(
+                "syerp.gl.manual_je.total_debit",
+                sum((ln.debit or Decimal("0") for ln in entry.lines), Decimal("0")),
+            )
+            manifest.value(
+                "syerp.gl.manual_je.total_credit",
+                sum((ln.credit or Decimal("0") for ln in entry.lines), Decimal("0")),
+            )
+
+        # -- AP: the posted bill, its payment, the draft bill ---------------------------
+        for label, ref in (("posted", AP_POSTED_BILL_REF), ("draft", AP_DRAFT_BILL_REF)):
+            bill = await _bill_by_ref(session, ref)
+            if bill is None:
+                continue
+            manifest.key("syerp.bill_ref", ref)
+            manifest.value(f"syerp.ap.bill.{label}.bill_number", bill.bill_number)
+            manifest.value(f"syerp.ap.bill.{label}.status", bill.status)
+            manifest.value(f"syerp.ap.bill.{label}.total", bill.total)
+            manifest.value(
+                f"syerp.ap.bill.{label}.paid_amount", bill.total - bill.open_balance
+            )
+            manifest.value(f"syerp.ap.bill.{label}.open_balance", bill.open_balance)
+
+        # -- AR: the invoice and the receipt ---------------------------------------------
+        so = await _so_by_line_marker(session, AR_SO_MARKER)
+        if so is not None:
+            manifest.value("syerp.ar.sales_order.so_number", so.so_number)
+            manifest.value("syerp.ar.sales_order.status", so.status)
+            manifest.value(
+                "syerp.ar.sales_order.line",
+                f"ordered {decimal_str(so.lines[0].qty_ordered)} "
+                f"shipped {decimal_str(so.lines[0].qty_shipped)} "
+                f"invoiced {decimal_str(so.lines[0].qty_invoiced)} "
+                f"@ {decimal_str(so.lines[0].unit_price)}",
+            )
+            invoice = next(
+                (inv for inv in await list_invoices(session) if inv.sales_order_id == so.id),
+                None,
+            )
+            if invoice is not None:
+                manifest.value("syerp.ar.invoice.invoice_number", invoice.invoice_number)
+                manifest.value("syerp.ar.invoice.status", invoice.status)
+                manifest.value("syerp.ar.invoice.total", invoice.total)
+                manifest.value("syerp.ar.invoice.open_balance", invoice.open_balance)
+            # NOTE: ReceiptRead/PaymentRead carry NO human document number — the
+            # `reference` string is the only identifier, so that is what the checklist
+            # quotes and what the owner must match on the Receipts / Payments screens.
+            for receipt in await list_receipts(session):
+                if receipt.reference == f"{AR_SO_MARKER}-RCPT-1":
+                    manifest.key("syerp.receipt_ref", receipt.reference)
+                    manifest.value("syerp.ar.receipt.amount", receipt.amount)
+                    manifest.value(
+                        "syerp.ar.receipt.allocations", len(receipt.allocations)
+                    )
+        for payment in await list_payments(session):
+            if payment.reference == f"{AP_POSTED_BILL_REF}-PAY-1":
+                manifest.key("syerp.payment_ref", payment.reference)
+                manifest.value("syerp.ap.payment.amount", payment.amount)
+                manifest.value("syerp.ap.payment.allocations", len(payment.allocations))
+
+        # -- the reports the owner reads off the screen ----------------------------------
+        ap_aging = await ap_aging_report(session)
+        manifest.value("syerp.report.ap_aging.current", ap_aging.grand_total.current)
+        manifest.value("syerp.report.ap_aging.d31_60", ap_aging.grand_total.d31_60)
+        manifest.value("syerp.report.ap_aging.d61_90", ap_aging.grand_total.d61_90)
+        manifest.value("syerp.report.ap_aging.d90_plus", ap_aging.grand_total.d90_plus)
+        manifest.value("syerp.report.ap_aging.total", ap_aging.grand_total.total)
+        manifest.value("syerp.report.ap_aging.control_2110", ap_aging.control_balance)
+        manifest.value("syerp.report.ap_aging.in_balance", str(ap_aging.in_balance).lower())
+        _expect("AP aging ties the 2110 control", ap_aging.in_balance, True)
+
+        ar_aging = await ar_aging_report(session)
+        manifest.value("syerp.report.ar_aging.current", ar_aging.grand_total.current)
+        manifest.value("syerp.report.ar_aging.d31_60", ar_aging.grand_total.d31_60)
+        manifest.value("syerp.report.ar_aging.d61_90", ar_aging.grand_total.d61_90)
+        manifest.value("syerp.report.ar_aging.d90_plus", ar_aging.grand_total.d90_plus)
+        manifest.value("syerp.report.ar_aging.total", ar_aging.grand_total.total)
+        manifest.value("syerp.report.ar_aging.control_1120", ar_aging.control_balance)
+        manifest.value("syerp.report.ar_aging.in_balance", str(ar_aging.in_balance).lower())
+        _expect("AR aging ties the 1120 control", ar_aging.in_balance, True)
+
+        tb = await trial_balance(session)
+        manifest.value("syerp.report.trial_balance.total_debit", tb.total_debit)
+        manifest.value("syerp.report.trial_balance.total_credit", tb.total_credit)
+        manifest.value(
+            "syerp.report.trial_balance.net", tb.total_debit - tb.total_credit
+        )
+        manifest.value("syerp.report.trial_balance.in_balance", str(tb.in_balance).lower())
+        manifest.value("syerp.report.trial_balance.row_count", len(tb.rows))
+        # THE assertion this whole layer is judged on: the TB nets EXACTLY zero.
+        _expect("trial balance net", tb.total_debit - tb.total_credit, Decimal("0"))
+        _expect("trial balance in_balance", tb.in_balance, True)
+
+        bs = await balance_sheet(session)
+        manifest.value("syerp.report.balance_sheet.total_assets", bs.total_assets)
+        manifest.value("syerp.report.balance_sheet.total_liabilities", bs.total_liabilities)
+        manifest.value("syerp.report.balance_sheet.total_equity", bs.total_equity)
+        manifest.value("syerp.report.balance_sheet.in_balance", str(bs.in_balance).lower())
+
+        # A ROLLING 365-day window, never a fixed calendar year: a year-to-date window
+        # would silently drop the 70-day-old invoice if the seed ran in early January.
+        today = date.today()
+        pl = await profit_loss(session, today - timedelta(days=365), today)
+        manifest.value("syerp.report.income_statement.window_days", 365)
+        manifest.value("syerp.report.income_statement.total_revenue", pl.total_revenue)
+        manifest.value("syerp.report.income_statement.total_expense", pl.total_expense)
+        manifest.value("syerp.report.income_statement.net_income", pl.net_income)
+
+
+GL_AP_AR_LAYER = FixtureLayer(
+    name="syerp-gl+ap+ar",
+    tables=(
+        TableSpec(
+            "syerp_bill", "vendor_invoice_ref LIKE 'UAT-%'", "syerp_bill (UAT-)"
+        ),
+        TableSpec(
+            "syerp_payment", "reference LIKE 'UAT-%'", "syerp_payment (UAT-)"
+        ),
+        TableSpec(
+            "syerp_invoice",
+            "sales_order_id IN (SELECT sales_order_id FROM crumb_sales_order_line "
+            "WHERE description LIKE 'UAT-%')",
+            "syerp_invoice (UAT-)",
+        ),
+        TableSpec("syerp_receipt", "reference LIKE 'UAT-%'", "syerp_receipt (UAT-)"),
+        TableSpec(
+            "gelato_shipment",
+            "sales_order_id IN (SELECT sales_order_id FROM crumb_sales_order_line "
+            "WHERE description LIKE 'UAT-%')",
+            "gelato_shipment (UAT-)",
+        ),
+    ),
+    build=build_gl_ap_ar,
+    report=report_gl_ap_ar,
+)
+
+
 def _layers() -> tuple[FixtureLayer, ...]:
     """
     The registered fixture layers, in DEPENDENCY order (builders run in this order).
@@ -2302,9 +2791,8 @@ def _layers() -> tuple[FixtureLayer, ...]:
     on both (its PLUM-linked item points at UAT-P101, its POs at the UAT vendors); GELATO
     depends on inventory (its bins subdivide UAT-LOC-A and it stocks its own item);
     MOUSSE+CRUMB depends on all three (its components are binned into GELATO's bins and
-    its sales order quotes PLUM parts to a UAT customer).
-
-    Task 7 appends here: SYERP GL / AP / AR.
+    its sales order quotes PLUM parts to a UAT customer); GL/AP/AR depends on everything
+    (it bills its own PO receipt and invoices its own GELATO shipment).
     """
     return (
         CORE_PARTNERS_LAYER,
@@ -2312,6 +2800,7 @@ def _layers() -> tuple[FixtureLayer, ...]:
         INVENTORY_PURCHASING_LAYER,
         GELATO_LAYER,
         MOUSSE_CRUMB_LAYER,
+        GL_AP_AR_LAYER,
     )
 
 
