@@ -83,6 +83,20 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
       (F3) a POSITIVE post_adjustment(+4, bin_id=F1) lands directly in that bin
       (D-P4-6): the bin's get_bin_on_hand rises by exactly 4 with no floor
       guard fired.
+  (G) BIN EXISTENCE + LOCATION MEMBERSHIP (SC8, D-P5-5 — the v4.0 Phase 5 fix):
+      two throwaway locations, each with its own bin (G_A at location A, G_B at
+      location B), stock received at B. (G1) a POSITIVE post_adjustment(+5) at
+      location B naming location A's bin is rejected 422 and writes NO ledger
+      rows (row-count oracle as in E1/F1) — before this check the mismatched pair
+      was trusted outright and silently booked stock into a bin at the OTHER
+      location, corrupting the per-bin split at both while the location totals,
+      computed from location_id alone, hid it. (G2) a bin id that does not exist
+      at all is rejected the same way. (G3) the MATCHING pair (+5 at B naming
+      B's own bin) still succeeds and raises that bin's get_bin_on_hand by
+      exactly 5, so the guard rejects a MISMATCHED bin and not a legitimate one
+      (D-P4-6 is preserved). (G4) bin_id=None is untouched: it still means the
+      location's unbinned pool and still posts, so D-P4-1's explicit-or-unbinned
+      contract — and the SC6 zero-pool fixture that depends on it — is intact.
 
 The script uses uniquely-suffixed throwaway SYERP items / GELATO bins / stock
 locations and CLEANS UP after itself (inventory txns -> bins -> inventory items ->
@@ -604,6 +618,116 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             "unbinned pool is untouched (0)",
             f_bin_after == Decimal("9") and f_unbinned_after == Decimal("0"),
             f"bin={f_bin_after!r} unbinned={f_unbinned_after!r}",
+        )
+
+        # ===================================================================
+        # (G) BIN EXISTENCE + LOCATION MEMBERSHIP (SC8, D-P5-5)
+        # ===================================================================
+        # post_adjustment validates a NON-NULL bin_id against gelato_bin with ONE
+        # raw-SQL existence+membership probe (SYERP must not import gelato models,
+        # D-P12a-3). Two locations each with their own bin make the mismatch
+        # expressible at all: with a single location every bin trivially belongs to
+        # it, which is exactly why the hole survived Phase 4's bin-awareness work.
+        item_g = await _make_item(session_factory, unique, "G")
+        item_ids.add(item_g)
+        async with session_factory() as session:
+            loc_g_a = await create_location(
+                session, StockLocationCreate(name=f"VERIFY-GELATO G-A {unique}")
+            )
+            loc_g_b = await create_location(
+                session, StockLocationCreate(name=f"VERIFY-GELATO G-B {unique}")
+            )
+        loc_ids.update({loc_g_a.id, loc_g_b.id})
+        bin_g_a = await _make_bin(session_factory, loc_g_a.id, f"GA1-{unique}")
+        bin_g_b = await _make_bin(session_factory, loc_g_b.id, f"GB1-{unique}")
+        bin_ids.update({bin_g_a, bin_g_b})
+        async with session_factory() as session:
+            await post_receipt(
+                session, item_g, loc_g_b.id, Decimal("10"), Decimal("2"), actor_id
+            )
+
+        g_rows_before = await _ledger_rows(session_factory, item_g)
+
+        # (G1) MISMATCH: adjust at location B while naming location A's bin.
+        g1_status = None
+        async with session_factory() as session:
+            try:
+                await post_adjustment(
+                    session, item_g, loc_g_b.id, Decimal("5"),
+                    "SC8 mismatched bin", actor_id,
+                    bin_id=bin_g_a,
+                )
+            except HTTPException as exc:
+                g1_status = exc.status_code
+        g_rows_after_mismatch = await _ledger_rows(session_factory, item_g)
+        check(
+            "(G1/SC8/D-P5-5) a POSITIVE adjustment (+5) at location B naming location "
+            "A's bin is REJECTED 422 and writes NO ledger rows — the bin must belong to "
+            "the location. Reverting the membership probe in post_adjustment regresses "
+            "this to a silent success that books stock into a bin at the WRONG location.",
+            g1_status == 422 and g_rows_after_mismatch == g_rows_before,
+            f"status={g1_status!r} rows {g_rows_before}->{g_rows_after_mismatch}",
+        )
+
+        # (G2) A bin id that does not exist at all — the FK's half of the guard.
+        g2_status = None
+        async with session_factory() as session:
+            try:
+                await post_adjustment(
+                    session, item_g, loc_g_b.id, Decimal("5"),
+                    "SC8 nonexistent bin", actor_id,
+                    bin_id=-1,
+                )
+            except HTTPException as exc:
+                g2_status = exc.status_code
+        check(
+            "(G2/SC8) a bin_id that does not exist at all is REJECTED 422 (not a raw "
+            "IntegrityError/500 from the FK) and writes NO ledger rows",
+            g2_status == 422
+            and await _ledger_rows(session_factory, item_g) == g_rows_before,
+            f"status={g2_status!r}",
+        )
+
+        # (G3) The MATCHING pair still succeeds — the guard must reject a MISMATCHED
+        # bin, never a legitimate one (D-P4-6 preserved).
+        async with session_factory() as session:
+            g_bin_before = await get_bin_on_hand(session, item_g, loc_g_b.id, bin_g_b)
+        async with session_factory() as session:
+            await post_adjustment(
+                session, item_g, loc_g_b.id, Decimal("5"),
+                "SC8 matching bin", actor_id,
+                bin_id=bin_g_b,
+            )
+        async with session_factory() as session:
+            g_bin_after = await get_bin_on_hand(session, item_g, loc_g_b.id, bin_g_b)
+        check(
+            "(G3/SC8/D-P4-6) the MATCHING (location B, bin of B) pair still SUCCEEDS and "
+            "raises that bin's get_bin_on_hand by exactly 5 — the new guard rejects a "
+            "mismatched bin, not a legitimate binned adjustment",
+            g_bin_after - g_bin_before == Decimal("5"),
+            f"bin {g_bin_before!r}->{g_bin_after!r}",
+        )
+
+        # (G4) bin_id=None must be COMPLETELY untouched by the membership probe: it
+        # still means the unbinned pool (D-P4-1). The SC6 zero-pool fixture design
+        # rests on this — if NULL started 422-ing, every "must name a bin" check in
+        # the UAT runbook would pass for the wrong reason.
+        async with session_factory() as session:
+            g_pool_before = await get_bin_on_hand(session, item_g, loc_g_b.id, None)
+        async with session_factory() as session:
+            await post_adjustment(
+                session, item_g, loc_g_b.id, Decimal("3"),
+                "SC8 unbinned pool still valid", actor_id,
+                bin_id=None,
+            )
+        async with session_factory() as session:
+            g_pool_after = await get_bin_on_hand(session, item_g, loc_g_b.id, None)
+        check(
+            "(G4/SC8/D-P4-1) bin_id=None is UNTOUCHED by the membership probe — it still "
+            "means the location's unbinned pool and still posts, raising that pool by "
+            "exactly 3. The SC6 zero-pool fixtures depend on NULL keeping this meaning.",
+            g_pool_after - g_pool_before == Decimal("3"),
+            f"pool {g_pool_before!r}->{g_pool_after!r}",
         )
 
     finally:

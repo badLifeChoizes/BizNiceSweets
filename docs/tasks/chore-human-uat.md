@@ -649,7 +649,66 @@ compose_db_1=Up (healthy)  compose_frontend_1=Up  compose_api_1=Up
 
 ### Task 19 — scenario (G) RED signature
 
-*(pending)*
+Mutation: the SC8 membership probe in `post_adjustment` commented out (nothing else
+touched), then `verify_gelato.py` re-run. It produced **two** distinct failures, and together
+they show the RED can only be the missing check.
+
+**1. `(G1)` assertion failure — the membership half**
+
+```
+FAIL: (G1/SC8/D-P5-5) a POSITIVE adjustment (+5) at location B naming location A's bin
+      is REJECTED 422 and writes NO ledger rows — the bin must belong to the location.
+      … — status=None rows 1->2
+```
+
+`status=None` means **no exception was raised at all** — the mismatched adjustment was
+*accepted*. `rows 1->2` means it **wrote a ledger row**, booking stock into a bin belonging
+to a different location. That is the defect, exactly.
+
+**2. `(G2)` crashed the script — the existence half**
+
+```
+sqlalchemy.exc.IntegrityError: (…asyncpg.IntegrityError)
+  <class 'asyncpg.exceptions.ForeignKeyViolationError'>: insert or update on table
+  "syerp_inventory_txn" violates foreign key constraint "fk_inventory_txn_bin"
+DETAIL:  Key (bin_id)=(-1) is not present in table "gelato_bin".
+[SQL: INSERT INTO syerp_inventory_txn (…) VALUES (…)]
+exit=1
+```
+
+Without the probe a non-existent bin id reaches the INSERT and surfaces as an **unhandled
+IntegrityError** — a 500 to a client, not a clean 422. The script aborted here, so `(G3)` and
+`(G4)` never ran in the RED state; their absence is a consequence of the crash, not a pass.
+
+**Why this RED can only be the missing membership check**
+
+- `(G1)` uses a **POSITIVE** delta, and D-P4-6 gives positive deltas **no floor guard at
+  all** — so neither the pool floor nor the per-location floor exists on that path to steal
+  the red. A positive delta also cannot drive a location below zero.
+- The **FK could not have rejected `(G1)`** either: location A's bin genuinely *exists*, so
+  `fk_inventory_txn_bin` is satisfied. The FK only fires on `(G2)`'s case.
+- Neither 404 guard applies: the item and the location both exist.
+- So the membership probe is the **only** thing in `post_adjustment` capable of rejecting
+  `(G1)`. With it removed, nothing does — which is precisely what `status=None` reports.
+- `(G2)`'s crash independently confirms the docstring's claim that the FK "catches only a bin
+  that does not exist at all; it cannot see the membership half" — the FK caught `(G2)` and
+  was silent on `(G1)`.
+
+**Restored → GREEN**
+
+```
+PASS: (G1/SC8/D-P5-5) … REJECTED 422 and writes NO ledger rows
+PASS: (G2/SC8) a bin_id that does not exist at all is REJECTED 422 (not a raw
+      IntegrityError/500 from the FK) and writes NO ledger rows
+PASS: (G3/SC8/D-P4-6) the MATCHING (location B, bin of B) pair still SUCCEEDS and raises
+      that bin's get_bin_on_hand by exactly 5
+PASS: (G4/SC8/D-P4-1) bin_id=None is UNTOUCHED by the membership probe …
+All assertions PASSED.   exit=0
+```
+
+Regression alongside: `verify_gelato`, `verify_inventory`, `verify_mousse`,
+`verify_inventory_race`, `verify_purchasing` all "All assertions PASSED";
+`pytest tests/syerp` **105 passed**; full suite **240 passed**.
 
 ### Task 33 — full regression gate results
 

@@ -35,8 +35,14 @@ podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d
 #    `up -d`, the health check below fails with
 #      curl: (56) Recv failure: Connection reset by peer
 #    because the entrypoint is still waiting on Postgres and running migrations.
-#    That error means "not up yet", not "broken". This loop waits for you.
-until curl -sf -o /dev/null http://localhost:8000/health/ready; do sleep 2; done
+#    That error means "not up yet", not "broken". This loop waits for you, and
+#    gives up after 2 minutes rather than spinning forever.
+for i in $(seq 60); do
+  curl -sf -o /dev/null http://localhost:8000/health/ready && break
+  sleep 2
+done
+curl -sf -o /dev/null http://localhost:8000/health/ready \
+  || echo "STILL NOT UP after 2 min. Check: podman logs compose_api_1 (and compose_db_1)"
 
 # 4. Confirm health and schema.
 curl -sS http://localhost:8000/health/ready
