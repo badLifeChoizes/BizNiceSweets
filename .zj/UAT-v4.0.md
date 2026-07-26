@@ -1099,6 +1099,311 @@ until those have passed.
 
 ---
 
+### 6.4 MOUSSE — manufacturing execution (4 checks)
+
+All four **mutate**. `C-MOUSSE-03` is run together with `C-SC6-c`.
+
+---
+
+#### C-MOUSSE-01 · WO list + create from a PLUM BOM · MOUSSE-01
+
+**Fixture:** `WO-000001` (`released`, plan `4`) and `WO-000002` (`draft`, plan `2`) already
+exist. Released PLUM parts available to build: `UAT-P301` and `UAT-P501`.
+
+- ✅ **Machine already proved:** `src/routes/mousse/WorkOrders.test.tsx
+  "renders work orders from a mocked GET with the part resolved to its number"`,
+  `"creates a work order from the dialog and refetches the invalidated list"`;
+  `src/routes/mousse/components/WorkOrderCreateDialog.test.tsx
+  "POSTs the right body and invalidates the work-order list on submit"`,
+  `"omits inactive locations from the target-location Select"`; `verify_mousse.py (A)`.
+- **Do:** read the WO list. Open the create dialog and inspect the **part picker** without
+  saving, then create a WO for `UAT-P501`.
+- 👁 **You are confirming:**
+  - both existing WOs list with their part resolved to a **part number**, not a UUID
+  - the part picker offers **only parts with a Released revision** — `UAT-P501` and
+    `UAT-P301` should be selectable; a Draft-only part such as `UAT-P104` should not be
+  - the target-location picker excludes `UAT-LOC-ARCH`
+  - the list repaints after the create **without a reload**
+- ✗ **Would be wrong:** a Draft-only part offered as a build target (release would then fail
+  later), or a raw UUID in the list.
+
+#### C-MOUSSE-02 · Release a Draft WO → components snapshot · MOUSSE-01
+
+**Fixture:** `WO-000002` — `draft`, plan `2`, target `UAT-LOC-NOBIN`, **0 components**.
+
+- ✅ **Machine already proved:** `verify_mousse.py (B)`, `(C)`;
+  `src/routes/mousse/WorkOrderDetail.test.tsx
+  "renders the header + snapshot lines with on_hand and issued_so_far"`.
+- **Do:** open `WO-000002`, note the component table, release it, note it again.
+- 👁 **You are confirming:**
+  - **before** release the component table is **empty** — and that this reads as *intended*
+    rather than broken. A BOM is snapshotted at release, so `0` components on a Draft is
+    correct. If the screen makes that look like an error, that is the finding.
+  - **after** release it lists `UAT-ITEM-5` required **`4`** and `UAT-ITEM-6` required **`6`**
+    (plan `2` × qty_per `2` and `3`)
+- ✗ **Would be wrong:** required quantities of `2`/`3` (qty_per not multiplied by the plan) or
+  `2`/`2` (the plan alone).
+
+#### C-MOUSSE-03 · Issue components · MOUSSE-01
+
+**Fixture:** `WO-000001` — `released`, plan `4`, target `UAT-LOC-A`; needs `UAT-ITEM-5` **`8`**
+and `UAT-ITEM-6` **`12`**. **Run together with `C-SC6-c`** — the bin behaviour lives in this
+same dialog.
+
+- ✅ **Machine already proved:** `src/routes/mousse/WorkOrderDetail.test.tsx
+  "issues components: POSTs …/issue and invalidates the detail + list queries"`;
+  `src/routes/mousse/components/IssueComponentsDialog.test.tsx
+  "POSTs the seeded remaining quantities (bin_id: null untouched) and calls onSuccess"`,
+  `"drops an unchecked line from the posted body"`; `verify_mousse.py (D)`, `(E)`, `(G)`.
+- **Do:** open `WO-000001` and issue both components in full.
+- 👁 **You are confirming:** the dialog **displays** required `8` for `UAT-ITEM-5` and `12`
+  for `UAT-ITEM-6`, on-hand is shown per line, and WIP visibly **rises** after the issue
+  (expected full-issue value **`58`**).
+- ✗ **Would be wrong:** a required quantity that does not match the fixture, or WIP not moving.
+
+#### C-MOUSSE-04 · Complete a WO — WIP visibly clears to zero · MOUSSE-01
+
+**Fixture:** `WO-000001` after `C-MOUSSE-03`. Finished good is `UAT-ITEM-7` (currently `0` on
+hand); it lands at `UAT-LOC-A`.
+
+- ✅ **Machine already proved:** `verify_mousse.py (F)`;
+  `src/routes/mousse/WorkOrderDetail.test.tsx
+  "completes a fully-issued WO: POSTs …/complete and invalidates the queries"`.
+- **Do:** complete `WO-000001`. Then open `UAT-ITEM-7`.
+- 👁 **You are confirming:**
+  - **WIP is shown as `0`** after completion. This is the headline visual of the whole suite —
+    a work order that consumed `58` of material must leave nothing behind in WIP.
+  - `UAT-ITEM-7` now has stock at `UAT-LOC-A` where it had none.
+- ✗ **Would be wrong:** a WIP residue left on screen, or the finished good not appearing in
+  stock.
+
+---
+
+### 6.5 CRUMB — CRM and sales (8 checks)
+
+`C-CRUMB-02`, `C-CRUMB-04` and `C-CRUMB-05` sit on screens with **no vitest at all** — weight
+them heavily. `C-CRUMB-07` is the **head of the money loop**; everything downstream of it
+depends on it passing.
+
+---
+
+#### C-CRUMB-01 · Leads list + create + convert to opportunity · CRUMB-01
+
+**Fixture:** `UAT-LEAD-1`, company `UAT Prospect Co`, status `new`.
+
+- ✅ **Machine already proved:** `src/routes/crumb/Leads.test.tsx
+  "renders the leads list from a mocked GET, showing each row"`; `verify_crumb.py (A)`, `(B)`.
+- **Do:** read the list. Create your own lead. Then **convert `UAT-LEAD-1`** to an
+  opportunity.
+- 👁 **You are confirming:** `UAT-LEAD-1` shows status `new` and offers a **Convert**
+  affordance; after converting, its status **visibly** becomes converted and the new
+  opportunity is reachable from it.
+- ✗ **Would be wrong:** a converted lead still offering Convert, or the new opportunity being
+  unreachable from the lead.
+
+#### C-CRUMB-02 · Lead detail · CRUMB-01
+
+**Fixture:** the lead you created in `C-CRUMB-01` (so `UAT-LEAD-1` is free to be converted).
+
+- ✅ **Machine already proved:** the backend only — `verify_crumb.py (A)`, `(B)`.
+- ⓘ `routes/crumb/LeadDetail.tsx` has **no vitest**. Nothing tests this screen. Weight it
+  heavily.
+- **Do:** open the lead you created and compare every field against what you typed.
+- 👁 **You are confirming:** every field entered on create is **displayed back**, and the
+  linked customer / opportunity (if any) are followable.
+- ✗ **Would be wrong:** a field silently dropped between create and detail.
+
+#### C-CRUMB-03 · Pipeline board + stage move · CRUMB-01
+
+**Fixture:** `UAT-OPP-1` at stage `proposal`; `UAT-OPP-2` at `qualify`.
+
+- ✅ **Machine already proved:** `src/routes/crumb/Pipeline.test.tsx
+  "renders the four stage columns and groups the opportunity under Proposal"`;
+  `verify_crumb.py (C)`.
+- **Do:** open the pipeline. Move `UAT-OPP-2` forward a stage.
+- 👁 **You are confirming:** `UAT-OPP-1` sits under **Proposal** and `UAT-OPP-2` under
+  **Qualify** before you touch anything; the column headings read sensibly; and only **legal**
+  forward moves are offered (`won` and `lost` are terminal — nothing should move out of them).
+- ✗ **Would be wrong:** an opportunity in the wrong column, or a move out of a terminal stage
+  being offered.
+
+#### C-CRUMB-04 · Opportunity detail · CRUMB-01
+
+**Fixture:** `UAT-OPP-1` — stage `proposal`, estimated value `4250`.
+
+- ✅ **Machine already proved:** the backend only — `verify_crumb.py (C)`, `(D)`.
+- ⓘ `routes/crumb/OpportunityDetail.tsx` has **no vitest**. Weight it heavily.
+- **Do:** open `UAT-OPP-1`.
+- 👁 **You are confirming:** stage `proposal` and estimated value `4250` are **displayed**; the
+  linked customer `UAT-CUST-1` is shown and followable; and any related quote is reachable.
+- ✗ **Would be wrong:** an estimated value rendered as a raw number without currency context,
+  or a dead customer link.
+
+#### C-CRUMB-05 · Quotes list · CRUMB-01
+
+**Fixture:** `QUOTE-0001` (`sent`, total `324.51`) and `QUOTE-0002` (`accepted`, total `100`).
+
+- ✅ **Machine already proved:** the backend only — `verify_crumb.py (E)`, `(F)`.
+- ⓘ `routes/crumb/Quotes.tsx` has **no vitest**. Weight it heavily.
+- **Do:** open the Quotes list.
+- 👁 **You are confirming:** both quotes list with the correct **status badges** (`sent` vs
+  `accepted`) and their totals **display** `324.51` and `100`; the customer is resolved to a
+  name.
+- ✗ **Would be wrong:** identical badges for two different statuses, or a customer UUID.
+
+#### C-CRUMB-06 · Quote detail: PLUM-derived pricing, line totals, FSM, accept · CRUMB-01
+
+**Fixture:** `QUOTE-0001` — `sent`, total **`324.51`**; line 1 `qty 7 @ 38.28 markup 45 =
+267.96`, line 2 `qty 3 @ 18.85 markup 30 = 56.55`. `QUOTE-0002` is already `accepted`.
+
+- ✅ **Machine already proved:** `src/routes/crumb/QuoteDetail.test.tsx
+  "renders the line price default and the quote total from a mocked GET"`, `"shows "`,
+  `"hides "`; `verify_crumb.py (E)`, `(F)`, `(G)`.
+- **Do:** open `QUOTE-0001` and read both lines and the total. Then **accept** it. Then open
+  `QUOTE-0002`.
+- 👁 **You are confirming:**
+  - line 1 **displays** `38.28` and `267.96`; line 2 `18.85` and `56.55`; total **`324.51`**
+  - the two lines are **visibly distinguishable** in markup — one carries `45`, one the
+    default `30`. Both prices derive from a PLUM released cost snapshot, so a screen that
+    showed the same price for both would be hiding the markup entirely.
+  - **Accept** is offered on the `sent` quote and **gone** on `QUOTE-0002`
+- ✗ **Would be wrong:** line 1 priced at `34.32` (the default 30 % applied instead of its
+  explicit 45 %) or `26.40` (the raw snapshot, no markup at all). Also wrong: Accept offered
+  on an already-accepted quote.
+- ⓘ Quote lines are numbered from **0** while PO lines start at **1**. Known cosmetic
+  inconsistency — do not report it again.
+
+#### C-CRUMB-07 · Sales orders + SO detail confirm + soft reservation · CRUMB-01
+
+**⚠ Head of the money loop.** `C-GELATO-03` picks this order; `C-SYERP-20` invoices that
+shipment. Run this **before** both.
+
+**Fixture:** `SO-0001` — `confirmed`, total `107.25`, one line `UAT-ITEM-8` ordered `11` @
+`9.75`, **reserved `11`**, shortage `0`. `UAT-ITEM-8` has `25` at `UAT-LOC-A`, all in
+`UAT-BIN-A2`.
+
+- ✅ **Machine already proved:** `src/routes/crumb/SalesOrders.test.tsx
+  "renders the sales-order list from a mocked GET, showing each row"`;
+  `src/routes/crumb/SalesOrderDetail.test.tsx
+  "renders a draft SO with ordered/reserved/shortage figures, flags, and Confirm + Cancel"`,
+  `"shows Fulfill + Cancel for a confirmed SO"`, `"surfaces each line"`;
+  `verify_crumb_so.py (A)` … `(F)` — including that two concurrent confirms can never
+  over-reserve.
+- **Do:** open `SO-0001`. (It is already confirmed; if you want to exercise the confirm
+  affordance, create your own draft SO for `UAT-CUST-1` on `UAT-ITEM-8` and confirm that
+  instead — **do not cancel `SO-0001`**, the rest of the money loop needs it.)
+- 👁 **You are confirming:**
+  - ordered **`11`**, reserved **`11`**, shortage **`0`** are **displayed**
+  - the reservation is labelled in a way a human reads as **soft** — it is a claim on stock,
+    not a movement of it. Stock on hand is still `25`.
+  - a confirmed SO offers **Fulfill** and no longer offers Confirm
+- ✗ **Would be wrong:** reserved shown as `25` (the whole on-hand rather than the ordered
+  quantity), or the reservation presented as if stock had physically moved.
+
+#### C-CRUMB-08 · Communication log append-only-ness · CRUMB-01
+
+**Fixture:** `UAT-CUST-1` has **2** entries — newest first: `email: UAT-COMM-2 follow-up
+email with the quote`, then `call: UAT-COMM-1 first contact call`.
+
+- ✅ **Machine already proved:** `src/routes/crumb/Communications.test.tsx
+  "renders the timeline newest-first with type, timestamp and body"`; `verify_crumb.py (H)`.
+- **Do:** open the communications timeline for `UAT-CUST-1`. Add a third entry.
+- 👁 **You are confirming:**
+  - `UAT-COMM-2` (email) appears **above** `UAT-COMM-1` (call) — newest first
+  - **no row offers edit or delete.** Append-only made visible; this is the check.
+  - your new entry appears at the top without a reload
+- ✗ **Would be wrong:** any edit or delete affordance on a logged interaction, or
+  oldest-first ordering.
+
+---
+
+### 6.6 GELATO — warehouse (4 checks)
+
+`C-GELATO-03` **requires `C-CRUMB-07`** to have passed, and `C-SYERP-20` requires
+`C-GELATO-03`. This is the middle of the money loop.
+
+---
+
+#### C-GELATO-01 · Bins CRUD + archive toggle · GELATO-01
+
+**Fixture:** `UAT-LOC-A` has `UAT-BIN-A1`, `UAT-BIN-A2`, `UAT-BIN-STAGE` active and
+`UAT-BIN-A3` **archived**. `UAT-LOC-NOBIN` has **none**.
+
+- ✅ **Machine already proved:** `src/routes/gelato/Bins.test.tsx
+  "renders bins for the selected location"`, `"creates a bin via the Sheet and POSTs the payload"`,
+  `"surfaces a duplicate-code 4xx as an error toast"`,
+  `"hides archived bins until the Show archived switch is on"`; `verify_gelato.py (A)`, `(B)`.
+- **Do:** select `UAT-LOC-A`; toggle **Show archived**. Create a bin. Try to create a **second
+  bin with the same code**. Then select `UAT-LOC-NOBIN`.
+- 👁 **You are confirming:**
+  - with the toggle off, three bins; with it on, `UAT-BIN-A3` appears too
+  - the duplicate-code rejection is a **legible toast**, not a 500
+  - `UAT-LOC-NOBIN` shows an **empty state**, and its copy makes sense
+- ✗ **Would be wrong:** `UAT-BIN-A3` visible by default.
+- ⓘ `UAT-BIN-A3` being **absent from every bin picker** elsewhere while **visible here** with
+  the toggle on is correct — pickers deliberately exclude archived bins.
+
+#### C-GELATO-02 · Putaway incl. the suggestion · GELATO-01
+
+**Fixture:** at `UAT-LOC-A`, `UAT-ITEM-4`'s unbinned pool is **`0`** (fully binned: `9` in
+`UAT-BIN-A1`, `6` in `UAT-BIN-A2`). At `UAT-LOC-NOBIN` it has **`4`**, all unbinned.
+
+- ✅ **Machine already proved:** `src/routes/gelato/Putaway.test.tsx
+  "renders the unbinned-stock list for the default-selected location"`,
+  `"pre-fills the suggested bin and defaults qty to the full unbinned qty"`,
+  `"posts the EXACT PutawayRequest body on Confirm (the 11b keeper)"`,
+  `"surfaces a 422 over-draw rejection as a toast and keeps the dialog open"`;
+  `verify_gelato.py (A)`, `(B)`, `(C)`, `(D)`.
+- **Do:** open Putaway at `UAT-LOC-A`, then switch to `UAT-LOC-NOBIN`.
+- 👁 **You are confirming:**
+  - at `UAT-LOC-A`, `UAT-ITEM-4` is **absent** from the unbinned list — its pool is `0`, so
+    there is nothing to put away. Its absence is correct.
+  - `UAT-ITEM-6` **is** listed there (pool `30`)
+  - at `UAT-LOC-NOBIN`, `UAT-ITEM-4` appears with **`4`** — but there are **no bins** to put
+    it into. Record what the screen does with that: an empty bin picker, a disabled Confirm,
+    an explanatory message, or something worse.
+  - where a bin **is** suggested, the suggestion's rationale is legible
+- ✗ **Would be wrong:** `UAT-ITEM-4` listed as awaiting putaway at `UAT-LOC-A` when its pool
+  is zero, or a putaway dialog at `UAT-LOC-NOBIN` that lets you submit into a nonexistent bin.
+
+#### C-GELATO-03 · Fulfilment pick → pack → ship · GELATO-01
+
+**⚠ Requires `C-CRUMB-07`.** Feeds `C-SYERP-20`.
+
+**Fixture:** `SO-0001` — confirmed, `UAT-ITEM-8` ordered `11`, reserved `11`. Stock is `25` in
+**`UAT-BIN-A2`**; `UAT-BIN-STAGE` exists as a staging bin.
+
+- ✅ **Machine already proved:** `src/routes/gelato/Fulfillment.test.tsx
+  "renders the pick list with ordered/reserved/picked/shipped for the preselected SO"`,
+  `"pre-fills the suggested source bin in the pick dialog"`,
+  `"posts the EXACT PickRequest body on Confirm (the 11b/12a keeper)"`,
+  `"walks pick → pack → ship, POSTing the ship endpoint after confirmation"`;
+  `verify_gelato_ship.py`. The pick list was also driven live at build time and suggested
+  `UAT-BIN-A2` holding `25`.
+- **Do:** walk `SO-0001` through **pick → pack → ship**.
+- 👁 **You are confirming:**
+  - the suggested source bin is **`UAT-BIN-A2`** and the suggestion is pre-filled
+  - each stage's affordance appears **only** at its own stage — no Ship button before packing
+  - the ordered / reserved / picked / shipped figures update visibly at each step
+- ✗ **Would be wrong:** all three actions available at once, or a pick dialog with no
+  suggested bin (the stock is entirely binned, so there is one to suggest).
+
+#### C-GELATO-04 · Post-ship state · GELATO-01
+
+**Fixture:** `SO-0001` after `C-GELATO-03`.
+
+- ✅ **Machine already proved:** `src/routes/crumb/SalesOrderDetail.test.tsx
+  "shows Fulfill / Ship when GELATO is enabled ∩ gelato:read on a fulfilling SO"`;
+  `verify_gelato_ship.py`.
+- **Do:** re-open `SO-0001` and its shipment.
+- 👁 **You are confirming:** the SO's status has visibly moved to **`fulfilling`**, shipped
+  shows **`11`**, and the shipment is **followable from the SO**.
+- ✗ **Would be wrong:** a shipment you cannot navigate to from the order it fulfils.
+- ⓘ **Reserved will now read `0`.** The reservation is consumed by the pick — correct, not a
+  defect. `SO-0002` in the fixture table shows the same thing.
+
+---
+
 ## 7. Prod-stack smoke (:8000)
 
 *(authored at Task 36)*
