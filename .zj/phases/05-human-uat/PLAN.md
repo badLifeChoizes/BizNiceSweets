@@ -172,7 +172,7 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Verify:** two consecutive runs → identical block; `verify_gelato.py` exits 0.
 - **Parallel-ok:** no.
 
-### [ ] 6. Seed the MOUSSE + CRUMB fixture layer
+### [x] 6. Seed the MOUSSE + CRUMB fixture layer
 - **Files:** `backend/scripts/seed_uat_fixtures.py`
 - **Do:** Get-or-create via real services: one **Draft** and one **Released** work order over a PLUM BOM with components in stock (so issue and complete are each reachable without perturbing the other); one lead, one opportunity mid-stage, one quote with PLUM-derived lines in a state that can still be accepted, one **accepted** quote (so quote→SO conversion is reachable), one **confirmed** sales order carrying a soft reservation, and two communication-log entries. Record WO numbers, quote numbers, SO number, reserved quantity, and quote line totals as literals.
 - **Done when:** manifest prints all of the above codes and quantities.
@@ -463,6 +463,12 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
    (h) `UAT-BIN-A3` is archived and holds 0. The pickers call `list_bins(include_archived=False)`, so
    it must be **absent** from the picker while still visible on the Bins screen with the toggle on —
    the manifest records it so "correctly hidden" is distinguishable from "missing".
+   (i) **A Draft WO genuinely reports `component_count 0`** — components snapshot at *release*. Task 14's
+   WO check needs a sentence saying so, or an empty component table reads as a broken fixture.
+   (j) Quote line `sort_order` is **0-based** while PO lines are **1-based**. Harmless, but if the UI
+   surfaces raw sort order the two screens number their lines differently.
+   (k) Number formats/widths differ across suites (`QUOTE-####`, `SO-####`, `WO-######`, `PO-####`,
+   `ITEM-####`) — quote them exactly in the checklist so an owner doesn't flag a "wrong" width.
 
 5. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
@@ -530,6 +536,33 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   could not have fired: the location holds 15). Red for the intended reason, per the Phase-4 keeper;
   the rejection wrote no ledger row (6 before, 6 after). Roll-up invariant asserted every run:
   `Σ(bins) 15 + unbinned 0 == location total 15`; putaway legs sum to exactly 0 at location grain.
+- **T6 (trivial) — a dedicated Released build target (`UAT-P501` + children), not Task 3's `UAT-P301`.**
+  Release snapshots only the Released revision's *direct* children and `UAT-P301` has exactly one; SC6
+  check (c) is about **per-line** independence, which a one-line dialog cannot demonstrate. Side
+  benefit: MOUSSE churn never touches the part whose read-only-ness Task 21 checks.
+- **T6 (trivial) — four new inventory items (`UAT-ITEM-5..8`).** Components must resolve to linked stock
+  items or `release_work_order` 422s the snapshot; the FG must too or completion cannot receive it; the
+  SO needs pickable stock that doesn't disturb `UAT-ITEM-4`'s Task-5 literals.
+- **T6 (trivial) — two opportunities, and the SO/quote natural keys are markers.** A quote number is
+  server-generated, so the opportunity link is a quote's only stable key → two quotes need two
+  opportunities (`UAT-OPP-1` at `proposal`, `UAT-OPP-2` at `qualify`, which also populates two pipeline
+  columns). `SalesOrder` has neither a client-settable number nor a notes column, so its key is a
+  marker in the line description (`UAT-SO-1`), which doubles as an on-screen label.
+- **T6 (trivial, good judgment) — the reservation clamp is NOT re-proved by the fixture.** The SO
+  reserves 11 of an available 25; over-ordering to force a shortage would complicate Tasks 30/31, and
+  `verify_crumb_so.py` scenarios E/F already pin the `min(ordered, available)` clamp and the
+  concurrent-confirm race. SC3's prefer-citation-over-new-code rule, applied to fixtures. The fixture
+  still discriminates: wrong `reserved = on_hand` reads 25, a missing reservation reads 0.
+- **T6 (trivial) — no dates in the manifest** (`wo_date`/`order_date` default to today and would make it
+  run-varying); interactions use fixed `occurred_at` constants so newest-first ordering is deterministic
+  rather than a microsecond race.
+- **T6 (SC6 (c) made observable) — one `IssueComponentsDialog` shows two lines with opposite bin
+  requirements.** At `UAT-LOC-A` the Released WO's comp A (`UAT-ITEM-5`, 20) is **fully binned → pool 0
+  → the line MUST name a bin**, while comp B (`UAT-ITEM-6`, 30) is **entirely unbinned → issues with no
+  bin**. Both pool states are asserted by `_expect` every run, so fixture drift that would quietly void
+  the check fails the seed instead. Money-loop head proven reachable, not just seeded: GELATO's own
+  pick-list builder resolves `SO-0001` to `UAT-BIN-A2` holding 25 against a reserved 11. Soft
+  reservation posts **no** JE (tripwire clear).
 
 ## Out of scope
 
