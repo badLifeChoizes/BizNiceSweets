@@ -14,10 +14,14 @@ build checklist is archived at
       transfer NULL-422 + zero rows; named-bin transfer out-leg-binned /
       in-leg-unbinned (D-P4-5) Decimal-exact; positive adjust into a named bin
       raises that pool (D-P4-6).
-- [ ] Fix 3b (VERIFICATION gap 1): `verify_mousse.py` binned-issue scenario —
+- [x] Fix 3b (VERIFICATION gap 1): `verify_mousse.py` binned-issue scenario —
       NULL-422 + zero rows at a fully-binned location; named-bin issue carries
       bin_id with WIP/JE unchanged; legacy-desync location-floor pin (RED without
       Fix 1 — mutation-verified once).
+      Mutation observation (location floor disabled via `if False and ...`):
+      G2 went RED — the bin-named issue of 10 SUCCEEDED over the desynced
+      location (rows 4→5, one WorkOrderIssue row, location total 0 → −10.000000,
+      script exit 1); guard restored → G2 GREEN, exit 0.
 - [ ] Gates: ruff clean; in-container pytest green 0 skipped; verify_gelato /
       verify_mousse / verify_inventory_race exit 0; full non-API sweep exit 0;
       push + all four CI jobs green.
