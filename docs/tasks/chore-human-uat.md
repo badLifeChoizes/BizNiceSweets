@@ -22,7 +22,7 @@ plan's hand-back protocol, an engineer must never tick an owner check or infer a
 - [x] 1. Seed-script skeleton: idempotency contract + manifest (`seed_uat_fixtures.py`)
 - [x] 2. Seed the CORE + partners fixture layer
 - [x] 3. Seed the PLUM fixture layer
-- [ ] 4. Seed the SYERP inventory + purchasing fixture layer
+- [x] 4. Seed the SYERP inventory + purchasing fixture layer
 - [ ] 5. Seed the GELATO bins fixture layer
 - [ ] 6. Seed the MOUSSE + CRUMB fixture layer
 - [ ] 7. Seed the SYERP GL / AP / AR fixture layer

@@ -158,7 +158,7 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Verify:** two consecutive runs produce identical manifests for the PLUM block.
 - **Parallel-ok:** no.
 
-### [ ] 4. Seed the SYERP inventory + purchasing fixture layer
+### [x] 4. Seed the SYERP inventory + purchasing fixture layer
 - **Files:** `backend/scripts/seed_uat_fixtures.py`
 - **Do:** Get-or-create: two stock locations besides the seeded `Main` (one to archive), three inventory items (`UAT-ITEM-…`) — one PLUM-linked, one standalone, one archived — and costed receipts giving each item known per-location on-hand and a known moving-average cost. One **Draft** PO with two lines and one **Approved** PO with outstanding quantity (so approve/receive/over-receipt checks each have their own PO and don't contend). Record every on-hand, moving-average, on-hand-value, PO number, and outstanding quantity as literals.
 - **Done when:** manifest prints item codes, per-location on-hand, moving averages, on-hand values, and both PO numbers with line quantities.
@@ -452,6 +452,11 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
    body 422s naming a missing `username`) — bake into the Task-11 runbook and Task 16.
    (d) The seeded `user` role grants all ten business read/write permissions, so it is unusable as an
    RBAC nav-filter subject; that is why T2 mints its own single-permission `UAT-PLUM-ONLY` role.
+   (e) `get_item_onhand` **omits zero-net locations by documented policy** (`inventory.py:60`), so the
+   archived zero-stock item shows an *empty* location table. The item-detail check must read that as
+   correct, not as a defect.
+   (f) On-hand quantities also come over HTTP at raw column scale (`"7.000000"`) — same screen-vs-payload
+   eye as (b).
 
 5. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
@@ -486,6 +491,22 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   digits; the UI paints `-59.66`).
 - **T3 (trivial) — `_ensure_cost` skips the write when values already match.** An unconditional PATCH
   appends a `part.cost_updated` audit row every run — manifest-identical but not actually idempotent.
+- **T4 (trivial) — PO natural key is the header `notes` marker** (`UAT-PO-DRAFT` / `UAT-PO-APPROVED`),
+  not `po_number`: the number is server-generated and cannot key a get-or-create. The generated
+  `PO-####` is recorded via `Manifest.value()`.
+- **T4 (trivial) — the Approved PO draws on `UAT-ITEM-2`, not the two-receipt `UAT-ITEM-1`.** Pointing
+  it at ITEM-1 would mean Task 27's receiving moves the exact moving-average literals Task 24's
+  read-only checks quote. Fixture-poisoning avoided by construction, not only by ordering.
+- **T4 (trivial) — archived `UAT-ITEM-3` carries zero stock** (the task said "each item"): an archived
+  item holding stock is a contradictory state that would muddy valuation checks; its only job is to
+  give the show-archived toggle something to hide. Zeros recorded as literals.
+- **T4 (trivial) — receipt idempotency keyed on the value tuple** `(item, location, qty, unit_cost)`,
+  since an append-only ledger row has no natural key.
+- **T4 (note, not a deviation) — this layer contributes exactly zero to the trial balance.** Standalone
+  `post_receipt` writes an `InventoryTxn` and moves the moving average but posts **no** JE; only PO
+  `receive_line` does (Dr 1130 / Cr 2150), and neither PO has been received. Proven, not assumed
+  (`JEs from UAT PO lines: 0`; TB `4950.00 = 4950.00`, all pre-existing dev data). Task 7 inherits a
+  clean slate.
 
 ## Out of scope
 
