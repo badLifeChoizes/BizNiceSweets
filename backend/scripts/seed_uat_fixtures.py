@@ -2391,6 +2391,10 @@ MOUSSE_CRUMB_LAYER = FixtureLayer(
 #   posted to 2110, so including it would break the tie-out (the D-P9c-1 divergence
 #   guard). Its exclusion is itself a check worth handing the owner.
 
+GL_CAPITAL_MEMO = "UAT-JE-0 opening capital contribution"
+GL_CAPITAL_AMOUNT = Decimal("8250.00")
+GL_CAPITAL_CODE = "3110"
+
 GL_JE_MEMO = "UAT-JE-1 manual journal entry (professional services accrual)"
 GL_JE_AMOUNT = Decimal("412.75")
 GL_JE_DEBIT_CODE = "5290"
@@ -2435,8 +2439,34 @@ async def build_gl_ap_ar(ctx: SeedContext) -> None:
         cash_id = await _gl_account_id_by_code(session, GL_JE_CREDIT_CODE)
         je_debit_id = await _gl_account_id_by_code(session, GL_JE_DEBIT_CODE)
         draft_expense_id = await _gl_account_id_by_code(session, AP_DRAFT_EXPENSE_CODE)
+        capital_id = await _gl_account_id_by_code(session, GL_CAPITAL_CODE)
 
     today = date.today()
+
+    # -- 0. opening capital, so the business has money BEFORE it spends any -------------
+    # Found by the Task-8 fresh-volume run: without this, the fixture pays a bill and a
+    # professional-services expense out of a cash account that was never funded, so 1110
+    # ends with a CREDIT balance and the Balance Sheet reports NEGATIVE total assets. The
+    # books still balance (assets == liabilities + equity), but an owner reading that
+    # screen at Task 23 would rightly report it as a defect — a false one. On the dev
+    # database this was invisible: 4950.00 of pre-existing GR/IR inventory made total
+    # assets positive. Dr 1110 Cash / Cr 3110 Capital Contributions is an ordinary
+    # business event, posted through the real service, and touches NEITHER the 1120/2110
+    # controls (so both aging tie-outs are unaffected) NOR revenue/expense (so the income
+    # statement is unaffected).
+    async with ctx.session_factory() as session:
+        entries = await list_journal_entries(session)
+        if not any(entry.memo == GL_CAPITAL_MEMO for entry in entries):
+            await post_journal_entry(
+                session,
+                entry_date=today,
+                memo=GL_CAPITAL_MEMO,
+                lines=[
+                    JournalLineCreate(account_id=cash_id, debit=GL_CAPITAL_AMOUNT),
+                    JournalLineCreate(account_id=capital_id, credit=GL_CAPITAL_AMOUNT),
+                ],
+                actor_id=ctx.actor_id,
+            )
 
     # -- 1. one posted manual journal entry (register + JE list non-empty, reversal
     #       reachable). Outside the AR/AP controls, so no tie-out is disturbed.
@@ -2739,7 +2769,18 @@ async def report_gl_ap_ar(ctx: SeedContext) -> None:
         _expect("trial balance net", tb.total_debit - tb.total_credit, Decimal("0"))
         _expect("trial balance in_balance", tb.in_balance, True)
 
+        capital = next(
+            (e for e in await list_journal_entries(session) if e.memo == GL_CAPITAL_MEMO),
+            None,
+        )
+        if capital is not None:
+            manifest.value("syerp.gl.opening_capital.memo", capital.memo)
+            manifest.value("syerp.gl.opening_capital.amount", GL_CAPITAL_AMOUNT)
+
         bs = await balance_sheet(session)
+        # Guard the Task-8 finding: a fixture that reports NEGATIVE total assets invites
+        # a false defect report at Task 23. Fail the seed instead.
+        _expect("balance sheet reports non-negative total assets", bs.total_assets > 0, True)
         manifest.value("syerp.report.balance_sheet.total_assets", bs.total_assets)
         manifest.value("syerp.report.balance_sheet.total_liabilities", bs.total_liabilities)
         manifest.value("syerp.report.balance_sheet.total_equity", bs.total_equity)
