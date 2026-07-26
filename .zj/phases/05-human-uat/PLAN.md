@@ -300,14 +300,14 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Verify:** `grep -c 'StockAdjustDialog\|StockTransferDialog\|IssueComponentsDialog' .zj/UAT-v4.0.md` ≥ 3 and the GELATO-off row names the restore step.
 - **Parallel-ok:** yes.
 
-### [ ] 16. Execute every command in the runbook once, at build time
+### [x] 16. Execute every command in the runbook once, at build time
 - **Files:** `.zj/UAT-v4.0.md` (corrections), `docs/tasks/chore-human-uat.md` (log)
 - **Do:** The Phase-03 keeper, applied literally: run **every** command the runbook asks the owner to run — the fresh-volume `down -v`, the dev-overlay bring-up, `alembic current`, the seed invocation, the `:5173` load, and the admin login — in order, from a clean shell, and correct the doc wherever reality differs (missing `PYTHONPATH`, container name, wait-for-ready, a needed seed step). Leave the stack **up and seeded** so Task 18 can start immediately.
 - **Done when:** every runbook command has been executed once with the observed output logged; the doc matches reality; `:5173` serves the login page and admin login succeeds.
 - **Verify:** `curl -sSf -o /dev/null -w '%{http_code}\n' http://localhost:5173` → `200`; `curl -sSf http://localhost:8000/health/ready` → 200.
 - **Parallel-ok:** no (depends on Tasks 11–15).
 
-### [ ] 17. Add pointer lines to the v1.0 and v2.0 UAT docs
+### [x] 17. Add pointer lines to the v1.0 and v2.0 UAT docs
 - **Files:** `.zj/UAT-v1.0.md`, `.zj/UAT-v2.0.md`
 - **Do:** Add one pointer line at the top of each: superseded for *execution* by `.zj/UAT-v4.0.md` (D-P5-6), retained as history — with the count of checks each carried forward (10 of 12 open in v1.0; all 14 open in v2.0). Change nothing else in either file.
 - **Done when:** both files carry the pointer; `git diff --stat` shows only added lines.
@@ -591,7 +591,16 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
     rewrote `.zj/UAT-v4.0.md` mid-authoring.** Content survived and all checks pass, but if that
     formatter sits in a pre-commit hook it may reflow the tables on future edits.
 
-12. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
+12. **Three follow-ups from executing the runbook** (Task 16): (a) the `until curl` readiness loop added
+    at T16 **has no timeout** — if the stack genuinely cannot start (a repeat of `U0`) the owner gets a
+    silent infinite spin instead of an error; bounding it with a "give up and check
+    `podman logs compose_api_1`" hint is kinder and is being done. (b) **`:5173` returns 200 for
+    `/no-such-page`** — correct for a SPA (the shell loads, the router decides), but it means
+    `C-CORE-07`'s unknown-path check can never be verified by status code; it is purely about what the
+    rendered page says. (c) `docs/tasks/chore-human-uat.md` is now ~370 lines and is doing two jobs
+    (checklist + evidence archive); if it keeps growing the manifests belong in a linked artifact.
+
+13. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
 ## Deviations
 
@@ -816,6 +825,31 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   `C-CRUMB-07 → C-GELATO-03 → C-SYERP-20` chain carries a dependency banner on each check, `C-CRUMB-07`
   tells the owner **not to cancel `SO-0001`** (create your own draft SO to exercise confirm), and the
   GL/AP/AR read-only checks are scheduled before any receiving that posts to the ledger.
+- **D-P5-1 amended (owner, AskUserQuestion, 2026-07-26) — keep all 59 checks.** The runbook came out at
+  59 against D-P5-1's "~40–50, est. 2–3 h". The overage is structural, not padding: 59 is the **exact sum
+  of the plan's own per-suite maxima** (6+13+20+4+8+4+4), so the per-suite instructions and the aggregate
+  estimate never agreed. Owner chose full coverage over the estimate — D-P5-1's binding words were
+  "residue-only, **full coverage**"; the count was an estimate, not a cap, and D-P5-7's resumable status
+  table means the extra hour need not be one sitting. Rejected: trimming ~9–12 thinnest-residue checks
+  (either owner- or engineer-selected) and reordering to front-load the machine-unproven surfaces.
+  Runbook estimate raised to **~3 h** across eleven suggested sittings.
+- **T16 — three runbook bugs found by executing it, all doc bugs (no `U#` assigned).** (1) **The health
+  check as written failed**: the doc said *"Wait for ready (a few seconds)"* as **prose** and then printed
+  a bare `curl`, which returns `curl: (56) Recv failure: Connection reset by peer`. A prose wait is not a
+  command; an owner pasting the block concludes the stack is broken. Replaced with a real
+  `until curl -sf …; do sleep 2; done` and the error documented so it reads "not yet", not "broken". The
+  few-second window is what makes it insidious — it bites some owners and not others. (2) **The seed is
+  ~5 s, not ~40 s** — the engineer's own Task-8 claim (which this plan had recorded) was wrong; measured
+  on a genuinely fresh volume exercising every create path. Corrected in both places. Whole bring-up is
+  **~30 s**, not the several minutes the old wording implied. (3) `alembic current` emits two `INFO` lines
+  first; the doc now shows all three and says so. **Corrected block re-run verbatim** on a
+  freshly-destroyed volume rather than trusted by reading, and the resulting manifest is **identical** to
+  the Task-8 record — nothing to reconcile. Admin login confirmed both directly and **through the Vite
+  `/api` proxy** (`:5173` returning 200 does not prove login works from the browser; nothing had tested
+  the proxy), and the admin keys confirmed still in `.env` after Task 8a moved the DB keys to `.env.db`.
+- **T17 — pointer lines added, `git diff --numstat` shows 5/0 and 4/0: zero deletions on both.** The
+  plan's carried-forward counts were verified against the files rather than trusted: v1.0 is 10 todo +
+  2 pass = 12, v2.0 is 14 of 14.
 
 ## Out of scope
 

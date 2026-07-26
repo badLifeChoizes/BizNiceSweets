@@ -42,8 +42,8 @@ plan's hand-back protocol, an engineer must never tick an owner check or infer a
 - [x] 13. Author the SYERP checks
 - [x] 14. Author the MOUSSE, CRUMB and GELATO checks
 - [x] 15. Author the SC6 bin-picker checks, including the GELATO-off degraded path
-- [ ] 16. Execute every command in the runbook once, at build time
-- [ ] 17. Add pointer lines to the v1.0 and v2.0 UAT docs
+- [x] 16. Execute every command in the runbook once, at build time
+- [x] 17. Add pointer lines to the v1.0 and v2.0 UAT docs
 
 ### The SC8 validation check
 
