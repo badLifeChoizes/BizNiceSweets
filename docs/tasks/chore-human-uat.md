@@ -18,7 +18,7 @@ plan's hand-back protocol, an engineer must never tick an owner check or infer a
 
 ### Fixtures (SC2)
 
-- [ ] 0. Cut branch and checklist
+- [x] 0. Cut branch and checklist
 - [x] 1. Seed-script skeleton: idempotency contract + manifest (`seed_uat_fixtures.py`)
 - [ ] 2. Seed the CORE + partners fixture layer
 - [ ] 3. Seed the PLUM fixture layer

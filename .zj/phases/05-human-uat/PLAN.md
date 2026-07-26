@@ -126,7 +126,7 @@ When an owner check fails, the engineer runs this loop. **The phase's total size
 
 Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verify" is the recorded result in the status table.
 
-### [ ] 0. Cut the branch and open the checklist file
+### [x] 0. Cut the branch and open the checklist file
 - **Files:** `docs/tasks/chore-human-uat.md` (new)
 - **Do:** `git checkout c02d80b -b chore-human-uat` (D-P5-9). Create the checklist file listing Tasks 1–38 per project convention. Leave `.vscode/settings.json` untouched. Conventional commits, no attribution lines, never edit `CHANGELOG.md`.
 - **Done when:** `git rev-parse chore-human-uat~0` resolves and `git merge-base --is-ancestor c02d80b HEAD` is true; checklist committed.
@@ -137,7 +137,7 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 
 ### Fixtures (SC2) — Tasks 1–8
 
-### [ ] 1. Create the seed-script skeleton with an idempotency contract and a manifest
+### [x] 1. Create the seed-script skeleton with an idempotency contract and a manifest
 - **Files:** `backend/scripts/seed_uat_fixtures.py` (new)
 - **Do:** Model the header/DSN/engine bootstrap on `backend/scripts/verify_ar.py:158-214` (`build_dsn()`, own async engine from `POSTGRES_*`, no conftest import). Establish the contract in the module docstring: **every fixture is get-or-create keyed on a stable natural key** (code / number / name / email) and every builder returns the existing row unchanged when found. Add `main()` with two modes: default = seed then print the manifest; `--manifest` = print only, write nothing. The manifest is a deterministic, sorted table of `table → row count` plus the literal key codes of every named fixture. Register the fixture prefix `UAT-` on every code the script mints so its rows are identifiable.
 - **Done when:** `python scripts/seed_uat_fixtures.py --manifest` runs against the live dev DB and prints an empty-ish manifest without writing; exit 0.
@@ -446,7 +446,11 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
 
 ## Deviations
 
-*(None yet — record any mid-build divergence from this plan here, especially any tripwire stop and any owner-declined check.)*
+- **T0 (trivial) — branch cut off the plan-carrying tip, not `c02d80b`.** D-P5-9 named `c02d80b`,
+  but that commit predates the plan commit `4171605`, so the branch dropped `PLAN.md` entirely.
+  Fast-forwarded to `4171605`, which is **docs-only** (`git diff --stat c02d80b 4171605` = `.zj/STATE.md`
+  + `.zj/phases/05-human-uat/PLAN.md`, zero product code) and therefore code-identical to the named
+  base. `c02d80b` remains an ancestor. Same trivial deviation logged in Phases 3, 4, and 13.
 
 ## Out of scope
 
