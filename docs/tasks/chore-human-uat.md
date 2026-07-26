@@ -47,8 +47,8 @@ plan's hand-back protocol, an engineer must never tick an owner check or infer a
 
 ### The SC8 validation check
 
-- [ ] 18. Add the positive-adjust bin existence + membership check
-- [ ] 19. Pin the membership check with a new `verify_gelato.py` scenario (G)
+- [x] 18. Add the positive-adjust bin existence + membership check
+- [x] 19. Pin the membership check with a new `verify_gelato.py` scenario (G)
 
 ### The owner run (SC4/SC6) — read-only before mutating
 

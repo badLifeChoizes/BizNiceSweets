@@ -3,8 +3,16 @@ Updated: 2026-07-26 (**v4.0 Phase 5 BUILD IN FLIGHT — `/zj:build 5`, engineeri
 Task 19; PAUSED AWAITING THE OWNER RUN.** Branch `chore-human-uat` (cut off `c02d80b` per D-P5-9 then
 fast-forwarded to the plan-carrying tip `4171605` — docs-only, code-identical; trivial deviation, same
 pattern as Phases 3/4/13). Task count grew **39 → 41**: two defect-fix tasks added mid-build (8a, 10a).
-**Done: Tasks 0–8, 8a, 9, 10, 10a, 11–17** (Tasks 18–19, the SC8 check, were dispatched and their result
-is not yet recorded here — confirm against `PLAN.md` checkboxes before resuming).
+**Done: Tasks 0–8, 8a, 9, 10, 10a, 11–17, 18, 19** — all engineering complete; only the `[OWNER]`
+sittings (20–31, 36) and close-out (32–35, 37–38) remain.
+**SC8 met** (`e57c1ff` + pin `0a7a89f`): `post_adjustment` now rejects a non-null `bin_id` that does not
+exist or does not belong to `location_id` — one raw-SQL probe, **no gelato import** (D-P12a-3 holds),
+422 + nothing persisted, pinned as `verify_gelato.py` scenario **(G)**. RED was unambiguous
+(`status=None rows 1->2` — no exception at all, stock booked into a bin at the wrong location) and
+provably attributable: G1 uses a **positive** delta, which D-P4-6 gives no floor guard, and the FK is
+satisfied because the other location's bin genuinely exists — so the membership probe is the only guard
+that could reject it. The **NULL path is confirmed untouched**, which is what keeps the SC6 fixture
+design valid.
 **SC2 met:** NEW `backend/scripts/seed_uat_fixtures.py` builds seven fixture layers and is **proven
 idempotent on a genuinely fresh volume** (43 named keys, 361-line manifest recorded verbatim in
 `docs/tasks/chore-human-uat.md` as the authoritative literals). Load-bearing literals: `UAT-P104`

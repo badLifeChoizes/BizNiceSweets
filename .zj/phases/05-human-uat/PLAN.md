@@ -318,14 +318,14 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 
 ### The SC8 validation check — Tasks 18–19 (land before the owner run so product code is stable)
 
-### [ ] 18. Add the positive-adjust bin existence + membership check
+### [x] 18. Add the positive-adjust bin existence + membership check
 - **Files:** `backend/app/modules/syerp/service/inventory.py` (`post_adjustment`, ~line 361)
 - **Do:** After the `get_location` 404 load and before the ledger write, when `bin_id is not None`, run **one raw-SQL** `SELECT 1 FROM gelato_bin WHERE id = :bin_id AND location_id = :location_id` via `db.execute(text(...))` and raise **422** when it returns nothing. **No gelato model import** — D-P12a-3's no-imports rule must hold (assert it: `grep -n 'gelato' backend/app/modules/syerp/service/inventory.py` shows only comments and the raw table name). Update the docstring's trust-boundary paragraph (lines ~403-406) — it currently states the bin is *not* validated. Before writing, `grep` the existing 422 detail strings in `backend/scripts/verify_gelato.py`, `verify_mousse.py`, and `backend/tests/syerp/` to confirm no existing assertion depends on the negative-mismatch path's current message.
 - **Done when:** a `post_adjustment` with a `bin_id` belonging to a different location raises 422 and writes no ledger row; a matching `(location, bin)` pair still succeeds; no gelato model is imported.
 - **Verify:** `cd backend && .venv/bin/ruff check .` exit 0; `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest -q tests/syerp'` → 0 failures.
 - **Parallel-ok:** no (Task 19 pins it).
 
-### [ ] 19. Pin the membership check with a new `verify_gelato.py` scenario
+### [x] 19. Pin the membership check with a new `verify_gelato.py` scenario
 - **Files:** `backend/scripts/verify_gelato.py`
 - **Do:** Add scenario **(G)** following the existing (E)/(F) style: build two locations each with a bin, then `post_adjustment(+qty, location_id=B, bin_id=<bin of A>)` → assert **422** and assert the item's ledger row count is unchanged; then the matching pair → assert success and that the bin's on-hand rises by exactly `qty`. Extend the docstring scenario list and the `_cleanup` registry. Prove the mutation: comment out the new check → scenario G goes RED; restore → GREEN. **Record what actually failed in the RED run** and confirm it is the missing membership check, not another guard (Phase-4 keeper).
 - **Done when:** `verify_gelato.py` exits 0 with scenario G present; the RED→GREEN mutation is executed and its RED signature recorded in the checklist file.
@@ -600,7 +600,18 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
     rendered page says. (c) `docs/tasks/chore-human-uat.md` is now ~370 lines and is doing two jobs
     (checklist + evidence archive); if it keeps growing the manifests belong in a linked artifact.
 
-13. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
+13. **SC8's hole is now asymmetric — `post_transfer` and MOUSSE `issue_components` still trust their bins**
+    (Task 18/19 finding). Their docstrings (`inventory.py:826-827`, `:998-999`) claim bin membership "is
+    GELATO's domain and is checked by the caller" — exactly what `post_adjustment`'s said until Task 18.
+    `post_transfer`'s `from_bin_id` and each issue line's `bin_id` are reachable from the API with a
+    mismatched pair. SC8 scoped only the positive-adjust path so they were deliberately not touched, but
+    the hole is the same shape. **→ p2 BACKLOG item at Task 38.** Also: SC8's 422 names the location by
+    numeric id (`"Bin 5 does not exist at location 6"`), matching the existing house style rather than
+    diverging — if the `C-SC6-a` pool-floor toast wording gets fixed, fix this with it. And
+    `verify_gelato.py` is now the slowest non-API script — the one to watch if `verify-scripts` ever
+    starts timing out.
+
+14. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
 ## Deviations
 
@@ -850,6 +861,29 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
 - **T17 — pointer lines added, `git diff --numstat` shows 5/0 and 4/0: zero deletions on both.** The
   plan's carried-forward counts were verified against the files rather than trusted: v1.0 is 10 todo +
   2 pass = 12, v2.0 is 14 of 14.
+- **T18/T19 — SC8 landed** (`e57c1ff` check + `0a7a89f` pin). One raw-SQL probe, **no gelato import**
+  (`grep -n 'gelato'` shows comments and the raw table name only — D-P12a-3 holds). Pre-flight found a
+  collateral risk the task block did not name: `tests/syerp/test_inventory.py::test_adjustment_does_not_move_moving_average`
+  does `inspect.getsource(post_adjustment)` and asserts `"compute_new_moving_avg"` / `"moving_avg_cost ="`
+  are absent **from the source including the docstring**, so the docstring rewrite had to avoid both
+  strings; it does, and the test passes. **NULL path confirmed untouched** — a NULL negative draw is still
+  rejected by the *original* pool floor with its *original* message, which is what keeps the SC6 fixture
+  design valid (`UAT-ITEM-4`'s zero-pool rejection still comes from the pool floor, not from SC8).
+  Matching pair still succeeds per D-P4-6 (bin on-hand rose by exactly the delta).
+  **Scenario (G) RED is unambiguous:** G1 reported `status=None rows 1->2` — *no exception at all* and a
+  ledger row written, i.e. stock booked into a bin at the wrong location. The reasoning that it can only
+  be the missing probe: G1 uses a **positive** delta, and D-P4-6 gives positive deltas **no floor guard**,
+  so neither floor exists on that path to steal the red; the FK is **satisfied** because location A's bin
+  genuinely exists (it fires only on G2, which crashed the script with an unhandled
+  `ForeignKeyViolationError` — a 500 to a client); both 404 guards pass. G2's crash independently confirms
+  the docstring's claim that the FK "catches only a bin that does not exist at all; it cannot see the
+  membership half". Restored → GREEN, all four G assertions pass. Gates: 5 `verify_*` + `pytest
+  tests/syerp` 105 + full suite **240 passed** + ruff exit 0.
+- **T19 (trivial) — the pin commit carries three files.** The runbook wait-loop bound (a manager
+  instruction folded into this task) and the RED-signature log (Task 19's own Done-when) ride with it;
+  splitting would have produced a commit whose message described work not in it. Both paths of the
+  bounded loop were tested verbatim — happy (`0.05 s`) and dead-port (`"STILL NOT UP after 2 min. Check:
+  podman logs compose_api_1"`, 6 s) — not just the happy one.
 
 ## Out of scope
 
