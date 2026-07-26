@@ -144,7 +144,7 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py --manifest`
 - **Parallel-ok:** no (Tasks 2–7 extend this file).
 
-### [ ] 2. Seed the CORE + partners fixture layer
+### [x] 2. Seed the CORE + partners fixture layer
 - **Files:** `backend/scripts/seed_uat_fixtures.py`
 - **Do:** Get-or-create: two vendors and two customers via the real `syerp.service.partners` functions (`UAT-VEND-1`, `UAT-VEND-2`, `UAT-CUST-1`, `UAT-CUST-2`), one already-archived vendor (so the show-archived toggle has something to hide), and one **non-admin user** with a single-module role (for the RBAC nav-filter check) via `auth` service functions. Drive real services, never hand-INSERT — the dead-through-UI lesson applies to fixtures too.
 - **Done when:** a run prints the five partner codes + the non-admin user's email in the manifest; a second run prints identical counts.
@@ -451,6 +451,15 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   Fast-forwarded to `4171605`, which is **docs-only** (`git diff --stat c02d80b 4171605` = `.zj/STATE.md`
   + `.zj/phases/05-human-uat/PLAN.md`, zero product code) and therefore code-identical to the named
   base. `c02d80b` remains an ancestor. Same trivial deviation logged in Phases 3, 4, and 13.
+- **T2 (trivial) — the fixture role is built with the ORM upsert `auth/seed.py` uses, not a service
+  function.** `auth.service` exposes no `create_role`; roles are seed data (D-09) and no router or UI
+  path creates one. `create_user(role_name=…)`/`update_user(role_name=…)` only *attach* an existing
+  role. The drive-real-services rule is not weakened: the fixture **user** is created through
+  `auth.service.create_user` and the role is consumed through it. The `plum:read` permission row is
+  never minted — the builder raises loudly if the startup seed has not created it.
+- **T2 (trivial) — archiving drives `update_partner(PartnerUpdate(active=False))`, not the
+  `archive_partner()` alias.** `PATCH /syerp/partners/{id}` (`router.py:299`) routes archiving through
+  `update_partner`; nothing calls `archive_partner`. The fixture takes the path the UI takes.
 
 ## Out of scope
 
