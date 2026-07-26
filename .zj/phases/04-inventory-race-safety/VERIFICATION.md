@@ -108,3 +108,9 @@ Observations (not gaps):
   `>0` filter documented as legacy-only, `grep "bin-blind"` over `backend/app/` returns only
   historical/closed phrasings, BACKLOG bin-desync inbound half claimed (final check-off at
   verify close per plan).
+
+---
+Close-out addendum (manager, 2026-07-25): the verify close-out commit `835b12a` (artifacts +
+roadmap/SRD/backlog/state/requirements-progress bookkeeping) touches **no source** —
+`git diff --stat 3253917..835b12a -- backend/ frontend/ compose/ .github/` is empty — so this
+verification of tip `3253917` remains valid for the tagged state.
