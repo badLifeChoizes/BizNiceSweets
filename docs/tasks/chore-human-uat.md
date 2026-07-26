@@ -37,11 +37,11 @@ plan's hand-back protocol, an engineer must never tick an owner check or infer a
 
 ### The checklist (SC1)
 
-- [ ] 11. Author `.zj/UAT-v4.0.md`: preamble, fixture table, ordering rule, defect ledger
-- [ ] 12. Author the CORE + PLUM checks
-- [ ] 13. Author the SYERP checks
-- [ ] 14. Author the MOUSSE, CRUMB and GELATO checks
-- [ ] 15. Author the SC6 bin-picker checks, including the GELATO-off degraded path
+- [x] 11. Author `.zj/UAT-v4.0.md`: preamble, fixture table, ordering rule, defect ledger
+- [x] 12. Author the CORE + PLUM checks
+- [x] 13. Author the SYERP checks
+- [x] 14. Author the MOUSSE, CRUMB and GELATO checks
+- [x] 15. Author the SC6 bin-picker checks, including the GELATO-off degraded path
 - [ ] 16. Execute every command in the runbook once, at build time
 - [ ] 17. Add pointer lines to the v1.0 and v2.0 UAT docs
 

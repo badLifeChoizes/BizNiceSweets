@@ -265,35 +265,35 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 
 ### The checklist (SC1) — Tasks 11–15
 
-### [ ] 11. Author `.zj/UAT-v4.0.md`: preamble, fixture table, ordering rule, defect ledger
+### [x] 11. Author `.zj/UAT-v4.0.md`: preamble, fixture table, ordering rule, defect ledger
 - **Files:** `.zj/UAT-v4.0.md` (new)
 - **Do:** Copy `.zj/UAT-v1.0.md`'s shape. Sections: (1) how to run — the exact fresh-volume bring-up + seed commands, `:5173`, admin login from `.env` (`BNS_ADMIN_EMAIL` / `BNS_ADMIN_PASSWORD`); (2) the **named fixture table** with every literal from Task 8's manifests; (3) the ordering rule — *read-only checks first, mutating checks last; a check must never poison a later check's fixture*; (4) the master **status table** (check #, flow + requirement ID, suite, status, notes) — this is the phase's resumable state (D-P5-7); (5) an empty **Defects** table (ID, check, symptom, severity, status, fix commit / backlog link); (6) a note that this doc consolidates and supersedes the v1.0/v2.0 runbooks per **D-P5-6**.
 - **Done when:** the doc exists with all six sections; every literal in the fixture table traces to a Task-8 manifest line.
 - **Verify:** `grep -c '^| ' .zj/UAT-v4.0.md` > 0 and every fixture code in the table appears in the recorded manifest (`grep -F` each).
 - **Parallel-ok:** no (depends on Task 8).
 
-### [ ] 12. Author the CORE + PLUM checks
+### [x] 12. Author the CORE + PLUM checks
 - **Files:** `.zj/UAT-v4.0.md`
 - **Do:** ~6 CORE checks (D-P5-8): login + session survives access-token expiry (CORE-02/03), Users admin CRUD incl. a duplicate-email re-entry (CORE-04), RBAC nav filtering as the non-admin fixture user (CORE-05), Settings save + persist (CORE-06), module-toggle propagation to the sidebar (CORE-07), Home/nav shell + unknown-path fallback (CORE-08). ~11–13 PLUM checks covering PLUM-01..10: parts list search/filter + empty state, part detail, BOM tree expand/collapse, **flat BOM dedupe + the Total-BOM-Cost footer** (the v1.0 D1 triple-count), Where-Used direct/indirect labels and their sort order, Cost & Margin across all three sources, below-cost margin **rendered red**, revision FSM + Released read-only-ness, AVL add + Preferred badge + **the duplicate re-add path** (the v1.0 D2 500), import/export incl. **"Choose File" opens a dialog AND drag-drop highlights and selects** (the v1.0 D3 dead picker), and the list refreshing **without F5** after a commit. Each check names its fixture, cites its machine proof from `PREFLIGHT.md`, and states residue only.
 - **Done when:** every CORE/PLUM row has fixture + citation + residue + a `todo` status; each requirement ID CORE-01..09 and PLUM-01..10 appears in at least one row.
 - **Verify:** `for id in CORE-0{1..9} PLUM-0{1..9} PLUM-10; do grep -qF "$id" .zj/UAT-v4.0.md || echo "MISSING $id"; done` prints nothing.
 - **Parallel-ok:** yes (with Tasks 13, 14).
 
-### [ ] 13. Author the SYERP checks
+### [x] 13. Author the SYERP checks
 - **Files:** `.zj/UAT-v4.0.md`
 - **Do:** ~18–20 checks over SYERP-01..05 and SYERP-10..13: partners CRUD + search + archive-toggle; inventory items (auto `ITEM-####`, PLUM link, show-archived), item detail per-location on-hand + total + moving average + on-hand value, the **read-only** append-only ledger, stock locations incl. archive; adjust and transfer happy paths plus their rejection **toasts**; PO create (vendor picker lists **only** vendors), approve (illegal actions **hidden**), partial receive → `Partially Received`, remainder → `Received`, over-receipt rejection, vendor filter, close; GL accounts, journal entry post + reverse, account register; AP bill from a PO receipt, pay bill, AP aging tie-out **footer**; AR invoice from a shipment, record receipt, AR aging; financial reports TB/BS/IS with the **TB netting zero on screen**. Reuse `.zj/UAT-v2.0.md`'s 14 checks verbatim where they still apply, upgraded with fixture names, citations, and residue.
 - **Done when:** every row has fixture + citation + residue + `todo`; SYERP-01..05 and SYERP-10..13 each appear.
 - **Verify:** `for id in SYERP-0{1..5} SYERP-1{0..3}; do grep -qF "$id" .zj/UAT-v4.0.md || echo "MISSING $id"; done` prints nothing.
 - **Parallel-ok:** yes.
 
-### [ ] 14. Author the MOUSSE, CRUMB and GELATO checks
+### [x] 14. Author the MOUSSE, CRUMB and GELATO checks
 - **Files:** `.zj/UAT-v4.0.md`
 - **Do:** ~4 MOUSSE (MOUSSE-01): WO list + create from a BOM, release, issue components, complete with **WIP visibly clearing to zero**. ~8 CRUMB (CRUMB-01): leads list + create + convert-to-opportunity, lead detail, pipeline stage move, opportunity detail, quote create with PLUM-derived line pricing + line editor totals, quote status FSM + accept, sales orders list, SO detail confirm showing the **soft reservation**, communication log **append-only-ness**. ~4 GELATO (GELATO-01): bins CRUD + archive, putaway incl. the suggestion, fulfilment pick → pack → ship, and the post-ship state. Give the CRUMB→GELATO→AR money-loop checks an explicit ordering note so they run in dependency order and do not poison the AR fixtures Task 13's read-only checks consume.
 - **Done when:** every row has fixture + citation + residue + `todo`; MOUSSE-01, CRUMB-01, GELATO-01 each appear.
 - **Verify:** `for id in MOUSSE-01 CRUMB-01 GELATO-01; do grep -qF "$id" .zj/UAT-v4.0.md || echo "MISSING $id"; done` prints nothing.
 - **Parallel-ok:** yes.
 
-### [ ] 15. Author the SC6 bin-picker checks, including the GELATO-off degraded path
+### [x] 15. Author the SC6 bin-picker checks, including the GELATO-off degraded path
 - **Files:** `.zj/UAT-v4.0.md`
 - **Do:** Four checks. (a) `StockAdjustDialog` bin picker: it appears only once a location with active bins is chosen, defaults to **"Unbinned pool"**, resets when the location changes, and a negative adjustment against the **fully-binned** fixture item (zero unbinned pool) is rejected with the pool-floor toast unless a bin is named (D-P4-1). (b) `StockTransferDialog` **from-bin** picker: same shape; confirm the destination leg lands **unbinned** (D-P4-5) and total on-hand is unchanged. (c) `IssueComponentsDialog` **per-line** bin picker: the column appears per line and each line's bin is independently selectable. (d) **GELATO-off degraded path:** toggle GELATO off in Settings→Modules, then re-open all three dialogs and record what actually happens. Write this check as *record the observed behavior*, not as *confirm the picker hides* — see `## Noticed` #1: there is **no server-side module gate**, so the API still serves `/api/v1/gelato/*` and the dialogs' own docstrings ("hidden when the bins query errors (GELATO off)") may be wrong. If the pickers still list bins, that is a defect → protocol (expected severity: minor). The check must end by toggling GELATO **back on** and confirming the sidebar restores.
 - **Done when:** four rows exist, each naming its dialog file and its fixture, with the GELATO-off row written as an observation with an explicit restore step.
@@ -581,7 +581,17 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
     **empty sidebar**. Not U1 and not in scope there, but the same "ordinary operator mistake handled
     badly" family — `C-CORE-03` may surface it.
 
-11. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
+11. **Three follow-ups from authoring the runbook** (Tasks 11–15): (a) **`C-CORE-02` needs a ~15-minute
+    idle wait** (access-token expiry). Written as "start it, go do other checks, come back", but it is the
+    one check that cannot be done in sequence — if sittings run shorter than 15 minutes it may never get
+    exercised. Watch for it at Task 32's reconciliation. (b) **`C-SYERP-11`'s expected moving average
+    `10.125` is a forward prediction, not a manifest literal** — `(4×12.25 + 4×8) / 8`, derivable from
+    manifested inputs and labelled as an expected outcome. It is the runbook's only forward-computed
+    number; if the owner sees something else, re-check the inputs first. (c) **A markdown formatter
+    rewrote `.zj/UAT-v4.0.md` mid-authoring.** Content survived and all checks pass, but if that
+    formatter sits in a pre-commit hook it may reflow the tables on future edits.
+
+12. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
 ## Deviations
 
@@ -773,6 +783,39 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   `ix_users_email` propagating out of the `INSERT`, with the two non-DB tests staying green under the
   revert, which is the discriminator that the failure is localised to the missing guard. Full suite
   **240 passed** (236 + 4).
+- **T11–15 — `.zj/UAT-v4.0.md` authored, 1,574 lines, 59 checks.** Status rows 59 ↔ check sections 59,
+  perfect 1:1, all `todo`. **63 distinct quoted literals traced to the Task-8 manifest, 0 misses.**
+  The tracer caught two literals quoted from a **live query rather than the manifest** — `PO-0003` and
+  `UAT-PO-BILLED` (the GL/AP/AR reporter records `po_number` for only the two POs it reports, so the
+  third PO's number is genuinely not in the manifest); the fixture table now describes that PO by its
+  *manifested* attributes instead and says why no number is given.
+- **T12–14 (trivial) — the plan's requirement-coverage greps were replaced with delimited ones.** Bounded
+  on **both** sides (`[(,] ?ID[,)]`) so they match mid-list occurrences like `(SYERP-01, SYERP-02, …)`;
+  a first attempt anchoring only the left side missed those. Demonstrated non-pedantic: a file containing
+  only `C-SYERP-02` **passes** `grep -qF "SYERP-02"` and correctly **fails** the delimited form.
+- **T12/13 (trivial) — four SYERP requirements were covered but unlabelled**, and were labelled rather
+  than padded with new checks: `SYERP-02/03/04/05` (vendor search, customer CRUD, customer search, GL
+  skeleton). `C-SYERP-01` now exercises both screens' searches incl. a no-match case; `C-SYERP-02` now
+  creates/edits/archives a **customer as well as** a vendor (both screens share `PartnerSheet.tsx`, so a
+  regression in one may not show in the other). `CORE-01/07/09` have **no click of their own** and the
+  doc says so out loud instead of inventing checks — they are exercised by the fresh-volume bring-up
+  (which is what caught `U0`), by `C-SC6-d`'s toggle, and by the audit assertions cited throughout.
+- **T11–15 (trivial, self-caught) — two arithmetic errors in the engineer's own prior work, disclosed:**
+  (1) `PREFLIGHT.md`'s headline said "48 planned checks" while its rows enumerate **58** — D-P5-1's
+  "~40–50" target had been copied into the summary instead of counting the rows; per-row content was
+  always correct. Corrected in place with a dated note; derived figures re-derived to **49** cited and
+  **9** machine-unproven checks across **7** register rows (`C-CRUMB-02/04/05` share a row — the source
+  of the 7-vs-9 discrepancy). (2) `C-SYERP-20` is a 59th check, **appended** so no existing ID moved.
+- **T15 — `C-SC6-d` is written as an observation, not an assertion**, per `## Noticed` #1: the doc states
+  there is no server-side module gate and that the dialogs' own comments are probably wrong about the
+  cause, with eight "record what you saw" steps and a mandatory re-enable plus a `psql` verification.
+  `C-PLUM-07` (below-cost red) has **no** machine citation and cannot have one — written as pure residue
+  with an explicit contrast (`UAT-P104` red vs `UAT-P301` not), because "is it red" alone is
+  unfalsifiable if everything is red.
+- **T11–15 — ordering made explicit on the checks themselves**, not merely implied by task order: the
+  `C-CRUMB-07 → C-GELATO-03 → C-SYERP-20` chain carries a dependency banner on each check, `C-CRUMB-07`
+  tells the owner **not to cancel `SO-0001`** (create your own draft SO to exercise confirm), and the
+  GL/AP/AR read-only checks are scheduled before any receiving that posts to the ledger.
 
 ## Out of scope
 
