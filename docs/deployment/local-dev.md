@@ -31,15 +31,36 @@ bundled with Docker Desktop) is functionally equivalent for development. Replace
 
 ### 1.2 Configure the environment
 
+The stack reads **two** env files (D-P5-10). Copy both:
+
 ```bash
-cp .env.example .env
+cp .env.example    .env
+cp .env.db.example .env.db
 ```
 
-Open `.env` and set a real value for `POSTGRES_PASSWORD`. The placeholder
-`changeme_in_production` will NOT work for a secure deployment.
+| File | Contents | Read by |
+|------|----------|---------|
+| `.env` | app config + app secrets (`JWT_SECRET`, `BNS_ADMIN_*`) | `api` only |
+| `.env.db` | database credentials (`POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD`) | `db` **and** `api` |
 
-> `.env` is listed in `.gitignore` — it will never be committed to the repo.
-> Only `.env.example` (with placeholder values) is tracked.
+Open `.env.db` and set a real `POSTGRES_PASSWORD`, and `.env` and set a real
+`JWT_SECRET` and `BNS_ADMIN_PASSWORD`. The `changeme_*` placeholders will NOT work
+for a secure deployment.
+
+> **Why two files.** The Postgres container needs the database credentials and
+> nothing else, so splitting them keeps `JWT_SECRET` out of a container that has no
+> use for it. `POSTGRES_PASSWORD` therefore has exactly one home — `.env.db` — read
+> by both containers rather than duplicated into two files that can drift.
+>
+> **Do not skip `.env.db`.** Without it the `db` container starts with an empty
+> password. An *already-initialized* volume does not care, so the stack appears
+> healthy — but a **fresh** volume refuses to initialize with
+> `Database is uninitialized and superuser password is not specified`. That was
+> defect U0 (v4.0 Phase 5); it is pinned by
+> `backend/tests/test_compose_config.py`.
+
+> Both `.env` and `.env.db` are listed in `.gitignore` — neither will ever be
+> committed. Only the `.env.example` / `.env.db.example` templates are tracked.
 
 ### 1.3 Production-like stack (API + DB, built SPA served from backend)
 
@@ -190,5 +211,6 @@ podman-compose -f compose/compose.yml --profile plum up -d
 |---|---|---|
 | `api` exits immediately with DB error | Postgres not ready yet | Check `podman-compose logs db`; ensure healthcheck passes |
 | File changes don't trigger reload | inotify not working on Windows | Add `compose.dev.yml` overlay; `WATCHFILES_FORCE_POLLING=true` is set automatically |
-| `alembic upgrade head` fails | Schema mismatch or bad URL | Verify `POSTGRES_*` env vars in `.env`; check migration logs in `podman-compose logs api` |
+| `alembic upgrade head` fails | Schema mismatch or bad URL | Verify `POSTGRES_HOST`/`POSTGRES_PORT` in `.env` and the credentials in `.env.db`; check migration logs in `podman-compose logs api` |
+| `db` container restart-loops with `Database is uninitialized and superuser password is not specified` | `.env.db` is missing, so `POSTGRES_PASSWORD` is empty. Only ever shows up on a **fresh** volume | `cp .env.db.example .env.db`, set a real password, then `podman-compose -f compose/compose.yml up -d` again (defect U0) |
 | Port 8000 already in use | Another process on the port | Stop the conflicting process or change the host port in `compose.yml` |

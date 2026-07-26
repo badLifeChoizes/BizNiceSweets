@@ -1,5 +1,7 @@
-# Environment / secrets — NEVER commit .env (only .env.example is tracked)
+# Environment / secrets — NEVER commit .env or .env.db
+# (only the .env.example / .env.db.example templates are tracked)
 .env
+.env.db
 
 # Frontend build artifacts and dependencies
 node_modules/

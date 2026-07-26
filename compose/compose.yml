@@ -1,7 +1,8 @@
 # compose/compose.yml — Production compose file
 #
-# Usage:
-#   cp ../.env.example ../.env  # then set POSTGRES_PASSWORD
+# Usage — BOTH env files are required (D-P5-10):
+#   cp ../.env.example    ../.env      # then set JWT_SECRET + BNS_ADMIN_PASSWORD
+#   cp ../.env.db.example ../.env.db   # then set POSTGRES_PASSWORD
 #   podman-compose -f compose/compose.yml up -d
 #
 # Module profiles (D-04):
@@ -15,8 +16,20 @@
 #     --profile crisp   → adds CRISP module services (when they exist)
 #     --profile full    → activates all optional modules
 #
-# Security (T-01-10, T-01-12):
-#   - POSTGRES_PASSWORD comes from ../.env (env_file); never baked into image
+# Security (T-01-10, T-01-12, D-P5-10):
+#   - Secrets live in TWO env files, never baked into an image:
+#       ../.env     — app secrets (JWT_SECRET, BNS_ADMIN_*). Read by `api` ONLY.
+#       ../.env.db  — database credentials (POSTGRES_DB/USER/PASSWORD). Read by
+#                     BOTH `db` and `api`, because both need to authenticate.
+#     Splitting them keeps the auth master key out of the Postgres container,
+#     which has no use for it. POSTGRES_PASSWORD has exactly ONE home: ../.env.db.
+#   - `db` MUST get POSTGRES_PASSWORD from an env_file, never from a bare
+#     ${POSTGRES_PASSWORD} interpolation: compose resolves interpolation against
+#     THIS directory (compose/), where no .env lives, so it silently expands to
+#     the empty string. That leaves an existing volume working — an initialized
+#     PGDATA needs no password at start-up — and breaks only a FRESH volume, so
+#     the fault stays invisible until a first-ever deploy. That was defect U0
+#     (v4.0 Phase 5). Pinned by backend/tests/test_compose_config.py.
 #   - db service has NO ports: mapping — Postgres is NOT exposed to the host;
 #     reachable only on the internal compose network
 #
@@ -30,15 +43,21 @@ services:
   # ---------------------------------------------------------------------------
   db:
     image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-biznice}
-      POSTGRES_USER: ${POSTGRES_USER:-app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # D-P5-10: the database credentials come from a DEDICATED env file, and there
+    # is deliberately NO `environment:` block here — an `environment:` entry takes
+    # precedence over env_file, so a `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`
+    # line would keep overriding the file value with an empty interpolation. This
+    # file is the single home for POSTGRES_DB / POSTGRES_USER / POSTGRES_PASSWORD.
+    env_file: ../.env.db
     volumes:
       - pgdata:/var/lib/postgresql/data
     # No ports: mapping — DB is NOT published to the host (T-01-12)
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-biznice}"]
+      # $$ escapes to a literal $, so the shell inside the container expands the
+      # container's OWN env. Interpolating ${POSTGRES_USER:-app} here would bake
+      # in the DEFAULT whenever the value is set only in ../.env.db (which is now
+      # the normal case), silently probing the wrong user/database.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -59,7 +78,13 @@ services:
       # bug: it misreads the absolute "E:\..." context as a git URL). docker
       # compose honors this key directly.
       dockerfile: Containerfile
-    env_file: ../.env
+    # BOTH files (D-P5-10): app secrets from ../.env, database credentials from
+    # ../.env.db. The api needs the DB credentials to authenticate, and they have
+    # exactly one home — so it reads the same file the db container does rather
+    # than keeping a second copy that can drift.
+    env_file:
+      - ../.env
+      - ../.env.db
     environment:
       POSTGRES_HOST: db
     ports:
