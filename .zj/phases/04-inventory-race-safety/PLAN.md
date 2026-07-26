@@ -159,7 +159,7 @@ D-P4-1..3 were owner-chosen at plan (bin semantics, single phase, Q1/Q2 stay bac
 - **Verify:** `cd frontend && npm run test -- --run IssueComponentsDialog && npm run lint && npm run build`.
 - **Parallel-ok:** yes (with 10, 11)
 
-### [ ] 13. Full-gate run + bookkeeping (SC5, SC6)
+### [x] 13. Full-gate run + bookkeeping (SC5, SC6)
 - **Files:** `.zj/SRD.md` (NFR-7 status + evidence), `docs/features/requirements-progress.md`, `.zj/DECISIONS.md` (append D-P4-1..6), `.zj/STATE.md`, `docs/tasks/chore-inventory-race-safety.md`
 - **Do:** Push the branch; confirm all four CI jobs green (the new verify script runs in `verify-scripts`). Flip SRD NFR-7 → done pending verify with the evidence summary (lock table, mutation table results, scenario-E revision, bin-aware payload proofs). Add the requirements-progress row. Append decisions. Update STATE.md (next: `/zj:verify 4`). Complete + archive the checklist per convention.
 - **Done when:** CI green on the branch tip; SRD/progress/decisions/state updated.
@@ -235,3 +235,22 @@ D-P4-1..3 were owner-chosen at plan (bin semantics, single phase, Q1/Q2 stay bac
   before the pickers degrade; harmless but noisy, tweak candidate.
 - In-container pytest can't write `/app/.pytest_cache` (rootless bind-mount ownership) — benign
   cache warning.
+
+### Verify fix loop (2026-07-25, `3126c48..3253917`)
+
+- **Fixed (review major #1):** MOUSSE `issue_components` had dropped its per-location floor when
+  it went pool-aware — restored beside the pool floor (`2a87f6d`), pinned by `verify_mousse.py`
+  scenario G2 (legacy-desync fixture, mutation-proven RED→GREEN).
+- **Fixed (verifier major gap):** the hand-checked bin behaviors now have durable CI pins —
+  `verify_gelato.py` scenario F (binned transfer + D-P4-5 legs + D-P4-6 positive-into-bin,
+  `c692498`) and `verify_mousse.py` scenario G (binned issue, `3f45685`).
+- **Fixed (review minor #3):** `post_transfer` now `db.refresh(item)` under the lock before leg
+  valuation (`5a45a7b`) — no more stale moving-avg cost provenance on transfer legs.
+- **Deferred to BACKLOG (review minor #2, decision needed):** positive adjustment accepts an
+  unvalidated `bin_id` → can strand stock in a foreign-location bin pool (p2 entry, owner call:
+  membership check vs. accept).
+- **Deferred to BACKLOG (review questions):** GELATO `pick_for_shipment` unsorted item-lock
+  acquisition (p2); `TransactionRead` omits `bin_id` + MOUSSE issue audit lacks per-line bins (p3).
+- Reviewer notes the same pre-lock `moving_avg_cost` staleness shape remains in the pre-existing
+  `post_issue`/`post_putaway` (valuation metadata on legs) — left untouched, matches the build
+  engineer's T1 Noticed entry above; fold into any future touch of those functions.

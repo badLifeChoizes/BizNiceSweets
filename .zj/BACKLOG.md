@@ -1,5 +1,8 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-25 (Phase 3 retro — the p1 **CI pipeline** item RESOLVED (NFR-4 verified,
+Updated: 2026-07-25 (Phase 4 verify — two deferred review findings logged: positive-adjust
+unvalidated bin_id [p2, decision needed] and `pick_for_shipment` unsorted item locks [p2];
+`TransactionRead` bin_id omission + MOUSSE audit bins → p3)
+Prior: 2026-07-25 (Phase 3 retro — the p1 **CI pipeline** item RESOLVED (NFR-4 verified,
 tag `zj/good-03-ci-pipeline`); its residual niceties + the phase's 4 minor verify gaps folded
 into a new p3 "CI hardening" item. True-up: the p1 "Port Phase-8 verify-script assertions"
 item was actually resolved by Phase 2b (NFR-5) — checked off now)
@@ -124,8 +127,16 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   traceability is a first-class medical-device-origin concern: if strict audit-with-mutation
   atomicity is wanted, thread `commit=False` through the audit insert so it shares the mutation's
   transaction (one commit). Revisit before CRISP (QMS) or any compliance sign-off.
-- [ ] **Concurrency races on the inventory ledger** — **CLAIMED by v4.0 Phase 4 (NFR-7,
-  planned 2026-07-25, `.zj/phases/04-inventory-race-safety/PLAN.md`; check off at verify).**
+- [x] **Concurrency races on the inventory ledger** — **RESOLVED by v4.0 Phase 4 (NFR-7,
+  verified 2026-07-25, tag `zj/good-04-inventory-race-safety`).** All floor-guarded writers now
+  serialize on the shared sorted-id FOR-UPDATE discipline (`post_receipt`/`post_adjustment`/
+  `post_transfer` item-master lock before any floor/aggregate read; `receive_line` PO-header lock,
+  PO→item order documented; putaway/issue/MOUSSE already locked). Mutation-proven by
+  `verify_inventory_race.py` (4 barrier races incl. the MOUSSE-issue × SYERP-adjust mixed pair —
+  M1–M4 all executed RED→GREEN), auto-runs in CI `verify-scripts`. Moving-average lost-update
+  also closed (re-read under lock). Residuals live in their own entries: pick-path shipment-header
+  races + unsorted pick locks (below), positive-adjust bin membership (above). Original analysis
+  in git history.
   (Phase 8 review, accepted-risk for
   single-shop, Plan Risk #4) — moving-average recompute, the over-receipt guard, and the
   negative-stock guards each read-check-write **without a row lock**. Single-threaded every path
@@ -143,8 +154,14 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   The narrow phase invariant ("two concurrent issues can't overdraw") holds; the ledger-wide floor
   guarantee does not. Fix is the shared lock across every floor-guarded path (issue/adjust/receive/
   transfer), not a MOUSSE-only lock. Still accepted-risk single-shop.
-- [ ] **Bin split desyncs after any bin-blind movement** — **inbound half CLAIMED by v4.0
-  Phase 4 (NFR-7, planned 2026-07-25; check off at verify).** (Phase 12a review MAJOR, 2026-07-18) —
+- [x] **Bin split desyncs after any bin-blind movement** — **RESOLVED by v4.0 Phase 4 (NFR-7,
+  verified 2026-07-25, tag `zj/good-04-inventory-race-safety`).** No draw primitive writes
+  bin-blind anymore (D-P4-1 explicit-or-unbinned across adjust/transfer/MOUSSE issue; outbound
+  half closed in 12b); the split can no longer newly rot. Pinned by `verify_gelato.py` scenario E
+  (flip) + F and `verify_mousse.py` scenario G — including the restored per-location floor that
+  defends the pre-Phase-4 legacy desync rows (G2 legacy-desync fixture, mutation-proven).
+  `list_unbinned_stock` keeps its `>0` filter, now documented as masking legacy data only.
+  Historical record below. (Phase 12a review MAJOR, 2026-07-18) —
   12a made ONLY putaway bin-aware. The pre-existing draw primitives — `post_transfer`,
   `post_adjustment` (`syerp/service/inventory.py`), and MOUSSE `issue_components` — all write
   `bin_id=NULL` and floor-guard **per-location**, not per-bin. So once stock is put into a bin,
@@ -173,6 +190,27 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `list_unbinned_stock` `>0` filter now only masks that legacy data, never a live negative).
   `get_bin_on_hand`'s trust-boundary note rewritten to the new invariant. Final check-off of
   this item happens at Phase 4 verify (scenario (E) flip, `verify_gelato.py`).
+- [ ] **Positive adjustment accepts an unvalidated `bin_id` — can strand stock in a
+  foreign-location bin pool** (Phase 4 verify review #2, 2026-07-25, minor — **decision needed**).
+  D-P12a-3 (SYERP never validates bin existence/membership; FK backstop) was safe pre-Phase-4
+  because every public bin WRITE went through GELATO, which does validate location-membership.
+  Phase 4's draw paths self-guard (a mismatched `(location, bin)` pool reads 0 → 422), but a
+  POSITIVE `post_adjustment {location_id: B, bin_id: <bin of location A>}` passes the FK, writes
+  a ledger row at `(B, bin-of-A)`, and the stock then counts in B's location total while
+  belonging to no pool GELATO will ever display — stranded until a manual negative adjustment
+  names the same mismatched pair. FE dialogs can't produce it (bin resets on location change);
+  only raw API callers hit it. Options: (a) one cheap raw-SQL existence+membership check against
+  `gelato_bin(id, location_id)` on non-null bin_id (no gelato model import, so D-P12a-3's
+  no-imports rule holds), 422 on mismatch; or (b) an explicit decision entry accepting it.
+  Owner call.
+- [ ] **GELATO `pick_for_shipment` acquires item locks incrementally in request-line order**
+  (Phase 4 verify review question, 2026-07-25 — pre-existing from 12b, the one remaining writer
+  outside the Phase-4 lock discipline). `shipments.py:387` calls `post_putaway` per line
+  UNSORTED, unlike every other multi-item path (MOUSSE issue, create_bill, confirm-SO — all
+  sorted-id). Two concurrent picks whose lines order shared items oppositely (or a pick racing
+  a MOUSSE issue over the same two items) can deadlock; Postgres aborts one with a 500 instead
+  of a clean 409/422. Fix: sort the lines by item id before the loop. Same lock family as the
+  Q1/Q2 item below; accepted-risk single-shop.
 - [ ] **GELATO pick-path shipment-header races** (Phase 12b review Q1/Q2, 2026-07-19) — the
   *ship* path is now hardened (shipment row `SELECT … FOR UPDATE` before the FSM gate — no double
   COGS post; `verify_gelato_ship.py` scenario h), but the *pick* path takes no shipment/SO lock:
@@ -250,6 +288,15 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **`TransactionRead` omits `bin_id`; MOUSSE issue audit records no per-line bins** (Phase 4
+  verify review question, 2026-07-25) — the transactions API/FE cannot show which pool a
+  post-Phase-4 ledger row hit (Phase 4's own `verify_gelato.py` scenario F had to read leg
+  bin_ids from raw ledger rows), and the `work_order.issued` audit row records only line count +
+  value, so per-line bins are reconstructable only from the ledger. Pre-existing schema, but
+  bin_id became load-bearing in Phase 4. Fix: add `bin_id` to `TransactionRead` (+ FE column
+  where useful) and per-line bins to the MOUSSE issue audit detail. Related FE tidy: `useBins`
+  has no `retry: false`, so a GELATO-off deploy retries the bins GET 3× per location before the
+  pickers degrade (harmless, noisy).
 - [ ] **CI hardening niceties** (Phase 3 retro, 2026-07-25 — owner chose close-as-is; these are
   the phase's homed minors plus the residuals folded into the old p1 CI item by Phases 1/2a).
   All low-priority; the standing protection today is that the four jobs run on every push:

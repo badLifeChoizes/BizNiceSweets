@@ -748,7 +748,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
   **Pending for NFR-4/Phase 3:** wiring both as CI jobs + ruff into the container image + `.npmrc`
   `legacy-peer-deps=true` for reproducible `npm ci`.
 
-## NFR-7: Concurrency-safe inventory ledger  [traces: PRD-12, PRD-7, PRD-8]  **Status: done — pending `/zj:verify 4`**
+## NFR-7: Concurrency-safe inventory ledger  [traces: PRD-12, PRD-7, PRD-8]  **Status: verified**
 - **Statement:** Every floor-guarded write to the inventory ledger — issue, adjust, receive,
   transfer, ship — shall serialize on the contended row(s) under one shared `SELECT … FOR UPDATE`
   lock discipline (sorted-id order, the `create_bill`/`record_payment` template) so the hard
@@ -782,6 +782,20 @@ future scope (expanded via `/zj:spec` when their milestones near).
   reconciliations needed**. FE bin pickers wired end-to-end with real-payload Vitests
   (`6d55d72`/`b270161`/`886193a`); full FE gate 44 files / 139 tests + lint + `tsc -b` + build
   exit 0. No GL/JE change, no migration (both tripwires unfired).
+- **Verified:** 3253917 (Phase 04 verify, 2026-07-25 — `/zj:verify 4`: initial verdict GAPS →
+  fix loop → re-verified PASS on tip `3253917`. Verifier read every lock in code (lock precedes
+  first aggregate/guard read in all 7 writers; post_receipt re-reads under lock), ran
+  `verify_inventory_race.py` live (exit 0, scenarios A–D pin exact remainders/moving-avg
+  9.583333), corroborated the executed M1–M4 RED→GREEN mutation table, and re-ran the full gates
+  (15/15 non-API sweep, in-container pytest 232/0-skipped, FE 139 tests + lint + build, CI 4/4
+  green run 30185233894). Fix loop closed the reviewer's major — MOUSSE `issue_components` had
+  dropped its per-location floor going pool-aware (`2a87f6d` restores it beside the pool floor,
+  mutation-proven RED→GREEN by `verify_mousse.py` scenario G2's legacy-desync fixture) — plus
+  `post_transfer` leg-cost refresh under lock (`5a45a7b`), and added durable CI pins for the
+  binned-transfer/D-P4-5/D-P4-6/binned-MOUSSE-issue behaviors (`verify_gelato.py` scenario F
+  `c692498`, `verify_mousse.py` scenario G `3f45685`). Deferred to BACKLOG: positive-adjust
+  unvalidated bin_id (p2, owner decision), `pick_for_shipment` unsorted item locks (p2),
+  `TransactionRead` bin_id omission (p3). Tag `zj/good-04-inventory-race-safety`.)
 
 ## NFR-8: Human-verified release readiness  [traces: PRD-12, PRD-5, PRD-7, PRD-8]  **Status: planned**
 - **Statement:** Before the milestone closes, every shipped user-facing flow — v1.0 PLUM

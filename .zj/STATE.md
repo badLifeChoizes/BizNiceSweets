@@ -1,5 +1,36 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-25 (**v4.0 Phase 4 BUILD COMPLETE — `/zj:build 4`.** All 14 tasks (0–13) on branch
+Updated: 2026-07-25 (**v4.0 Phase 4 VERIFIED — `/zj:verify 4` PASS on tip `3253917`, tag
+`zj/good-04-inventory-race-safety`.** NFR-7 verified + stamped in SRD; ROADMAP row ✅; BACKLOG:
+the two claimed p2 items (inventory-ledger races; bin-split desync) RESOLVED + checked off, three
+verify findings homed (p2 positive-adjust bin membership — **owner decision needed**, p2
+pick-path unsorted locks, p3 TransactionRead bin_id); requirements-progress NFR-7 → Verified.
+**Next action:** `/zj:retro 4` (candidate learnings: a same-phase sibling pattern [dual floor]
+silently dropped in one of three parallel edits — reviewer caught it; hand-checked behaviors are
+not pinned behaviors — verifier's gap; legacy-desync fixtures need real moving-avg cost or the
+zero-value guard masks the mutation). Verify history below.)
+
+Verify record: (**v4.0 Phase 4 VERIFY — `/zj:verify 4`, fix loop complete.**
+Verifier + reviewer both ran on `7a71fd0..3126c48`: initial verdict **GAPS** (REVIEW.md: 1 major —
+MOUSSE `issue_components` dropped its per-location floor going pool-aware, bin-named issue on
+legacy-desynced data could drive location on-hand negative + book WIP for nonexistent stock;
+2 minor. VERIFICATION.md: all six SCs empirically true but transfer/MOUSSE/positive-adjust
+bin behaviors had NO automated pin — hand-check only). **Fix loop done, tip now `3253917`:**
+`2a87f6d` restores the location floor beside the pool floor (mutation-proven RED→GREEN via new
+`verify_mousse.py` scenario G2 legacy-desync fixture — guard off ⇒ issue succeeds, location
+−10.000000); `5a45a7b` `db.refresh(item)` under the post_transfer lock (stale leg-cost provenance);
+`c692498` `verify_gelato.py` scenario F pins binned transfer (NULL-422, out-leg-binned/in-leg-NULL
+D-P4-5) + D-P4-6 positive-into-bin; `3f45685` scenario G pins binned MOUSSE issue; `3253917`
+checklist addendum. Post-fix gates: ruff clean, in-container pytest 232/0-skipped, sweep 15/15
+SWEEP_OK, CI run 30185233894 4/4 green on `3253917`. Deferred to BACKLOG: positive-adjust
+unvalidated bin_id (p2, **owner decision needed**: membership check vs accept), `pick_for_shipment`
+unsorted item locks (p2), `TransactionRead` bin_id omission (p3) — PLAN `## Noticed` has the full
+fix-loop record. **Verifier re-verification of the new tip is running** (will rewrite
+VERIFICATION.md's verdict). **Next action:** on fresh `Verdict: PASS` — close out `/zj:verify 4`
+(ROADMAP `[verified]`, SRD NFR-7 verified + `- **Verified:** 3253917` stamp, check off the two
+claimed BACKLOG p2 items, commit artifacts, tag `zj/good-04-inventory-race-safety`, then
+`/zj:retro 4`).)
+
+Prior: 2026-07-25 (**v4.0 Phase 4 BUILD COMPLETE — `/zj:build 4`.** All 14 tasks (0–13) on branch
 `chore-inventory-race-safety` (cut at T0 `378fb34` off the plan-carrying tip `7a71fd0`,
 code-identical to the D-P4-4 base `db725fd`); checklist archived to
 `docs/tasks/_completed/2026-07-25-chore-inventory-race-safety.md`. **NFR-7 delivered in two waves:**
