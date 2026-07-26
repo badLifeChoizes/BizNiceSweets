@@ -1,5 +1,38 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-25 (**v4.0 Phase 4 CLOSED — `/zj:retro 4` done.** LEARNINGS Phase 04 banked:
+Updated: 2026-07-26 (**v4.0 Phase 5 PLANNED — `/zj:plan 5`.** Phase 5 = **human click-through UAT
+(NFR-8)** — the FINAL v4.0 phase, closing the DoD's last clause. **39 tasks, 13 of them `[OWNER]`**
+(`.zj/phases/05-human-uat/PLAN.md`): fixtures (T1–8 NEW idempotent `backend/scripts/seed_uat_fixtures.py`,
+proven twice-identical on a genuinely fresh volume) → pre-flight (T9–10 `PREFLIGHT.md` maps every check
+to the existing `verify_*`/pytest/vitest assertion that already proves its backend; T10 adds the missing
+`getVisibleModules` probe) → checklist (T11–15 author ONE consolidated `.zj/UAT-v4.0.md`; T16 **executes
+every runbook command once at build time**; T17 pointer lines on the old docs) → SC8 (T18–19 the
+positive-adjust bin-membership check + `verify_gelato.py` scenario G, mutation-proven) → **owner run
+(T20–31, one sitting per suite, read-only before mutating** so no check poisons a later fixture; money
+loop last) → close-out (T32 zero-`todo` reconcile, T33 full regression gate, T34–36 rebuild dist+image
+then prod-stack smoke at :8000 on a fresh volume, T37–38 bookkeeping). **9 SCs.** **9 owner decisions
+(AskUserQuestion ×2 rounds) → D-P5-1..9:** breadth = **residue-only, full coverage** (~40–50 checks,
+est. 2–3 h — each check names only what a machine can't confirm; the v1.0 "what the machine already
+proved" shape); env = **Vite :5173 for the click-through + one prod-stack smoke** (D-P7-1 precedent, and
+under the dev overlay :8000 serves no SPA at all); fixtures = **seed script on a fresh DB** (the v1.0 UAT
+was burned when the dev volume was recreated and its named fixtures vanished); defects = **fix
+blocker/major in-phase with a pinning test, home minor to BACKLOG with a `U#` ID**; **ADD** the p2
+positive-adjust bin-membership check (resolves the owner call the Phase-4 retro flagged); **one**
+`.zj/UAT-v4.0.md` (amends NFR-8's literal three-doc wording — trued up at T37); run mechanics =
+**interactive, suite by suite**, the status table is the resumable state; **CORE surfaces IN scope**
+(~6 checks — needed anyway for the GELATO-off path); branch = fresh `chore-human-uat` off `c02d80b`.
+**Two STOP-and-flag tripwires:** any Alembic migration, any GL/JE posting change — v4.0 ships no new
+capability, so the only authorized product code is UAT defect fixes + the SC8 check. Keepers baked in:
+fresh-volume-or-it's-unproven (P3), execute-the-runbook-before-trusting-it (P3), hand-checked ≠ pinned +
+RED-must-fail-for-the-intended-reason (P4), and the dead-through-UI trap this UAT is the counter-measure
+for. Top risk: **reading a machine pass as a human pass** (exactly the v1.0 G1 failure) — countered by a
+hand-back protocol that forbids an engineer ticking or inferring an owner check. Two plan findings:
+**there is no server-side module gate** (toggling GELATO off only filters the sidebar; the three Phase-4
+dialogs' "hidden when GELATO off" docstrings are likely wrong about the cause — T15/T26 record the truth),
+and **7 route screens have no colocated vitest** (Home, Settings, Modules, GLAccounts, LeadDetail,
+OpportunityDetail, Quotes) = the genuinely machine-unproven set, weighted heaviest in the run.
+**Next action:** `/zj:build 5`.)
+
+Prior: 2026-07-25 (**v4.0 Phase 4 CLOSED — `/zj:retro 4` done.** LEARNINGS Phase 04 banked:
 (1) one transform applied across N sibling writers dropped MOUSSE's per-location floor while its
 two siblings kept it — the review artifact is the **cross-sibling guard diff**, since a dropped
 guard reads as normal code in isolation and only a legacy-desynced fixture can expose it;
