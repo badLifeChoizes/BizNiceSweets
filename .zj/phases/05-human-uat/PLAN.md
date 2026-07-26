@@ -80,9 +80,20 @@ pytest **232 passed / 0 skipped**; **15/15** non-API + **9/9** API `verify_*` ex
 - **D-P5-8 — CORE platform surfaces are IN scope** (~6 checks): login + token refresh, Users admin CRUD, RBAC nav filtering, module-toggle propagation, Settings. The module-toggle check is needed anyway for SC6's GELATO-off path, and it makes "every shipped UI flow" literally true.
 - **D-P5-9 — Branch:** cut a fresh `chore-human-uat` off the current tip **`c02d80b`** on `chore-inventory-race-safety` (the unmerged v4.0 stack), same pattern as D-P4-4. `.vscode/settings.json` is unstaged-dirty (owner's) — **leave it**.
 
+- **D-P5-10 — `U0` fix shape = a dedicated db env file** (owner, AskUserQuestion at Task 8, 2026-07-26).
+  Split into `.env` (app secrets, unchanged) + **`.env.db`** (`POSTGRES_*` only); `db` gets
+  `env_file: ../.env.db` and loses the `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}` line from
+  `environment:` (which takes precedence and would keep overriding it to empty). Rejected alternatives:
+  `env_file: ../.env` on `db` (one line, but spreads `JWT_SECRET` — the auth system's master key — and
+  `BNS_ADMIN_PASSWORD` into a container that needs neither, visible in `podman inspect`);
+  `--env-file .env` on every documented command (no restructure, but a forgotten flag silently
+  reproduces the bug); deferring to BACKLOG (SC7 would then prove the artifact only under a workaround,
+  contradicting its own wording). Rationale: the db container never sees a secret it does not need, and
+  the **documented deploy command stays unchanged** — which is the thing U0 broke.
+
 ## Decisions needed
 
-None. D-P5-1..9 are settled. If the run surfaces a defect whose fix requires an **Alembic migration** or a **GL/JE posting change**, that is a tripwire (below), not an architect decision — stop and surface it.
+None. D-P5-1..10 are settled. If the run surfaces a defect whose fix requires an **Alembic migration** or a **GL/JE posting change**, that is a tripwire (below), not an architect decision — stop and surface it.
 
 ## Two STOP-and-flag tripwires
 
@@ -192,6 +203,23 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 - **Done when:** `diff manifest1 manifest2` is empty, on a volume created minutes earlier; the manifests are recorded.
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && alembic current'` prints `0017 (head)`; the two-run diff is empty.
 - **Parallel-ok:** no (blocks Tasks 11–14 and every owner task).
+
+### [ ] 8a. Fix `U0` — the fresh-volume deploy blocker (ADDED mid-build, D-P5-10)
+- **Files:** `compose/compose.yml`, `.env.db.example` (new), `.env.example`, `.gitignore`,
+  `compose/compose.dev.yml` (only if it overrides db env), `README.md` / deploy docs, plus a pinning test
+- **Do:** Implement D-P5-10. Give `db` `env_file: ../.env.db` and **remove** the
+  `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}` line from its `environment:`. Create `.env.db.example`
+  carrying only `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD`; strip `POSTGRES_PASSWORD` from
+  `.env.example` (or cross-reference it) so there is exactly one home for it. Add `.env.db` to
+  `.gitignore`. Correct the misleading header comment at `compose/compose.yml:19`. Update every place
+  that documents the bring-up so a first-time self-hoster copies **both** example files.
+- **Done when:** on a genuinely fresh volume, the **documented** command sequence alone brings the stack
+  up — no `set -a; . ./.env` shell workaround — and `podman inspect` shows a non-empty
+  `POSTGRES_PASSWORD` on `db` and **no** `JWT_SECRET` / `BNS_ADMIN_PASSWORD` on `db`.
+- **Verify:** `podman-compose -f compose/compose.yml -f compose/compose.dev.yml down -v`, then the
+  documented bring-up from a clean shell; `/health/ready` 200; `alembic current` == `0017 (head)`;
+  the pinning test fails on revert.
+- **Parallel-ok:** no (must precede Task 35; land it before the owner run so product config is stable).
 
 ---
 

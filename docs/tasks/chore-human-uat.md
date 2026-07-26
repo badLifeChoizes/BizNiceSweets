@@ -27,6 +27,7 @@ plan's hand-back protocol, an engineer must never tick an owner check or infer a
 - [x] 6. Seed the MOUSSE + CRUMB fixture layer
 - [x] 7. Seed the SYERP GL / AP / AR fixture layer
 - [x] 8. Prove the seed idempotent on a genuinely fresh volume
+- [ ] 8a. Fix `U0` — fresh-volume deploy blocker, dedicated `.env.db` (D-P5-10, added mid-build)
 
 ### Pre-flight (SC3)
 
