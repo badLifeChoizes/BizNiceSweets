@@ -1,5 +1,9 @@
 # UAT — v2.0 milestone (SYERP inventory & purchasing)
 
+> **Superseded for execution by [`.zj/UAT-v4.0.md`](UAT-v4.0.md)** (D-P5-6), which consolidates
+> the v1.0 and v2.0 runbooks into one. Retained as **history**. **All 14** checks here were
+> still open and are carried forward into v4.0's SYERP block; do not run this file.
+
 Per **D-P7-5**, human click-through UAT is a milestone-close activity, run once at
 `/zj:milestone` against the Vite dev server (**http://localhost:5173**, D-P7-1) with the
 Podman stack up (`podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`;
