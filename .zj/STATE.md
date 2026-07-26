@@ -1,5 +1,57 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-26 (**v4.0 Phase 5 PLANNED — `/zj:plan 5`.** Phase 5 = **human click-through UAT
+Updated: 2026-07-26 (**v4.0 Phase 5 BUILD IN FLIGHT — `/zj:build 5`, engineering complete through
+Task 19; PAUSED AWAITING THE OWNER RUN.** Branch `chore-human-uat` (cut off `c02d80b` per D-P5-9 then
+fast-forwarded to the plan-carrying tip `4171605` — docs-only, code-identical; trivial deviation, same
+pattern as Phases 3/4/13). Task count grew **39 → 41**: two defect-fix tasks added mid-build (8a, 10a).
+**Done: Tasks 0–8, 8a, 9, 10, 10a, 11–17** (Tasks 18–19, the SC8 check, were dispatched and their result
+is not yet recorded here — confirm against `PLAN.md` checkboxes before resuming).
+**SC2 met:** NEW `backend/scripts/seed_uat_fixtures.py` builds seven fixture layers and is **proven
+idempotent on a genuinely fresh volume** (43 named keys, 361-line manifest recorded verbatim in
+`docs/tasks/chore-human-uat.md` as the authoritative literals). Load-bearing literals: `UAT-P104`
+roll-up **99.15** / margin **−59.15 / −59.66 %** / flat-BOM dedupe **UAT-P102 qty 11**; `UAT-ITEM-1`
+moving avg **6.669231**, on-hand value **86.700003**; `UAT-ITEM-4` unbinned pool **0** at `UAT-LOC-A`
+(the fixture SC6's pool-floor rejection depends on); AP **57.75** in 31-60, AR **84.25** in 61-90.
+Every fixture layer picks anti-coincidence arithmetic on purpose (a second costed leaf so no single flat
+row equals the roll-up; a divisor making ROUND_HALF_UP load-bearing; disjoint documents so Task 27's
+receiving and Task 30/31's ship→invoice cannot move Task 23/24's literals).
+**SC3 met:** `PREFLIGHT.md` maps **59 checks** (ID scheme `C-`-prefixed, suite-local, so a check can
+never be confused with an SRD requirement), **309 citations verified, zero misses**; 49 cited, 9
+machine-unproven, 1 probed (`getVisibleModules`, mutation-exercised — wildcard-first ordering would make
+`C-SC6-d` silently pass while broken).
+**SC1 met:** `.zj/UAT-v4.0.md`, 1,574 lines, **59 checks / 59 status rows, perfect 1:1, all `todo`**;
+63 quoted literals all traced to the manifest (the tracer caught two quoted from a live query, not the
+manifest). **Three defects found and homed BEFORE any human clicked** — SC3 paying for itself:
+**`U0` (blocker, fixed `4ace2c4` + pin `d870233`)** the compose stack could not start on a fresh volume
+at all (`db` got `POSTGRES_PASSWORD` by interpolation only; `compose/.env` doesn't exist → empty →
+Postgres refuses to init; invisible for the life of a volume, so five phases never hit it; blocked
+Task 35/SC7 and every first-ever self-hosted deploy) → **D-P5-10** dedicated `.env.db`, pinned by
+`backend/tests/test_compose_config.py` whose matcher **strips comments** because the pre-fix file's own
+comment claimed the fix was already there; **`U1` (major, fixed `f508554` + pin `f67f085`)** duplicate-email
+user create returned **500**, now a clean 409 matching the house convention, narrowed to `ix_users_email`
+(users has two unique indexes, so a broad except would misreport a PK collision — the Phase-13
+`create_invoice` failure in miniature), no-partial-row proven; plus a **false defect averted** — on a
+fresh volume the Balance Sheet showed **negative total assets** because the fixture spent from an
+unfunded Cash account, which the owner would reasonably have reported at Task 23 (fixed with an opening
+capital contribution; `report()` now asserts `total_assets > 0`).
+**Two owner decisions mid-build (AskUserQuestion ×2):** **D-P5-10** (U0 fix = dedicated db env file,
+rejecting `env_file: ../.env` on db because it spreads `JWT_SECRET` into a container that needs it not);
+and **D-P5-1 amended — keep all 59 checks** (the overage is structural: 59 is the exact sum of the plan's
+own per-suite maxima, so "~40–50" and the per-suite ranges never agreed; full coverage was the binding
+half of D-P5-1). Runbook estimate **~3 h** across eleven suggested sittings.
+**Corrections to the plan's own facts, all found by executing rather than reading** (Phase-03 keeper,
+now fired four times): in-container `pytest` **does not work** (absent from the image; the bind-mounted
+`.venv/bin/pytest` has host-path shebangs) → Task 33 must use the host venv against a reachable
+Postgres; the runbook's health-check was **prose** where a command was needed and failed with
+`curl: (56)`; the seed is **~5 s, not ~40 s** and the whole bring-up **~30 s**.
+**Neither product tripwire fired** — no Alembic migration (head still `0017`), no GL/JE posting-rule
+change. Tree clean except the owner's `.vscode/settings.json` (left dirty per D-P5-9).
+**Next action: the owner run — Task 20, the CORE sitting**, then 21→31 one sitting per suite,
+read-only before mutating, money loop last. Stack is up and seeded at **http://localhost:5173**
+(admin from `.env`; DB keys now live in `.env.db`). The status table in `.zj/UAT-v4.0.md` is the
+resumable state — a paused run is normal. **An engineer must never tick an owner check or infer a pass.**
+Then close-out 32–38. Full detail in `PLAN.md` `## Deviations` / `## Noticed`.)
+
+Prior: 2026-07-26 (**v4.0 Phase 5 PLANNED — `/zj:plan 5`.** Phase 5 = **human click-through UAT
 (NFR-8)** — the FINAL v4.0 phase, closing the DoD's last clause. **39 tasks, 13 of them `[OWNER]`**
 (`.zj/phases/05-human-uat/PLAN.md`): fixtures (T1–8 NEW idempotent `backend/scripts/seed_uat_fixtures.py`,
 proven twice-identical on a genuinely fresh volume) → pre-flight (T9–10 `PREFLIGHT.md` maps every check
