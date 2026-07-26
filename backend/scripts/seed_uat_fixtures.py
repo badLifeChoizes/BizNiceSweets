@@ -89,6 +89,7 @@ import os
 import sys
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select, text
@@ -109,8 +110,41 @@ from app.modules.auth.service import (
     get_user_by_email,
     write_audit,
 )
+from app.modules.crumb.schemas import (
+    InteractionCreate,
+    LeadCreate,
+    OpportunityCreate,
+    QuoteCreate,
+    QuoteLineCreate,
+    SalesOrderCreate,
+    SalesOrderLineCreate,
+)
+from app.modules.crumb.service import (
+    advance_quote_status,
+    advance_stage,
+    confirm_sales_order,
+    create_interaction,
+    create_lead,
+    create_opportunity,
+    create_quote,
+    create_sales_order,
+    get_quote_detail,
+    get_sales_order_detail,
+    list_customer_timeline,
+    list_leads,
+    list_opportunities,
+    list_quotes,
+    list_sales_orders,
+)
 from app.modules.gelato.schemas import BinCreate, PutawayRequest
 from app.modules.gelato.service import archive_bin, create_bin, execute_putaway, list_bins
+from app.modules.mousse.schemas import WorkOrderCreate
+from app.modules.mousse.service import (
+    create_work_order,
+    get_work_order_detail,
+    list_work_orders,
+    release_work_order,
+)
 from app.modules.plum.schemas import (
     AvlLinkCreate,
     BomItemCreate,
@@ -146,7 +180,12 @@ from app.modules.syerp.schemas import (
 )
 from app.modules.syerp.service.inventory import get_bin_on_hand, get_item_onhand, post_receipt
 from app.modules.syerp.service.items import create_item, list_items, update_item
-from app.modules.syerp.service.locations import create_location, list_locations, update_location
+from app.modules.syerp.service.locations import (
+    create_location,
+    get_location,
+    list_locations,
+    update_location,
+)
 from app.modules.syerp.service.partners import create_partner, list_partners, update_partner
 from app.modules.syerp.service.purchasing import add_line, advance_po_status, create_po, list_pos
 
@@ -1698,18 +1737,582 @@ GELATO_LAYER = FixtureLayer(
 )
 
 
+# ---------------------------------------------------------------------------
+# Layer: MOUSSE + CRUMB (Task 6)
+# ---------------------------------------------------------------------------
+#
+# MOUSSE — a dedicated build target, UAT-P501, with TWO components:
+#
+#   UAT-P501 (Released, snapshot 14.50)      → UAT-ITEM-7  finished good, no stock
+#     ├─ 2× UAT-P502 (material 5.00)         → UAT-ITEM-5  component A
+#     └─ 3× UAT-P503 (material 1.50)         → UAT-ITEM-6  component B
+#
+# WHY A DEDICATED TARGET rather than Task 3's Released UAT-P301: release snapshots the
+# Released revision's DIRECT children, and UAT-P301 has exactly ONE child. SC6 check (c)
+# asks the owner to confirm the IssueComponentsDialog's bin column appears PER LINE and
+# that each line's bin is INDEPENDENTLY selectable — which a single-line dialog cannot
+# show. Two components also let the two pool cases sit side by side in one dialog.
+#
+# WHICH COMPONENT STOCK IS BINNED (the SC6 (c) fixture, stated explicitly):
+#   At UAT-LOC-A — the RELEASED work order's target location, the one WITH bins:
+#     * UAT-ITEM-5 (component A): 20 received, FULLY put away into UAT-BIN-A1 → its
+#       unbinned pool at UAT-LOC-A is EXACTLY 0, so this line's issue MUST name a bin
+#       (D-P4-1) or it 422s.
+#     * UAT-ITEM-6 (component B): 30 received and left ENTIRELY UNBINNED → this line
+#       issues fine with no bin named.
+#   One dialog, two lines, opposite requirements — that is the per-line independence
+#   check made observable.
+#   At UAT-LOC-NOBIN — the DRAFT work order's target location, which has NO bins:
+#     * UAT-ITEM-5: 10 unbinned; UAT-ITEM-6: 15 unbinned.
+#
+# SEPARATE STOCK, so issuing against one WO cannot starve the other: the Released WO
+# (planned 4 → needs 8 + 12) draws UAT-LOC-A; the Draft WO (planned 2 → needs 4 + 6, once
+# the owner releases it) draws UAT-LOC-NOBIN. Different locations, different pools.
+# qty_per 2 and 3 against planned 4 give 8 and 12 — "qty_per only" (2/3), "planned only"
+# (4/4) and "qty_per + planned" (6/7) all land elsewhere.
+#
+# CRUMB — the pipeline and the head of the money loop:
+#   * UAT-LEAD-1 (status new, unconverted, so Task 29's convert-to-opportunity is reachable)
+#   * UAT-OPP-1 mid-stage at 'proposal'; UAT-OPP-2 left at 'qualify' so the pipeline board
+#     has two populated columns. TWO opportunities because a quote's own number is
+#     server-generated: the opportunity link is the only stable natural key a quote has.
+#   * Quote A (still 'sent', so Task 29 can accept it) — PLUM-derived pricing off the
+#     released cost snapshots:
+#       line 1  UAT-P301  qty 7  markup 45% → 26.40 × 1.45 = 38.28 → 267.96
+#       line 2  UAT-P501  qty 3  markup default 30% → 14.50 × 1.30 = 18.85 → 56.55
+#       total 324.51.  The 45% is NOT the default: had the service ignored the explicit
+#       markup and applied its 30% default the line would read 34.32, not 38.28 — visibly
+#       different. Other wrong formulas: snapshot alone 26.40; snapshot + markup 71.40;
+#       snapshot × 0.45 = 11.88; qty × snapshot 184.80. All distinct from 267.96.
+#   * Quote B already 'accepted', so quote→SO conversion is reachable without first having
+#     to accept anything (explicit unit_price 20.00 × 5 = 100.00 — the override branch).
+#   * One CONFIRMED sales order carrying a soft reservation — the head of the money loop
+#     Task 30 fulfils and Task 31 invoices. Its line draws UAT-ITEM-8, a dedicated sellable
+#     item whose 25 are fully binned into UAT-BIN-A2 at UAT-LOC-A, so the stock is genuinely
+#     PICKABLE (GELATO picks from bins) and Task 30 cannot disturb UAT-ITEM-4's Task-5
+#     literals. Ordered 11 of an available 25 → reserved 11 (a wrong `reserved = on_hand`
+#     would read 25, a missing reservation 0). The min(ordered, available) clamp is not
+#     re-proved here — verify_crumb_so.py already pins it (SC3: prefer citation).
+#   * Two interactions with FIXED occurred_at timestamps, so the newest-first ordering of
+#     the append-only log is unambiguous rather than a microsecond race.
+#
+# A soft reservation posts NO journal entry (confirm_sales_order only sets qty_reserved
+# under an item-master lock), so this layer's CRUMB half is GL-neutral. The MOUSSE half is
+# too, until the owner issues: issuing posts Dr 1140 WIP / Cr 1130, and completion clears
+# it — both are Task 28's business, not the fixture's.
+
+MOUSSE_TARGET_PART = "UAT-P501"
+MOUSSE_COMP_A_PART = "UAT-P502"
+MOUSSE_COMP_B_PART = "UAT-P503"
+MOUSSE_COMP_A_COST = Decimal("5.00")
+MOUSSE_COMP_B_COST = Decimal("1.50")
+MOUSSE_QTY_A_PER = Decimal("2")
+MOUSSE_QTY_B_PER = Decimal("3")
+
+MOUSSE_ITEM_COMP_A = "UAT-ITEM-5"
+MOUSSE_ITEM_COMP_B = "UAT-ITEM-6"
+MOUSSE_ITEM_FG = "UAT-ITEM-7"
+CRUMB_ITEM_SELLABLE = "UAT-ITEM-8"
+CRUMB_ITEM_COST = Decimal("6.40")
+CRUMB_ITEM_QTY = Decimal("25")
+
+MOUSSE_RELEASED_QTY = Decimal("4")  # at UAT-LOC-A (binned component A)
+MOUSSE_DRAFT_QTY = Decimal("2")  # at UAT-LOC-NOBIN (no bins at all)
+
+CRUMB_LEAD = "UAT-LEAD-1"
+CRUMB_OPP_OPEN = "UAT-OPP-1"
+CRUMB_OPP_ACCEPTED = "UAT-OPP-2"
+CRUMB_QUOTE_A_MARKUP = Decimal("45")
+CRUMB_QUOTE_A_QTY_1 = Decimal("7")
+CRUMB_QUOTE_A_QTY_2 = Decimal("3")
+CRUMB_QUOTE_B_QTY = Decimal("5")
+CRUMB_QUOTE_B_PRICE = Decimal("20.00")
+CRUMB_SO_MARKER = "UAT-SO-1"
+CRUMB_SO_QTY = Decimal("11")
+CRUMB_SO_PRICE = Decimal("9.75")
+CRUMB_INTERACTIONS: tuple[tuple[str, str, str], ...] = (
+    ("call", "UAT-COMM-1 first contact call", "2026-01-05T09:00:00+00:00"),
+    ("email", "UAT-COMM-2 follow-up email with the quote", "2026-01-06T14:30:00+00:00"),
+)
+
+
+async def _wo_by_plan(session: AsyncSession, part_id: str, planned_qty: Decimal):
+    """
+    Resolve a work order by (build target, planned quantity).
+
+    A WO's own number is server-generated, so this pair is the stable natural key: the
+    two fixture WOs differ by planned_qty (4 released / 2 draft).
+    """
+    for wo in await list_work_orders(session):
+        if wo.plum_part_id == part_id and wo.planned_qty == planned_qty:
+            return wo
+    return None
+
+
+async def _quote_by_opportunity(session: AsyncSession, opportunity_id: str):
+    """Resolve a quote by its opportunity link — a quote's number is server-generated."""
+    for quote in await list_quotes(session):
+        if quote.opportunity_id == opportunity_id:
+            return quote
+    return None
+
+
+async def _so_by_line_marker(session: AsyncSession, marker: str):
+    """
+    Resolve a sales order by a marker carried in one of its line descriptions.
+
+    SalesOrder has neither a client-settable number nor a notes column, so the line
+    description is the only stable natural key available through the real create service.
+    """
+    for so in await list_sales_orders(session):
+        detail = await get_sales_order_detail(session, so.id)
+        if any(line.description == marker for line in detail.lines):
+            return detail
+    return None
+
+
+async def build_mousse_crumb(ctx: SeedContext) -> None:
+    """Get-or-create the MOUSSE build target + work orders and the CRUMB pipeline."""
+    # -- the MOUSSE build target: a Released 2-component PLUM assembly ------------------
+    comp_a_part = await _ensure_part(ctx, MOUSSE_COMP_A_PART, "UAT MOUSSE component A")
+    comp_b_part = await _ensure_part(ctx, MOUSSE_COMP_B_PART, "UAT MOUSSE component B")
+    target_part = await _ensure_part(ctx, MOUSSE_TARGET_PART, "UAT MOUSSE build target")
+    await _ensure_cost(ctx, comp_a_part, material_cost=MOUSSE_COMP_A_COST)
+    await _ensure_cost(ctx, comp_b_part, material_cost=MOUSSE_COMP_B_COST)
+    await _ensure_bom_line(ctx, target_part, comp_a_part, MOUSSE_COMP_A_PART, MOUSSE_QTY_A_PER)
+    await _ensure_bom_line(ctx, target_part, comp_b_part, MOUSSE_COMP_B_PART, MOUSSE_QTY_B_PER)
+    await _ensure_released(ctx, target_part)
+
+    # -- the stock items behind it -------------------------------------------------------
+    comp_a_item = await _ensure_item(
+        ctx, MOUSSE_ITEM_COMP_A, "UAT MOUSSE component A stock", plum_part_id=comp_a_part
+    )
+    comp_b_item = await _ensure_item(
+        ctx, MOUSSE_ITEM_COMP_B, "UAT MOUSSE component B stock", plum_part_id=comp_b_part
+    )
+    await _ensure_item(
+        ctx, MOUSSE_ITEM_FG, "UAT MOUSSE finished good", plum_part_id=target_part
+    )
+    sellable_item = await _ensure_item(ctx, CRUMB_ITEM_SELLABLE, "UAT sellable stock item")
+
+    async with ctx.session_factory() as session:
+        loc_a = (await _location_by_name(session, GELATO_BIN_LOCATION)).id
+        loc_nobin = (await _location_by_name(session, GELATO_NOBIN_LOCATION)).id
+        bin_a1 = (await _bin_by_code(session, loc_a, GELATO_BIN_1)).id
+        bin_a2 = (await _bin_by_code(session, loc_a, GELATO_BIN_2)).id
+
+    # Component A at UAT-LOC-A is FULLY BINNED → its issue line must name a bin.
+    await _ensure_receipt(ctx, comp_a_item, loc_a, Decimal("20"), MOUSSE_COMP_A_COST)
+    await _ensure_putaway(ctx, comp_a_item, loc_a, bin_a1, Decimal("20"))
+    # Component B at UAT-LOC-A stays UNBINNED → its issue line needs no bin.
+    await _ensure_receipt(ctx, comp_b_item, loc_a, Decimal("30"), MOUSSE_COMP_B_COST)
+    # Separate stock for the Draft WO, at the location with no bins at all.
+    await _ensure_receipt(ctx, comp_a_item, loc_nobin, Decimal("10"), MOUSSE_COMP_A_COST)
+    await _ensure_receipt(ctx, comp_b_item, loc_nobin, Decimal("15"), MOUSSE_COMP_B_COST)
+    # The sellable item: fully binned so GELATO can actually pick it.
+    await _ensure_receipt(ctx, sellable_item, loc_a, CRUMB_ITEM_QTY, CRUMB_ITEM_COST)
+    await _ensure_putaway(ctx, sellable_item, loc_a, bin_a2, CRUMB_ITEM_QTY)
+
+    # -- the two work orders -------------------------------------------------------------
+    for planned_qty, location_id, release in (
+        (MOUSSE_RELEASED_QTY, loc_a, True),
+        (MOUSSE_DRAFT_QTY, loc_nobin, False),
+    ):
+        async with ctx.session_factory() as session:
+            if await _wo_by_plan(session, target_part, planned_qty) is not None:
+                continue
+            wo = await create_work_order(
+                session,
+                WorkOrderCreate(
+                    plum_part_id=target_part,
+                    planned_qty=planned_qty,
+                    target_location_id=location_id,
+                ),
+                ctx.actor_id,
+            )
+            await write_audit(
+                session,
+                actor_id=ctx.actor_id,
+                action="wo.created",
+                target_type="work_order",
+                target_id=str(wo.id),
+                detail=f"Work order created: {wo.wo_number}",
+            )
+        if release:
+            async with ctx.session_factory() as session:
+                await release_work_order(session, wo.id, ctx.actor_id)
+                await write_audit(
+                    session,
+                    actor_id=ctx.actor_id,
+                    action="wo.released",
+                    target_type="work_order",
+                    target_id=str(wo.id),
+                    detail=f"Work order released: {wo.wo_number}",
+                )
+
+    # -- CRUMB: lead → opportunities → quotes → sales order → interactions ---------------
+    async with ctx.session_factory() as session:
+        customers = {p.code: p.id for p in await list_partners(session, include_archived=True)}
+        leads = {lead.name: lead for lead in await list_leads(session, include_archived=True)}
+        if CRUMB_LEAD not in leads:
+            lead = await create_lead(
+                session,
+                LeadCreate(
+                    name=CRUMB_LEAD, company="UAT Prospect Co", source="UAT fixture"
+                ),
+                ctx.actor_id,
+            )
+            await write_audit(
+                session,
+                actor_id=ctx.actor_id,
+                action="lead.created",
+                target_type="lead",
+                target_id=str(lead.id),
+                detail=f"Lead created: {lead.name}",
+            )
+
+    opportunities: dict[str, str] = {}
+    for name, customer_code, stage, value in (
+        (CRUMB_OPP_OPEN, "UAT-CUST-1", "proposal", Decimal("4250.00")),
+        (CRUMB_OPP_ACCEPTED, "UAT-CUST-2", None, Decimal("1875.00")),
+    ):
+        async with ctx.session_factory() as session:
+            existing = next(
+                (o for o in await list_opportunities(session) if o.name == name), None
+            )
+            if existing is not None:
+                opportunities[name] = existing.id
+                continue
+            opp = await create_opportunity(
+                session,
+                OpportunityCreate(
+                    name=name, partner_id=customers[customer_code], estimated_value=value
+                ),
+                ctx.actor_id,
+            )
+            opportunities[name] = opp.id
+            await write_audit(
+                session,
+                actor_id=ctx.actor_id,
+                action="opportunity.created",
+                target_type="opportunity",
+                target_id=str(opp.id),
+                detail=f"Opportunity created: {opp.name}",
+            )
+        if stage is not None:
+            async with ctx.session_factory() as session:
+                await advance_stage(session, opportunities[name], stage, ctx.actor_id)
+
+    async with ctx.session_factory() as session:
+        target_part_id = await _plum_part_id(session, MOUSSE_TARGET_PART)
+        released_part_id = await _plum_part_id(session, PLUM_REL_ASM)
+
+    # Quote A — PLUM-derived lines, advanced to 'sent' so Task 29 can accept it.
+    async with ctx.session_factory() as session:
+        if await _quote_by_opportunity(session, opportunities[CRUMB_OPP_OPEN]) is None:
+            quote = await create_quote(
+                session,
+                QuoteCreate(
+                    partner_id=customers["UAT-CUST-1"],
+                    opportunity_id=opportunities[CRUMB_OPP_OPEN],
+                    lines=[
+                        QuoteLineCreate(
+                            plum_part_id=released_part_id,
+                            description="UAT quote line — explicit 45% markup",
+                            quantity=CRUMB_QUOTE_A_QTY_1,
+                            markup_pct=CRUMB_QUOTE_A_MARKUP,
+                        ),
+                        QuoteLineCreate(
+                            plum_part_id=target_part_id,
+                            description="UAT quote line — default markup",
+                            quantity=CRUMB_QUOTE_A_QTY_2,
+                        ),
+                    ],
+                ),
+                ctx.actor_id,
+            )
+            await advance_quote_status(session, quote.id, "sent", ctx.actor_id)
+
+    # Quote B — already accepted, so quote→SO conversion is reachable straight away.
+    async with ctx.session_factory() as session:
+        if await _quote_by_opportunity(session, opportunities[CRUMB_OPP_ACCEPTED]) is None:
+            quote_b = await create_quote(
+                session,
+                QuoteCreate(
+                    partner_id=customers["UAT-CUST-2"],
+                    opportunity_id=opportunities[CRUMB_OPP_ACCEPTED],
+                    lines=[
+                        QuoteLineCreate(
+                            plum_part_id=target_part_id,
+                            description="UAT accepted quote line — explicit price",
+                            quantity=CRUMB_QUOTE_B_QTY,
+                            unit_price=CRUMB_QUOTE_B_PRICE,
+                        )
+                    ],
+                ),
+                ctx.actor_id,
+            )
+            await advance_quote_status(session, quote_b.id, "sent", ctx.actor_id)
+            await advance_quote_status(session, quote_b.id, "accepted", ctx.actor_id)
+
+    # The confirmed sales order carrying the soft reservation — head of the money loop.
+    async with ctx.session_factory() as session:
+        if await _so_by_line_marker(session, CRUMB_SO_MARKER) is None:
+            so = await create_sales_order(
+                session,
+                SalesOrderCreate(
+                    partner_id=customers["UAT-CUST-1"],
+                    lines=[
+                        SalesOrderLineCreate(
+                            item_id=sellable_item,
+                            description=CRUMB_SO_MARKER,
+                            qty_ordered=CRUMB_SO_QTY,
+                            unit_price=CRUMB_SO_PRICE,
+                        )
+                    ],
+                ),
+                ctx.actor_id,
+            )
+            await confirm_sales_order(session, so.id, ctx.actor_id)
+
+    # Two interactions with FIXED timestamps so the newest-first order is unambiguous.
+    async with ctx.session_factory() as session:
+        existing_bodies = {
+            row.body for row in await list_customer_timeline(session, customers["UAT-CUST-1"])
+        }
+        for kind, body, occurred_at in CRUMB_INTERACTIONS:
+            if body in existing_bodies:
+                continue
+            await create_interaction(
+                session,
+                InteractionCreate(
+                    partner_id=customers["UAT-CUST-1"],
+                    interaction_type=kind,
+                    body=body,
+                    occurred_at=datetime.fromisoformat(occurred_at),
+                ),
+                ctx.actor_id,
+            )
+
+
+async def report_mousse_crumb(ctx: SeedContext) -> None:
+    """Read the MOUSSE + CRUMB literals back out of the REAL services."""
+    manifest = ctx.manifest
+
+    async with ctx.session_factory() as session:
+        target_part_id = await _plum_part_id(session, MOUSSE_TARGET_PART)
+        if target_part_id is None:
+            return
+        item_codes = {
+            item.id: item.code for item in await list_items(session, include_archived=True)
+        }
+        bin_codes = {}
+        loc_a = await _location_by_name(session, GELATO_BIN_LOCATION)
+        if loc_a is not None:
+            bin_codes = {
+                b.id: b.code
+                for b in await list_bins(session, loc_a.id, include_archived=True)
+            }
+
+        # -- work orders --------------------------------------------------------------
+        for planned_qty in (MOUSSE_RELEASED_QTY, MOUSSE_DRAFT_QTY):
+            wo = await _wo_by_plan(session, target_part_id, planned_qty)
+            if wo is None:
+                continue
+            # A WO number is SYSTEM-generated, so it is a derived literal, never a key.
+            manifest.value(f"mousse.wo.plan{decimal_str(planned_qty)}.wo_number", wo.wo_number)
+            manifest.value(f"mousse.wo.plan{decimal_str(planned_qty)}.status", wo.status)
+            manifest.value(
+                f"mousse.wo.plan{decimal_str(planned_qty)}.planned_qty", wo.planned_qty
+            )
+            detail = await get_work_order_detail(session, wo.id)
+            location = await get_location(session, wo.target_location_id)
+            manifest.value(
+                f"mousse.wo.plan{decimal_str(planned_qty)}.target_location", location.name
+            )
+            wip_value = Decimal("0")
+            for component in detail.components:
+                code = item_codes.get(component.item_id, "(unlinked)")
+                manifest.value(
+                    f"mousse.wo.plan{decimal_str(planned_qty)}.component.{code}",
+                    f"qty_per {decimal_str(component.qty_per)} "
+                    f"required {decimal_str(component.qty_required)}",
+                )
+                item = await _item_by_code(session, code) if code != "(unlinked)" else None
+                if item is not None:
+                    pool = await get_bin_on_hand(
+                        session, item.id, wo.target_location_id, None
+                    )
+                    manifest.value(
+                        f"mousse.wo.plan{decimal_str(planned_qty)}.component.{code}.pool",
+                        f"unbinned {decimal_str(pool)} at {location.name} — "
+                        + ("bin REQUIRED" if pool <= 0 else "no bin needed"),
+                    )
+                    wip_value += component.qty_required * item.moving_avg_cost
+            # A Draft WO has NO components yet — the BOM is snapshotted at release — so a
+            # "0" WIP value there would read as a fixture defect rather than as the FSM.
+            manifest.value(
+                f"mousse.wo.plan{decimal_str(planned_qty)}.component_count",
+                len(detail.components),
+            )
+            manifest.value(
+                f"mousse.wo.plan{decimal_str(planned_qty)}.full_issue_wip_value",
+                wip_value
+                if detail.components
+                else "n/a — components snapshot at release",
+            )
+
+        # Component A must be bin-locked at the released WO's location, component B not —
+        # the SC6 (c) fixture. Assert it rather than hoping.
+        comp_a = await _item_by_code(session, MOUSSE_ITEM_COMP_A)
+        comp_b = await _item_by_code(session, MOUSSE_ITEM_COMP_B)
+        sellable = await _item_by_code(session, CRUMB_ITEM_SELLABLE)
+        if comp_a is not None and comp_b is not None and loc_a is not None:
+            _expect(
+                f"{MOUSSE_ITEM_COMP_A} unbinned pool at {GELATO_BIN_LOCATION} (bin required)",
+                await get_bin_on_hand(session, comp_a.id, loc_a.id, None),
+                Decimal("0"),
+            )
+            _expect(
+                f"{MOUSSE_ITEM_COMP_B} unbinned pool at {GELATO_BIN_LOCATION} (no bin needed)",
+                await get_bin_on_hand(session, comp_b.id, loc_a.id, None),
+                Decimal("30"),
+            )
+            for code, item in (
+                (MOUSSE_ITEM_COMP_A, comp_a),
+                (CRUMB_ITEM_SELLABLE, sellable),
+            ):
+                if item is None:
+                    continue
+                held = []
+                for bin_id, bin_code in sorted(bin_codes.items(), key=lambda kv: kv[1]):
+                    qty = await get_bin_on_hand(session, item.id, loc_a.id, bin_id)
+                    if qty != 0:
+                        held.append(f"{bin_code}={decimal_str(qty)}")
+                manifest.value(
+                    f"gelato.binned.{GELATO_BIN_LOCATION}.{code}", ", ".join(held) or "none"
+                )
+
+        # -- CRUMB pipeline -------------------------------------------------------------
+        for lead in await list_leads(session, include_archived=True):
+            if lead.name.startswith(FIXTURE_PREFIX):
+                name = manifest.key("crumb.lead", lead.name)
+                manifest.value(f"crumb.lead.{name}.status", lead.status)
+                manifest.value(f"crumb.lead.{name}.company", lead.company or "")
+
+        opportunities = {}
+        for opp in await list_opportunities(session):
+            if not opp.name.startswith(FIXTURE_PREFIX):
+                continue
+            opportunities[opp.name] = opp.id
+            name = manifest.key("crumb.opportunity", opp.name)
+            manifest.value(f"crumb.opportunity.{name}.stage", opp.stage)
+            manifest.value(
+                f"crumb.opportunity.{name}.estimated_value", opp.estimated_value
+            )
+
+        for label, opp_name in (("open", CRUMB_OPP_OPEN), ("accepted", CRUMB_OPP_ACCEPTED)):
+            opp_id = opportunities.get(opp_name)
+            if opp_id is None:
+                continue
+            quote = await _quote_by_opportunity(session, opp_id)
+            if quote is None:
+                continue
+            detail = await get_quote_detail(session, quote.id)
+            manifest.value(f"crumb.quote.{label}.quote_number", detail.quote_number)
+            manifest.value(f"crumb.quote.{label}.status", detail.status)
+            manifest.value(f"crumb.quote.{label}.total_value", detail.total_value)
+            for line in sorted(detail.lines, key=lambda line: line.sort_order):
+                manifest.value(
+                    f"crumb.quote.{label}.line{line.sort_order}",
+                    f"qty {decimal_str(line.quantity)} "
+                    f"@ {decimal_str(line.unit_price)} "
+                    f"markup {decimal_str(line.markup_pct) if line.markup_pct is not None else 'none'} "
+                    f"= {decimal_str(line.line_total)}",
+                )
+
+        # -- the confirmed sales order and its soft reservation ---------------------------
+        so = await _so_by_line_marker(session, CRUMB_SO_MARKER)
+        if so is not None:
+            manifest.value("crumb.sales_order.so_number", so.so_number)
+            manifest.value("crumb.sales_order.status", so.status)
+            manifest.value("crumb.sales_order.total_value", so.total_value)
+            for line in so.lines:
+                code = item_codes.get(line.item_id, "(non-stock)")
+                manifest.value(
+                    f"crumb.sales_order.line.{code}",
+                    f"ordered {decimal_str(line.qty_ordered)} "
+                    f"@ {decimal_str(line.unit_price)} "
+                    f"reserved {decimal_str(line.qty_reserved)} "
+                    f"shortage {decimal_str(line.shortage)}",
+                )
+            _expect(
+                "confirmed sales order status", so.status, "confirmed"
+            )
+            _expect(
+                f"{CRUMB_ITEM_SELLABLE} soft reservation",
+                so.lines[0].qty_reserved,
+                CRUMB_SO_QTY,
+            )
+
+        # -- the append-only communication log, newest-first --------------------------
+        customers = {p.code: p.id for p in await list_partners(session, include_archived=True)}
+        timeline = await list_customer_timeline(session, customers["UAT-CUST-1"])
+        ours = [row for row in timeline if row.body.startswith("UAT-COMM-")]
+        manifest.value("crumb.interactions.count", len(ours))
+        manifest.value(
+            "crumb.interactions.newest_first",
+            "; ".join(f"{row.interaction_type}: {row.body}" for row in ours),
+        )
+
+
+MOUSSE_CRUMB_LAYER = FixtureLayer(
+    name="mousse+crumb",
+    tables=(
+        TableSpec(
+            "mousse_work_order",
+            "plum_part_id IN (SELECT id FROM plum_part WHERE part_number LIKE 'UAT-P%')",
+            "mousse_work_order (UAT-P)",
+        ),
+        TableSpec("crumb_lead", "name LIKE 'UAT-%'", "crumb_lead (UAT-)"),
+        TableSpec("crumb_opportunity", "name LIKE 'UAT-%'", "crumb_opportunity (UAT-)"),
+        TableSpec(
+            "crumb_quote",
+            "opportunity_id IN (SELECT id FROM crumb_opportunity WHERE name LIKE 'UAT-%')",
+            "crumb_quote (UAT-)",
+        ),
+        TableSpec(
+            "crumb_sales_order",
+            "id IN (SELECT sales_order_id FROM crumb_sales_order_line "
+            "WHERE description LIKE 'UAT-%')",
+            "crumb_sales_order (UAT-)",
+        ),
+        TableSpec("crumb_interaction", "body LIKE 'UAT-COMM-%'", "crumb_interaction (UAT-)"),
+    ),
+    build=build_mousse_crumb,
+    report=report_mousse_crumb,
+)
+
+
 def _layers() -> tuple[FixtureLayer, ...]:
     """
     The registered fixture layers, in DEPENDENCY order (builders run in this order).
 
     PLUM depends on core+partners (AVL links point at the UAT vendors); inventory depends
     on both (its PLUM-linked item points at UAT-P101, its POs at the UAT vendors); GELATO
-    depends on inventory (its bins subdivide UAT-LOC-A and it stocks its own item).
+    depends on inventory (its bins subdivide UAT-LOC-A and it stocks its own item);
+    MOUSSE+CRUMB depends on all three (its components are binned into GELATO's bins and
+    its sales order quotes PLUM parts to a UAT customer).
 
-    Tasks 6-7 append here:
-      6. MOUSSE + CRUMB   7. SYERP GL / AP / AR
+    Task 7 appends here: SYERP GL / AP / AR.
     """
-    return (CORE_PARTNERS_LAYER, PLUM_LAYER, INVENTORY_PURCHASING_LAYER, GELATO_LAYER)
+    return (
+        CORE_PARTNERS_LAYER,
+        PLUM_LAYER,
+        INVENTORY_PURCHASING_LAYER,
+        GELATO_LAYER,
+        MOUSSE_CRUMB_LAYER,
+    )
 
 
 # ---------------------------------------------------------------------------
