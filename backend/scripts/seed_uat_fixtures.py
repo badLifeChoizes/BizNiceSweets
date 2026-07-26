@@ -67,11 +67,14 @@ MODES:
 
 ADDING A LAYER (Tasks 2-7 each add exactly one):
   Append a ``FixtureLayer`` to ``_layers()`` in dependency order with:
-    * ``build``  — async, get-or-create, drives the real services. Records the keys it
-      mints via ``ctx.manifest.key(...)``.
+    * ``build``  — async, get-or-create, drives the real services. It WRITES only; it
+      records nothing in the manifest.
     * ``report`` — async and STRICTLY READ-ONLY. Runs in BOTH modes, so it is what makes
       ``--manifest`` a faithful re-print of a seeded database. It reads the fixtures back
-      (through service read functions where possible) and records the derived literals.
+      (through service read functions where possible) and records BOTH the minted keys and
+      the derived literals. Reading them back rather than echoing this file's constants is
+      what makes the manifest a statement about the DATABASE — and it is why an unseeded
+      database honestly reports an empty manifest instead of a wishful one.
     * ``tables`` — the ``TableSpec`` row counts that layer contributes to the manifest.
   Keep every builder's own writes inside its own layer; never mutate another layer's rows.
 
@@ -87,7 +90,7 @@ import sys
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Make the backend root importable when run as a bare `python scripts/seed_uat_fixtures.py`
@@ -98,6 +101,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import the central model aggregator FIRST so Base.metadata is fully populated before any
 # module's models resolve their cross-module FKs (the Task-8 lesson from Phase 13).
 import app.core.models  # noqa: F401
+from app.modules.auth.models import Permission, Role
+from app.modules.auth.service import (
+    collect_permissions,
+    create_user,
+    get_user_by_email,
+    write_audit,
+)
+from app.modules.syerp.schemas import PartnerCreate, PartnerUpdate
+from app.modules.syerp.service.partners import create_partner, list_partners, update_partner
 
 # Every natural key this script mints carries this prefix, so its rows are identifiable
 # in the UI, in the database, and in the manifest.
@@ -261,16 +273,232 @@ class SeedContext:
     actor_id: str = SEED_ACTOR_ID
 
 
+# ---------------------------------------------------------------------------
+# Layer: CORE + partners (Task 2)
+# ---------------------------------------------------------------------------
+#
+# Four live partners (two vendors, two customers) + one ALREADY-ARCHIVED vendor, so the
+# partner lists' "show archived" toggle has something to hide and something to reveal; plus
+# one NON-ADMIN user holding a SINGLE-MODULE role, the subject of the RBAC nav-filter check
+# (`getVisibleModules` in AppShell.tsx:37-46 shows a non-admin only the modules it holds a
+# `<key>:read` permission for). Everything here is created through the REAL service the
+# router calls — including the archive, which goes through update_partner(PartnerUpdate(
+# active=False)) exactly as `PATCH /syerp/partners/{id}` does, not through the
+# archive_partner() convenience alias the router never uses.
+
+
+@dataclass(frozen=True)
+class _PartnerSpec:
+    """One get-or-create partner fixture, keyed on its natural key `code`."""
+
+    code: str
+    name: str
+    is_vendor: bool = False
+    is_customer: bool = False
+    archived: bool = False
+
+
+_PARTNER_SPECS: tuple[_PartnerSpec, ...] = (
+    _PartnerSpec("UAT-VEND-1", "UAT Vendor One", is_vendor=True),
+    _PartnerSpec("UAT-VEND-2", "UAT Vendor Two", is_vendor=True),
+    _PartnerSpec("UAT-VEND-ARCH", "UAT Vendor Archived", is_vendor=True, archived=True),
+    _PartnerSpec("UAT-CUST-1", "UAT Customer One", is_customer=True),
+    _PartnerSpec("UAT-CUST-2", "UAT Customer Two", is_customer=True),
+)
+
+# The single-module role and its subject. The role grants exactly ONE module-read
+# permission, so the sidebar must show PLUM and nothing else for this user.
+UAT_ROLE_NAME = "UAT-PLUM-ONLY"
+UAT_ROLE_PERMISSION = "plum:read"
+UAT_USER_EMAIL = "uat-plum-user@example.invalid"
+UAT_USER_FULL_NAME = "UAT PLUM-only User"
+# A FIXED literal (never generated) because the owner has to type it at the login form and
+# the checklist quotes it. A throwaway credential for a local UAT fixture on a dev volume —
+# it is not, and must never become, a real secret.
+UAT_USER_PASSWORD = "uat-plum-user-pw"
+
+
+async def _partner_by_code(session: AsyncSession, code: str):
+    """
+    Look one partner up by its natural key through the REAL list service.
+
+    There is no get-by-code service function, and list_partners(include_archived=True) is
+    the same read the partners screen issues with "show archived" on — so an archived
+    fixture is still found and is NOT re-created.
+    """
+    partners = await list_partners(session, include_archived=True)
+    return next((p for p in partners if p.code == code), None)
+
+
+async def _ensure_single_module_role(session: AsyncSession) -> None:
+    """
+    Get-or-create the single-module role, mirroring auth/seed.py's upsert-by-name.
+
+    DEVIATION, recorded deliberately: roles have no service function and no UI — they are
+    seed data (D-09), and `auth/seed.py:seed_admin_user` builds them with exactly this
+    ORM upsert. So this IS the real code path for a role; there is no router path to
+    prefer. The permission row itself is NOT minted here: it must already exist from the
+    startup seed, and we fail loudly if it does not rather than invent one.
+    """
+    role = (
+        await session.execute(select(Role).where(Role.name == UAT_ROLE_NAME))
+    ).scalars().first()
+    if role is None:
+        role = Role(
+            name=UAT_ROLE_NAME,
+            description="UAT fixture: single-module (PLUM read-only) non-admin role",
+        )
+        session.add(role)
+        await session.flush()
+
+    perm = (
+        await session.execute(
+            select(Permission).where(Permission.code == UAT_ROLE_PERMISSION)
+        )
+    ).scalars().first()
+    if perm is None:
+        raise RuntimeError(
+            f"permission {UAT_ROLE_PERMISSION!r} is missing — the startup seed "
+            "(app.core.seed) has not run against this database"
+        )
+
+    existing = {p.code for p in await role.awaitable_attrs.permissions}
+    if UAT_ROLE_PERMISSION not in existing:
+        role.permissions.append(perm)
+    await session.commit()
+
+
+async def build_core_partners(ctx: SeedContext) -> None:
+    """
+    Get-or-create the five partners and the non-admin single-module user.
+
+    Every branch is skip-if-present: a partner found by code is returned UNCHANGED (it is
+    NOT re-archived, re-named, or re-flagged), and the archive step runs only on the run
+    that actually created the row, so an owner who un-archives UAT-VEND-ARCH mid-UAT does
+    not have it silently archived again by the next seed.
+    """
+    for spec in _PARTNER_SPECS:
+        async with ctx.session_factory() as session:
+            if await _partner_by_code(session, spec.code) is not None:
+                continue  # get-or-create: found → leave it exactly as it is
+
+            partner = await create_partner(
+                session,
+                PartnerCreate(
+                    code=spec.code,
+                    name=spec.name,
+                    is_vendor=spec.is_vendor,
+                    is_customer=spec.is_customer,
+                ),
+            )
+            await write_audit(
+                session,
+                actor_id=ctx.actor_id,
+                action="partner.created",
+                target_type="partner",
+                target_id=str(partner.id),
+                detail=f"Partner created: {partner.name}",
+            )
+
+            if spec.archived:
+                # The REAL archive path: PATCH {active: false} → update_partner, with the
+                # router's partner.archived audit action.
+                await update_partner(session, partner.id, PartnerUpdate(active=False))
+                await write_audit(
+                    session,
+                    actor_id=ctx.actor_id,
+                    action="partner.archived",
+                    target_type="partner",
+                    target_id=str(partner.id),
+                    detail=f"Partner archived: {partner.name}",
+                )
+
+    async with ctx.session_factory() as session:
+        await _ensure_single_module_role(session)
+
+    async with ctx.session_factory() as session:
+        if await get_user_by_email(session, UAT_USER_EMAIL) is None:
+            user = await create_user(
+                session,
+                email=UAT_USER_EMAIL,
+                password=UAT_USER_PASSWORD,
+                full_name=UAT_USER_FULL_NAME,
+                role_name=UAT_ROLE_NAME,
+            )
+            await write_audit(
+                session,
+                actor_id=ctx.actor_id,
+                action="user.created",
+                target_type="user",
+                target_id=str(user.id),
+                detail=f"Admin created user: {user.email}",
+            )
+
+
+async def report_core_partners(ctx: SeedContext) -> None:
+    """Read the CORE/partner fixtures back (READ-ONLY) and record their literals."""
+    manifest = ctx.manifest
+
+    async with ctx.session_factory() as session:
+        partners = await list_partners(session, include_archived=True)
+    for partner in sorted(
+        (p for p in partners if p.code.startswith(FIXTURE_PREFIX)), key=lambda p: p.code
+    ):
+        code = manifest.key("syerp.partner", partner.code)
+        roles = [
+            label
+            for label, flag in (("vendor", partner.is_vendor), ("customer", partner.is_customer))
+            if flag
+        ]
+        manifest.value(f"syerp.partner.{code}.name", partner.name)
+        manifest.value(f"syerp.partner.{code}.role", "+".join(roles) or "none")
+        manifest.value(f"syerp.partner.{code}.active", str(partner.active).lower())
+
+    async with ctx.session_factory() as session:
+        role = (
+            await session.execute(select(Role).where(Role.name == UAT_ROLE_NAME))
+        ).scalars().first()
+        if role is not None:
+            manifest.key("auth.role", role.name)
+            perms = sorted(p.code for p in await role.awaitable_attrs.permissions)
+            manifest.value(f"auth.role.{role.name}.permissions", ",".join(perms))
+
+        user = await get_user_by_email(session, UAT_USER_EMAIL)
+        if user is not None:
+            email = manifest.key("auth.user", user.email)
+            manifest.value(f"auth.user.{email}.full_name", user.full_name or "")
+            manifest.value(f"auth.user.{email}.is_active", str(user.is_active).lower())
+            manifest.value(
+                f"auth.user.{email}.roles", ",".join(sorted(r.name for r in user.roles))
+            )
+            manifest.value(
+                f"auth.user.{email}.permissions", ",".join(sorted(collect_permissions(user)))
+            )
+            # Quoted in the checklist because the owner logs in as this user.
+            manifest.value(f"auth.user.{email}.password", UAT_USER_PASSWORD)
+
+
+CORE_PARTNERS_LAYER = FixtureLayer(
+    name="core+partners",
+    tables=(
+        TableSpec("syerp_partner", "code LIKE 'UAT-%'", "syerp_partner (UAT-)"),
+        TableSpec("roles", "name LIKE 'UAT-%'", "roles (UAT-)"),
+        TableSpec("users", "email LIKE 'uat-%'", "users (uat-)"),
+    ),
+    build=build_core_partners,
+    report=report_core_partners,
+)
+
+
 def _layers() -> tuple[FixtureLayer, ...]:
     """
     The registered fixture layers, in DEPENDENCY order (builders run in this order).
 
-    Tasks 2-7 append here:
-      2. CORE + partners          5. GELATO bins
-      3. PLUM                     6. MOUSSE + CRUMB
-      4. SYERP inventory + purchasing   7. SYERP GL / AP / AR
+    Tasks 3-7 append here:
+      3. PLUM                           5. GELATO bins        7. SYERP GL / AP / AR
+      4. SYERP inventory + purchasing   6. MOUSSE + CRUMB
     """
-    return ()
+    return (CORE_PARTNERS_LAYER,)
 
 
 # ---------------------------------------------------------------------------
