@@ -1,5 +1,8 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-25 (Phase 4 verify — two deferred review findings logged: positive-adjust
+Updated: 2026-07-25 (Phase 4 retro — two unhomed PLAN `## Noticed` items filed p3: pre-lock
+`moving_avg_cost` staleness in `post_issue`/`post_putaway`, and `verify_purchasing.py` orphan
+JE rows. Nothing resized; the p2 positive-adjust bin-membership item still needs an owner call)
+Prior: 2026-07-25 (Phase 4 verify — two deferred review findings logged: positive-adjust
 unvalidated bin_id [p2, decision needed] and `pick_for_shipment` unsorted item locks [p2];
 `TransactionRead` bin_id omission + MOUSSE audit bins → p3)
 Prior: 2026-07-25 (Phase 3 retro — the p1 **CI pipeline** item RESOLVED (NFR-4 verified,
@@ -288,6 +291,22 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **Pre-lock `moving_avg_cost` staleness remains in `post_issue` / `post_putaway`** (Phase 4
+  PLAN `## Noticed` T1 + review finding 3 follow-through, retro'd 2026-07-25) — both load `item`
+  before taking the FOR UPDATE lock (which selects the id column only and does not repopulate the
+  mapped object), then value their ledger legs from `item.moving_avg_cost`. A receipt committing
+  between the load and the lock leaves the leg stamped at the pre-receipt cost for a movement the
+  lock demonstrably serialized *after* it. Quantities and GL are unaffected (legs net to zero;
+  valuation reports read the live average) — this is **audit provenance only**, which still
+  matters given the first-class traceability constraint. Phase 4 fixed the same shape in
+  `post_receipt` (`73e45c2`) and `post_transfer` (`5a45a7b`); fix = `await db.refresh(item)`
+  after the lock. Fold in whenever either function is next touched.
+- [ ] **`verify_purchasing.py` leaves orphan `po_receipt`-sourced JEs behind on every run**
+  (Phase 4 PLAN `## Noticed`, retro'd 2026-07-25) — its cleanup doesn't delete the journal
+  entries its receipts post, so dev/CI databases accumulate orphan source rows run over run.
+  Cosmetic (no assertion depends on a clean GL), but it makes hand-inspecting a dev DB noisier
+  and every other script cleans up after itself — `verify_inventory_race.py` (Phase 4) is the
+  current template.
 - [ ] **`TransactionRead` omits `bin_id`; MOUSSE issue audit records no per-line bins** (Phase 4
   verify review question, 2026-07-25) — the transactions API/FE cannot show which pool a
   post-Phase-4 ledger row hit (Phase 4's own `verify_gelato.py` scenario F had to read leg

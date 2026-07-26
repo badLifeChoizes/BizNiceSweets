@@ -3,6 +3,86 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 04 — Inventory ledger race-safety (v4.0, NFR-7, verified 2026-07-25)
+
+Shared `SELECT … FOR UPDATE` item-master/PO-header lock across `post_receipt`/`post_adjustment`/
+`post_transfer`/`receive_line`, plus bin-aware draws in the three remaining bin-blind writers
+(adjust, transfer, MOUSSE issue) — closing the *inbound* half of 12a's bin-desync boundary. New
+`verify_inventory_race.py` (4 barrier scenarios × 5 iterations, mutations M1–M4 executed
+RED→GREEN) + three FE bin pickers. The reviewer found the locking work correct on the first pass;
+**every finding landed on the bin-aware half**. Verifier returned GAPS despite all six SCs being
+empirically true — which is the phase's most portable lesson.
+
+### Surprises (assumption → corrected truth)
+
+- **Applying one transform to N sibling writers silently drops invariants that a per-file read
+  cannot see — the review artifact is the cross-sibling guard diff, not N independent file
+  reviews.** The same phase deliberately kept the per-location floor *beside* the new pool floor
+  in `post_adjustment` and `post_transfer` ("defends legacy data whose per-bin split already
+  desynced"), while MOUSSE `issue_components` **replaced** its location floor with the pool floor
+  — and MOUSSE-issue is precisely the writer whose pre-Phase-4 bin-blind draws *created* those
+  desyncs. No test could see it: on clean post-Phase-4 data every pool ≥ 0 implies location ≥ 0,
+  so the pool guard is sufficient and only a legacy-desynced fixture exposes the gap (a bin-named
+  issue drives location on-hand −10 and books a Dr 1140 / Cr 1130 JE for stock that doesn't
+  exist). The reviewer found it by noticing the *asymmetry between siblings*, not by auditing
+  MOUSSE alone. Keeper: when a phase applies the same change to a set of sibling functions,
+  explicitly tabulate which invariants each one holds before vs. after — a dropped guard in one
+  of three parallel edits reads as normal code in isolation.
+- **"All success criteria empirically true" is not a PASS when the proof was the verifier's own
+  throwaway script — hand-checked ≠ pinned.** The verifier hand-confirmed the transfer / MOUSSE /
+  positive-adjust bin behaviors live, then correctly returned **GAPS**: nothing in CI would go red
+  if any of them silently regressed. This is Phase 2a's keeper ("when the failure mode is *the
+  safety net disappears*, the deliverable is a standing test") turned on the verifier's own
+  evidence. Keeper, now standing practice: **verify must classify each criterion's proof as
+  *pinned* (a CI-run assertion) or *observed* (a hand check at verify time), and treat
+  observed-only proof of a behavior this phase created as a gap.** The fix loop converted both
+  into CI-resident scenarios (`verify_gelato.py` F, `verify_mousse.py` G).
+- **A mutation-proof only proves the guard if the RED run fails for the *intended* reason — the
+  fixture's incidental guards can hijack the mutation just as they can hijack the green test.**
+  G2's legacy-desync fixture receives its component at a real moving-avg cost (10 @ 5), not 0: with
+  a zero-cost item the guard-disabled run would have been rejected by MOUSSE's zero-total-value JE
+  guard (the standing p3 backlog item) instead of driving location on-hand to −10.000000, and
+  "it went RED" would have proven nothing about the location floor. Same shape on the other side:
+  M3's RED did **not** manifest as the predicted `qty_received > qty_ordered` — the ORM
+  read-modify-write overwrote the accumulator, so the real signature was two receipts landing +
+  a double GL post with `qty_received` stuck at 7. Keeper: the predicted failure signature is a
+  hypothesis; record *what actually rejected/failed* in the RED run and re-check the assertion is
+  non-vacuous against that, rather than accepting red as self-evident. (This is the v3.0
+  "only the guard under test may reject" rule applied to the mutation axis.)
+
+### What worked (repeat)
+
+- **Pinning a known-wrong boundary makes its durable fix a planned task instead of a
+  re-discovery.** 12a's keeper — make every writer of a new ledger dimension dimension-aware in
+  the same phase, *or* pin the boundary with a test — paid out exactly as designed two phases
+  later: `verify_gelato.py` scenario E had *pinned* the bin-blind desync, so closing the inbound
+  half here meant Task 8 "revise scenario E to assert the fix" was written into the plan up front,
+  and the pin language had to be visibly deleted for the phase to go green. A deferred boundary
+  that is pinned is cheap to close; one that is only documented gets rediscovered by a reviewer.
+- **The lock + forced-interleave discipline scaled from one mutation to a whole phase of
+  writers.** One script covering four writers (mixed-path MOUSSE × SYERP, adjust/transfer floors,
+  PO over-receipt, moving-average lost-update) with mutation-proofs per scenario left the
+  reviewer's verdict on the locking half: *correct*. Nth consecutive confirmation that pre-empting
+  concurrency at plan time turns the recurring post-hoc concurrency major into a non-event.
+- **Phase 3's CI paid its first dividend immediately.** Both fix-loop scenarios entered standing
+  protection with zero wiring — the `verify-scripts` job globs `verify_*.py` minus `*_api.py`, so
+  adding scenarios F and G to existing scripts made them CI-enforced on push (confirmed green on
+  run 30185233894, headSha `3253917`). The maintenance-proof glob (Phase 3 keeper) is what made
+  the pins free.
+
+### Deferred (homed)
+
+- Homed at verify close: **positive-adjust accepts an unvalidated `bin_id`** → can strand stock in
+  a foreign-location bin pool (**BACKLOG p2 — owner decision pending**: membership check vs.
+  explicitly accept); **GELATO `pick_for_shipment` unsorted incremental item locks** → deadlock-500
+  risk (BACKLOG p2, same lock family); **`TransactionRead` omits `bin_id`** + MOUSSE issue audit
+  records no per-line bins (BACKLOG p3) — flagged because Phase 4 made `bin_id` load-bearing.
+- Homed at retro: **pre-lock `moving_avg_cost` staleness remains in `post_issue`/`post_putaway`**
+  (leg valuation provenance only — `post_receipt` and `post_transfer` were fixed) and
+  **`verify_purchasing.py` leaves orphan `po_receipt`-sourced JEs on every run** → both BACKLOG p3.
+- Both p2 items this phase existed to close — **inventory-ledger cross-path races** and the
+  **inbound half of the bin-split desync** — are RESOLVED and checked off.
+
 ## Phase 03 — CI pipeline (GitHub Actions) (v4.0, NFR-4, verified 2026-07-25)
 
 Shipped `.github/workflows/ci.yml`: four independent blocking jobs (`frontend`, `backend-lint`,

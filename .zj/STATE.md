@@ -1,13 +1,21 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-25 (**v4.0 Phase 4 VERIFIED — `/zj:verify 4` PASS on tip `3253917`, tag
-`zj/good-04-inventory-race-safety`.** NFR-7 verified + stamped in SRD; ROADMAP row ✅; BACKLOG:
-the two claimed p2 items (inventory-ledger races; bin-split desync) RESOLVED + checked off, three
-verify findings homed (p2 positive-adjust bin membership — **owner decision needed**, p2
-pick-path unsorted locks, p3 TransactionRead bin_id); requirements-progress NFR-7 → Verified.
-**Next action:** `/zj:retro 4` (candidate learnings: a same-phase sibling pattern [dual floor]
-silently dropped in one of three parallel edits — reviewer caught it; hand-checked behaviors are
-not pinned behaviors — verifier's gap; legacy-desync fixtures need real moving-avg cost or the
-zero-value guard masks the mutation). Verify history below.)
+Updated: 2026-07-25 (**v4.0 Phase 4 CLOSED — `/zj:retro 4` done.** LEARNINGS Phase 04 banked:
+(1) one transform applied across N sibling writers dropped MOUSSE's per-location floor while its
+two siblings kept it — the review artifact is the **cross-sibling guard diff**, since a dropped
+guard reads as normal code in isolation and only a legacy-desynced fixture can expose it;
+(2) **hand-checked ≠ pinned** — "all six SCs empirically true" was still correctly GAPS because
+the proof was the verifier's own throwaway script; verify must classify each SC's proof as
+*pinned* (CI assertion) vs *observed*; (3) a mutation-proof's RED must fail for the **intended**
+reason — G2's fixture needed a real moving-avg cost (10 @ 5) or the zero-value JE guard would
+have hijacked the red, and M3's actual RED signature (double receipt + lost-update accumulator)
+differed from the predicted `qty_received > qty_ordered`; plus 12a's pinned boundary making its
+own closure a planned task, and Phase 3's CI glob making the new pins free. ROADMAP Phase 4 row
+→ `[done — verified + retro'd]`; **Phase 5's UAT scope amended** to cover this phase's three bin
+pickers incl. the GELATO-off degraded path. BACKLOG: two unhomed PLAN `## Noticed` items filed p3
+(pre-lock `moving_avg_cost` staleness in `post_issue`/`post_putaway`; `verify_purchasing.py`
+orphan JEs); the p2 positive-adjust bin-membership item **still needs an owner call** — natural
+companion to Phase 5. **Next action:** `/zj:plan 5` (Human click-through UAT, NFR-8 — the last
+v4.0 phase). Optional: `/zj:log phase 4` to file the formal work log. Verify history below.)
 
 Verify record: (**v4.0 Phase 4 VERIFY — `/zj:verify 4`, fix loop complete.**
 Verifier + reviewer both ran on `7a71fd0..3126c48`: initial verdict **GAPS** (REVIEW.md: 1 major —
