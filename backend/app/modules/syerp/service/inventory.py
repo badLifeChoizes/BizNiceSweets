@@ -5,7 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
@@ -400,10 +400,28 @@ async def post_adjustment(
     The item's moving_avg_cost is deliberately left UNTOUCHED — only costed
     receipts move the average (AC10-5); a positive adjustment adds quantity at
     the current average. Raises 404 if the item or location does not exist (via
-    get_item / get_location). The BIN is NOT validated here: bin existence +
-    location-membership is GELATO's domain and the caller's job (D-P12a-3);
-    the DB FK on bin_id is the backstop. The 422 status mirrors the receipt
-    guard.
+    get_item / get_location).
+
+    THE BIN **IS** VALIDATED (v4.0 Phase 5, SC8 / D-P5-5). A non-null `bin_id`
+    must both EXIST and BELONG to `location_id`, or the whole adjustment is
+    rejected 422 with no ledger row. Before this check the bin was trusted
+    outright, so a mismatched pair silently booked stock into a bin at another
+    location — the per-bin split at BOTH locations went wrong at once, and the
+    location totals hid it because they were computed from `location_id` alone.
+    The DB FK on bin_id catches only a bin that does not exist at all; it cannot
+    see the membership half.
+
+    The check is deliberately ONE raw-SQL existence+membership probe against
+    `gelato_bin`, NOT a gelato service call or model import: D-P12a-3 forbids
+    SYERP importing GELATO (the hub must not depend on a satellite), and the
+    import would also be circular. That is the whole reason validation was
+    previously deferred to the caller. A raw probe honours the no-imports rule
+    while closing the hole, at the cost of naming one table SYERP does not own —
+    a trade recorded as SC8.
+
+    A NULL `bin_id` is untouched by all of this: it still means "the location's
+    unbinned pool" (D-P4-1) and is always valid, because there is no bin to
+    check. The 422 status mirrors the receipt guard.
 
     Returns the created row as a TransactionRead (joined location name). The
     router writes the inventory.adjustment audit row.
@@ -414,6 +432,27 @@ async def post_adjustment(
     # 404s if either does not exist (mirrors get_item / get_location).
     item = await get_item(db, item_id)  # noqa: F841 — loaded to 404 on missing item
     location = await get_location(db, location_id)
+
+    # SC8 (D-P5-5): a NON-NULL bin must exist AND belong to this location. Runs
+    # BEFORE the lock and before any write, so a rejection costs nothing and
+    # persists nothing. ONE raw-SQL probe rather than a gelato import — SYERP is
+    # the hub and must not depend on a satellite (D-P12a-3); see the docstring.
+    # bin_id is None (the unbinned pool) skips this entirely and stays valid.
+    if bin_id is not None:
+        bin_ok = await db.execute(
+            text(
+                "SELECT 1 FROM gelato_bin WHERE id = :bin_id AND location_id = :location_id"
+            ),
+            {"bin_id": bin_id, "location_id": location_id},
+        )
+        if bin_ok.first() is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Bin {bin_id} does not exist at location {location_id}; a "
+                    f"binned adjustment must name a bin belonging to that location."
+                ),
+            )
 
     # LOCK the item-master row FOR UPDATE *before* the floor read (mirror
     # post_putaway). Locking the append-only ledger rows would not serialize
