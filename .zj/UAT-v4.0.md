@@ -342,8 +342,8 @@ ends as `pass`, `pass (U# fixed <commit>)`, or `U# → BACKLOG`.
 | C-PLUM-10 | BOM add / remove on a Draft (PLUM-04) | PLUM | ⬜ todo | mutating |
 | C-PLUM-11 | AVL add + Preferred badge + duplicate re-add (PLUM-07) | PLUM | ⬜ todo | v1.0 **D2**; mutating |
 | C-PLUM-12 | Import / export + list refresh without F5 (PLUM-10) | PLUM | ⬜ todo | v1.0 **D3**/**G2**; mutating |
-| C-SYERP-01 | Vendors / Customers lists + search + show-archived (SYERP-01) | SYERP | ⬜ todo | |
-| C-SYERP-02 | Partner create / edit / archive (SYERP-01) | SYERP | ⬜ todo | mutating |
+| C-SYERP-01 | Vendors / Customers lists + search + show-archived (SYERP-01, SYERP-02, SYERP-03, SYERP-04) | SYERP | ⬜ todo | both screens, both searches |
+| C-SYERP-02 | Partner create / edit / archive, vendor and customer (SYERP-01, SYERP-03) | SYERP | ⬜ todo | mutating |
 | C-SYERP-03 | Inventory items: auto `ITEM-####`, PLUM link, show-archived (SYERP-10) | SYERP | ⬜ todo | |
 | C-SYERP-04 | Item detail on-hand / moving average / value (SYERP-10) | SYERP | ⬜ todo | |
 | C-SYERP-05 | Read-only append-only ledger (SYERP-10) | SYERP | ⬜ todo | |
@@ -355,7 +355,7 @@ ends as `pass`, `pass (U# fixed <commit>)`, or `U# → BACKLOG`.
 | C-SYERP-11 | Receive partial → `Partially Received` (SYERP-11) | SYERP | ⬜ todo | mutating; posts to GL |
 | C-SYERP-12 | Receive remainder → `Received`; over-receipt rejected (SYERP-11) | SYERP | ⬜ todo | mutating; posts to GL |
 | C-SYERP-13 | PO list vendor filter + close (SYERP-11) | SYERP | ⬜ todo | |
-| C-SYERP-14 | GL accounts list (SYERP-12) | SYERP | ⬜ todo | FE machine-unproven |
+| C-SYERP-14 | GL accounts list — chart-of-accounts skeleton (SYERP-05, SYERP-12) | SYERP | ⬜ todo | FE machine-unproven |
 | C-SYERP-15 | Journal entry post + reverse; account register (SYERP-12) | SYERP | ⬜ todo | read first, then mutate |
 | C-SYERP-16 | Bills + bill detail + AP aging footer tie-out (SYERP-12) | SYERP | ⬜ todo | read-only |
 | C-SYERP-17 | Pay a bill; overpayment blocked (SYERP-12) | SYERP | ⬜ todo | mutating |
@@ -718,6 +718,384 @@ preferred, `UAT-VEND-2` not).
 - ✗ **Would be wrong:** a dead Choose File button or a dropzone with no drag feedback — the
   v1.0 **D3** defect. Excel export 500ing is the v1.0 **G2** defect (a stale image lacking
   `openpyxl`).
+
+---
+
+### 6.3 SYERP — the hub (20 checks)
+
+**Read the books before you post to them.** `C-SYERP-14` … `C-SYERP-19` quote exact
+balances; run them **before** `C-SYERP-11`/`12` (receiving posts to the GL) and before
+`C-SYERP-20`. The order below already does this — partners and inventory read-only first,
+then GL/AP/AR read-only, then the mutating flows, then the money-loop tail last.
+
+---
+
+#### C-SYERP-01 · Vendors / Customers: lists, search, show-archived · SYERP-01, SYERP-02, SYERP-03, SYERP-04
+
+**Fixture:** `UAT-VEND-1`, `UAT-VEND-2`, `UAT-VEND-ARCH` (archived), `UAT-CUST-1`,
+`UAT-CUST-2`.
+
+- ✅ **Machine already proved:** `src/routes/syerp/Vendors.test.tsx
+  "renders the Vendors heading and Create Vendor button with empty state"`;
+  `src/routes/syerp/Customers.test.tsx
+  "renders the Customers heading and Create Customer button with empty state"`. Also proven
+  live: `?role=vendor` returns only `UAT-VEND-1`/`-2`; `&include_archived=true` adds
+  `UAT-VEND-ARCH`.
+- **Do:** open Vendors. Toggle **Show archived**. Search `UAT-VEND`, then a partial code, then
+  something that matches nothing. Repeat all of it on the **Customers** screen.
+- 👁 **You are confirming:**
+  - with the toggle **off**, `UAT-VEND-ARCH` is **absent**; with it **on**, it appears.
+  - an archived row is **visibly** distinguishable from an active one.
+  - the Customers list shows `UAT-CUST-1`/`-2` and **no vendors**, and its search narrows the
+    list the same way (SYERP-04 is a separate requirement from the vendor one, and the two
+    screens share a component — so a regression in one may not show in the other).
+  - what a no-match search renders on each screen.
+- ✗ **Would be wrong:** an archived vendor visible by default, or vendors and customers
+  sharing one undifferentiated list.
+
+#### C-SYERP-02 · Partner create / edit / archive, vendor **and** customer · SYERP-01, SYERP-03
+
+**Fixture:** create your own; do **not** archive a `UAT-` partner — later checks need them.
+
+- ✅ **Machine already proved:** `verify_purchasing.py
+  "create_partner (vendor) + create_item + create_location built the fix"`.
+- **Do:** create a vendor, edit its name, archive it. Then do the same for a **customer** —
+  customer CRUD is its own requirement and the two screens share `PartnerSheet.tsx`, so
+  confirm the shared sheet behaves for both roles.
+- 👁 **You are confirming:** the archive **confirmation wording**, and that the row leaves the
+  default list **immediately** — no manual reload.
+- ✗ **Would be wrong:** needing F5 to see the archive take effect.
+
+#### C-SYERP-03 · Inventory items: auto `ITEM-####`, PLUM link, show-archived · SYERP-10
+
+**Fixture:** `UAT-ITEM-1` (PLUM-linked to `UAT-P101`) … `UAT-ITEM-10`; `UAT-ITEM-3` archived.
+
+- ✅ **Machine already proved:** `src/routes/syerp/InventoryItems.test.tsx
+  "renders the heading and Create Item button with empty state"`,
+  `"keeps the item Sheet usable when the PLUM parts fetch errors (PLUM disabled)"`;
+  the numeric-boundary guarantee by `verify_part_numbering.py`.
+- **Do:** open the create Sheet **without saving** and look at the code it offers. Toggle
+  **Show archived**. Open `UAT-ITEM-1` and follow its PLUM link.
+- 👁 **You are confirming:**
+  - the offered code is the **next `ITEM-####`** in sequence. The `UAT-ITEM-n` fixtures are
+    deliberately named so they do **not** perturb that series, so it should start from
+    `ITEM-0001`.
+  - `UAT-ITEM-3` is hidden until the toggle is on.
+  - `UAT-ITEM-1`'s PLUM link to `UAT-P101` is a **followable affordance**, not inert text.
+- ✗ **Would be wrong:** a suggested code that collides with an existing one, or a PLUM link
+  that goes nowhere.
+
+#### C-SYERP-04 · Item detail: on-hand, moving average, on-hand value · SYERP-10
+
+**Fixture:** `UAT-ITEM-1`.
+
+- ✅ **Machine already proved:** `src/routes/syerp/InventoryItemDetail.test.tsx
+  "renders header, per-location on-hand, valuation and the ledger"`; the arithmetic by
+  `verify_inventory.py` and the seed's own oracle.
+- **Do:** open `UAT-ITEM-1`.
+- 👁 **You are confirming the screen *displays*:**
+  - `Main` **`7`** and `UAT-LOC-A` **`6`**, total **`13`**
+  - moving average **`6.669231`**
+  - on-hand value **`86.700003`**
+  - and that quantities are **not** rendered at raw column scale — `7`, not `7.000000`.
+- ✗ **Would be wrong:** `86.70` instead of `86.700003` (that would mean the value is a ledger
+  cost sum rather than quantity × moving average), or six trailing zeros on every quantity.
+- ⓘ Also open `UAT-ITEM-3` (archived, zero stock): its per-location table is **empty**, not
+  rows of zero. That is documented policy, not a defect.
+
+#### C-SYERP-05 · The read-only append-only ledger · SYERP-10
+
+**Fixture:** `UAT-ITEM-1`'s ledger (receipts of `7` @ `4.50` and `6` @ `9.20`).
+
+- ✅ **Machine already proved:** `src/routes/syerp/InventoryItemDetail.test.tsx
+  "renders header, per-location on-hand, valuation and the ledger"`.
+- **Do:** scan every ledger row for a way to change it.
+- 👁 **You are confirming:** there is **no edit and no delete affordance on any row** — the
+  append-only guarantee made visible. Note the row ordering and whether it is legible.
+- ✗ **Would be wrong:** any editable ledger row. That would undermine the audit trail the
+  whole compliance posture rests on.
+
+#### C-SYERP-06 · Stock locations incl. `Main` + archive · SYERP-10
+
+**Fixture:** `Main` (seeded), `UAT-LOC-A`, `UAT-LOC-NOBIN`, `UAT-LOC-ARCH` (archived).
+
+- ✅ **Machine already proved:** `src/routes/syerp/StockLocations.test.tsx
+  "renders the heading and Create Location button with empty state"`,
+  `"opens the create Sheet with a required Name field"`,
+  `"renders location rows returned by the API"`.
+- **Do:** open Stock Locations; toggle show-archived.
+- 👁 **You are confirming:** **`Main` exists without anyone creating it** (it is seeded on a
+  fresh deploy), `UAT-LOC-A` and `UAT-LOC-NOBIN` are listed, and `UAT-LOC-ARCH` is hidden by
+  default.
+- ✗ **Would be wrong:** no `Main` on a fresh deploy — receiving would be impossible
+  out-of-the-box.
+
+---
+
+*GL / AP / AR — still read-only. Run these before anything posts.*
+
+#### C-SYERP-14 · GL accounts list — the chart-of-accounts skeleton · SYERP-05, SYERP-12
+
+**Fixture:** the seeded chart of accounts — **47** accounts.
+
+- ✅ **Machine already proved:** `verify_reports.py
+  "rollup-parent accounts that carry children but no direct postings "`.
+- ⓘ `routes/syerp/GLAccounts.tsx` has **no vitest**. This is one of the most
+  machine-unproven screens in the app — weight it heavily.
+- **Do:** open GL Accounts and read the tree.
+- 👁 **You are confirming:** the CoA renders **grouped by account type** (asset / liability /
+  equity / revenue / expense) as a legible hierarchy; **rollup parents**
+  (e.g. `1000 Assets`, `1100 Current Assets`) are visually distinct from posting accounts
+  (`1110`, `1120`); and nothing on this screen is editable.
+- ✗ **Would be wrong:** a flat undifferentiated list, or an editable account code.
+
+#### C-SYERP-16 · Bills + bill detail + AP aging footer tie-out · SYERP-12
+
+**Fixture:** `BILL-0001` (posted, total `94.25`, paid `36.5`, open `57.75`) and `BILL-0002`
+(**draft**, `264.5`).
+
+- ✅ **Machine already proved:** `src/routes/syerp/Bills.test.tsx
+  "renders bills from a mocked GET with resolved vendor, status, and total"`;
+  `src/routes/syerp/BillDetail.test.tsx "renders the header + a bill line from a mocked GET"`;
+  `src/routes/syerp/ApAging.test.tsx "renders per-vendor bucket cells for each vendor"`,
+  `"renders the grand-total footer row"`, `"renders the 2110 tie-out badge when in balance"`;
+  `verify_ap.py "CRUX: after receive + post_bill the 2150 GR/IR derived balance EQUALS"`;
+  `verify_reports.py "a DRAFT bill (999, not posted) appears in NEITHER the aging total NOR"`.
+- **Do:** open Bills, then `BILL-0001`, then the AP Aging report.
+- 👁 **You are confirming the aging screen *displays*:**
+  - `57.75` in the **31-60** column — **not** in `current`
+  - grand total `57.75`, 2110 control `57.75`, and a tie-out badge reading **in balance**
+  - **`BILL-0002` is absent from the aging entirely.** A draft is not posted to 2110, so
+    including it would break the tie-out. Its absence is the check.
+- ✗ **Would be wrong:** `57.75` in the `current` column (the date basis is being ignored), or
+  the draft's `264.5` appearing anywhere in the aging.
+
+#### C-SYERP-18 · Invoices + detail + receipts + AR aging · SYERP-13
+
+**Fixture:** `INV-0001` (posted, total `139.5`, open `84.25`), receipt ref
+`UAT-SO-2-RCPT-1` (`55.25`), `SO-0002`.
+
+- ✅ **Machine already proved:** `src/routes/syerp/Invoices.test.tsx
+  "renders invoices from a mocked GET with resolved customer, status, and total"`;
+  `src/routes/syerp/InvoiceDetail.test.tsx
+  "renders the header + a line + the open balance from a mocked GET"`;
+  `src/routes/syerp/Receipts.test.tsx
+  "renders receipts with the resolved account, amount, and allocations"`;
+  `src/routes/syerp/ArAging.test.tsx "renders per-customer bucket cells for each customer"`,
+  `"renders the 1120 tie-out badge when in balance"`; `verify_ar.py (B)`, `(C)`, `(D)`, `(G)`.
+- **Do:** open Invoices → `INV-0001`; then Receipts; then AR Aging.
+- 👁 **You are confirming:**
+  - `INV-0001` **displays** total `139.5` and open `84.25`
+  - AR aging puts `84.25` in the **61-90** column, control `84.25`, in balance
+  - **what the Receipts list uses to identify a row.** A receipt has *no document number* —
+    only the reference `UAT-SO-2-RCPT-1`. If the list shows a raw UUID instead, that is a
+    real finding.
+- ✗ **Would be wrong:** a UUID where a human-readable identifier should be.
+
+#### C-SYERP-19 · Financial reports: TB / BS / IS, TB nets zero on screen · SYERP-12
+
+**Fixture:** the whole ledger as seeded. **Run this before any posting in this run.**
+
+- ✅ **Machine already proved:** `src/routes/syerp/FinancialReports.test.tsx
+  "renders the Trial Balance tab with account rows and a balanced totals footer"`,
+  `"renders the Profit & Loss tab with revenue/expense lines and net income"`,
+  `"fires the P&L query with a non-empty From date so it never 422s on first open (G1)"`,
+  `"renders the Balance Sheet tab with assets/liabilities/equity and a balanced total"`;
+  `verify_reports.py "trial_balance total_debit EXACTLY equals total_credit and in_balance "`,
+  `"balance_sheet total_assets EXACTLY equals total_liabilities + total_e"`.
+- **Do:** open Financial Reports and visit all three tabs.
+- 👁 **You are confirming the screen *displays*:**
+  - **Trial balance:** debit **`8447.25`** and credit **`8447.25`**, `9` rows, and reads as
+    **balanced**
+  - **Balance sheet:** assets `7991.75`, liabilities `57.75`, equity `7934` — and balanced
+  - **Income statement:** revenue `139.5`, expense `455.5`, net income `-316`
+  - the P&L opens **without an error** on first view (its From date must be pre-filled)
+- ✗ **Would be wrong:** a trial balance that does not net to zero on screen, or a P&L that
+  422s when you first open the tab (that was gap **G1**).
+
+---
+
+*Everything below **mutates**. `C-SYERP-11`/`12` post to the GL, so they must follow
+`C-SYERP-19`.*
+
+#### C-SYERP-07 · Stock adjust + floor rejection toast · SYERP-10
+
+**Fixture:** `UAT-ITEM-1` at `Main` (`7` on hand, unbinned). **Run together with `C-SC6-a`.**
+
+- ✅ **Machine already proved:** `src/routes/syerp/components/StockAdjustDialog.test.tsx
+  "renders the location, quantity and reason fields"`,
+  `"blocks submit while the reason is blank"`,
+  `"surfaces a 422 negative-stock rejection and keeps the dialog open"`;
+  `verify_inventory.py "negative adjustment below zero is rejected (raises HTTPException)"`;
+  `verify_inventory_race.py (A)`, `(B)`, `(C)`, `(D)`.
+- **Do:** adjust `UAT-ITEM-1` at `Main` by `+2` (succeeds). Then try `-999`.
+- 👁 **You are confirming:** the rejection **toast's actual wording**, that the dialog stays
+  open with your entered values intact, and that the reason field is genuinely required.
+- ✗ **Would be wrong:** a rejection that closes the dialog and loses your input, or an
+  adjustment succeeding past zero.
+
+#### C-SYERP-08 · Stock transfer + over-draw toast + unbinned destination · SYERP-10
+
+**Fixture:** `UAT-ITEM-1`, `Main` → `UAT-LOC-NOBIN`. **Run together with `C-SC6-b`.**
+
+- ✅ **Machine already proved:** `src/routes/syerp/components/StockTransferDialog.test.tsx
+  "renders the from-location, to-location and quantity fields"`,
+  `"blocks submit when source and destination are the same"`,
+  `"surfaces a 422 over-draw rejection and keeps the dialog open"`; `verify_gelato.py (F2)`
+  proves the destination leg lands **unbinned** and both location totals stay exact.
+- **Do:** note `UAT-ITEM-1`'s total, transfer `2` from `Main` to `UAT-LOC-NOBIN`, re-read the
+  total. Then try to transfer more than the source holds, and try `Main` → `Main`.
+- 👁 **You are confirming:** the **total on-hand is visibly unchanged** by the transfer (only
+  the split moves), the over-draw toast's wording, and the same-location block's message.
+- ✗ **Would be wrong:** the total changing across a transfer.
+
+#### C-SYERP-09 · PO create — vendor picker lists only vendors · SYERP-11
+
+**Fixture:** vendors `UAT-VEND-1`/`-2`; `UAT-VEND-ARCH` archived; customers `UAT-CUST-1`/`-2`.
+
+- ✅ **Machine already proved:** `src/routes/syerp/PurchaseOrderCreate.test.tsx
+  "renders the heading, vendor Select, and one line row"`,
+  `"blocks submit until a vendor is selected"`,
+  `"POSTs the Draft PO header then the filled line on submit"`,
+  `"excludes inactive items from the line item Select"`; `verify_purchasing.py
+  "create_po opens a Draft PO for the vendor"`,
+  `"add_line appended a line qty 10 @ 5 (qty_received starts at 0)"`.
+- **Do:** start a new PO and open the vendor dropdown **without saving**.
+- 👁 **You are confirming:** the dropdown lists `UAT-VEND-1`/`-2` and contains **no
+  customers** (`UAT-CUST-1`/`-2` absent) and **no archived vendor** (`UAT-VEND-ARCH` absent).
+  Reachability of the constraint, not the payload.
+- ✗ **Would be wrong:** a customer selectable as a PO vendor.
+
+#### C-SYERP-10 · PO approve — illegal actions hidden · SYERP-11
+
+**Fixture:** `PO-0001` (`draft`, 2 lines, total `86`).
+
+- ✅ **Machine already proved:** `src/routes/syerp/PurchaseOrderDetail.test.tsx
+  "shows Approve (and hides Close/Receive) for a draft PO"`,
+  `"shows Close + per-line Receive (and hides Approve) for an approved PO"`;
+  `verify_purchasing.py "advance_po_status draft → approved (stamps approver)"`.
+- **Do:** open `PO-0001`, note which actions exist, approve it, note them again.
+- 👁 **You are confirming:** before approving, **Approve is offered and Receive is absent**.
+  After approving, the line fields are **genuinely not editable** (try to type in one) and
+  Approve is gone.
+- ✗ **Would be wrong:** a Receive button on a draft, or line fields that look disabled but
+  still accept input.
+
+#### C-SYERP-11 · Receive partial → `Partially Received` · SYERP-11
+
+**Fixture:** `PO-0002` — `approved`, `UAT-ITEM-2` ordered **`9`** @ `8`, received `0`.
+`UAT-ITEM-2` currently has `Main 4`, moving average `12.25`.
+
+- ✅ **Machine already proved:** `src/routes/syerp/components/ReceiveLineDialog.test.tsx
+  "defaults the quantity to the outstanding balance and renders the location Select"`,
+  `"posts the receipt and closes on success"`; `verify_purchasing.py
+  "after receiving 4 the PO is 'partially_received'"`,
+  `"line.qty_received accumulated to 4 after the first receipt"`.
+- **Do:** receive **`4`** of the `9` into `Main`. Then open `UAT-ITEM-2`.
+- 👁 **You are confirming:** the PO's **status badge wording** changes to reflect a partial
+  receipt, the outstanding figure drops to `5`, and `UAT-ITEM-2`'s moving average has
+  **visibly moved off `12.25`** (it will land at `10.125`, being `(4×12.25 + 4×8) / 8`).
+- ✗ **Would be wrong:** the status still reading as fully approved/unreceived, or a moving
+  average that did not move.
+
+#### C-SYERP-12 · Receive remainder → `Received`; over-receipt rejected · SYERP-11
+
+**Fixture:** `PO-0002`, now with `5` outstanding.
+
+- ✅ **Machine already proved:** `src/routes/syerp/components/ReceiveLineDialog.test.tsx
+  "surfaces a 422 over-receipt rejection and keeps the dialog open"`; `verify_purchasing.py
+  "over-receipt (4 + 10 > 10 ordered) RAISES HTTPException 422"`,
+  `"rejected over-receipt left line.qty_received unchanged (still 4)"`,
+  `"rejected over-receipt left on-hand unchanged (still 4)"`,
+  `"after receiving the remaining 6 the PO is 'received'"`.
+- **Do:** receive the remaining **`5`**. Then try to receive **one more**.
+- 👁 **You are confirming:** the status badge now reads fully **received**; and the
+  over-receipt attempt shows a **toast** whose wording you record, after which the on-screen
+  received/outstanding figures have **not budged**.
+- ✗ **Would be wrong:** an over-receipt succeeding, or the figures changing after a rejection.
+
+#### C-SYERP-13 · PO list vendor filter + close · SYERP-11
+
+**Fixture:** `PO-0001` (`UAT-VEND-1`), `PO-0002` (`UAT-VEND-2`).
+
+- ✅ **Machine already proved:** `src/routes/syerp/PurchaseOrders.test.tsx
+  "renders the heading, Create PO button, and vendor filter with empty state"`,
+  `"renders a PO row with status badge, total, and resolved vendor name"`;
+  `verify_purchasing.py "list_pos(vendor_id) returns the PO with total == Decimal('50') and st"`,
+  `"a DIFFERENT vendor's filter does NOT return this PO"`.
+- **Do:** filter the PO list by `UAT-VEND-2`, then by `UAT-VEND-1`. Close a finished PO.
+- 👁 **You are confirming:** filtering by `UAT-VEND-2` shows `PO-0002` and **hides**
+  `PO-0001`; the vendor name is resolved to a **name**, not an id; and the Close affordance
+  is where you would expect it.
+- ✗ **Would be wrong:** a raw vendor UUID in the list, or the filter not filtering.
+
+#### C-SYERP-15 · Journal entry post + reverse; account register · SYERP-12
+
+**Fixture:** `UAT-JE-1` (`412.75`) and `UAT-JE-0` (`8250`) already posted.
+
+- ✅ **Machine already proved:** `src/routes/syerp/JournalEntries.test.tsx
+  "renders the heading and the posted entries list"`, `"opens the dialog and appends a line"`,
+  `"gates Post on a balanced ≥2-line entry"`; `src/routes/syerp/AccountRegister.test.tsx
+  "renders posting rows with a running balance once an account is selected"`,
+  `"displays the opening and closing balances for the period"`; `verify_gl.py (A)`, `(B)`,
+  `(M1)`.
+- **Do:** read the JE list. Open the register for `1110`. Then create an **unbalanced** entry
+  and try to post it. Then post a balanced one and **reverse** it.
+- 👁 **You are confirming:**
+  - both `UAT-JE-1` and `UAT-JE-0` appear with their memos legible
+  - the Post button is **genuinely disabled** on an unbalanced entry — not enabled-then-
+    error-toasting
+  - a reversal is **visibly linked** to the entry it reverses
+  - the register shows a running balance
+- ✗ **Would be wrong:** being able to submit an unbalanced entry, or a reversal that looks
+  like an unrelated new entry.
+
+#### C-SYERP-17 · Pay a bill; overpayment blocked · SYERP-12
+
+**Fixture:** `BILL-0001` — posted, total `94.25`, paid `36.5`, **open `57.75`**.
+
+- ✅ **Machine already proved:** `src/routes/syerp/BillDetail.test.tsx
+  "shows Pay (and hides Post) for a posted bill"`,
+  `"blocks a pay amount above the open balance"`,
+  `"records a valid payment: POST /ap/payments with the correct allocation body"`;
+  `verify_ap.py "a partial payment (20 of 50) leaves the bill 'posted' with open_balan"`,
+  `"the payment JE is a balanced Dr 2110 / Cr 1110 cash for 20 "`.
+- **Do:** open `BILL-0001`, confirm it shows open `57.75`, try to pay **`100`**, then pay
+  `10`.
+- 👁 **You are confirming:** the overpayment block's **message**, and that the open balance
+  updates on screen after the valid payment without a reload.
+- ✗ **Would be wrong:** an overpayment accepted, or the open balance going stale.
+
+---
+
+#### C-SYERP-20 · Money-loop tail: bill → pay → invoice → collect → re-read TB · SYERP-12, SYERP-13
+
+**⚠ This check runs LAST.** It depends on `C-SYERP-12` (a PO receipt to bill),
+`C-CRUMB-07` (a confirmed SO) and `C-GELATO-03` (a shipment to invoice). Do not start it
+until those have passed.
+
+- ✅ **Machine already proved:** `src/routes/syerp/Bills.test.tsx
+  "opens the dialog, matches an unbilled line + a non-PO line, and POSTs the right body"`;
+  `src/routes/syerp/components/BillCreateDialog.test.tsx
+  "includes the chosen bill_date in the POST /ap/bills body on submit"`;
+  `src/routes/syerp/components/InvoiceCreateDialog.test.tsx
+  "renders the shipment picker with uninvoiced_qty and a read-only locked price"`,
+  `"defaults the invoice qty to the full uninvoiced qty and POSTs InvoiceCreate"`;
+  `src/routes/syerp/components/RecordReceiptDialog.test.tsx
+  "defaults the cash account to 1110 and lists open invoices"`; `verify_ap.py`,
+  `verify_ar.py (B)`.
+- **Do:** in order — create a bill from the `C-SYERP-12` receipt; pay it; create an invoice
+  from the `C-GELATO-03` shipment; record a receipt against that invoice; then **re-open
+  Financial Reports**.
+- 👁 **You are confirming:**
+  - the bill dialog's unbilled-receipt picker actually **offers** your receipt
+  - the invoice dialog **offers** your shipment, with the price shown **read-only** (it is
+    locked to the SO line)
+  - after all four postings, the **trial balance still nets zero on screen**, and AP/AR aging
+    still tie to their control accounts
+- ✗ **Would be wrong:** an empty picker (the flow is unreachable end-to-end — the standing
+  "dead-through-UI" trap), an editable locked price, or a trial balance that no longer
+  balances.
 
 ---
 
