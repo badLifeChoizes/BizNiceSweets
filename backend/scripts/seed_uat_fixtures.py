@@ -131,8 +131,22 @@ from app.modules.plum.service import (
     load_flat_bom,
     update_cost,
 )
-from app.modules.syerp.schemas import PartnerCreate, PartnerUpdate
+from app.modules.syerp.inventory_seed import DEFAULT_LOCATION_NAME
+from app.modules.syerp.schemas import (
+    InventoryItemCreate,
+    InventoryItemUpdate,
+    PartnerCreate,
+    PartnerUpdate,
+    POCreate,
+    POLineCreate,
+    StockLocationCreate,
+    StockLocationUpdate,
+)
+from app.modules.syerp.service.inventory import get_item_onhand, post_receipt
+from app.modules.syerp.service.items import create_item, list_items, update_item
+from app.modules.syerp.service.locations import create_location, list_locations, update_location
 from app.modules.syerp.service.partners import create_partner, list_partners, update_partner
+from app.modules.syerp.service.purchasing import add_line, advance_po_status, create_po, list_pos
 
 # Every natural key this script mints carries this prefix, so its rows are identifiable
 # in the UI, in the database, and in the manifest.
@@ -1007,17 +1021,436 @@ PLUM_LAYER = FixtureLayer(
 )
 
 
+# ---------------------------------------------------------------------------
+# Layer: SYERP inventory + purchasing (Task 4)
+# ---------------------------------------------------------------------------
+#
+# TWO extra stock locations beside the seeded "Main" (one archived, so the locations
+# screen's archive state is observable), THREE items — PLUM-linked / standalone /
+# archived — with costed receipts giving each a known per-location on-hand and a known
+# moving average, and TWO non-contending purchase orders.
+#
+# WHY THESE RECEIPT NUMBERS (the Phase-2b keeper again — the moving average is this
+# layer's crux, so its arithmetic must not divide evenly):
+#   UAT-ITEM-1 takes TWO receipts at DIFFERENT unit costs, in DIFFERENT locations and at
+#   DIFFERENT quantities: 7 @ 4.50 into Main, then 6 @ 9.20 into UAT-LOC-A.
+#     moving average = (7×4.50 + 6×9.20) / 13 = 86.70 / 13 = 6.669230769…
+#                    → quantized scale 6, ROUND_HALF_UP → 6.669231
+#   Every wrong formula lands somewhere visibly different:
+#     * simple mean of the two unit costs        → 6.85
+#     * last cost wins                           → 9.20
+#     * first cost wins (average never updated)  → 4.50
+#     * total cost, forgetting to divide         → 86.70
+#     * weighted sum ÷ 2 (count, not quantity)   → 43.35
+#     * per-location averaging                   → 4.50 and 9.20, never one number
+#     * TRUNCATION instead of ROUND_HALF_UP      → 6.669230  (the 7th decimal is a 7, so
+#       the rounding mode is load-bearing here — this is why 13 was chosen as the divisor)
+#   13 is prime to 86.70, so no dropped or doubled quantity divides back onto the answer.
+#
+#   On-hand VALUE is the second, subtler guard: 13 × 6.669231 = 86.700003, NOT the 86.70
+#   actually spent. The rounding of the average to scale 6 is visible in the valuation.
+#   An implementation that valued stock as Σ(qty × unit_cost) off the ledger would print a
+#   clean 86.700000 — so this literal distinguishes "quantity × moving average" (what the
+#   product does) from "sum of what we paid" (what it does not).
+#
+# GL CONTRIBUTION: NONE. Standalone post_receipt writes an InventoryTxn and moves the
+# moving average; it posts NO journal entry (only PO receive_line does, Dr 1130 / Cr 2150).
+# create_po and approve post nothing either. So this layer leaves the trial balance exactly
+# as it found it — Task 7 inherits a clean slate.
+#
+# The two POs deliberately DO NOT CONTEND:
+#   * the Draft PO (two lines) is the approve check's subject;
+#   * the Approved PO (one line, fully outstanding) is the receive / partial-receive /
+#     over-receipt subject, and its line points at UAT-ITEM-2 — NOT the two-receipt
+#     UAT-ITEM-1 — so Task 27's receiving cannot move the moving-average literals that
+#     Task 24's read-only checks quote.
+# A PO number is SYSTEM-generated and cannot carry the UAT- prefix, so the natural key for
+# get-or-create is the header's `notes` marker; the PO-#### number is recorded as a derived
+# literal, exactly as the task requires.
+
+UAT_LOC_A = "UAT-LOC-A"
+UAT_LOC_ARCHIVED = "UAT-LOC-ARCH"
+
+INV_ITEM_LINKED = "UAT-ITEM-1"
+INV_ITEM_STANDALONE = "UAT-ITEM-2"
+INV_ITEM_ARCHIVED = "UAT-ITEM-3"
+INV_LINKED_PLUM_PART = PLUM_LEAF  # UAT-P101, the costed leaf
+
+# (item code, location name, qty, unit cost) — applied in order; the moving average is
+# item-level, so the ORDER of these receipts is part of the fixture.
+INV_RECEIPTS: tuple[tuple[str, str, Decimal, Decimal], ...] = (
+    (INV_ITEM_LINKED, DEFAULT_LOCATION_NAME, Decimal("7"), Decimal("4.50")),
+    (INV_ITEM_LINKED, UAT_LOC_A, Decimal("6"), Decimal("9.20")),
+    (INV_ITEM_STANDALONE, DEFAULT_LOCATION_NAME, Decimal("4"), Decimal("12.25")),
+)
+
+PO_DRAFT_KEY = "UAT-PO-DRAFT"
+PO_APPROVED_KEY = "UAT-PO-APPROVED"
+PO_DRAFT_LINES: tuple[tuple[str, Decimal, Decimal], ...] = (
+    (INV_ITEM_LINKED, Decimal("10"), Decimal("5.00")),
+    (INV_ITEM_STANDALONE, Decimal("3"), Decimal("12.00")),
+)
+PO_APPROVED_LINES: tuple[tuple[str, Decimal, Decimal], ...] = (
+    (INV_ITEM_STANDALONE, Decimal("9"), Decimal("8.00")),
+)
+
+_COST_QUANTUM = Decimal("0.000001")
+
+
+async def _location_by_name(session: AsyncSession, name: str):
+    """Resolve a stock location by its natural key `name` through the real list service."""
+    locations = await list_locations(session, include_archived=True)
+    return next((loc for loc in locations if loc.name == name), None)
+
+
+async def _item_by_code(session: AsyncSession, code: str):
+    """Resolve an inventory item by its natural key `code` through the real list service."""
+    items = await list_items(session, include_archived=True)
+    return next((item for item in items if item.code == code), None)
+
+
+async def _po_by_notes(session: AsyncSession, marker: str):
+    """
+    Resolve a purchase order by its `notes` marker.
+
+    A PO's own natural key (po_number) is SERVER-generated, so it cannot be used to
+    get-or-create. The notes marker is the stable key this script controls.
+    """
+    for po in await list_pos(session):
+        if po.notes == marker:
+            return po
+    return None
+
+
+async def _ensure_location(ctx: SeedContext, name: str, archived: bool = False) -> int:
+    """Get-or-create one stock location; archive only on the run that created it."""
+    async with ctx.session_factory() as session:
+        existing = await _location_by_name(session, name)
+        if existing is not None:
+            return existing.id
+
+        location = await create_location(session, StockLocationCreate(name=name))
+        await write_audit(
+            session,
+            actor_id=ctx.actor_id,
+            action="location.created",
+            target_type="location",
+            target_id=str(location.id),
+            detail=f"Location created: {location.name}",
+        )
+        if archived:
+            await update_location(session, location.id, StockLocationUpdate(active=False))
+            await write_audit(
+                session,
+                actor_id=ctx.actor_id,
+                action="location.archived",
+                target_type="location",
+                target_id=str(location.id),
+                detail=f"Location archived: {location.name}",
+            )
+        return location.id
+
+
+async def _ensure_item(
+    ctx: SeedContext,
+    code: str,
+    name: str,
+    *,
+    plum_part_id: str | None = None,
+    archived: bool = False,
+) -> str:
+    """Get-or-create one inventory item; archive only on the run that created it."""
+    async with ctx.session_factory() as session:
+        existing = await _item_by_code(session, code)
+        if existing is not None:
+            return existing.id
+
+        item = await create_item(
+            session,
+            InventoryItemCreate(
+                code=code, name=name, unit_of_measure="ea", plum_part_id=plum_part_id
+            ),
+        )
+        await write_audit(
+            session,
+            actor_id=ctx.actor_id,
+            action="item.created",
+            target_type="item",
+            target_id=str(item.id),
+            detail=f"Item created: {item.name}",
+        )
+        if archived:
+            await update_item(session, item.id, InventoryItemUpdate(active=False))
+            await write_audit(
+                session,
+                actor_id=ctx.actor_id,
+                action="item.archived",
+                target_type="item",
+                target_id=str(item.id),
+                detail=f"Item archived: {item.name}",
+            )
+        return item.id
+
+
+async def _ensure_receipt(
+    ctx: SeedContext, item_id: str, location_id: int, qty: Decimal, unit_cost: Decimal
+) -> None:
+    """
+    Post one costed receipt, keyed on (item, location, qty, unit_cost).
+
+    A receipt is an append-only ledger row with no natural key of its own, so the tuple of
+    its own values IS the key: if a matching row already exists this run made it (or a
+    previous one did) and posting again would double the stock. Matching on the tuple also
+    means an owner's own mid-UAT receipt of a different quantity never blocks the fixture.
+    """
+    async with ctx.session_factory() as session:
+        existing = await session.execute(
+            text(
+                "SELECT count(*) FROM syerp_inventory_txn WHERE item_id = :item_id "
+                "AND location_id = :location_id AND txn_type = 'receipt' "
+                "AND quantity = :qty AND unit_cost = :unit_cost"
+            ),
+            {
+                "item_id": item_id,
+                "location_id": location_id,
+                "qty": qty,
+                "unit_cost": unit_cost,
+            },
+        )
+        if int(existing.scalar_one()) > 0:
+            return
+
+        txn = await post_receipt(
+            session, item_id, location_id, qty, unit_cost, ctx.actor_id
+        )
+        await write_audit(
+            session,
+            actor_id=ctx.actor_id,
+            action="inventory.receipt",
+            target_type="item",
+            target_id=str(item_id),
+            detail=f"Receipt {qty} @ {unit_cost} into location {txn.location_name}",
+        )
+
+
+async def _ensure_po(
+    ctx: SeedContext,
+    marker: str,
+    vendor_id: str,
+    lines: tuple[tuple[str, Decimal, Decimal], ...],
+    item_ids: dict[str, str],
+    *,
+    approve: bool,
+) -> None:
+    """
+    Get-or-create one purchase order keyed on its `notes` marker, with its lines.
+
+    Found → returned UNCHANGED (not re-lined, not re-approved), so a PO the owner has
+    already advanced or received against during the click-through survives a re-seed.
+    """
+    async with ctx.session_factory() as session:
+        if await _po_by_notes(session, marker) is not None:
+            return
+
+        po = await create_po(session, POCreate(vendor_id=vendor_id, notes=marker))
+        await write_audit(
+            session,
+            actor_id=ctx.actor_id,
+            action="po.created",
+            target_type="purchase_order",
+            target_id=str(po.id),
+            detail=f"Purchase order created: {po.po_number}",
+        )
+
+    for code, qty_ordered, unit_cost in lines:
+        async with ctx.session_factory() as session:
+            line = await add_line(
+                session,
+                po.id,
+                POLineCreate(
+                    item_id=item_ids[code], qty_ordered=qty_ordered, unit_cost=unit_cost
+                ),
+            )
+            await write_audit(
+                session,
+                actor_id=ctx.actor_id,
+                action="po.line_added",
+                target_type="po_line",
+                target_id=str(line.id),
+                detail=f"PO line added: {code} qty={qty_ordered} @ {unit_cost}",
+            )
+
+    if approve:
+        async with ctx.session_factory() as session:
+            await advance_po_status(session, po.id, "approved", ctx.actor_id)
+            await write_audit(
+                session,
+                actor_id=ctx.actor_id,
+                action="po.approved",
+                target_type="purchase_order",
+                target_id=str(po.id),
+                detail=f"Purchase order approved: {po.po_number}",
+            )
+
+
+async def build_inventory_purchasing(ctx: SeedContext) -> None:
+    """Get-or-create the locations, items, costed receipts and the two POs."""
+    await _ensure_location(ctx, UAT_LOC_A)
+    await _ensure_location(ctx, UAT_LOC_ARCHIVED, archived=True)
+
+    async with ctx.session_factory() as session:
+        plum_part_id = await _plum_part_id(session, INV_LINKED_PLUM_PART)
+
+    await _ensure_item(
+        ctx, INV_ITEM_LINKED, "UAT PLUM-linked stock item", plum_part_id=plum_part_id
+    )
+    await _ensure_item(ctx, INV_ITEM_STANDALONE, "UAT standalone stock item")
+    await _ensure_item(ctx, INV_ITEM_ARCHIVED, "UAT archived stock item", archived=True)
+
+    async with ctx.session_factory() as session:
+        item_ids = {
+            code: (await _item_by_code(session, code)).id
+            for code in (INV_ITEM_LINKED, INV_ITEM_STANDALONE, INV_ITEM_ARCHIVED)
+        }
+        location_ids = {
+            name: (await _location_by_name(session, name)).id
+            for name in (DEFAULT_LOCATION_NAME, UAT_LOC_A)
+        }
+
+    for code, location_name, qty, unit_cost in INV_RECEIPTS:
+        await _ensure_receipt(
+            ctx, item_ids[code], location_ids[location_name], qty, unit_cost
+        )
+
+    async with ctx.session_factory() as session:
+        vendors = {p.code: p.id for p in await list_partners(session, include_archived=True)}
+    await _ensure_po(
+        ctx, PO_DRAFT_KEY, vendors["UAT-VEND-1"], PO_DRAFT_LINES, item_ids, approve=False
+    )
+    await _ensure_po(
+        ctx,
+        PO_APPROVED_KEY,
+        vendors["UAT-VEND-2"],
+        PO_APPROVED_LINES,
+        item_ids,
+        approve=True,
+    )
+
+
+async def report_inventory_purchasing(ctx: SeedContext) -> None:
+    """Read the inventory + purchasing literals back out of the REAL services."""
+    manifest = ctx.manifest
+
+    async with ctx.session_factory() as session:
+        for location in sorted(
+            (
+                loc
+                for loc in await list_locations(session, include_archived=True)
+                if loc.name.startswith(FIXTURE_PREFIX)
+            ),
+            key=lambda loc: loc.name,
+        ):
+            name = manifest.key("syerp.location", location.name)
+            manifest.value(f"syerp.location.{name}.active", str(location.active).lower())
+
+        items = [
+            item
+            for item in await list_items(session, include_archived=True)
+            if item.code.startswith(FIXTURE_PREFIX)
+        ]
+        for item in sorted(items, key=lambda i: i.code):
+            code = manifest.key("syerp.item", item.code)
+            manifest.value(f"syerp.item.{code}.name", item.name)
+            manifest.value(f"syerp.item.{code}.active", str(item.active).lower())
+            manifest.value(
+                f"syerp.item.{code}.plum_linked", str(item.plum_part_id is not None).lower()
+            )
+
+            onhand = await get_item_onhand(session, item.id)
+            manifest.value(f"syerp.item.{code}.moving_avg_cost", onhand.moving_avg_cost)
+            manifest.value(f"syerp.item.{code}.total_quantity", onhand.total_quantity)
+            manifest.value(f"syerp.item.{code}.onhand_value", onhand.onhand_value)
+            for row in sorted(onhand.locations, key=lambda r: r.location_name):
+                manifest.value(
+                    f"syerp.item.{code}.onhand.{row.location_name}", row.quantity
+                )
+
+        # Independent oracle for the crux: recompute the weighted average from the
+        # literal receipts rather than re-reading what the product stored.
+        linked = await _item_by_code(session, INV_ITEM_LINKED)
+        if linked is not None:
+            receipts = [r for r in INV_RECEIPTS if r[0] == INV_ITEM_LINKED]
+            total_qty = sum((r[2] for r in receipts), Decimal("0"))
+            total_cost = sum((r[2] * r[3] for r in receipts), Decimal("0"))
+            oracle_avg = (total_cost / total_qty).quantize(_COST_QUANTUM, ROUND_HALF_UP)
+            onhand = await get_item_onhand(session, linked.id)
+            _expect(f"{INV_ITEM_LINKED} moving_avg_cost", onhand.moving_avg_cost, oracle_avg)
+            _expect(f"{INV_ITEM_LINKED} total_quantity", onhand.total_quantity, total_qty)
+            _expect(
+                f"{INV_ITEM_LINKED} onhand_value",
+                onhand.onhand_value,
+                total_qty * oracle_avg,
+            )
+
+        # Purchase orders — the PO-#### numbers are system-generated literals.
+        item_codes = {item.id: item.code for item in await list_items(session, include_archived=True)}
+        for marker in (PO_DRAFT_KEY, PO_APPROVED_KEY):
+            po = await _po_by_notes(session, marker)
+            if po is None:
+                continue
+            manifest.value(f"syerp.po.{marker}.po_number", po.po_number)
+            manifest.value(f"syerp.po.{marker}.status", po.status)
+            manifest.value(f"syerp.po.{marker}.line_count", len(po.lines))
+            manifest.value(f"syerp.po.{marker}.total", po.total)
+            manifest.value(f"syerp.po.{marker}.total_ordered_qty", po.total_ordered_qty)
+            manifest.value(f"syerp.po.{marker}.total_received_qty", po.total_received_qty)
+            manifest.value(f"syerp.po.{marker}.outstanding_qty", po.outstanding_qty)
+            for line in sorted(po.lines, key=lambda line: line.line_no):
+                label = f"syerp.po.{marker}.line{line.line_no}"
+                manifest.value(
+                    f"{label}",
+                    f"{item_codes.get(line.item_id, line.item_id)} "
+                    f"ordered={decimal_str(line.qty_ordered)} "
+                    f"@ {decimal_str(line.unit_cost)} "
+                    f"received={decimal_str(line.qty_received)}",
+                )
+
+
+INVENTORY_PURCHASING_LAYER = FixtureLayer(
+    name="syerp-inventory+purchasing",
+    tables=(
+        TableSpec("syerp_stock_location", "name LIKE 'UAT-%'", "syerp_stock_location (UAT-)"),
+        TableSpec("syerp_inventory_item", "code LIKE 'UAT-%'", "syerp_inventory_item (UAT-)"),
+        TableSpec(
+            "syerp_inventory_txn",
+            "item_id IN (SELECT id FROM syerp_inventory_item WHERE code LIKE 'UAT-%')",
+            "syerp_inventory_txn (UAT-)",
+        ),
+        TableSpec(
+            "syerp_purchase_order", "notes LIKE 'UAT-%'", "syerp_purchase_order (UAT-)"
+        ),
+        TableSpec(
+            "syerp_purchase_order_line",
+            "po_id IN (SELECT id FROM syerp_purchase_order WHERE notes LIKE 'UAT-%')",
+            "syerp_purchase_order_line (UAT-)",
+        ),
+    ),
+    build=build_inventory_purchasing,
+    report=report_inventory_purchasing,
+)
+
+
 def _layers() -> tuple[FixtureLayer, ...]:
     """
     The registered fixture layers, in DEPENDENCY order (builders run in this order).
 
-    PLUM depends on core+partners (its AVL links point at the UAT vendors).
+    PLUM depends on core+partners (AVL links point at the UAT vendors); inventory depends
+    on both (its PLUM-linked item points at UAT-P101, its POs at the UAT vendors).
 
-    Tasks 4-7 append here:
-      4. SYERP inventory + purchasing   6. MOUSSE + CRUMB
-      5. GELATO bins                    7. SYERP GL / AP / AR
+    Tasks 5-7 append here:
+      5. GELATO bins   6. MOUSSE + CRUMB   7. SYERP GL / AP / AR
     """
-    return (CORE_PARTNERS_LAYER, PLUM_LAYER)
+    return (CORE_PARTNERS_LAYER, PLUM_LAYER, INVENTORY_PURCHASING_LAYER)
 
 
 # ---------------------------------------------------------------------------
