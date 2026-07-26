@@ -10,7 +10,7 @@ build checklist is archived at
       accumulate-and-guard; defends legacy bin-split desync).
 - [x] Fix 2 (REVIEW finding 3, minor): `post_transfer` refreshes the item under the
       FOR UPDATE lock before valuing the legs (mirror `post_receipt`'s refresh).
-- [ ] Fix 3a (VERIFICATION gap 1): `verify_gelato.py` scenario F — binned-source
+- [x] Fix 3a (VERIFICATION gap 1): `verify_gelato.py` scenario F — binned-source
       transfer NULL-422 + zero rows; named-bin transfer out-leg-binned /
       in-leg-unbinned (D-P4-5) Decimal-exact; positive adjust into a named bin
       raises that pool (D-P4-6).

@@ -72,11 +72,22 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
       bin_id=E1) — succeeds: the bin pool falls to 0, the unbinned pool stays 0,
       neither ever negative; (E3) the roll-up identity Σ bins + unbinned ==
       per-location total == 0 still holds Decimal-EXACT.
+  (F) BIN-AWARE TRANSFER + POSITIVE ADJUST INTO A BIN (SC3, D-P4-1/5/6 — the
+      Phase 4 fix): fresh item + fresh destination location; receive 10 unbinned
+      at Main, putaway ALL 10 into bin F1. (F1) a bin-blind post_transfer(5,
+      from_bin_id=None) draws ONLY the now-empty UNBINNED source pool and is
+      rejected 422 with NO ledger rows written (row-count oracle as in E1);
+      (F2) naming the bin — from_bin_id=F1 — succeeds: the OUT leg carries
+      bin_id=F1 and the IN leg lands UNBINNED at the destination (bin_id NULL,
+      D-P4-5); source bin pool and BOTH location totals are Decimal-EXACT;
+      (F3) a POSITIVE post_adjustment(+4, bin_id=F1) lands directly in that bin
+      (D-P4-6): the bin's get_bin_on_hand rises by exactly 4 with no floor
+      guard fired.
 
-The script uses uniquely-suffixed throwaway SYERP items / GELATO bins and CLEANS
-UP after itself (inventory txns -> bins -> inventory items) in a finally block, so
-it is safe to re-run against the same database. The seeded "Main" stock location is
-reused and left in place (real deploy state).
+The script uses uniquely-suffixed throwaway SYERP items / GELATO bins / stock
+locations and CLEANS UP after itself (inventory txns -> bins -> inventory items ->
+locations) in a finally block, so it is safe to re-run against the same database.
+The seeded "Main" stock location is reused and left in place (real deploy state).
 """
 from __future__ import annotations
 
@@ -105,12 +116,14 @@ from app.modules.gelato.schemas import BinCreate, PutawayRequest
 from app.modules.gelato.service import create_bin, execute_putaway, get_bin_on_hand
 from app.modules.syerp.inventory_seed import DEFAULT_LOCATION_NAME, seed_default_location
 from app.modules.syerp.models import InventoryItem, InventoryTxn, StockLocation
-from app.modules.syerp.schemas import InventoryItemCreate
+from app.modules.syerp.schemas import InventoryItemCreate, StockLocationCreate
 from app.modules.syerp.service import (
     create_item,
+    create_location,
     get_item_onhand,
     post_adjustment,
     post_receipt,
+    post_transfer,
 )
 
 # ---------------------------------------------------------------------------
@@ -215,6 +228,7 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
     # Throwaway-row registries for the finally cleanup.
     item_ids: set[str] = set()
     bin_ids: set[int] = set()
+    loc_ids: set[int] = set()
 
     try:
         # Seed (idempotent) + reuse the "Main" stock location for on-hand receipts.
@@ -469,8 +483,131 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             f"rollup={(e_bin + e_unbinned)!r} location_total={e_loc_total!r}",
         )
 
+        # ===================================================================
+        # (F) BIN-AWARE TRANSFER + POSITIVE ADJUST INTO A BIN (SC3, D-P4-1/5/6)
+        # ===================================================================
+        # Phase 4 made post_transfer bin-aware under the same explicit-or-
+        # unbinned contract as adjustments (D-P4-1): from_bin_id=None draws
+        # ONLY the source location's UNBINNED pool (and floor-guards it); a
+        # named bin draws that single bin. The IN leg always lands UNBINNED at
+        # the destination — putaway directs it later (D-P4-5). And a POSITIVE
+        # adjustment may target a bin directly (cycle-count "found in bin",
+        # D-P4-6) with no floor guard on additions. Pins the behaviors the
+        # Phase-4 verification could only hand-check.
+        item_f = await _make_item(session_factory, unique, "FT")
+        item_ids.add(item_f)
+        bin_f = await _make_bin(session_factory, main_id, f"FT1-{unique}")  # "bin F1"
+        bin_ids.add(bin_f)
+        async with session_factory() as session:
+            dest = await create_location(
+                session, StockLocationCreate(name=f"VERIFY-GELATO dest {unique}")
+            )
+        dest_id = dest.id
+        loc_ids.add(dest_id)
+        async with session_factory() as session:
+            await post_receipt(session, item_f, main_id, Decimal("10"), Decimal("6"), actor_id)
+        async with session_factory() as session:
+            await execute_putaway(
+                session,
+                PutawayRequest(
+                    item_id=item_f, location_id=main_id, to_bin_id=bin_f,
+                    qty=Decimal("10"), from_bin_id=None,
+                ),
+                actor_id,
+            )
+        # (F1) A bin-blind transfer of 5 (from_bin_id=None) draws the now-EMPTY
+        # unbinned source pool — rejected 422 with NO ledger rows written.
+        # Row-count oracle as in (E1): receipt + two putaway legs == 3 rows.
+        f_rows_before = await _ledger_rows(session_factory, item_f)
+        try:
+            async with session_factory() as session:
+                await post_transfer(
+                    session, item_f, main_id, dest_id, Decimal("5"), actor_id,
+                    from_bin_id=None,
+                )
+            check(
+                "(F1/SC3/D-P4-1) bin-blind transfer (5, from_bin_id=None) out of a "
+                "fully-binned source is rejected",
+                False, "transfer succeeded over the unbinned-pool floor",
+            )
+        except HTTPException as exc:
+            check(
+                "(F1/SC3/D-P4-1) bin-blind transfer (5, from_bin_id=None) draws ONLY "
+                "the empty unbinned source pool and is rejected 422",
+                exc.status_code == 422,
+                f"status={exc.status_code}",
+            )
+        f_rows_after = await _ledger_rows(session_factory, item_f)
+        check(
+            "(F1/SC3) the rejected bin-blind transfer wrote NO ledger rows "
+            "(row count unchanged after the rejected call)",
+            f_rows_after == f_rows_before == 3,
+            f"before={f_rows_before!r} after={f_rows_after!r}",
+        )
+        # (F2) Naming the bin succeeds: the OUT leg carries bin_id=F1, the IN
+        # leg lands UNBINNED at the destination (bin_id NULL, D-P4-5); the
+        # source bin pool and BOTH location totals are Decimal-exact.
+        async with session_factory() as session:
+            legs = await post_transfer(
+                session, item_f, main_id, dest_id, Decimal("5"), actor_id,
+                from_bin_id=bin_f,
+            )
+        # TransactionRead omits bin_id, so read the legs' bin_ids straight off
+        # the ledger rows by the returned ids (the assertion's own truth).
+        async with session_factory() as session:
+            out_bin = (
+                await session.execute(
+                    select(InventoryTxn.bin_id).where(InventoryTxn.id == legs[0].id)
+                )
+            ).scalar()
+            in_bin = (
+                await session.execute(
+                    select(InventoryTxn.bin_id).where(InventoryTxn.id == legs[1].id)
+                )
+            ).scalar()
+            f_bin_pool = await get_bin_on_hand(session, item_f, main_id, bin_f)
+            f_unbinned = await get_bin_on_hand(session, item_f, main_id, None)
+        f_src_total = await _location_total(session_factory, item_f, main_id)
+        f_dest_total = await _location_total(session_factory, item_f, dest_id)
+        check(
+            "(F2/SC3/D-P4-5) bin-aware transfer (5, from_bin_id=F1) succeeds: the OUT "
+            "leg carries bin_id=F1 and the IN leg lands UNBINNED (bin_id NULL) at the "
+            "destination",
+            legs[0].quantity == Decimal("-5") and out_bin == bin_f
+            and legs[1].quantity == Decimal("5") and in_bin is None,
+            f"out_qty={legs[0].quantity!r} out_bin={out_bin!r} "
+            f"in_qty={legs[1].quantity!r} in_bin={in_bin!r}",
+        )
+        check(
+            "(F2/SC3) source bin pool and BOTH location totals are Decimal-EXACT "
+            "after the transfer (bin 10-5==5, unbinned 0, source total 5, dest total 5)",
+            f_bin_pool == Decimal("5") and f_unbinned == Decimal("0")
+            and f_src_total == Decimal("5") and f_dest_total == Decimal("5"),
+            f"bin={f_bin_pool!r} unbinned={f_unbinned!r} "
+            f"src_total={f_src_total!r} dest_total={f_dest_total!r}",
+        )
+        # (F3) A POSITIVE adjustment naming the bin lands directly in that bin
+        # (D-P4-6): the bin's pool rises by exactly the delta, no floor guard
+        # fires on an addition.
+        async with session_factory() as session:
+            await post_adjustment(
+                session, item_f, main_id, Decimal("4"),
+                "cycle count found stock in bin F1", actor_id,
+                bin_id=bin_f,
+            )
+        async with session_factory() as session:
+            f_bin_after = await get_bin_on_hand(session, item_f, main_id, bin_f)
+            f_unbinned_after = await get_bin_on_hand(session, item_f, main_id, None)
+        check(
+            "(F3/SC3/D-P4-6) a POSITIVE adjustment (+4, bin_id=F1) raises that bin's "
+            "get_bin_on_hand by exactly 4 (5+4==9) with no floor guard fired; the "
+            "unbinned pool is untouched (0)",
+            f_bin_after == Decimal("9") and f_unbinned_after == Decimal("0"),
+            f"bin={f_bin_after!r} unbinned={f_unbinned_after!r}",
+        )
+
     finally:
-        await _cleanup(session_factory, item_ids, bin_ids)
+        await _cleanup(session_factory, item_ids, bin_ids, loc_ids)
         await engine.dispose()
 
 
@@ -584,15 +721,19 @@ async def run_concurrency(
 # ---------------------------------------------------------------------------
 
 
-async def _cleanup(session_factory, item_ids: set[str], bin_ids: set[int]) -> None:
+async def _cleanup(
+    session_factory, item_ids: set[str], bin_ids: set[int], loc_ids: set[int]
+) -> None:
     """
     Delete the throwaway rows in FK-safe order: inventory txns (they FK into both
-    items and bins) -> bins (FK into the location) -> inventory items. The seeded
-    "Main" stock location is reused and left in place (real deploy state).
+    items and bins) -> bins (FK into the location) -> inventory items -> throwaway
+    stock locations (scenario F's destination). The seeded "Main" stock location is
+    reused and left in place (real deploy state).
     """
     async with session_factory() as session:
         item_list = list(item_ids)
         bin_list = list(bin_ids)
+        loc_list = list(loc_ids)
 
         if item_list:
             await session.execute(
@@ -603,6 +744,10 @@ async def _cleanup(session_factory, item_ids: set[str], bin_ids: set[int]) -> No
         if item_list:
             await session.execute(
                 delete(InventoryItem).where(InventoryItem.id.in_(item_list))
+            )
+        if loc_list:
+            await session.execute(
+                delete(StockLocation).where(StockLocation.id.in_(loc_list))
             )
 
         await session.commit()
