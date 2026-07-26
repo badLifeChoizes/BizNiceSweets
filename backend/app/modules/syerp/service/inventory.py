@@ -527,8 +527,10 @@ async def post_transfer(
          locked to serialize concurrent inserts — the item-master row is the
          correct single contention point, so two concurrent out-transfers
          cannot both pass the source floor. One item, so the sorted-id ordering
-         is trivial, but the lock must precede the reads. Held until this
-         function's single commit.
+         is trivial, but the lock must precede the reads. The item row is
+         refreshed once the lock is held, so both legs are valued at the true
+         (post-serialization) moving average — not a stale identity-mapped
+         read. Held until this function's single commit.
       3. Derive `current_from_onhand` = the item's on-hand AT from_location_id
          (SUM of that item's InventoryTxn.quantity WHERE location_id matches).
       4. Reject with 422 if the `-qty` leg would drive the source location on-hand
@@ -588,6 +590,12 @@ async def post_transfer(
     await db.execute(
         select(InventoryItem.id).where(InventoryItem.id == item_id).with_for_update()
     )
+    # Re-read the item NOW the lock is held: a concurrent receipt may have
+    # committed a new moving_avg_cost between get_item's load and lock
+    # acquisition, and the identity-mapped `item` would still carry that stale
+    # value. The refresh makes the leg valuation below record the true
+    # post-serialization average (mirrors post_receipt; audit cost provenance).
+    await db.refresh(item)
 
     # Per-location source on-hand: signed SUM of this item's txns AT the source.
     result = await db.execute(

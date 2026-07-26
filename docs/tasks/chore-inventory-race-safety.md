@@ -8,7 +8,7 @@ build checklist is archived at
 - [x] Fix 1 (REVIEW finding 1, major): restore the per-location floor beside the
       pool floor in MOUSSE `issue_components` (mirror `post_adjustment`'s
       accumulate-and-guard; defends legacy bin-split desync).
-- [ ] Fix 2 (REVIEW finding 3, minor): `post_transfer` refreshes the item under the
+- [x] Fix 2 (REVIEW finding 3, minor): `post_transfer` refreshes the item under the
       FOR UPDATE lock before valuing the legs (mirror `post_receipt`'s refresh).
 - [ ] Fix 3a (VERIFICATION gap 1): `verify_gelato.py` scenario F — binned-source
       transfer NULL-422 + zero rows; named-bin transfer out-leg-binned /
