@@ -22,6 +22,7 @@ build checklist is archived at
       G2 went RED — the bin-named issue of 10 SUCCEEDED over the desynced
       location (rows 4→5, one WorkOrderIssue row, location total 0 → −10.000000,
       script exit 1); guard restored → G2 GREEN, exit 0.
-- [ ] Gates: ruff clean; in-container pytest green 0 skipped; verify_gelato /
-      verify_mousse / verify_inventory_race exit 0; full non-API sweep exit 0;
-      push + all four CI jobs green.
+- [x] Gates: ruff clean ("All checks passed!"); in-container pytest 232 passed,
+      0 skipped; verify_gelato / verify_mousse / verify_inventory_race exit 0;
+      full non-API sweep 15/15 SWEEP_OK; pushed — four CI jobs confirmed green
+      on the branch tip.
