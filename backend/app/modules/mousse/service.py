@@ -613,12 +613,21 @@ async def issue_components(
          concurrent issue against the same item blocks until this transaction
          commits and then re-reads the true on-hand, so two issues can never
          drive on-hand negative or double-consume.
-      4. Per line, derive the NAMED pool's on-hand (SYERP's null-aware
-         get_bin_on_hand — bin_id=None is the unbinned pool) and apply the SAME
-         floor guard SYERP adjustments use (_adjustment_violates_floor) at pool
-         grain; an insufficient-pool line is rejected 422 naming the pool.
-         Duplicate (item, location, bin) lines within one request accumulate so
-         they cannot jointly overdraw.
+      4. Per line, floor-guard the draw at TWO grains, both 422 BEFORE any txn
+         is appended. LOCATION grain first: accumulate consumption per
+         (item, location) against the location-level on-hand
+         (_component_onhand) and reject a line that would drive the location
+         total below zero. This location floor is kept ALONGSIDE the pool
+         floor (mirrors post_adjustment / post_transfer, D-P8-7 contract):
+         the pool floors imply the location floor only on clean post-Phase-4
+         data — the location floor defends legacy rows whose per-bin split
+         has already desynced from the location total. Then POOL grain:
+         derive the NAMED pool's on-hand (SYERP's null-aware get_bin_on_hand
+         — bin_id=None is the unbinned pool) and apply the SAME floor guard
+         SYERP adjustments use (_adjustment_violates_floor); an
+         insufficient-pool line is rejected 422 naming the pool. Duplicate
+         lines within one request accumulate at BOTH grains so they cannot
+         jointly overdraw.
       5. Append one signed `issue` InventoryTxn per line (quantity = -qty,
          unit_cost = item.moving_avg_cost, txn_type='issue', bin_id = the
          line's pool, source_type='mousse_work_order', source_id=wo.id) — added
@@ -698,15 +707,38 @@ async def issue_components(
         ).scalars().first()
         item_by_id[locked_id] = item
 
-    # Per-pool floor guard (D-P4-1), then append the signed issue txns. Base
-    # pool on-hand is read once per (item, location, bin) via SYERP's null-aware
-    # get_bin_on_hand (bin_id=None = the unbinned pool); duplicate lines on the
-    # same pool accumulate consumed qty so they cannot jointly overdraw.
+    # Two-grain floor guard (D-P4-1 + D-P8-7), then append the signed issue
+    # txns. LOCATION grain: base on-hand is read once per (item, location) via
+    # _component_onhand — kept ALONGSIDE the pool floor (mirrors
+    # post_adjustment / post_transfer) because the pool floors imply the
+    # location floor only on clean post-Phase-4 data; the location floor
+    # defends legacy rows whose per-bin split has already desynced from the
+    # location total. POOL grain: base on-hand is read once per
+    # (item, location, bin) via SYERP's null-aware get_bin_on_hand
+    # (bin_id=None = the unbinned pool). Duplicate lines accumulate consumed
+    # qty at BOTH grains so they cannot jointly overdraw.
+    loc_base_onhand: dict[tuple[str, int], Decimal] = {}
+    loc_consumed: dict[tuple[str, int], Decimal] = {}
     base_onhand: dict[tuple[str, int, int | None], Decimal] = {}
     consumed: dict[tuple[str, int, int | None], Decimal] = {}
     total_value = Decimal("0")
     created: list[tuple[WorkOrderComponent, Decimal, int, Decimal, InventoryTxn]] = []
     for comp, qty, location_id, bin_id in resolved:
+        loc_key = (comp.item_id, location_id)
+        if loc_key not in loc_base_onhand:
+            loc_base_onhand[loc_key] = await _component_onhand(db, comp.item_id, location_id)
+            loc_consumed[loc_key] = Decimal("0")
+        loc_available = loc_base_onhand[loc_key] - loc_consumed[loc_key]
+        if _adjustment_violates_floor(loc_available, -qty):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Issue of {qty} for component {comp.id} would drive location "
+                    f"{location_id} on-hand below zero (available {loc_available}) "
+                    f"for item {comp.item_id}."
+                ),
+            )
+
         key = (comp.item_id, location_id, bin_id)
         if key not in base_onhand:
             base_onhand[key] = await get_bin_on_hand(db, comp.item_id, location_id, bin_id)
@@ -722,6 +754,7 @@ async def issue_components(
                 ),
             )
         consumed[key] += qty
+        loc_consumed[loc_key] += qty
 
         item = item_by_id[comp.item_id]
         unit_cost = item.moving_avg_cost
