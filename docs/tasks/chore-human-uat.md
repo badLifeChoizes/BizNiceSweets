@@ -31,8 +31,9 @@ plan's hand-back protocol, an engineer must never tick an owner check or infer a
 
 ### Pre-flight (SC3)
 
-- [ ] 9. Write the check → machine-assertion map (`PREFLIGHT.md`)
-- [ ] 10. Add probes for the machine-unproven surfaces worth probing
+- [x] 9. Write the check → machine-assertion map (`PREFLIGHT.md`)
+- [x] 10. Add probes for the machine-unproven surfaces worth probing
+- [ ] 10a. Fix `U1` — HTTP 500 on duplicate-email user creation (added mid-build)
 
 ### The checklist (SC1)
 

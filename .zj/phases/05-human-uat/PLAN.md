@@ -232,19 +232,34 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 
 ### Pre-flight (SC3) — Tasks 9–10
 
-### [ ] 9. Write the check → machine-assertion map
+### [x] 9. Write the check → machine-assertion map
 - **Files:** `.zj/phases/05-human-uat/PREFLIGHT.md` (new)
 - **Do:** One row per planned check: check #, flow, the **existing** assertion that proves its backend (`backend/scripts/verify_*.py` scenario letter, `backend/tests/...::test_name`, or `frontend/src/.../*.test.tsx`), and the residue left for the human. Prefer citation over new code — the 24 verify scripts plus 232 pytest tests plus 139 vitests already cover most backends. Mark every row with **no** covering assertion as `machine-unproven`. Seed the map from the measured FE holes in `## Context` (Home, Settings, Modules, GLAccounts, LeadDetail, OpportunityDetail, Quotes, `getVisibleModules`).
 - **Done when:** every planned check has either a citation (file + test/scenario name) or an explicit `machine-unproven` mark; no row is blank.
 - **Verify:** every cited file path exists and every cited test/scenario name is greppable — `grep -c` each citation; zero misses.
 - **Parallel-ok:** yes (independent of Tasks 1–8).
 
-### [ ] 10. Add probes for the machine-unproven surfaces worth probing
+### [x] 10. Add probes for the machine-unproven surfaces worth probing
 - **Files:** `frontend/src/components/AppShell.test.tsx` (new), plus any additional `frontend/src/routes/**/**.test.tsx` the map calls for
 - **Do:** For each `machine-unproven` row from Task 9, either add a cheap probe or leave the mark and say why in `PREFLIGHT.md`. Minimum: a vitest on `getVisibleModules` (`AppShell.tsx:37-46`) covering enabled∩permitted, admin-wildcard, and disabled-module exclusion — the nav filter behind CORE-07 and SC6's GELATO-off check, which nothing tests today. Do **not** write probes for pure appearance (colour, badge presence, toast absence); those are the human residue by definition.
 - **Done when:** `PREFLIGHT.md` has no unexplained `machine-unproven` row; new tests pass.
 - **Verify:** `cd frontend && npm run test` — file/test count is above the 44/139 baseline and 0 failures.
 - **Parallel-ok:** no (depends on Task 9).
+
+### [ ] 10a. Fix `U1` — HTTP 500 on duplicate-email user creation (ADDED mid-build)
+- **Files:** `backend/app/modules/auth/service.py` (and/or `router.py`), plus a pinning test
+- **Do:** Found by the Task-9 pre-flight, not by a human: `POST` a second user with an existing email
+  returns **500** (`IntegrityError` → `UniqueViolationError` on `ix_users_email`) because nothing guards
+  it — `grep -n "IntegrityError\|409\|already exists"` over the auth service and router returns **no
+  matches**. Severity **major** per the plan's rubric ("a 500 on a legitimate re-entry"), and it is the
+  v1.0 **D2** pattern the plan explicitly told this UAT to weight toward. Return a clean **409**
+  (or 422 if that matches the codebase's house convention for this class — check the neighbours and
+  match them) with an actionable message, and persist nothing.
+- **Done when:** a duplicate-email create returns a clean, non-5xx, actionable error; the first create
+  still succeeds; no partial user row is written.
+- **Verify:** a pinning test in `backend/tests/auth/` proven RED-on-revert with the **actual RED
+  signature recorded**, confirming the red is the missing guard and not another assertion hijacking it.
+- **Parallel-ok:** no (land before the owner run so `C-CORE-04` can pass rather than be a known failure).
 
 ---
 
@@ -548,7 +563,17 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
 8. **Seeding takes ~40 s on an empty database** (all create paths) — state it in the Task-11 runbook so
    the owner does not assume it has hung.
 
-9. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
+9. **Three follow-ups from the pre-flight** (Tasks 9/10): (a) `verify_ap.py`, `verify_reports.py`,
+   `verify_purchasing.py`, `verify_inventory.py`, `verify_gl.py` (mostly) and `verify_gelato_ship.py`
+   use **no scenario letters**, so their citations are `check()`-label substrings — greppable today, but
+   they break silently if anyone reformats a label. Cheap hardening: give those scripts scenario letters
+   like their siblings. (b) `routes/admin/Modules.tsx` has no vitest and no check row of its own — it is
+   exercised only *through* `C-SC6-d`; if the Modules screen itself should be checked it needs a row.
+   (c) **The plan's own Task 12–14 verify greps are now trivially satisfiable** — `grep -qF "CORE-05"`
+   matches the check ID `C-CORE-05` as well as the requirement, so requirement coverage would prove
+   nothing. Tasks 12–14 must use a delimited pattern (e.g. `grep -qF "(CORE-05)"`) instead.
+
+10. **`.zj/codebase/MAP.md` is materially stale** (generated 2026-07-04 at `2329803`): Concern 1 (the `SyerpPartner` blocker) and Concern 5 ("No CI") are resolved; the registry list omits `gelato` (registered at `main.py:82`); the FE lint entry still cites `.eslintrc.cjs`, deleted in Phase 1. A fuller refresh is already BACKLOG p3 — worth pulling forward at the v4.0 milestone close, not in this phase.
 
 ## Deviations
 
@@ -707,6 +732,21 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
   the RED cannot come from prose; RED is an `AssertionError` on the empty `env_files` list, and the
   secret-spread guard on the line above **passed**, confirming it did not hijack red. Full suite
   **236 passed** (232 + 4).
+- **T9/T10 — 48 checks mapped, 309 citations, zero misses.** Check-ID scheme is `C-`-prefixed and
+  **suite-local** (`C-CORE-01`, `C-PLUM-04`, `C-SC6-a`) so a check can never be confused with an SRD
+  requirement (`CORE-05` vs `C-CORE-05`) and Tasks 11–15 can insert checks without renumbering anything
+  the owner has already reported against. 41 rows carry a citation, 7 are `machine-unproven` (1 probed,
+  6 deliberately not, each with a per-row reason). The citation checker caught a **real miscitation**
+  before commit (a Putaway test title copied from StockTransferDialog, missing "as a toast"); its own
+  first version cried wolf with 38 false misses and was rewritten rather than trusted. Module-toggle
+  propagation is `C-SC6-d`, not a CORE check, keeping the toggle's blast radius inside Task 26.
+  `getVisibleModules` probe **mutation-exercised**: swapping the `enabled` check and the admin wildcard
+  turns 2 named tests RED for the intended reason (order-sensitive cases, not a compile error), product
+  code restored byte-identical. That ordering is load-bearing — wildcard-first would mean toggling
+  GELATO off changes nothing for the admin who just toggled it, so `C-SC6-d` would silently pass while
+  the feature was broken. FE suite 44/139 → **45/148**, lint exit 0.
+- **T9 (transient product-code touch, disclosed) —** `AppShell.tsx` was mutated and reverted for the
+  mutation proof. Nothing ships (`git diff --stat` empty); recorded so it cannot surface as a surprise.
 
 ## Out of scope
 
