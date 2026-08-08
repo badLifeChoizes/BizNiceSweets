@@ -291,6 +291,17 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **`scripts/uat.ps1` checks `POSTGRES_PASSWORD` in the wrong file (pre-D-P5-10)** (noticed
+  2026-08-08 while porting the launcher to bash during Phase 5) — the `.ps1` warns when
+  `^POSTGRES_PASSWORD=\S+` is absent from `.env`, but D-P5-10 moved that credential to `.env.db`
+  and gave it exactly one home there. So on a stock checkout the `.ps1` warns on a *correct*
+  setup (`.env` legitimately has no `POSTGRES_PASSWORD`), and — worse — it never checks `.env.db`
+  exists at all, so `./scripts/uat.ps1 -Fresh` on a first-ever deploy sails past its own guard
+  straight into defect **U0** (`Database is uninitialized and superuser password is not
+  specified`). Windows-only exposure, which is why it was not fixed inline. `scripts/uat.sh`
+  already has the corrected guard (checks both files exist, greps `.env.db`) — port that block
+  back. Compose-side config is separately pinned by `backend/tests/test_compose_config.py`;
+  neither launcher is covered by a test.
 - [ ] **Pre-lock `moving_avg_cost` staleness remains in `post_issue` / `post_putaway`** (Phase 4
   PLAN `## Noticed` T1 + review finding 3 follow-through, retro'd 2026-07-25) — both load `item`
   before taking the FOR UPDATE lock (which selects the id column only and does not repopulate the

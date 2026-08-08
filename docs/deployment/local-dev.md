@@ -117,6 +117,33 @@ After `down -v` + `up`, Alembic migrations run automatically on the fresh
 database — no manual migration step. This confirms the repeatability
 requirement (CORE-01).
 
+### 1.6 One-command launcher
+
+Two wrapper scripts do the whole of §1.2–§1.5 in a single command. They are
+equivalent; pick the one your shell supports:
+
+| Script | Requires |
+|---|---|
+| `scripts/uat.sh` | bash (Linux / macOS / WSL / Git Bash) |
+| `scripts/uat.ps1` | PowerShell (`pwsh`) |
+
+```bash
+./scripts/uat.sh --fresh --detach   # reset the volume, start, wait for health, open the app
+./scripts/uat.sh                    # foreground; logs stream, Ctrl+C stops
+./scripts/uat.sh --down             # stop the stack
+./scripts/uat.sh --down --fresh     # stop and delete the volume
+./scripts/uat.sh --help             # all flags
+```
+
+Both resolve a compose runner automatically (`podman-compose` →
+`podman compose` → `docker compose` → `docker-compose`) and create `.env` /
+`.env.db` from their templates if either is missing.
+
+> **The launchers do not seed the named UAT fixtures.** `--fresh` leaves the
+> database holding only the automatic startup seeds (chart of accounts, admin
+> user). The UAT fixtures are a separate explicit step — see
+> [`.zj/UAT-v4.0.md`](../../.zj/UAT-v4.0.md) §1.1 step 5.
+
 ---
 
 ## Path 2 — Native Run (Fast-Debug Escape Hatch)

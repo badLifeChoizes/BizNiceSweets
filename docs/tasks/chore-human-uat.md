@@ -713,3 +713,40 @@ Regression alongside: `verify_gelato`, `verify_inventory`, `verify_mousse`,
 ### Task 33 — full regression gate results
 
 *(pending)*
+
+### Off-plan deviation — `scripts/uat.sh` (bash launcher)
+
+**Not a PLAN.md task.** Added mid-phase, at the owner's request, while bringing the stack
+up for the Task-20 sitting. Recorded here rather than silently folded into a task.
+
+**Why.** `scripts/uat.ps1` has a `#!/usr/bin/env pwsh` shebang and is PowerShell-only. The
+owner's machine has no `pwsh` on PATH, so the documented one-command launcher could not run
+at all and the stack had to be driven by raw `podman-compose` invocations. The phase's
+remaining work is ~11 owner sittings across an estimated 3 h, every one of which needs the
+stack stopped and restarted.
+
+**What.** `scripts/uat.sh` — a bash port with the same four flags (`--fresh`, `--detach`,
+`--down`, `--no-browser`), the same compose-runner resolution order, and the same
+foreground/detached/down modes. Two deliberate divergences from the `.ps1`:
+
+1. It ensures **both** `.env` and `.env.db` exist and warns when `POSTGRES_PASSWORD` is
+   empty **in `.env.db`**. `uat.ps1` predates D-P5-10 and still checks `.env` for
+   `POSTGRES_PASSWORD`, which has since moved to `.env.db` — so on a fresh volume the `.ps1`
+   would pass its own check and then hit defect **U0**. The `.sh` cannot.
+2. It does **not** seed the named UAT fixtures. That stays an explicit step
+   (`.zj/UAT-v4.0.md` §1.1 step 5) so a launcher flag can never silently reset the run.
+
+**Verification.** `bash -n` clean; `--help` and unknown-flag (exit 2) paths exercised;
+`--detach --no-browser` run against the live stack → `API is healthy`, `/health/ready` →
+`{"status":"ok","db":"connected"}`, `:5173` → 200. Fixtures re-checked afterwards with
+`seed_uat_fixtures.py --manifest`: all **129** derived literals byte-identical to the Task-8
+recorded manifest.
+
+> Cosmetic, pre-existing: `podman-compose` 1.0.6 prints `Error: … name is already in use`
+> + `exit code: 125` for each container when `up -d` runs against an already-created stack,
+> then falls back to `podman start` and succeeds. Not introduced by the script — raw
+> `podman-compose up -d` does the same. Harmless noise.
+
+`scripts/uat.ps1` is left in place unchanged for Windows use; both are now documented in
+`docs/deployment/local-dev.md` §1.6. Note the `.ps1` still carries divergence 1 above as a
+latent bug — homed to BACKLOG rather than fixed here, since no Windows run is in scope.
