@@ -1,5 +1,54 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-17 (**v4.0 Phase 5 RESCOPED — D-P5-11; build resumes at Task 32.** The phase had
+Updated: 2026-08-17 (**v4.0 Phase 5 BUILD COMPLETE — every task done; next `/zj:verify 5`.**
+Branch `chore-human-uat`, now pushed to `origin`. Tasks 0–19 (engineering, previously done), then
+**32–35, 37–38** this session. Tasks **20–31 and 36 were struck** by **D-P5-11**, not skipped.
+
+**D-P5-11, the rescope.** Twelve tasks had a `Done when` only the owner could satisfy ("every row
+`pass` or a defect ID; zero `todo`"). The phase stalled at 22/41 for three weeks and held the v4.0
+milestone behind a ~3 h sitting — the shape the owner preference **`QA docs: non-blocking`** forbids.
+Struck as plan tasks; restated as a parallel twelve-sitting to-do with dependency order preserved.
+**The deliverable is the checklist, not the reading.**
+
+**`.zj/QA.md`** (`493e185`, extended `fbac89b`) — the standing regression checklist. **61 checks**,
+all judgeable, re-keyed from phase success criteria onto **SRD requirement IDs**, so it survives
+phase closure and can express coverage: **31 of 47** requirements checked, §5 names **zero real
+gaps**. §6 result log is the resumable state; §7 is the defect ledger. `UAT-v1.0/v2.0/v4.0` carry
+pointer lines and are history.
+
+**Three defects, every one found by engineering before anyone clicked.** `U0` blocker (fresh-volume
+deploy) `4ace2c4`+pin `d870233`; `U1` major (500 on duplicate email) `f508554`+pin `f67f085`; and
+**`U2` blocker — the API image could not be built at all**: `COPY frontend/package*.json ./` never
+matched the dotfile `frontend/.npmrc`, so `npm ci` ran without `legacy-peer-deps=true` and died on
+the `eslint-plugin-react-hooks@5` peer range. Introduced by Phase 1's lint devDeps and **masked for
+five phases by the stale image the p1 backlog item was about** — Task 34's rebuild was the first
+attempt since, and it failed on the first try. Fixed `8d61cca`, pinned `f82ec38`, RED on revert.
+
+**Two corrections to previously recorded facts, both found by executing.** The `verify_*` sweep
+drifts the seeded fixtures by **`+100.00`**, not the `+50.00` attributed to `verify_purchasing.py`
+alone — so a second leaker exists and is **unidentified** (p3 re-worded to say so). And **NFR-1 has
+no human surface at all**: `write_audit` is called throughout the backend, but no audit endpoint is
+exposed and nothing in `frontend/src/` reads audit events — re-triaged from "real gap" to
+machine-only. Also: `podman-compose build` printed `exit code: 1` and **returned 0**, which nearly
+hid U2 — never trust its exit status, grep for `Error: building at STEP`.
+
+**Gate at `81a8f55`:** pytest **243 passed / 0 skipped** (baseline 232), 24/24 `verify_*`, ruff +
+eslint 0, vitest 148/45, CI run **32059723558** 4/4 success — the first push of the v4.0 stack, so
+CI exercised 154 commits end to end. Prod stack verified on a **fresh volume** at `:8000`: `/` 200
+serving `index-BQmUVhcG.js`, byte-identical to the host bundle, `alembic current` `0017 (head)`,
+129 fixture literals identical to the Task-8 record, admin login + authed reads 200.
+NFR-8 stamped `done`; ROADMAP/BACKLOG/DECISIONS trued up (D-P5-1..11, 137→148); checklist archived.
+
+**What is deliberately NOT done: anyone has run the checklist.** `.zj/QA.md` §6 holds **zero**
+readings. Under D-P5-11 that blocks nothing — but NFR-8 no longer evidences that a human exercised
+the flows, the module rows caveated "UI-flow UAT-pending" **stay** caveated, and the p1 backlog UAT
+item **stays open** by design. **Whether v4.0 ships on an unrun checklist is an owner call at
+`/zj:milestone`.**
+
+**Next action:** `/zj:verify 5`. The owner run is a parallel to-do with no due date — the prod stack
+is up and seeded at **http://localhost:8000** (dev `:5173` is down; `compose.yml` alone has no
+frontend service). **An engineer must still never tick an owner check or infer a pass.**)
+
+Prior: 2026-08-17 (**v4.0 Phase 5 RESCOPED — D-P5-11; build resumes at Task 32.** The phase had
 stalled at 22/41 for three weeks because twelve of its tasks (20–31, 36) had a `Done when` only the
 owner could satisfy — "every row has `pass` or a defect ID; zero `todo`". The new owner preference
 **`QA docs: non-blocking`** forbids that shape outright, so those tasks are **struck** and restated as
