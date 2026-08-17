@@ -66,7 +66,7 @@ go in `.zj/QA.md` §6. No engineering was lost — Tasks 0–19 all stand.
 - [x] 35. Bring the prod stack up on a fresh volume at :8000
 - [ ] ~~36. **[OWNER]** Prod-stack deploy smoke at :8000~~ → sitting 12 of the parallel to-do
 - [x] 37. Bookkeeping: SRD NFR-8 and requirements-progress *(amended)*
-- [ ] 38. Bookkeeping: ROADMAP, BACKLOG, DECISIONS, and archive the checklist *(amended)*
+- [x] 38. Bookkeeping: ROADMAP, BACKLOG, DECISIONS, and archive the checklist *(amended)*
 
 ## Records
 

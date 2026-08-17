@@ -512,7 +512,7 @@ with the SPA served and `alembic current` at head — stays a real gate as **Tas
 - **Verify:** `grep -A8 'NFR-8' .zj/SRD.md` shows the rewritten clauses citing `.zj/QA.md`; `grep -c 'NFR-8' docs/features/requirements-progress.md` ≥ 1.
 - **Parallel-ok:** no.
 
-### [ ] 38. Bookkeeping: ROADMAP, BACKLOG, DECISIONS, and archive the checklist
+### [x] 38. Bookkeeping: ROADMAP, BACKLOG, DECISIONS, and archive the checklist
 - **Files:** `.zj/ROADMAP.md` (v4.0 Phase 5 row), `.zj/BACKLOG.md`, `.zj/DECISIONS.md`, `docs/tasks/_completed/2026-07-XX-chore-human-uat.md`
 - **Do:** Update the ROADMAP Phase 5 row with the outcome and evidence, **including the rescope** (D-P5-11) so the row does not read as a completed click-through. Check off the p1 "Rebuild `frontend/dist` + the API container image" item; check off the p2 "Positive adjustment accepts an unvalidated `bin_id`" item citing the SC8 commit and scenario G. **Leave the p1 "Human click-through UAT for v2.0 operations" item open** and re-word it to point at `.zj/QA.md` — the checklist now exists, but nobody has run it, and ticking it would be a false claim. Add the owner run to the backlog as a standing non-blocking item. Append **D-P5-1..11** to `.zj/DECISIONS.md`. Archive `docs/tasks/chore-human-uat.md` to `docs/tasks/_completed/{date}-chore-human-uat.md`.
 - **Done when:** all four files updated; the two closable backlog items are `[x]`; the UAT item is open and re-pointed; D-P5-1..11 present; the checklist is archived.

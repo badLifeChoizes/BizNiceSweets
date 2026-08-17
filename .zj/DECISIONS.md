@@ -1,5 +1,6 @@
 # DECISIONS — BizNiceSweets
-Updated: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — D-M4-1..3 scope/CI-platform/lint-baseline; v3.0 shipped to master via PR #3, D-M3-4 updated; 137 decisions)
+Updated: 2026-08-17 (v4.0 Phase 5 close — D-P5-1..11 appended, incl. D-P5-10 the dedicated `.env.db` that fixed blocker U0, and D-P5-11 the rescope making the QA checklist the deliverable rather than the owner's reading; 148 decisions)
+Prior: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — D-M4-1..3 scope/CI-platform/lint-baseline; v3.0 shipped to master via PR #3, D-M3-4 updated; 137 decisions)
 
 Recovered decisions are marked `(recovered)` with their original source (now archived).
 Numbering is append-only.
@@ -1176,3 +1177,38 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   "found in bin" case, adds directly to that bin's pool); `NULL` adds to the unbinned pool (prior
   behavior). Additions take NO pool floor guard — a pool cannot be overdrawn by adding; only
   negative deltas floor-guard the named pool.
+
+- **D-P5-1 — UAT breadth = residue-only, full coverage.** Every shipped flow gets a check; each names only what a machine cannot confirm (labels, badges, colours, toast *absence*, auto-refresh without F5, empty states, sort order, read-only-ness). An agent pre-flight proves each flow's backend first. Target **~40–50 checks**, est. **2–3 h** of owner time. Copy `.zj/UAT-v1.0.md`'s "machine already proved" / "residue only a human can confirm" split.
+- **D-P5-2 — Environment = dev overlay for the click-through + one prod-stack smoke.** Click-through on the Vite dev server **:5173** (D-P7-1 precedent; HMR means a defect is fixed and re-checked in seconds). Separately, one task brings the **prod** stack up on a fresh volume at **:8000** and smokes login + one write per suite (SC7).
+- **D-P5-3 — Fixtures = idempotent seed script on a fresh DB** (SC2). The v1.0 UAT was burned by exactly this ("the previously-listed fixtures no longer exist — the dev volume was recreated"). The script is reusable for every future milestone UAT.
+- **D-P5-4 — Defect policy = fix blocker/major in-phase with a pinning test; home minor to BACKLOG with a defect ID.** Matches the v1.0 D1/D2/D3 handling and every prior milestone.
+- **D-P5-5 — Positive-adjust bin membership: ADD the check** (SC8), not accept-and-document. Resolves the p2 BACKLOG item's owner call.
+- **D-P5-6 — One consolidated `.zj/UAT-v4.0.md`**, not three per-milestone docs. This **amends NFR-8's literal wording** ("`UAT-v1.0.md` round-2 + `UAT-v2.0.md` extended") — same coverage, one runbook. The SRD sentence is trued up at Task 33.
+- **D-P5-7 — Run mechanics = interactive, suite by suite.** The build brings the stack up and pre-flights a suite, the **owner** clicks through it and reports results; the engineer records them and fixes defects live, then moves to the next suite. **The status table in `.zj/UAT-v4.0.md` is the resumable state** — the run must survive being paused across sessions.
+- **D-P5-8 — CORE platform surfaces are IN scope** (~6 checks): login + token refresh, Users admin CRUD, RBAC nav filtering, module-toggle propagation, Settings. The module-toggle check is needed anyway for SC6's GELATO-off path, and it makes "every shipped UI flow" literally true.
+- **D-P5-9 — Branch:** cut a fresh `chore-human-uat` off the current tip **`c02d80b`** on `chore-inventory-race-safety` (the unmerged v4.0 stack), same pattern as D-P4-4. `.vscode/settings.json` is unstaged-dirty (owner's) — **leave it**.
+- **D-P5-10 — `U0` fix shape = a dedicated db env file** (owner, AskUserQuestion at Task 8, 2026-07-26).
+  Split into `.env` (app secrets, unchanged) + **`.env.db`** (`POSTGRES_*` only); `db` gets
+  `env_file: ../.env.db` and loses the `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}` line from
+  `environment:` (which takes precedence and would keep overriding it to empty). Rejected alternatives:
+  `env_file: ../.env` on `db` (one line, but spreads `JWT_SECRET` — the auth system's master key — and
+  `BNS_ADMIN_PASSWORD` into a container that needs neither, visible in `podman inspect`);
+  `--env-file .env` on every documented command (no restructure, but a forgotten flag silently
+  reproduces the bug); deferring to BACKLOG (SC7 would then prove the artifact only under a workaround,
+  contradicting its own wording). Rationale: the db container never sees a secret it does not need, and
+  the **documented deploy command stays unchanged** — which is the thing U0 broke.
+- **D-P5-11 — Rescope: the checklist is the deliverable, the reading is not** (owner, 2026-08-17,
+  driven by the new `QA docs: non-blocking` preference). Twelve tasks (20–31, 36) had a `Done when`
+  only the owner could satisfy; the phase stalled at 22/41 for three weeks and blocked the v4.0
+  milestone behind a ~3 h sitting. **Struck as plan tasks** and restated as a parallel to-do with
+  their dependency order preserved. The consolidated checklist moves from `.zj/UAT-v4.0.md` to
+  **`.zj/QA.md`**, re-keyed from phase success criteria to **SRD requirement IDs**, so it stays true
+  as phases close and can express coverage (29/47 requirements checked; 3 real gaps named). SC1, SC4,
+  SC6, SC7 amended; NFR-8's Statement and Verification rewritten.
+  **This supersedes D-P5-6** (which made `.zj/UAT-v4.0.md` the single runbook) and **D-P5-7**'s
+  "the status table in `.zj/UAT-v4.0.md` is the resumable state" — that role passes to `.zj/QA.md` §6.
+  **Consciously accepted cost:** NFR-8 is now satisfiable by a checklist nobody has run. That is the
+  point — it stops an unrun checklist blocking a milestone — but it means NFR-8 no longer evidences
+  that a human exercised the flows. The module SRD rows carrying "UI-flow UAT-pending" therefore
+  **stay** caveated (Task 37), and whether v4.0 ships on an unrun checklist is a separate owner call
+  at `/zj:milestone`.

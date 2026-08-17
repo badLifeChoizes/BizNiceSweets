@@ -1,5 +1,11 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-07-25 (Phase 4 retro — two unhomed PLAN `## Noticed` items filed p3: pre-lock
+Updated: 2026-08-17 (v4.0 Phase 5 Task 38 — p1 **Rebuild `frontend/dist` + the API container image**
+RESOLVED (and it exposed blocker `U2`, fixed+pinned); p2 **positive-adjust unvalidated `bin_id`**
+RESOLVED by SC8 per owner decision D-P5-5. The p1 human-UAT item stays **open** and is re-pointed at
+`.zj/QA.md` — the checklist is delivered, nobody has run it, and per D-P5-11 that ticks only when a
+person clicks. Two p3 items filed: no `pytest` in the API image, and `uat.ps1`'s stale env-file guard.
+The `verify_*` orphan-JE item re-measured at +100.00, so a second leaker exists and is unidentified)
+Prior: 2026-07-25 (Phase 4 retro — two unhomed PLAN `## Noticed` items filed p3: pre-lock
 `moving_avg_cost` staleness in `post_issue`/`post_putaway`, and `verify_purchasing.py` orphan
 JE rows. Nothing resized; the p2 positive-adjust bin-membership item still needs an owner call)
 Prior: 2026-07-25 (Phase 4 verify — two deferred review findings logged: positive-adjust
@@ -77,25 +83,36 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   still folds into the CI-pipeline item above (Phase 3 / NFR-4) — that item stays open.
 - [ ] **Seed/startup integration test** — admin-seed path has no DB-backed regression test
   (a `MissingGreenlet` slipped past unit tests in Phase 2).
-- [ ] **Rebuild `frontend/dist` + the API container image** — production bundle predates Phase 3;
-  `:8000` serving doesn't reflect Phases 3–6 UI until rebuilt. The **API image is stale too**
-  (Phase 7 verify, 2026-07-09): in-container Excel export raises `ModuleNotFoundError: openpyxl`
-  though `requirements.txt` pins `openpyxl==3.1.5`, and `pytest` isn't installed — so every
-  "run it in the container" verify step pays a tax. Rebuild both, or add a test stage carrying
-  dev deps.
+- [x] **Rebuild `frontend/dist` + the API container image** — **RESOLVED by v4.0 Phase 5 Tasks
+  34–35 (2026-08-17).** Both rebuilt; the image now carries `openpyxl 3.1.5` (verified in-image),
+  and the bundle served at `:8000` on a fresh prod volume is `index-BQmUVhcG.js`, byte-identical to
+  `frontend/dist/assets/` — image and host are one build. **The rebuild exposed defect `U2`, a
+  blocker: the image could not be built at all.** `COPY frontend/package*.json ./` never matched the
+  dotfile `frontend/.npmrc`, so `npm ci` ran without `legacy-peer-deps=true` and died on the
+  `eslint-plugin-react-hooks@5` peer range — a break introduced by Phase 1's lint devDeps and masked
+  for five phases by the very staleness this item describes. Fixed `8d61cca`, pinned `f82ec38`
+  (`backend/tests/test_containerfile_config.py`, RED on revert).
+  **Residual, deliberately not fixed here:** `pytest` is still absent from the image, so the backend
+  suite cannot run in-container (the bind-mounted venv carries host-path shebangs). Phase-5 Task 33
+  ran it against a disposable `postgres:17-alpine` instead. The "add a test stage carrying dev deps"
+  half of this item is therefore **not** delivered — refiled as a p3 item below.
 - [x] **Refresh root `CLAUDE.md` stack/architecture sections** — done in Phase 7 Task 4
   (commit `5db8278`); Technology Stack + Architecture now describe the live FastAPI/React stack
   and cite `.zj/codebase/MAP.md`. (Any remaining Windows-path references elsewhere are out of
   that task's scope.)
 
-- [ ] **[task] [p1] Human click-through UAT for v2.0 operations** (deferred at the v2.0 milestone
-  close, D-M2-2) — the 14-check `.zj/UAT-v2.0.md` (SYERP inventory + purchasing UI flows) and the
-  owed v1.0 round-2 checks never ran. All backend behavior is live-proven (13/13 verify scripts) and
-  the milestone audit confirmed every route is mounted, in-nav, and contract-aligned, so the tag
-  rests on backend proof + wired-UI audit (D-P7-5 precedent). This is now a **pre-public-release
-  gate**: run it against the Vite dev server (`localhost:5173`) with the Podman stack up before any
-  public open-source release, and extend it with GL/AP/reports/MOUSSE UI flows (Phases 9–10 shipped
-  no UAT checklist of their own). Record results in `.zj/UAT-v2.0.md`.
+- [ ] **[task] [p1] Run the human click-through checklist** (deferred at the v2.0 milestone close,
+  D-M2-2; **re-pointed 2026-08-17, D-P5-11**) — **still open, and deliberately so.** The *checklist*
+  is now delivered and complete: `.zj/QA.md`, 61 checks, requirement-keyed, 31/47 requirements
+  covered with zero real gaps, against reproducible fresh-volume fixtures. **Nobody has run it** —
+  `.zj/QA.md` §6 holds zero readings. Under `QA docs: non-blocking` that blocks no phase and no
+  milestone, so this item will not be ticked by any engineering work; it is ticked only by a person
+  clicking. Run order and its dependency rationale (read-only before mutating, GELATO back on before
+  the GELATO sitting, money loop last) are the twelve-sitting table in
+  `.zj/phases/05-human-uat/PLAN.md`. Record readings in `.zj/QA.md` §6; it is the resumable state, so
+  a partial run is normal and useful.
+  *(Supersedes the original wording, which pointed at `.zj/UAT-v2.0.md` and the owed v1.0 round-2 —
+  both now history, carried into `.zj/QA.md` verbatim.)*
 
 ## p2 — architecture & docs
 
@@ -193,8 +210,18 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `list_unbinned_stock` `>0` filter now only masks that legacy data, never a live negative).
   `get_bin_on_hand`'s trust-boundary note rewritten to the new invariant. Final check-off of
   this item happens at Phase 4 verify (scenario (E) flip, `verify_gelato.py`).
-- [ ] **Positive adjustment accepts an unvalidated `bin_id` — can strand stock in a
-  foreign-location bin pool** (Phase 4 verify review #2, 2026-07-25, minor — **decision needed**).
+- [x] **Positive adjustment accepts an unvalidated `bin_id` — can strand stock in a
+  foreign-location bin pool** — **RESOLVED by v4.0 Phase 5 SC8 (`e57c1ff`, pinned `0a7a89f`).**
+  Owner chose option (a) (**D-P5-5**): `post_adjustment` now runs one raw-SQL existence +
+  location-membership probe against `gelato_bin(id, location_id)` for any non-null `bin_id` and
+  rejects a mismatch with 422, writing nothing. **No gelato model import**, so D-P12a-3's
+  no-imports rule still holds. Pinned as `verify_gelato.py` scenario **(G)**, four assertions:
+  G1 the mismatched pair is rejected and writes no ledger rows; G2 a wholly non-existent bin is
+  rejected 422 rather than surfacing a raw FK IntegrityError as a 500; G3 the matching pair still
+  succeeds and raises that bin's on-hand by exactly 5; G4 `bin_id=None` is untouched by the probe
+  (D-P4-1). RED was unambiguous before the fix — `status=None rows 1->2`, i.e. no exception at all
+  and stock booked into a bin at the wrong location. Original text follows.
+  *(Phase 4 verify review #2, 2026-07-25, minor — decision needed.)*
   D-P12a-3 (SYERP never validates bin existence/membership; FK backstop) was safe pre-Phase-4
   because every public bin WRITE went through GELATO, which does validate location-membership.
   Phase 4's draw paths self-guard (a mismatched `(location, bin)` pool reads 0 → 422), but a
@@ -291,6 +318,17 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **The API image carries no `pytest`, so the backend suite cannot run in-container**
+  (split out of the now-resolved p1 rebuild item, v4.0 Phase 5 Task 33, 2026-08-17) — the runtime
+  stage installs `requirements.txt` only, and the bind-mounted `backend/.venv/bin/pytest` carries
+  host-path shebangs, so neither route works. Every "run the suite in the container" instruction in
+  the docs is therefore wrong, and Task 33 had to run it against a **disposable**
+  `postgres:17-alpine` on a host port instead (compose's `db` is deliberately unpublished, T-01-12).
+  That workaround is fine and arguably safer — it cannot touch the seeded dev database — but it is
+  undocumented tribal knowledge. Fix: either add a builder/test stage carrying
+  `requirements-dev.txt`, or document the disposable-Postgres recipe in
+  `docs/deployment/local-dev.md` beside the other verified commands. The `openpyxl` half of the
+  original item is done; only this half remains.
 - [ ] **`scripts/uat.ps1` checks `POSTGRES_PASSWORD` in the wrong file (pre-D-P5-10)** (noticed
   2026-08-08 while porting the launcher to bash during Phase 5) — the `.ps1` warns when
   `^POSTGRES_PASSWORD=\S+` is absent from `.env`, but D-P5-10 moved that credential to `.env.db`
