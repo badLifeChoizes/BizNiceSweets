@@ -162,3 +162,119 @@ jobs:
             echo "== $s =="
             python "$s"
           done
+
+      # --- UAT fixture seed idempotency (SC2, gap G-2) -------------------------
+      # backend/scripts/seed_uat_fixtures.py is the single point of failure for the
+      # 275 derived literals `.zj/QA.md` quotes throughout its checks, and it is
+      # deliberately NOT named verify_* so the glob above skips it. Nothing else
+      # re-proves that a second run changes nothing; if idempotency breaks, the first
+      # symptom is a tester chasing a phantom defect against a drifted number.
+      #
+      # IT GETS ITS OWN DATABASE, not `biznice`. The scripts above post journal
+      # entries under random actor ids, which the seed's require_no_foreign_ledger
+      # guard correctly reads as somebody's real books, and they drift the GL
+      # aggregates the manifest quotes. A second database on the same postgres
+      # service is cheaper than a second service or a second job — and, unlike a new
+      # job, `verify-scripts` is already a required status context on master, so this
+      # pin gates from the moment it lands.
+      - name: Create an isolated `uatseed` database
+        run: |
+          python - <<'PY'
+          import asyncio
+          import os
+
+          import asyncpg
+
+          async def main():
+              conn = await asyncpg.connect(
+                  host=os.environ["POSTGRES_HOST"],
+                  port=int(os.environ["POSTGRES_PORT"]),
+                  user=os.environ.get("POSTGRES_USER", "app"),
+                  password=os.environ["POSTGRES_PASSWORD"],
+                  database="postgres",   # the maintenance DB — never `biznice`
+              )
+              await conn.execute("DROP DATABASE IF EXISTS uatseed")
+              await conn.execute("CREATE DATABASE uatseed")
+              await conn.close()
+
+          asyncio.run(main())
+          print("created database uatseed")
+          PY
+
+      - name: Seed the UAT fixtures twice and prove the second run changed nothing
+        env:
+          POSTGRES_DB: uatseed
+          # The seed refuses to run unless the stack opts in (a guard so the runbook
+          # command cannot seed a self-hoster's live books). CI's throwaway database,
+          # fresh on every run, is exactly the case the opt-in exists for.
+          BNS_ALLOW_UAT_SEED: "1"
+        run: |
+          set -e
+          python -m alembic upgrade head
+          python - <<'PY'
+          import asyncio
+          from app.core.db import AsyncSessionLocal
+          from app.core.seed import run_seeds
+
+          async def main():
+              async with AsyncSessionLocal() as db:
+                  await run_seeds(db)
+
+          asyncio.run(main())
+          print("seeds applied")
+          PY
+
+          # A whole-database row census. The manifest is the checklist's contract, but
+          # it counts only UAT- rows, so an audit row per run would slip past it — the
+          # exact regression `_ensure_cost` had to be made conditional to avoid.
+          cat > "$RUNNER_TEMP/census.py" <<'PY'
+          import asyncio
+          import os
+
+          import asyncpg
+
+          TABLES = (
+              "SELECT table_name FROM information_schema.tables "
+              "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
+              "ORDER BY table_name"
+          )
+
+          async def main():
+              conn = await asyncpg.connect(
+                  host=os.environ["POSTGRES_HOST"],
+                  port=int(os.environ["POSTGRES_PORT"]),
+                  user=os.environ.get("POSTGRES_USER", "app"),
+                  password=os.environ["POSTGRES_PASSWORD"],
+                  database=os.environ["POSTGRES_DB"],
+              )
+              for row in await conn.fetch(TABLES):
+                  table = row["table_name"]
+                  print(table, await conn.fetchval('SELECT count(*) FROM "' + table + '"'))
+              await conn.close()
+
+          asyncio.run(main())
+          PY
+
+          # Default mode seeds and then prints the manifest, so each file is the state
+          # of the database after that run. The banner goes to stderr; stdout is a pure,
+          # diffable artifact.
+          python scripts/seed_uat_fixtures.py > "$RUNNER_TEMP/manifest-1.txt"
+          python "$RUNNER_TEMP/census.py"     > "$RUNNER_TEMP/census-1.txt"
+          python scripts/seed_uat_fixtures.py > "$RUNNER_TEMP/manifest-2.txt"
+          python "$RUNNER_TEMP/census.py"     > "$RUNNER_TEMP/census-2.txt"
+
+          if ! diff -u "$RUNNER_TEMP/manifest-1.txt" "$RUNNER_TEMP/manifest-2.txt"; then
+            echo "::error::seed_uat_fixtures.py is NOT idempotent — the manifest changed"
+            echo "between two runs on a fresh database. Every literal .zj/QA.md quotes"
+            echo "comes from this manifest, so a tester would now be checking numbers"
+            echo "the seed no longer produces. Fix the get-or-create that re-wrote."
+            exit 1
+          fi
+          if ! diff -u "$RUNNER_TEMP/census-1.txt" "$RUNNER_TEMP/census-2.txt"; then
+            echo "::error::the second seed run WROTE ROWS. The manifest is unchanged, so"
+            echo "the drift is in a table it does not count (an audit row per run is the"
+            echo "known shape — see _ensure_cost). Make the offending write conditional."
+            exit 1
+          fi
+          echo "manifest byte-identical across two runs on a fresh database"
+          wc -l "$RUNNER_TEMP/manifest-1.txt" "$RUNNER_TEMP/census-1.txt"
