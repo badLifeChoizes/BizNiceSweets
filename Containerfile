@@ -20,8 +20,15 @@ FROM node:22-slim AS frontend-builder
 
 WORKDIR /frontend
 
-# Copy manifests first for layer caching
-COPY frontend/package*.json ./
+# Copy manifests first for layer caching.
+# `.npmrc` MUST come with them (defect U2): it carries `legacy-peer-deps=true`
+# (D-P1-1), without which `npm ci` below dies on the eslint-plugin-react-hooks@5
+# peer range. `package*.json` does not match a dotfile, so it needs naming
+# explicitly — and the failure only appears once the v4.0 Phase-1 lint devDeps
+# exist, which is why five phases of stale image never hit it.
+# Do NOT "fix" this by adding --legacy-peer-deps to the npm ci below: that puts
+# the setting in two places, and the copy is what CI already honors.
+COPY frontend/package*.json frontend/.npmrc ./
 # Install ALL deps (incl. devDependencies) — the build tools (tsc, vite,
 # @vitejs/plugin-react, @tailwindcss/vite) live in devDependencies and are
 # required to compile the SPA. These never reach the final image: only the
