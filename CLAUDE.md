@@ -77,7 +77,7 @@ The vanilla-JS / CDN / localStorage details in the "Legacy prototypes" subsectio
 - **Boot sequence:** `backend/entrypoint.sh` waits for Postgres, runs `alembic upgrade head`, then startup seeds run idempotently; the built React app is served from `frontend/dist` by a catch-all mounted last so it never swallows `/api/*`
 
 ## Configuration
-- Environment-driven (12-factor); required secrets have **no defaults** — the app refuses to start without them: `POSTGRES_PASSWORD`, `JWT_SECRET`, `BNS_ADMIN_PASSWORD` (see `.env.example`; `.env` is not git-tracked)
+- Environment-driven (12-factor); required secrets have **no defaults** — the app refuses to start without them: `JWT_SECRET` and `BNS_ADMIN_PASSWORD` in **`.env`** (from `.env.example`), and `POSTGRES_PASSWORD` in **`.env.db`** (from `.env.db.example`). The stack reads **both** files — the split (D-P5-10) gives the database credentials exactly one home, read by `db` and `api` alike; skipping `.env.db` is defect `U0` (a fresh volume refuses to initialize). Neither `.env` nor `.env.db` is git-tracked; only the two `*.example` templates are
 - Backend config surface in `backend/app/core/config.py`; module toggles/settings via `modules_router.py` / `settings_router.py`
 
 ## Legacy prototypes (frozen reference — `plum/app/`, `flan/app/` only)
@@ -187,8 +187,8 @@ and applies **only** to `plum/app/` and `flan/app/`.
 - **Split PLUM's service layer before it metastasizes** — `plum/service.py` is ~3,000 lines; keep new suites thin.
 
 ## Entry Points
-- **Full dev stack:** `./scripts/uat.ps1` (requires `pwsh`), or `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up`.
-- **Prod stack:** `podman-compose -f compose/compose.yml up -d` (needs `.env` from `.env.example`).
+- **Full dev stack:** `./scripts/uat.sh` (bash; `--fresh/--detach/--down/--no-browser`) or `./scripts/uat.ps1` (requires `pwsh`; `-Fresh/-Detach/-Down/-NoBrowser`) — both create `.env` / `.env.db` from their templates if either is missing; or `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up`.
+- **Prod stack:** `podman-compose -f compose/compose.yml up -d` (needs **both** `.env` from `.env.example` **and** `.env.db` from `.env.db.example` — D-P5-10; without `.env.db` a fresh volume refuses to initialize, defect `U0`).
 - **Backend:** `pytest` / `ruff check .` / `alembic upgrade head` from `backend/`.
 - **Frontend:** `npm run dev` / `npm run build` / `npm run lint` / `npm run test` from `frontend/`.
 

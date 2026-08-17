@@ -64,8 +64,8 @@ All verified against config files:
 
 | Purpose | Command | Evidence |
 |---|---|---|
-| Full dev stack (db+api+Vite, containers only) | `./scripts/uat.ps1` (add `-Fresh` to reset DB, `-Down` to stop) | `scripts/uat.ps1:44-158` — requires `pwsh` on Linux |
-| Prod stack | `podman-compose -f compose/compose.yml up -d` (needs `.env` from `.env.example`) | `compose/compose.yml:3-5` |
+| Full dev stack (db+api+Vite, containers only) | `./scripts/uat.sh` (add `--fresh` to reset DB, `--down` to stop) or `./scripts/uat.ps1` (`-Fresh` / `-Down`) | `scripts/uat.sh:50-228`; `scripts/uat.ps1:44-178` — the `.ps1` requires `pwsh` on Linux |
+| Prod stack | `podman-compose -f compose/compose.yml up -d` (needs **both** `.env` from `.env.example` and `.env.db` from `.env.db.example` — D-P5-10) | `compose/compose.yml:3-5`, `:85-88` (`api` reads both files) |
 | Dev stack (manual) | `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up` | `scripts/uat.ps1:58` |
 | Backend tests | `pytest` from `backend/` (testpaths=tests, asyncio auto). **DB-backed (v4.0 Phase 2a, NFR-5):** the harness provisions a dedicated migrated **`biznice_test`** DB (never the live `biznice`) and requires a live Postgres — no silent-skip mode. In-container: `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest -q'`. Localhost/CI: set `POSTGRES_HOST/POSTGRES_PORT/POSTGRES_PASSWORD/JWT_SECRET/BNS_ADMIN_PASSWORD` (+ optional `TEST_POSTGRES_DB`). | `backend/pyproject.toml:1-3`, `backend/tests/conftest.py:16-33` |
 | Backend lint | `ruff check .` from `backend/` (E,F,I,UP; line-length 100) | `backend/pyproject.toml:5-15` |
@@ -76,7 +76,7 @@ All verified against config files:
 | Frontend tests | `npm run test` (vitest) | `frontend/package.json:11` |
 | Legacy prototypes | open `plum/app/plm_v54.html` / `flan/app/prj-mgmt-v24.html` in a browser | `README.md:21-27` |
 
-Required env (no defaults; app refuses to start without them): `POSTGRES_PASSWORD`, `JWT_SECRET`, `BNS_ADMIN_PASSWORD` — `backend/app/core/config.py:25,35,43`, `.env.example:19-33`. `.env` exists locally but is not git-tracked (verified via `git ls-files`).
+Required env (no defaults; app refuses to start without them) is split across **two** files since D-P5-10: `JWT_SECRET` + `BNS_ADMIN_PASSWORD` in `.env` (`.env.example:32,36`) and `POSTGRES_PASSWORD` in `.env.db` (`.env.db.example:34`) — `backend/app/core/config.py:24,33,41`. `db` reads `../.env.db` only; `api` reads both (`compose/compose.yml:51`, `:85-88`). Both files exist locally but neither is git-tracked (verified via `git ls-files`); only the two `*.example` templates are.
 
 ## Conventions
 
