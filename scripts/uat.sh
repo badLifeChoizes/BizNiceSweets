@@ -166,6 +166,15 @@ if ! grep -Eq '^POSTGRES_PASSWORD=\S+' .env.db; then
   warn "POSTGRES_PASSWORD looks empty in .env.db - a fresh db volume will refuse to initialize (defect U0). Edit .env.db and set it."
 fi
 
+# A leftover POSTGRES_PASSWORD in .env is the PRE-D-P5-10 layout. podman-compose
+# emits `--env-file ../.env --env-file ../.env.db` and the LATER file wins, so the
+# stale .env value is not the one `api` ends up using - and an already-initialized
+# volume still expects it. Two homes for one credential is exactly the drift
+# D-P5-10 removed. Warn, never fail: it is the operator's file to fix.
+if grep -Eq '^POSTGRES_PASSWORD=' .env; then
+  warn ".env still defines POSTGRES_PASSWORD - it now lives ONLY in .env.db (D-P5-10). If your database volume predates the split, MOVE that line's value into .env.db and delete it from .env; see docs/deployment/local-dev.md 1.2."
+fi
+
 # --- Fresh: reset DB volume --------------------------------------------------
 if (( FRESH )); then
   say "$YELLOW" 'Resetting database volume (down -v)...'

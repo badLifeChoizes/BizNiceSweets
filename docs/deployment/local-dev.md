@@ -62,6 +62,26 @@ for a secure deployment.
 > Both `.env` and `.env.db` are listed in `.gitignore` — neither will ever be
 > committed. Only the `.env.example` / `.env.db.example` templates are tracked.
 
+> **⚠ Upgrading an existing deployment.** If you already have a running stack, your
+> untracked `.env` still carries `POSTGRES_PASSWORD=<your real password>` and your
+> volume was initialized with it — this change cannot rewrite a file git does not
+> track. **Move that line into `.env.db` and delete it from `.env`:**
+>
+> ```bash
+> grep '^POSTGRES_PASSWORD=' .env >> .env.db      # carry the OLD value across
+> sed -i '/^POSTGRES_PASSWORD=/d' .env            # remove its second home
+> # then delete the template's `POSTGRES_PASSWORD=changeme_in_production` line
+> # from .env.db, so exactly one definition is left
+> ```
+>
+> **The *old* value is the one that must end up in `.env.db`.** An initialized PGDATA
+> ignores `POSTGRES_PASSWORD`, so `db` starts fine either way — but podman-compose
+> passes `--env-file ../.env --env-file ../.env.db` in that order and **the later file
+> wins**, so a fresh `cp .env.db.example .env.db` alone leaves `api` authenticating with
+> `changeme_in_production` and dying on
+> `password authentication failed for user "app"`. `scripts/uat.sh` and `scripts/uat.ps1`
+> warn if `.env` still defines `POSTGRES_PASSWORD`.
+
 ### 1.3 Production-like stack (API + DB, built SPA served from backend)
 
 ```bash
