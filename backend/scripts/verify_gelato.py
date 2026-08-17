@@ -97,6 +97,10 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
       (D-P4-6 is preserved). (G4) bin_id=None is untouched: it still means the
       location's unbinned pool and still posts, so D-P4-1's explicit-or-unbinned
       contract — and the SC6 zero-pool fixture that depends on it — is intact.
+      (G5) an ARCHIVED bin of B's own is rejected 422 with NO ledger rows, the
+      third test execute_putaway applies to a destination bin: list_bins hides
+      archived bins by default, so stock booked into one is invisible on every
+      bin-grain screen while the location total still counts it.
 
 The script uses uniquely-suffixed throwaway SYERP items / GELATO bins / stock
 locations and CLEANS UP after itself (inventory txns -> bins -> inventory items ->
@@ -127,7 +131,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app.core.models  # noqa: F401
 from app.modules.gelato.models import Bin
 from app.modules.gelato.schemas import BinCreate, PutawayRequest
-from app.modules.gelato.service import create_bin, execute_putaway, get_bin_on_hand
+from app.modules.gelato.service import (
+    archive_bin,
+    create_bin,
+    execute_putaway,
+    get_bin_on_hand,
+)
 from app.modules.syerp.inventory_seed import DEFAULT_LOCATION_NAME, seed_default_location
 from app.modules.syerp.models import InventoryItem, InventoryTxn, StockLocation
 from app.modules.syerp.schemas import InventoryItemCreate, StockLocationCreate
@@ -728,6 +737,38 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             "exactly 3. The SC6 zero-pool fixtures depend on NULL keeping this meaning.",
             g_pool_after - g_pool_before == Decimal("3"),
             f"pool {g_pool_before!r}->{g_pool_after!r}",
+        )
+
+        # (G5) ARCHIVED: the bin exists AND belongs to the location, so only the
+        # `active` clause can reject it. The delta is deliberately POSITIVE (+5):
+        # D-P4-6 gives positives no pool floor and the location floor passes
+        # trivially, so neither floor guard can hijack the red — and the row is
+        # really there, so the FK is satisfied too. Archived through the REAL
+        # archive_bin service, exactly as POST /gelato/bins/{id}/archive does it
+        # (bins are only ever soft-deleted).
+        async with session_factory() as session:
+            await archive_bin(session, bin_g_b)
+        g_rows_before_archived = await _ledger_rows(session_factory, item_g)
+        g5_status = None
+        async with session_factory() as session:
+            try:
+                await post_adjustment(
+                    session, item_g, loc_g_b.id, Decimal("5"),
+                    "SC8 archived bin", actor_id,
+                    bin_id=bin_g_b,
+                )
+            except HTTPException as exc:
+                g5_status = exc.status_code
+        g_rows_after_archived = await _ledger_rows(session_factory, item_g)
+        check(
+            "(G5/SC8) a POSITIVE adjustment (+5) naming an ARCHIVED bin OF THIS "
+            "LOCATION is REJECTED 422 and writes NO ledger rows — the same third test "
+            "execute_putaway applies ('is archived'). Dropping `AND active` from the "
+            "probe regresses this to a silent success that books stock into a bin "
+            "list_bins hides, so the location total counts it and no bin-grain screen "
+            "shows it.",
+            g5_status == 422 and g_rows_after_archived == g_rows_before_archived,
+            f"status={g5_status!r} rows {g_rows_before_archived}->{g_rows_after_archived}",
         )
 
     finally:
