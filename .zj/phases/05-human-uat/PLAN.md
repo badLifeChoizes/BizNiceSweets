@@ -464,12 +464,34 @@ BACKLOG. That protocol was never the problem; the blocking `Done when` was.
   ⚠ `podman-compose build` printed `exit code: 1` and **returned 0** — grep the log for
   `Error: building at STEP`, never trust its exit status.
 
-### [ ] 35. Bring the prod stack up on a fresh volume at :8000
+### [x] 35. Bring the prod stack up on a fresh volume at :8000
 - **Files:** `docs/tasks/chore-human-uat.md` (log)
 - **Do:** `podman-compose -f compose/compose.yml -f compose/compose.dev.yml down -v` (drop the dev stack **and** its volume), then `podman-compose -f compose/compose.yml up -d` with `compose.yml` **alone** — no dev overlay, so the image's `/app/frontend/dist` is not shadowed. Wait for the entrypoint's `alembic upgrade head` + lifespan seeds, then run `seed_uat_fixtures.py` in the prod container. This is the fresh-volume, genuinely-empty environment the Phase-03 keeper demands.
 - **Done when:** `/health/ready` is 200, `alembic current` is `0017 (head)`, and `:8000` serves the SPA (not a 404) with the seeded fixtures present.
 - **Verify:** `curl -sSf -o /dev/null -w '%{http_code}\n' http://localhost:8000/` → `200`; `curl -sSf http://localhost:8000/health/ready`; `podman exec -e PYTHONPATH=/app <prod api container> sh -c 'cd /app && alembic current'` → `0017 (head)`.
 - **Parallel-ok:** no.
+- **Done (2026-08-17).** Dev stack + `compose_pgdata` destroyed, then `compose.yml` **alone**
+  (no dev overlay). All Done-when clauses met:
+
+  | Clause | Result |
+  |---|---|
+  | `/health/ready` | `{"status":"ok","db":"connected"}` |
+  | `alembic current` | `0017 (head)` |
+  | `:8000/` serves the SPA | **200**, `<!doctype html>` — not the dev overlay's 404 |
+  | `/docs` still routed | 200 (catch-all does not swallow `/api/*`) |
+  | Fixtures seeded | all **129** literals byte-identical to the Task-8 record |
+
+  **The shipped artifact is the one Task 34 built:** the HTML served at `:8000` references
+  `assets/index-BQmUVhcG.js`, the same hash as `frontend/dist/assets/`. Image and host bundle are
+  one build, so U2's fix is what is actually running.
+
+  **Extra (not required by this task):** admin login against the prod API returns **200** with a
+  411-char access token, and authed reads of `/api/v1/syerp/partners` and `/api/v1/plum/parts`
+  both return 200 — so sitting 12 (`C-CORE-08`) starts from a known-good auth path rather than
+  discovering a broken one. Note the endpoint is the **OAuth2 password flow**: form-encoded
+  `username`/`password`, not JSON `email`/`password` (a JSON body 422s).
+  ⚠ `podman-compose up -d` logs `Error: no such volume compose_pgdata` on a fresh volume — that is
+  the `volume inspect || volume create` probe, not a failure.
 
 ### ~~36. **[OWNER]** Prod-stack deploy smoke at :8000~~ → struck as a plan task (D-P5-11)
 
