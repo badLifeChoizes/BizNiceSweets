@@ -1,6 +1,6 @@
 # Verification: Phase 05 — Human click-through UAT (NFR-8)
 Date: 2026-08-17 | Commits: `4171605..d3e68e2` (70 commits: 55 build + 15 fix-loop)
-Verdict: **PASS** — 0 blocker, 0 major, 6 minor
+Verdict: PASS — 0 blocker, 0 major, 6 minor
 
 **Re-verification pass.** The first pass (at `1954b56`) returned GAPS FOUND — 5 major, 5 minor.
 The owner ran the full fix loop; the tip moved to `d3e68e2`. This document is a complete
