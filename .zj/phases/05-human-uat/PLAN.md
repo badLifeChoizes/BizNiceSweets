@@ -479,7 +479,7 @@ BACKLOG. That protocol was never the problem; the blocking `Done when` was.
   | `alembic current` | `0017 (head)` |
   | `:8000/` serves the SPA | **200**, `<!doctype html>` — not the dev overlay's 404 |
   | `/docs` still routed | 200 (catch-all does not swallow `/api/*`) |
-  | Fixtures seeded | all **129** literals byte-identical to the Task-8 record |
+  | Fixtures seeded | all **275** derived literals (the full 361-line manifest) byte-identical to the Task-8 record |
 
   **The shipped artifact is the one Task 34 built:** the HTML served at `:8000` references
   `assets/index-BQmUVhcG.js`, the same hash as `frontend/dist/assets/`. Image and host bundle are
