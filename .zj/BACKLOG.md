@@ -1,5 +1,9 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-08-17 (v4.0 Phase 5 Task 38 — p1 **Rebuild `frontend/dist` + the API container image**
+Updated: 2026-08-17 (v4.0 Phase 5 `/zj:verify 5` fix loop — gap G-5: the p2 item PLAN `## Noticed`
+#13 promised for `post_transfer` / MOUSSE `issue_components`' unvalidated bins is **now filed**;
+the p3 `uat.ps1` env-file item is **RESOLVED** (reviewer #4 — the `.env.db` block is ported from
+`scripts/uat.sh`))
+Prior: 2026-08-17 (v4.0 Phase 5 Task 38 — p1 **Rebuild `frontend/dist` + the API container image**
 RESOLVED (and it exposed blocker `U2`, fixed+pinned); p2 **positive-adjust unvalidated `bin_id`**
 RESOLVED by SC8 per owner decision D-P5-5. The p1 human-UAT item stays **open** and is re-pointed at
 `.zj/QA.md` — the checklist is delivered, nobody has run it, and per D-P5-11 that ticks only when a
@@ -233,6 +237,25 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `gelato_bin(id, location_id)` on non-null bin_id (no gelato model import, so D-P12a-3's
   no-imports rule holds), 422 on mismatch; or (b) an explicit decision entry accepting it.
   Owner call.
+- [ ] **`post_transfer` and MOUSSE `issue_components` still trust their bins — SC8's guard is
+  asymmetric** (promised as a p2 item by Phase-5 PLAN `## Noticed` #13, filed at `/zj:verify 5`
+  fix-loop 2026-08-17). SC8 (D-P5-5) scoped the probe to the positive-adjust path only, and the
+  fix loop then widened it to **three** tests — the bin must exist, belong to the named location,
+  **and be active** (`inventory.py:444-477`, `fd7ca87`), matching `execute_putaway`
+  (`gelato/service/putaway.py:165-179`). The two sibling draw paths validate **zero**:
+  `post_transfer`'s `from_bin_id` (docstring `inventory.py:618-621`: *"The BIN is NOT validated
+  here: bin existence + location-membership is GELATO's domain and the caller's job (D-P12a-3);
+  the DB FK on bin_id is the backstop"*) and MOUSSE `issue_components`' per-line `bin_id`
+  (docstring `mousse/service.py:607-610`, same claim — and its `post_issue` primitive repeats it
+  at `inventory.py:1019-1022`, where "checked by the caller" is simply false for the MOUSSE
+  caller). Both are reachable from the API with a mismatched or archived `(location, bin)` pair.
+  Impact is smaller than SC8's — a draw from a foreign or archived pool reads on-hand `0` and is
+  rejected by the pool floor — but the *docstrings assert a guarantee nobody provides*, and the
+  next primitive written against that contract inherits the hole. Fix: extend SC8's raw-SQL probe
+  (**no gelato model import** — D-P12a-3 keeps the hub free of satellite imports) to both paths,
+  and correct the three docstrings; pin as further `verify_gelato.py` scenarios in the shape of
+  (G1)–(G5). Do it in one pass so all three bin-taking primitives state and enforce the same
+  contract.
 - [ ] **GELATO `pick_for_shipment` acquires item locks incrementally in request-line order**
   (Phase 4 verify review question, 2026-07-25 — pre-existing from 12b, the one remaining writer
   outside the Phase-4 lock discipline). `shipments.py:387` calls `post_putaway` per line
@@ -329,7 +352,16 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `requirements-dev.txt`, or document the disposable-Postgres recipe in
   `docs/deployment/local-dev.md` beside the other verified commands. The `openpyxl` half of the
   original item is done; only this half remains.
-- [ ] **`scripts/uat.ps1` checks `POSTGRES_PASSWORD` in the wrong file (pre-D-P5-10)** (noticed
+- [x] **`scripts/uat.ps1` checks `POSTGRES_PASSWORD` in the wrong file (pre-D-P5-10)** —
+  **RESOLVED at the `/zj:verify 5` fix loop (2026-08-17, review finding #4).** The
+  `scripts/uat.sh` block is ported: the `.ps1` now ensures **both** `.env` and `.env.db` exist
+  (creating each from its template), greps `^POSTGRES_PASSWORD=\S+` in **`.env.db`**, and adds
+  the new upgrade warning when `.env` still defines `POSTGRES_PASSWORD`. §1.6 of
+  `docs/deployment/local-dev.md` — which already claimed both launchers create both files — is
+  now true. **⚠ Landed unexecuted:** no PowerShell interpreter exists on the dev host (`pwsh`
+  absent), so the port was reviewed line-by-line against the bash original but never run. The
+  first Windows user to touch it should confirm `-Fresh` on a bare checkout.
+  *Original text follows.* (noticed
   2026-08-08 while porting the launcher to bash during Phase 5) — the `.ps1` warns when
   `^POSTGRES_PASSWORD=\S+` is absent from `.env`, but D-P5-10 moved that credential to `.env.db`
   and gave it exactly one home there. So on a stock checkout the `.ps1` warns on a *correct*
