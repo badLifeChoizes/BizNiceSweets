@@ -7,10 +7,13 @@ a parallel to-do with their dependency order preserved (`PLAN.md`).
 **The deliverable is now the checklist, not the reading.** `.zj/QA.md` (`493e185`, 1,595 lines) is the
 standing regression checklist: all 59 checks carried over **verbatim** from `UAT-v4.0.md` but re-keyed
 from phase success criteria onto **SRD requirement IDs**, so it stays true as phases close and can
-express what a phase-shaped doc could not — **coverage**. 29 of 47 requirements carry a human check;
-the other 18 are triaged in §5 as **3 real gaps** (CORE-01 deploy, CORE-09 migrations, NFR-1 audit
-trail), 9 not-built, 5 machine-only, and NFR-8 itself. `C-SC6-a/b/c` were re-keyed onto SYERP-10 and
-MOUSSE-01 — they cited `SC6`, a phase criterion meaningless outside Phase 5.
+express what a phase-shaped doc could not — **coverage**. After Task 32: **31 of 47** requirements
+carry a human check and §5 lists **zero real gaps** — CORE-01 and CORE-09 were closed by two new
+checks (`C-CORE-08` prod-stack deploy smoke, `C-CORE-09` fresh-volume-reaches-head), and **NFR-1 was
+re-triaged as machine-only**: `write_audit` is called throughout the backend but no audit endpoint is
+exposed and nothing in `frontend/src/` reads audit events, so there is nothing for a human to look at.
+The remaining 16 are 9 not-built, 6 machine-only, and NFR-8 itself. `C-SC6-a/b/c` were re-keyed onto
+SYERP-10 and MOUSSE-01 — they cited `SC6`, a phase criterion meaningless outside Phase 5.
 SC1/SC4/SC6/SC7 amended; NFR-8's Statement and Verification rewritten; `UAT-v1.0/v2.0/v4.0` all now
 carry pointer lines to `.zj/QA.md` and are history.
 **Consciously accepted:** NFR-8 is now satisfiable by a checklist nobody has run. That is the point —

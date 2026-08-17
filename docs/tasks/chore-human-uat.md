@@ -60,7 +60,7 @@ go in `.zj/QA.md` §6. No engineering was lost — Tasks 0–19 all stand.
 
 ### Close-out
 
-- [ ] 32. Reconcile the checklist: every check judgeable, every defect homed *(amended)*
+- [x] 32. Reconcile the checklist: every check judgeable, every defect homed *(amended)*
 - [ ] 33. Run the full regression gate
 - [ ] 34. Rebuild `frontend/dist` and the API container image
 - [ ] 35. Bring the prod stack up on a fresh volume at :8000

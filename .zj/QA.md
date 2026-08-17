@@ -235,12 +235,12 @@ Full-issue WIP value for `WO-000001`: **`58`**.
 
 ## 3. Coverage map
 
-**29 of 47 requirements have at least one human check.**
+**31 of 47 requirements have at least one human check.**
 Requirements with none are itemised in [§5](#5-requirements-with-no-human-check).
 
 | Requirement | Status | Checks |
 |---|---|---|
-| **CORE-01** — Containerized single-command deploy | implemented | — |
+| **CORE-01** — Containerized single-command deploy | implemented | `C-CORE-08` |
 | **CORE-02** — Account login via OAuth2/JWT | implemented | `C-CORE-01` |
 | **CORE-03** — Secure session persistence | implemented | `C-CORE-02` |
 | **CORE-04** — Admin user management | implemented | `C-CORE-03`, `C-CORE-04` |
@@ -248,7 +248,7 @@ Requirements with none are itemised in [§5](#5-requirements-with-no-human-check
 | **CORE-06** — System settings | implemented | `C-CORE-06` |
 | **CORE-07** — Module enable/disable | implemented | `C-SC6-d` |
 | **CORE-08** — Navigation shell | implemented | `C-CORE-07` |
-| **CORE-09** — Versioned migrations | implemented | — |
+| **CORE-09** — Versioned migrations | implemented | `C-CORE-08`, `C-CORE-09` |
 | **PLUM-01** — Part CRUD | implemented | `C-PLUM-01` |
 | **PLUM-02** — Part search/filter | implemented | `C-PLUM-02` |
 | **PLUM-03** — Revisions and status workflow | implemented | `C-PLUM-02`, `C-PLUM-08`, `C-PLUM-09` |
@@ -294,6 +294,62 @@ Requirements with none are itemised in [§5](#5-requirements-with-no-human-check
 
 Grouped by the requirement each one exercises. A check that exercises more than one
 requirement appears once, under its primary, and is cross-referenced from the others.
+
+### CORE-01 — Containerized single-command deploy
+
+#### C-CORE-08 · Prod-stack deploy smoke at `:8000`  ·  *also covers CORE-09*
+
+**This is the only check that exercises the shipped artifact.** Every other check in this file
+runs against the Vite dev server at `:5173`, where the `../backend:/app` bind mount shadows the
+image's built bundle. This one runs against the image itself, served from `frontend/dist` by the
+API container — which is what a self-hoster actually gets.
+
+**Preconditions:** `frontend/dist` and the API image rebuilt, and the prod stack up on a **fresh**
+volume via `compose.yml` **alone** (no dev overlay) — Phase-5 Tasks 34 and 35. Fixtures seeded.
+
+- ✅ **Machine already proved:** the stack comes up healthy — `/health/ready` returns
+  `{"status":"ok","db":"connected"}`, `alembic current` is at head, and `:8000/` serves the SPA
+  rather than a 404 (Phase-5 Task 35). `backend/tests/test_compose_config.py` pins the two-env-file
+  split that defect **U0** broke.
+- **Do, in this order:**
+  1. Open **http://localhost:8000** — not `:5173`.
+  2. Log in with `BNS_ADMIN_EMAIL` / `BNS_ADMIN_PASSWORD`.
+  3. Perform **one write per enabled suite**: edit a partner (SYERP), edit a part (PLUM), create a
+     work order (MOUSSE), log an interaction (CRUMB), create a bin (GELATO).
+- 👁 **You are confirming:**
+  - `:8000/` serves the **app**, not a 404 and not a bare JSON payload
+  - login succeeds against the built bundle
+  - each of the five writes **succeeds and shows no error toast**
+  - the page you land on after login is the same one `:5173` gives you — the built bundle is not
+    an older UI
+- ✗ **Would be wrong:** a 404 at `/` (that is the dev-overlay symptom, and means the prod stack
+  was started with the dev file); a write failing with a 500; or the Excel export failing, which
+  would mean the image is missing `openpyxl` — the exact staleness the p1 backlog item was about.
+
+---
+
+### CORE-09 — Versioned migrations
+
+#### C-CORE-09 · Fresh volume reaches head with no manual step
+
+**Fixture:** a genuinely empty volume — `podman-compose … down -v` first.
+
+- ✅ **Machine already proved:** `alembic current` → `0017 (head)` after a fresh boot, asserted at
+  Phase-5 Task 35 and re-run at every `--fresh` bring-up. Every model change ships a revision in
+  `backend/alembic/versions/`.
+- **Do:** destroy the volume and bring the stack back up in one command —
+  `./scripts/uat.sh --fresh --detach` — then watch the API container's logs as it starts:
+  `podman logs -f compose_api_1`.
+- 👁 **You are confirming:**
+  - you were **never asked to run a migration by hand**; the entrypoint did it
+  - the logs show Alembic running and stopping at head, not erroring and retrying
+  - the app is usable immediately afterwards — the seeds ran too (chart of accounts present,
+    admin login works)
+- ✗ **Would be wrong:** the API container restart-looping; a log line about a schema mismatch or
+  a failed revision; or the app coming up with an empty chart of accounts, which would mean the
+  seeds silently did not run.
+
+---
 
 ### CORE-02 — Account login via OAuth2/JWT
 
@@ -1559,9 +1615,9 @@ Two items one row apart in the same dialog, behaving oppositely. That contrast *
 
 ### Real gaps — human-checkable, currently unchecked
 
-- [ ] **CORE-01** — Containerized single-command deploy  _(status: implemented)_
-- [ ] **CORE-09** — Versioned migrations  _(status: implemented)_
-- [ ] **NFR-1** — Audit trail  _(status: implemented)_
+_None._ **CORE-01** and **CORE-09** were the last two and were closed in Phase-5 Task 32 by
+authoring `C-CORE-08` (prod-stack deploy smoke) and `C-CORE-09` (fresh volume reaches head with
+no manual step).
 
 ### Not built yet — correctly uncovered
 
@@ -1569,9 +1625,16 @@ Two items one row apart in the same dialog, behaving oppositely. That contrast *
 
 ### Machine-only by nature — correctly uncovered
 
-**NFR-2**, **NFR-4**, **NFR-5**, **NFR-6**, **NFR-7** — CI, lint, licensing, integration coverage and
-race-safety have no human-judgeable surface. They are pinned by the test suites and
-`backend/scripts/verify_*.py`.
+**NFR-1**, **NFR-2**, **NFR-4**, **NFR-5**, **NFR-6**, **NFR-7** — audit trail, licensing, CI, lint,
+integration coverage and race-safety have no human-judgeable surface. They are pinned by the test
+suites and `backend/scripts/verify_*.py`.
+
+> **NFR-1 was re-triaged in Task 32.** It was first listed as a real gap on the assumption that an
+> audit trail has a screen. It does not: `write_audit` is called throughout the backend, but **no
+> audit endpoint is exposed and nothing in `frontend/src/` reads audit events** — the UI only
+> mentions auditing in copy ("Changes are audited"). There is nothing for a human to look at, so a
+> check would have to read the database directly, which is a test, not a click-through. If an audit
+> viewer is ever built, NFR-1 needs a check and this note should go.
 
 ### Self-referential
 
@@ -1592,4 +1655,30 @@ One row per run. A run need not be complete — record what you did.
 | Date | Build / commit | Scope run | Result | Notes |
 |---|---|---|---|---|
 | | | | | |
+
+---
+
+## 7. Defect ledger
+
+`U#` IDs. **Blocker/major** → fix with a pinning automated test that fails on revert.
+**Minor** → BACKLOG entry quoting the `U#`. Assign the ID and record the row *before* fixing.
+
+| ID | Check | Symptom | Severity | Status | Fix / link |
+|---|---|---|---|---|---|
+| **U0** | — (found at Phase-5 Task 8) | On a **fresh volume** the `db` container never received `POSTGRES_PASSWORD` and Postgres refused to initialize (`Database is uninitialized and superuser password is not specified`). Invisible on an existing volume, so it broke only a first-ever deploy. | blocker | **fixed** | `4ace2c4`; pinned by `backend/tests/test_compose_config.py` (`d870233`). D-P5-10 |
+| **U1** | `C-CORE-04` | `POST /auth/users` with an existing email returned **HTTP 500** from an unhandled `ix_users_email` `UniqueViolationError` instead of a clean rejection. The v1.0 **D2** pattern. | major | **fixed** | `f508554`; pinned by `backend/tests/auth/test_user_duplicate_email.py` (`f67f085`) |
+
+All four SHAs verified resolvable (Task 32).
+
+> Both were found by **engineer** work before anyone clicked — U0 by the fresh-volume idempotency
+> proof, U1 by the machine pre-flight. They are recorded here because a defect ledger that only
+> lists what humans found understates what the checklist's construction caught.
+
+**Known candidate minors already logged** — note these "as expected" rather than raising them new:
+
+- The stock-adjust rejection toast names the location by **numeric id** (*"…at location 374"*)
+  rather than by code (`UAT-LOC-A`). See `C-SC6-a`.
+- Disabling GELATO filters the sidebar but there is **no server-side module gate** —
+  `/api/v1/gelato/*` keeps serving an authorised user. See `C-SC6-d`, which is an observation
+  check precisely because the expected behaviour here is unsettled.
 

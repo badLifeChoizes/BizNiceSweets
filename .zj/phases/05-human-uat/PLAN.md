@@ -417,13 +417,22 @@ BACKLOG. That protocol was never the problem; the blocking `Done when` was.
 
 ### Close-out — Tasks 32–35, 37–38
 
-### [ ] 32. Reconcile the checklist: every check judgeable, every defect homed  *(amended D-P5-11)*
+### [x] 32. Reconcile the checklist: every check judgeable, every defect homed  *(amended D-P5-11)*
 - **Files:** `.zj/QA.md`, `.zj/BACKLOG.md`
 - **Do:** Sweep `.zj/QA.md` §4 for any check that is not judgeable as written — a step that says "verify it works" rather than naming an action and an observable result — and fix it. Confirm §3's coverage map is accurate against the SRD and §5 names every requirement with no human check. Reconcile any defects found so far: every blocker/major has a fix commit **and** a named pinning test; every minor has a BACKLOG item quoting its `U#`.
 - **Done when:** every check names an action and an observable result; §3 tallies against the SRD; every recorded defect carries a commit SHA or a backlog link.
 - **Verify:** the §3 covered count equals the number of distinct requirements cited in §4; each fix SHA resolves via `git cat-file -e <sha>^{commit}`.
 - **Parallel-ok:** no.
 - **Not a gate:** unrun checks are expected and fine (D-P5-11). This task audits the *checklist*, never the *readings*. *(Originally "zero `todo` rows" — struck.)*
+- **Done (2026-08-17):** 61 checks, **all judgeable** (each names an action, an observable result,
+  and the failure to watch for). §3 and §4 agree exactly — 31 requirements each, no mismatch — and
+  the headline tally matches. **Two checks authored** to close the last real gaps: `C-CORE-08`
+  (prod-stack deploy smoke at `:8000`, also covering CORE-09) and `C-CORE-09` (fresh volume reaches
+  head with no manual step). **NFR-1 re-triaged** from "real gap" to machine-only: no audit endpoint
+  is exposed and nothing in `frontend/src/` reads audit events, so there is no human surface to
+  check. **Defect ledger recovered** — it did not survive the migration from `UAT-v4.0.md`; U0 and
+  U1 are restored as §7 with all four fix/pin SHAs verified resolvable, plus the two known candidate
+  minors. §5 now reads zero real gaps.
 
 ### [ ] 33. Run the full regression gate
 - **Files:** `docs/tasks/chore-human-uat.md` (record results)
@@ -460,7 +469,7 @@ with the SPA served and `alembic current` at head — stays a real gate as **Tas
 
 ### [ ] 37. Bookkeeping: SRD NFR-8 and requirements-progress  *(amended D-P5-11)*
 - **Files:** `.zj/SRD.md` (NFR-8, §800), `docs/features/requirements-progress.md`
-- **Do:** Stamp NFR-8 → `done (pending /zj:verify 5)` with evidence: the check count, the coverage tally (29 of 47 requirements carry a human check; 3 real gaps named), the defect ledger summary so far, and the SC8 commit. **Rewrite NFR-8's Statement and Verification** per **D-P5-11**: the deliverable is the *documented, runnable, requirement-keyed checklist* (`.zj/QA.md`), not a completed sitting — readings accrue in its §6 result log and are explicitly non-blocking. Add the NFR-8 row to `requirements-progress.md`. **Do not** promote the module SRD rows whose caveat is "UI-flow UAT-pending" — that caveat is honest until someone actually clicks, and promoting it on the strength of an authored-but-unrun check would be exactly the false claim this rescope exists to avoid.
+- **Do:** Stamp NFR-8 → `done (pending /zj:verify 5)` with evidence: the check count, the coverage tally (31 of 47 requirements carry a human check; zero real gaps — CORE-01/CORE-09 closed at Task 32, NFR-1 re-triaged as machine-only), the defect ledger summary so far, and the SC8 commit. **Rewrite NFR-8's Statement and Verification** per **D-P5-11**: the deliverable is the *documented, runnable, requirement-keyed checklist* (`.zj/QA.md`), not a completed sitting — readings accrue in its §6 result log and are explicitly non-blocking. Add the NFR-8 row to `requirements-progress.md`. **Do not** promote the module SRD rows whose caveat is "UI-flow UAT-pending" — that caveat is honest until someone actually clicks, and promoting it on the strength of an authored-but-unrun check would be exactly the false claim this rescope exists to avoid.
 - **Done when:** NFR-8's Statement and Verification both name `.zj/QA.md` and neither implies a completed run; the progress row exists.
 - **Verify:** `grep -A8 'NFR-8' .zj/SRD.md` shows the rewritten clauses citing `.zj/QA.md`; `grep -c 'NFR-8' docs/features/requirements-progress.md` ≥ 1.
 - **Parallel-ok:** no.
