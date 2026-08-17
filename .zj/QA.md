@@ -28,6 +28,20 @@ Click through at **http://localhost:5173** (the Vite dev server, not `:8000` —
 overlay `:8000` serves the API only and returns 404 at `/`, which is expected). Log in with
 `BNS_ADMIN_EMAIL` / `BNS_ADMIN_PASSWORD` from `.env`.
 
+> **`C-CORE-08` is the one check this command is wrong for.** `./scripts/uat.sh` brings up
+> the **dev overlay**, whose `../backend:/app` bind mount shadows the image's built bundle —
+> so `:8000` serves no SPA and the prod artifact is never exercised. `C-CORE-08` requires
+> `compose/compose.yml` **alone** on a fresh volume:
+>
+> ```bash
+> podman-compose -f compose/compose.yml down -v
+> podman-compose -f compose/compose.yml build api
+> podman-compose -f compose/compose.yml up -d
+> ```
+>
+> That stack does not set `BNS_ALLOW_UAT_SEED`, so seed it with the explicit per-run override
+> shown below.
+
 Re-read fixtures without changing anything:
 
 ```bash
@@ -332,6 +346,18 @@ Requirements with none are itemised in [§5](#5-requirements-with-no-human-check
 
 Grouped by the requirement each one exercises. A check that exercises more than one
 requirement appears once, under its primary, and is cross-referenced from the others.
+The `4.x` banners below mark the suite groupings and the order to run them in; each
+banner's count is that suite's **own** checks, so `C-SC6-a/b/c/d` are counted once, in
+§4.7, and not again in the suite they physically sit under.
+
+### 4.1 CORE — the platform (9 checks)
+
+`C-CORE-08` needs the **prod** stack (see the note in §1); everything else in this
+section runs on the dev stack at `:5173`. Run `C-SC6-d`'s module toggle late — it turns
+GELATO off, and step 8 turns it back on.
+
+---
+
 
 ### CORE-01 — Containerized single-command deploy
 
@@ -570,14 +596,12 @@ through the protocol.
   a blank screen or a crash.
 - ✗ **Would be wrong:** a white page, or a React error overlay, on the unknown path.
 
-> `CORE-01` (self-hostable deploy), `CORE-07` (module registry) and `CORE-09` (audit trail)
-> are exercised structurally rather than by a click of their own: `CORE-01` by §1.1's
-> fresh-volume bring-up (and defect `U0`, which it caught), `CORE-07` by `C-SC6-d`'s module
-> toggle, and `CORE-09` by the audit assertions cited throughout — see `PREFLIGHT.md`.
+> `CORE-07` (module enable/disable) has no check of its own — it is exercised through
+> `C-SC6-d`'s module toggle.
 
 ---
 
-### 6.2 PLUM — product lifecycle (12 checks)
+### 4.2 PLUM — product lifecycle (12 checks)
 
 `C-PLUM-01` … `C-PLUM-08` are **read-only** — run them first and re-run them freely.
 `C-PLUM-09` … `C-PLUM-12` **mutate**, so they come after.
@@ -802,7 +826,7 @@ preferred, `UAT-VEND-2` not).
 
 ---
 
-### 6.3 SYERP — the hub (20 checks)
+### 4.3 SYERP — the hub (20 checks)
 
 **Read the books before you post to them.** `C-SYERP-14` … `C-SYERP-19` quote exact
 balances; run them **before** `C-SYERP-11`/`12` (receiving posts to the GL) and before
@@ -1019,6 +1043,16 @@ vs `UAT-ITEM-1` @ `UAT-LOC-A` (pool `6`). **Run together with `C-SYERP-07`.**
 - ✗ **Would be wrong:** the picker offering the archived bin; the picker keeping a stale
   selection after the location changes; step 4 succeeding (that would mean the server
   auto-allocated across bins, breaking D-P4-1); or step 6 being rejected.
+- ✗ **Would also be wrong — the server-side backstop behind the picker (SC8, D-P5-5).** The
+  dialog cannot produce either of these, but the API accepts the call, so if a raw client ever
+  does, the server must refuse. Both were driven live and are pinned by `verify_gelato.py`
+  scenario `(G)`:
+  - a bin belonging to a **different location** → **422**, *"Bin `N` does not exist at location
+    `M`; a binned adjustment must name a bin belonging to that location."*
+  - an **archived** bin of the correct location → **422**, *"Bin `N` is archived; a binned
+    adjustment must name an active bin."* — the same three tests `execute_putaway` applies
+  - **nothing is written to the ledger in either case** — re-read on-hand and it is unchanged.
+    A `200`, or a raw `500` from the FK, is the defect.
 - ⓘ **Known candidate minor:** the rejection toast names the location by **numeric id**
   (*"…at location 374"*) rather than `UAT-LOC-A`. Already logged — note "as expected" rather
   than raising it as new.
@@ -1254,7 +1288,7 @@ until those have passed.
 
 ---
 
-### 6.4 MOUSSE — manufacturing execution (4 checks)
+### 4.4 MOUSSE — manufacturing execution (4 checks)
 
 All four **mutate**. `C-MOUSSE-03` is run together with `C-SC6-c`.
 
@@ -1364,7 +1398,7 @@ hand); it lands at `UAT-LOC-A`.
 
 ---
 
-### 6.5 CRUMB — CRM and sales (8 checks)
+### 4.5 CRUMB — CRM and sales (8 checks)
 
 `C-CRUMB-02`, `C-CRUMB-04` and `C-CRUMB-05` sit on screens with **no vitest at all** — weight
 them heavily. `C-CRUMB-07` is the **head of the money loop**; everything downstream of it
@@ -1534,7 +1568,7 @@ email with the quote`, then `call: UAT-COMM-1 first contact call`.
 
 ---
 
-### 6.6 GELATO — warehouse (4 checks)
+### 4.6 GELATO — warehouse (4 checks)
 
 `C-GELATO-03` **requires `C-CRUMB-07`** to have passed, and `C-SYERP-20` requires
 `C-GELATO-03`. This is the middle of the money loop.
@@ -1624,7 +1658,7 @@ email with the quote`, then `call: UAT-COMM-1 first contact call`.
 
 ---
 
-### 6.7 SC6 — the Phase-4 bin pickers (4 checks)
+### 4.7 SC6 — the Phase-4 bin pickers (4 checks)
 
 **These are the reason this phase exists in its current shape.** The three bin pickers are
 v4.0's **only new UI surface**. They are unit-tested and have **never been driven by a human**.
@@ -1705,7 +1739,7 @@ One row per run. A run need not be complete — record what you did.
 |---|---|---|---|---|---|
 | **U0** | — (found at Phase-5 Task 8) | On a **fresh volume** the `db` container never received `POSTGRES_PASSWORD` and Postgres refused to initialize (`Database is uninitialized and superuser password is not specified`). Invisible on an existing volume, so it broke only a first-ever deploy. | blocker | **fixed** | `4ace2c4`; pinned by `backend/tests/test_compose_config.py` (`d870233`). D-P5-10 |
 | **U1** | `C-CORE-04` | `POST /auth/users` with an existing email returned **HTTP 500** from an unhandled `ix_users_email` `UniqueViolationError` instead of a clean rejection. The v1.0 **D2** pattern. | major | **fixed** | `f508554`; pinned by `backend/tests/auth/test_user_duplicate_email.py` (`f67f085`) |
-| **U2** | `C-CORE-08` (found at Phase-5 Task 34) | **The API image could not be built at all.** The Containerfile's builder stage did `COPY frontend/package*.json ./` — a glob that does not match the dotfile `frontend/.npmrc` — so `npm ci` ran without `legacy-peer-deps=true` (D-P1-1) and died on the `eslint-plugin-react-hooks@5` peer range. `podman-compose build api` therefore failed outright. | blocker | **fixed** | Containerfile `COPY … frontend/.npmrc ./`; pinned by `backend/tests/test_containerfile_config.py`, proven RED on revert |
+| **U2** | `C-CORE-08` (found at Phase-5 Task 34) | **The API image could not be built at all.** The Containerfile's builder stage did `COPY frontend/package*.json ./` — a glob that does not match the dotfile `frontend/.npmrc` — so `npm ci` ran without `legacy-peer-deps=true` (D-P1-1) and died on the `eslint-plugin-react-hooks@5` peer range. `podman-compose build api` therefore failed outright. | blocker | **fixed** | `8d61cca` (Containerfile `COPY … frontend/.npmrc ./`); pinned by `backend/tests/test_containerfile_config.py` (`f82ec38`), proven RED on revert |
 
 All fix/pin SHAs verified resolvable (Task 32; U2 added Task 34).
 
