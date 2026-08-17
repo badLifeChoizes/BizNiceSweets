@@ -1,5 +1,70 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-17 (**v4.0 Phase 5 BUILD COMPLETE — every task done; next `/zj:verify 5`.**
+Updated: 2026-08-17 (**v4.0 Phase 5 VERIFIED — `/zj:verify 5`, verdict PASS after a full fix loop.**
+Tip `bbd795b`, tag **`zj/good-05-human-uat`**. **This closes the final phase of milestone v4.0.**
+
+**First pass was GAPS, honestly.** Verifier: 5 major / 5 minor. Reviewer: 4 major / 3 minor, 0 blocker.
+The owner chose the **full fix loop** (four serialized engineer waves, 11 commits `fd7ca87..d3e68e2`);
+re-verification at `d3e68e2` returned **PASS — 0 blocker, 0 major, 6 minor**, with every gap re-driven
+empirically rather than read from the engineers' reports.
+
+**The rescope held up under adversarial review.** D-P5-11 was the top thing I asked the verifier to
+attack — SC4 moved from "zero `todo` rows at close" to "unrun checks are not a failure", which is
+exactly the shape of a criterion quietly redefined to match what got built. It is **not** that: the
+decision is owner-attributed, names the decisions it supersedes (D-P5-6, D-P5-7), preserves every
+struck SC's original wording inline, and repeats "NOT evidenced, by design" across SRD/ROADMAP/
+BACKLOG/requirements-progress. **Evidenced:** 61 judgeable checks against reproducible fixtures.
+**Not evidenced:** that any human clicked anything. Both halves stay stated.
+
+**What the fix loop actually caught — two of these could have hurt a real user.**
+(1) **The phase's own product change had a hole:** `post_adjustment` validated bin existence and
+location membership but **not `active`**, while `execute_putaway` validates all three — so stock could
+be booked into an archived bin `list_bins` hides, making the location total and the per-bin split
+disagree. That is precisely the failure SC8's docstring says it exists to close. Fixed `fd7ca87`,
+pinned `947e5d6` as scenario **(G5)**; RED `status=None rows 3->4` (no exception at all, ledger row
+appended) with G1–G4 still PASS, so nothing hijacked red.
+(2) **`seed_uat_fixtures.py` could seed a self-hoster's live books.** podman-compose derives its
+project name from the first compose file's directory — `compose/` for **both** stacks — so the
+runbook's copy-paste `podman exec … compose_api_1 …` targets whichever is up, posting an
+opening-capital JE, a bill, a payment and an AR invoice **irreversibly** (append-only), plus an active
+login whose password is committed to the repo. Now two gates (`3a6ce35`): `BNS_ALLOW_UAT_SEED=1`, set
+by the dev overlay only, and a foreign-ledger refusal. **The subtle part:** the guard must match on
+the seed **actor**, not just a `UAT-` memo prefix — only 2 of the 8 seeded JEs carry that prefix, so a
+prefix-only guard would have refused every second seed and broken SC2's idempotency contract.
+(3) The `.env`/`.env.db` split broke **existing** deployments on upgrade (later `env_file` wins, so
+`api` picks up the template password against an initialized volume — U0's exact class); `uat.ps1` was
+never ported while the new docs claimed it was; and a promised p2 BACKLOG item had never been filed.
+
+**Criteria became tests — the headline durable outcome.** Four SCs were true only because someone
+hand-checked them. All four now re-run every push, each proven non-vacuous by mutation:
+`verify_qa_doc.py` (coverage arithmetic, both directions), `verify_qa_citations.py` (224 citations
+resolve), a seed-idempotency `verify-scripts` step on its **own** database (asserts a byte-identical
+manifest **and** a 47-table row census — the census earns its place: making `_ensure_cost`
+unconditional again grows `audit_log 100→104` while the manifest stays identical), and a
+**`container-image` CI job that builds the shipped artifact**. That last one matters most: `U2` — *the
+image could not be built at all* — hid for five phases precisely because nothing ever built it.
+⚠ `container-image` is **not yet a required status context** — that needs a repo-settings change no
+workflow file can make.
+
+**Final gate at `d3e68e2`:** pytest **245 passed / 0 skipped**, **17/17** non-API + **9/9** API
+`verify_*`, ruff + eslint 0, vitest 148/45, **CI run `32072598536` 5/5 success** (first real-runner
+green for `container-image`). Prod stack re-driven at `:8000` on a fresh volume — the verification
+caught **the artifact going stale again** (`fd7ca87` postdated the built image, the v1.0 G2 class), so
+it rebuilt from HEAD and re-drove SC7 plus both SC8 rejections live. `.zj/QA.md` now carries a
+precondition: the image must be newer than the last product commit.
+
+**6 minors homed p3**, none blocking: the two new QA guard scripts can't run the in-container way
+(`.zj/` isn't in the image, so the house recipe yields 15/17); `verify_qa_citations.py` erodes silently
+if a citation loses its *shape*; three `verify_gl.py` citations are only weakly pinned (that script
+letters scenarios lower-case). NFR-8 stamped `- **Verified:** d3e68e2`; ROADMAP Phase 5 → `[verified]`.
+
+**Next action:** `/zj:retro 5` — this phase produced real keepers (a criterion whose only proof is the
+verifier's own hand-check is not protected; a fixture-guard's matcher must be derived from what the
+fixture actually writes, not from its naming convention; and "the artifact is stale" has now cost two
+milestones). Then `/zj:milestone v4.0`, where **whether v4.0 ships on an unrun checklist is the owner's
+call** — `.zj/QA.md` §6 still holds zero readings, by design. The stack is up and seeded at
+**http://localhost:8000**. **An engineer must still never tick an owner check or infer a pass.**)
+
+Prior: 2026-08-17 (**v4.0 Phase 5 BUILD COMPLETE — every task done; next `/zj:verify 5`.**
 Branch `chore-human-uat`, now pushed to `origin`. Tasks 0–19 (engineering, previously done), then
 **32–35, 37–38** this session. Tasks **20–31 and 36 were struck** by **D-P5-11**, not skipped.
 
