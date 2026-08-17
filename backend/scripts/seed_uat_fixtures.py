@@ -60,10 +60,27 @@ HOW TO RUN (the compose ``db`` service is not host-published):
   podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py
   podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py --manifest
 
+THE TARGET-DATABASE GUARDS (Phase-5 review finding 1 — read the block above
+``require_uat_stack_opt_in`` for the full why):
+  Seeding refuses unless BOTH hold, and refuses having written NOTHING (exit code 3):
+    1. the STACK opted in — ``BNS_ALLOW_UAT_SEED=1`` is in the process environment.
+       ``compose/compose.dev.yml`` sets it on the api service; ``compose/compose.yml``
+       (production) never does. Both stacks answer to the container name
+       ``compose_api_1``, so the command above is byte-for-byte the same one that must
+       be REFUSED against production — which is why the opt-in lives in the stack's
+       environment rather than in a flag someone can paste. A deliberate prod-artifact
+       load passes ``-e BNS_ALLOW_UAT_SEED=1`` on the ``podman exec`` line.
+    2. the LEDGER is ours — every ``syerp_journal_entry`` row was posted by this script
+       (seed actor, or a ``UAT-`` memo). Any other entry means real books, and journal
+       entries are append-only.
+  Neither guard applies to ``--manifest``: it reads and reports, and writes nothing.
+
 MODES:
   (default)     seed every registered layer (get-or-create), then print the manifest.
-  --manifest    print the manifest ONLY — no builder runs, nothing is written. Use it
-                to inspect a database, or to re-read the literals mid click-through.
+                Subject to both guards above.
+  --manifest    print the manifest ONLY — no builder runs, nothing is written, no guard
+                applies. Use it to inspect a database, or to re-read the literals mid
+                click-through.
 
 ADDING A LAYER (Tasks 2-7 each add exactly one):
   Append a ``FixtureLayer`` to ``_layers()`` in dependency order with:
@@ -73,8 +90,12 @@ ADDING A LAYER (Tasks 2-7 each add exactly one):
       ``--manifest`` a faithful re-print of a seeded database. It reads the fixtures back
       (through service read functions where possible) and records BOTH the minted keys and
       the derived literals. Reading them back rather than echoing this file's constants is
-      what makes the manifest a statement about the DATABASE — and it is why an unseeded
-      database honestly reports an empty manifest instead of a wishful one.
+      what makes the manifest a statement about the DATABASE — every per-fixture line is
+      gated on that fixture actually being present, so a database missing one reports it
+      missing rather than wishfully. (One known exception, Phase-5 review finding 6, owned
+      separately: the GL layer's WHOLE-LEDGER balance-sheet oracle is not presence-gated,
+      so ``--manifest`` against a never-seeded database raises there instead of printing an
+      empty manifest.)
     * ``tables`` — the ``TableSpec`` row counts that layer contributes to the manifest.
   Keep every builder's own writes inside its own layer; never mutate another layer's rows.
 
@@ -267,6 +288,152 @@ def build_dsn() -> str:
         print("ERROR: POSTGRES_PASSWORD is not set in the environment.", file=sys.stderr)
         sys.exit(2)
     return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
+
+
+# ---------------------------------------------------------------------------
+# Target-database guards — seeding must never land on somebody's real books
+# ---------------------------------------------------------------------------
+#
+# WHY (Phase-5 review finding 1): podman-compose derives its project name from the
+# DIRECTORY of the first compose file, which is `compose/` for the prod stack
+# (`-f compose/compose.yml`) AND for the dev stack (`… -f compose/compose.dev.yml`).
+# Both therefore produce the container `compose_api_1` and the volume `compose_pgdata`,
+# so the one runbook line reproduced across scripts/uat.sh, docs/deployment/local-dev.md
+# and .zj/QA.md silently targets whichever stack happens to be up. What it writes is not
+# recoverable: journal entries are APPEND-ONLY (models.py: JournalEntry) — an opening
+# capital JE, a manual JE, a received PO, a posted bill, a payment, an AR invoice and a
+# receipt can be reversed, never deleted — and the fixture login it creates is ACTIVE with
+# a password committed to this repository.
+#
+# TWO INDEPENDENT GATES, both required before any builder runs:
+#   1. the STACK opts in (BNS_ALLOW_UAT_SEED=1 in the process env). Deliberately an env
+#      var and not a flag: the documented command stays byte-for-byte identical, and it
+#      is the compose file — not the operator's shell history — that decides. The dev
+#      overlay sets it; compose/compose.yml never does. An operator who genuinely wants
+#      fixtures in a prod artifact (the C-CORE-08 prod-stack smoke) passes `-e` per run,
+#      which is an explicit act rather than a paste.
+#   2. the LEDGER is ours (no journal entry this script did not post). This is the one
+#      that saves someone who passed the override at the wrong moment.
+# Both gates apply to seeding ONLY. `--manifest` reads and reports; it writes nothing and
+# runs under both.
+
+UAT_SEED_OPT_IN_ENV = "BNS_ALLOW_UAT_SEED"
+UAT_SEED_OPT_IN_VALUE = "1"
+
+# Exit code shared by both refusals — distinct from 2 (POSTGRES_PASSWORD missing) and
+# from 1 (an oracle mismatch or any other failure), so a wrapper can tell them apart.
+REFUSED_EXIT_CODE = 3
+
+# A journal entry is THIS SCRIPT'S when it carries the seed actor (every fixture posting
+# goes through a real service with actor_id=SEED_ACTOR_ID, including the ones whose memo
+# the SERVICE generates — "AP bill BILL-0001", "PO receipt <id>", "AR invoice INV-0001",
+# "Shipment 1 — SO SO-0002 COGS") or when its memo carries the UAT- fixture prefix (the
+# two manual JEs, GL_CAPITAL_MEMO and GL_JE_MEMO). Anything else is FOREIGN. A static
+# predicate authored here, never anything derived from the environment — same rule as
+# TableSpec.where.
+_FOREIGN_JE_WHERE = (
+    "actor_id IS DISTINCT FROM :actor AND upper(coalesce(memo, '')) NOT LIKE :prefix"
+)
+
+
+def _refuse(headline: str, body: str) -> None:
+    """Print a refusal to stderr (stdout stays a pure manifest) and exit REFUSED."""
+    print(f"REFUSED: {headline}\n{body}", file=sys.stderr)
+    sys.exit(REFUSED_EXIT_CODE)
+
+
+def require_uat_stack_opt_in() -> None:
+    """
+    Gate 1 — refuse unless the STACK declared itself a UAT stack.
+
+    Reads ``BNS_ALLOW_UAT_SEED`` from the process environment; the dev overlay sets it
+    on the api service, the production compose file must never set it.
+    """
+    if os.environ.get(UAT_SEED_OPT_IN_ENV) == UAT_SEED_OPT_IN_VALUE:
+        return
+    _refuse(
+        "the target stack is not a UAT stack.",
+        f"""
+  This script WRITES to the database it is pointed at, through the real services:
+  an opening-capital journal entry, a manual journal entry, an approved+received
+  purchase order, a posted bill, a cash payment, an AR invoice and a customer
+  receipt. Journal entries are APPEND-ONLY — they can be reversed, never deleted.
+  It also creates an ACTIVE login ({UAT_USER_EMAIL}) whose password is
+  committed to this repository.
+
+  It therefore runs only when the stack itself has opted in by setting
+  {UAT_SEED_OPT_IN_ENV}={UAT_SEED_OPT_IN_VALUE} in the api service's environment.
+  compose/compose.dev.yml sets it; compose/compose.yml (production) never does —
+  and both stacks answer to the same container name, so this variable, not the
+  command you typed, is what tells them apart.
+
+  If you meant the dev stack, bring it up with the dev overlay:
+    podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d
+
+  If you deliberately want the fixtures in THIS database (e.g. the C-CORE-08
+  prod-artifact smoke on a fresh prod volume), say so explicitly, per run:
+    podman exec -e PYTHONPATH=/app -e {UAT_SEED_OPT_IN_ENV}={UAT_SEED_OPT_IN_VALUE} \\
+      compose_api_1 python scripts/seed_uat_fixtures.py
+
+  NOTHING was written. --manifest is read-only and runs without the opt-in.
+""".rstrip(),
+    )
+
+
+async def require_no_foreign_ledger(session: AsyncSession) -> None:
+    """
+    Gate 2 — refuse when the ledger holds journal entries this script did not post.
+
+    Independent of gate 1 by design: it is what catches a deliberate override aimed at
+    the wrong database. Read-only; it runs before any builder.
+    """
+    params = {"actor": SEED_ACTOR_ID, "prefix": f"{FIXTURE_PREFIX.upper()}%"}
+    total = int(
+        (
+            await session.execute(
+                text(f"SELECT count(*) FROM syerp_journal_entry WHERE {_FOREIGN_JE_WHERE}"),
+                params,
+            )
+        ).scalar_one()
+    )
+    if total == 0:
+        return
+
+    sample = (
+        await session.execute(
+            text(
+                f"SELECT entry_date, source_type, memo FROM syerp_journal_entry "
+                f"WHERE {_FOREIGN_JE_WHERE} ORDER BY entry_date, id LIMIT 5"
+            ),
+            params,
+        )
+    ).all()
+    found = "\n".join(
+        f"    {entry_date}  {source_type or 'manual'}  {memo or '(no memo)'}"
+        for entry_date, source_type, memo in sample
+    )
+    more = f"\n    … and {total - len(sample)} more" if total > len(sample) else ""
+
+    _refuse(
+        f"this database already holds {total} journal "
+        f"{'entry' if total == 1 else 'entries'} this script did not post.",
+        f"""
+  Found:
+{found}{more}
+
+  That is not a UAT database — it looks like REAL BOOKS. Seeding would post
+  further append-only entries into them (opening capital, a manual journal entry,
+  a bill, a payment, an invoice, a receipt), and an append-only ledger cannot be
+  un-posted, only reversed.
+
+  This script seeds only a ledger that is empty or holds nothing but its own
+  {FIXTURE_PREFIX} fixtures, and there is no flag that overrides this: point it at a
+  fresh volume instead
+  (./scripts/uat.sh --fresh --detach, or podman-compose … down -v).
+
+  NOTHING was written. --manifest is read-only and still works here.
+""".rstrip(),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2858,7 +3025,16 @@ async def _count_rows(session: AsyncSession, spec: TableSpec) -> int:
 
 
 async def run(*, seed: bool) -> None:
-    """Seed (unless manifest-only), then render the manifest to stdout."""
+    """
+    Seed (unless manifest-only), then render the manifest to stdout.
+
+    Seeding passes BOTH target-database guards first — the stack opt-in (which needs no
+    database) and the foreign-ledger check (which does) — so a refusal happens before any
+    builder writes anything. Manifest-only mode skips both: it writes nothing.
+    """
+    if seed:
+        require_uat_stack_opt_in()
+
     engine = create_async_engine(build_dsn(), echo=False)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     manifest = Manifest()
@@ -2870,6 +3046,8 @@ async def run(*, seed: bool) -> None:
         # printing an empty manifest that looks like an empty database.
         async with session_factory() as session:
             await session.execute(text("SELECT 1"))
+            if seed:
+                await require_no_foreign_ledger(session)
 
         if seed:
             for layer in layers:

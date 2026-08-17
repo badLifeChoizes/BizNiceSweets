@@ -2,7 +2,9 @@
 # ABOUTME: Asserts the compose `db` service resolves POSTGRES_PASSWORD from a DEDICATED
 # ABOUTME: env_file rather than a bare ${POSTGRES_PASSWORD} interpolation (which silently
 # ABOUTME: expands to empty and breaks only a FRESH volume), and that the file it reads is
-# ABOUTME: NOT the app `.env` — so the secret-spread regression is caught too.
+# ABOUTME: NOT the app `.env` — so the secret-spread regression is caught too. Also pins the
+# ABOUTME: UAT-seed opt-in split (Phase-5 review finding 1): the dev overlay sets
+# ABOUTME: BNS_ALLOW_UAT_SEED=1, the production file never does.
 """
 Compose configuration invariants for defect U0 (v4.0 Phase 5).
 
@@ -45,6 +47,14 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _COMPOSE = _REPO_ROOT / "compose" / "compose.yml"
+_COMPOSE_DEV = _REPO_ROOT / "compose" / "compose.dev.yml"
+
+# The UAT-seed opt-in (Phase-5 review finding 1). podman-compose names BOTH stacks
+# after the compose/ directory, so prod and dev share the container `compose_api_1`
+# and the documented `podman exec … seed_uat_fixtures.py` cannot tell them apart.
+# This variable is what does: the dev overlay declares itself a UAT stack, the prod
+# file never may.
+_UAT_SEED_OPT_IN = "BNS_ALLOW_UAT_SEED"
 
 # The app env file — the one carrying JWT_SECRET / BNS_ADMIN_PASSWORD. The db
 # container must never be pointed at it (that was the rejected "easy" fix).
@@ -187,6 +197,40 @@ def test_api_service_also_reads_the_db_credentials(compose_text: str) -> None:
     assert _APP_ENV_FILE in env_files, (
         f"compose `api` service must still read {_APP_ENV_FILE!r} for JWT_SECRET and "
         f"BNS_ADMIN_PASSWORD; got {env_files!r}."
+    )
+
+
+def test_prod_compose_never_declares_itself_a_uat_stack(compose_text: str) -> None:
+    """
+    Finding 1: `compose.yml` must not set BNS_ALLOW_UAT_SEED — anywhere.
+
+    The seeder writes append-only journal entries and an active login whose password
+    is in this repository. Its only defence against being pointed at a self-hoster's
+    real books is that the production stack does not opt in, so this is asserted over
+    the WHOLE file (comment-stripped), not just the `api` block.
+    """
+    offenders = [
+        line for line in compose_text.splitlines() if _UAT_SEED_OPT_IN in _strip_comment(line)
+    ]
+    assert not offenders, (
+        f"compose/compose.yml sets {_UAT_SEED_OPT_IN}: {offenders!r}. The production "
+        "stack must never opt into the UAT fixture seed — a deliberate load into a "
+        f"prod artifact passes `-e {_UAT_SEED_OPT_IN}=1` on the podman exec line."
+    )
+
+
+def test_dev_overlay_declares_itself_a_uat_stack() -> None:
+    """The other half: without the overlay's opt-in the documented runbook stops working."""
+    assert _COMPOSE_DEV.is_file(), f"dev overlay not found at {_COMPOSE_DEV}"
+    block = [
+        line
+        for line in _service_block(_COMPOSE_DEV.read_text(encoding="utf-8"), "api")
+        if _UAT_SEED_OPT_IN in line
+    ]
+    assert any(re.search(rf"{_UAT_SEED_OPT_IN}:\s*['\"]?1['\"]?\s*$", line) for line in block), (
+        f"compose/compose.dev.yml `api` service must set {_UAT_SEED_OPT_IN}: \"1\" — it is "
+        "what lets backend/scripts/seed_uat_fixtures.py seed the dev stack while the "
+        f"identical command refuses against production; got {block!r}."
     )
 
 
