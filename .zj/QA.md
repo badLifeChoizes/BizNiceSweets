@@ -1681,8 +1681,19 @@ One row per run. A run need not be complete — record what you did.
 |---|---|---|---|---|---|
 | **U0** | — (found at Phase-5 Task 8) | On a **fresh volume** the `db` container never received `POSTGRES_PASSWORD` and Postgres refused to initialize (`Database is uninitialized and superuser password is not specified`). Invisible on an existing volume, so it broke only a first-ever deploy. | blocker | **fixed** | `4ace2c4`; pinned by `backend/tests/test_compose_config.py` (`d870233`). D-P5-10 |
 | **U1** | `C-CORE-04` | `POST /auth/users` with an existing email returned **HTTP 500** from an unhandled `ix_users_email` `UniqueViolationError` instead of a clean rejection. The v1.0 **D2** pattern. | major | **fixed** | `f508554`; pinned by `backend/tests/auth/test_user_duplicate_email.py` (`f67f085`) |
+| **U2** | `C-CORE-08` (found at Phase-5 Task 34) | **The API image could not be built at all.** The Containerfile's builder stage did `COPY frontend/package*.json ./` — a glob that does not match the dotfile `frontend/.npmrc` — so `npm ci` ran without `legacy-peer-deps=true` (D-P1-1) and died on the `eslint-plugin-react-hooks@5` peer range. `podman-compose build api` therefore failed outright. | blocker | **fixed** | Containerfile `COPY … frontend/.npmrc ./`; pinned by `backend/tests/test_containerfile_config.py`, proven RED on revert |
 
-All four SHAs verified resolvable (Task 32).
+All fix/pin SHAs verified resolvable (Task 32; U2 added Task 34).
+
+> **U2 hid for five phases** because the colliding devDependencies arrived in v4.0 Phase 1
+> (NFR-6, the ESLint flat-config work) and the image had not been rebuilt since. The stale image
+> kept working and masked a broken build — the same shape as U0, a fault invisible until someone
+> builds from scratch. It is why the p1 "rebuild `frontend/dist` + the API container image" item
+> mattered more than it looked: the staleness was not just an old bundle.
+>
+> ⚠ **Trap:** `podman-compose build` printed `exit code: 1` and still **returned 0**. A
+> `build && next-step` chain walks straight over a failed build. Grep the log for
+> `Error: building at STEP`, never trust the exit status alone.
 
 > Both were found by **engineer** work before anyone clicked — U0 by the fresh-volume idempotency
 > proof, U1 by the machine pre-flight. They are recorded here because a defect ledger that only

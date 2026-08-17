@@ -447,12 +447,22 @@ BACKLOG. That protocol was never the problem; the blocking `Done when` was.
   unpublished); the sweep's `+100.00` fixture drift was measured, homed to BACKLOG, and repaired by
   a fresh-volume re-seed verified byte-identical to the Task-8 record.
 
-### [ ] 34. Rebuild `frontend/dist` and the API container image
+### [x] 34. Rebuild `frontend/dist` and the API container image
 - **Files:** `frontend/dist/` (rebuilt artifact), no source change
 - **Do:** `cd frontend && npm run build` (host bundle), then `podman-compose -f compose/compose.yml build api` (the image builds its own SPA in the `frontend-builder` stage — see `## Context`). Must run **after** Task 32, so no defect fix lands after the image is built; if a fix lands later, re-run this task. Closes the p1 BACKLOG "Rebuild `frontend/dist` + the API container image" item, including the stale-`openpyxl` half.
 - **Done when:** both artifacts are newer than the last source commit; the image contains `openpyxl` (the old image did not).
 - **Verify:** `podman run --rm --entrypoint python <image> -c 'import openpyxl, sys; print(openpyxl.__version__)'` prints `3.1.5`; `ls -l frontend/dist/index.html` is newer than `git log -1 --format=%cd -- frontend/src`.
 - **Parallel-ok:** no.
+- **Done (2026-08-17) — and it found a blocker.** The first `podman-compose build api` **failed**:
+  `COPY frontend/package*.json ./` does not match the dotfile `frontend/.npmrc`, so `npm ci` ran
+  without `legacy-peer-deps=true` and died on the `eslint-plugin-react-hooks@5` peer range. Filed
+  **U2 (blocker)**, fixed `8d61cca`, pinned `f82ec38` (`test_containerfile_config.py`, RED on
+  revert). Rebuild then clean. Verified: `openpyxl 3.1.5` in the image; `/app/frontend/dist/` present
+  and its `index-BQmUVhcG.js` **byte-identical to the host bundle**, so image and host are the same
+  build; host `dist` (2026-08-17 14:46) newer than the last `frontend/src` commit (2026-07-26).
+  Suite now **243 passed / 0 skipped**, ruff clean.
+  ⚠ `podman-compose build` printed `exit code: 1` and **returned 0** — grep the log for
+  `Error: building at STEP`, never trust its exit status.
 
 ### [ ] 35. Bring the prod stack up on a fresh volume at :8000
 - **Files:** `docs/tasks/chore-human-uat.md` (log)
