@@ -8,6 +8,52 @@ on:
   pull_request:
 
 jobs:
+  # The artifact a self-hoster actually gets (SC7, gap G-4). Defect U2 — the API image
+  # could not be built AT ALL — hid for five phases precisely because no automated
+  # process ever built it; the stale image kept serving and masked the break.
+  # backend/tests/test_containerfile_config.py pins U2's `.npmrc` COPY, i.e. one config
+  # invariant; this job pins the thing itself, so the NEXT unrelated break (a new
+  # dotfile, a base-image bump, a moved COPY path) fails on the day it lands.
+  #
+  # Build only — no push, no compose, no run. Deliberately UNCACHED: U2 was a
+  # cold-build failure, and a warm layer cache is exactly what hid it.
+  #
+  # NOTE — this job is NOT yet one of `master`'s required status contexts. The four
+  # existing job names are wired into branch protection; adding this one there is a
+  # repo-settings change nobody can make from a workflow file. Until someone does, it
+  # reports but does not block.
+  container-image:
+    name: container-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # `docker build` on the runner returns a trustworthy exit status, unlike the
+      # `podman-compose build` this project builds with locally, which printed
+      # `exit code: 1` and still RETURNED 0 (Phase-5 defect U2 nearly hid entirely
+      # behind that). pipefail keeps `| tee` from laundering the status back to 0 —
+      # the same trap one layer up — and the log assertion below is the belt to that
+      # brace, so the next build-wrapper change cannot silently re-open it.
+      - name: Build the API image from Containerfile
+        run: |
+          set -o pipefail
+          docker build -f Containerfile -t biznicesweets-api:ci . 2>&1 \
+            | tee "$RUNNER_TEMP/image-build.log"
+
+      - name: Assert the build log records no failed step
+        run: |
+          # `Error: building at STEP` is buildah/podman's failure line (the one U2
+          # printed); `failed to solve` is BuildKit's. Neither may appear in a log
+          # that a `build && next-step` chain would walk straight over.
+          if grep -nE "Error: building at STEP|failed to solve" "$RUNNER_TEMP/image-build.log"; then
+            echo '::error::the image build log records a failed step. Never trust a'
+            echo 'build wrapper exit status alone — U2 shipped for five phases behind a'
+            echo 'podman-compose build that printed "exit code: 1" and returned 0.'
+            exit 1
+          fi
+          # Positive side: the tag must actually exist afterwards.
+          docker image inspect biznicesweets-api:ci > /dev/null
+          echo "image built from Containerfile, log clean"
+
   frontend:
     name: frontend
     runs-on: ubuntu-latest
