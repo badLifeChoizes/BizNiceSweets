@@ -47,7 +47,7 @@ backend/            FastAPI app, alembic, tests (the live backend)
 frontend/           React/Vite SPA (the live frontend)
 compose/            compose.yml (prod) + compose.dev.yml (dev overlay: Vite HMR, --reload)
 Containerfile       multi-stage image build (repo root; Podman-native name)
-scripts/uat.ps1     one-command dev-stack launcher (PowerShell)
+scripts/uat.sh      one-command dev-stack launcher (bash); uat.ps1 is the PowerShell twin
 plum/, flan/        legacy prototypes: app/, archive/, data/, docs/, templates/
 syerp/ crumb/ mousse/ crisp/ gelato/   placeholder suite dirs (CLAUDE.md only)
 docs/               features/ (per-suite reference docs + requirements-progress.md),
@@ -66,7 +66,7 @@ All verified against config files:
 |---|---|---|
 | Full dev stack (db+api+Vite, containers only) | `./scripts/uat.sh` (add `--fresh` to reset DB, `--down` to stop) or `./scripts/uat.ps1` (`-Fresh` / `-Down`) | `scripts/uat.sh:50-228`; `scripts/uat.ps1:44-178` — the `.ps1` requires `pwsh` on Linux |
 | Prod stack | `podman-compose -f compose/compose.yml up -d` (needs **both** `.env` from `.env.example` and `.env.db` from `.env.db.example` — D-P5-10) | `compose/compose.yml:3-5`, `:85-88` (`api` reads both files) |
-| Dev stack (manual) | `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up` | `scripts/uat.ps1:58` |
+| Dev stack (manual) | `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up` | `scripts/uat.sh:126` |
 | Backend tests | `pytest` from `backend/` (testpaths=tests, asyncio auto). **DB-backed (v4.0 Phase 2a, NFR-5):** the harness provisions a dedicated migrated **`biznice_test`** DB (never the live `biznice`) and requires a live Postgres — no silent-skip mode. In-container: `podman exec -e PYTHONPATH=/app compose_api_1 sh -c 'cd /app && python -m pytest -q'`. Localhost/CI: set `POSTGRES_HOST/POSTGRES_PORT/POSTGRES_PASSWORD/JWT_SECRET/BNS_ADMIN_PASSWORD` (+ optional `TEST_POSTGRES_DB`). | `backend/pyproject.toml:1-3`, `backend/tests/conftest.py:16-33` |
 | Backend lint | `ruff check .` from `backend/` (E,F,I,UP; line-length 100) | `backend/pyproject.toml:5-15` |
 | Migrations | `alembic upgrade head` from `backend/` (auto-run by container entrypoint) | `backend/alembic.ini`, `backend/entrypoint.sh:23` |
@@ -124,7 +124,7 @@ Required env (no defaults; app refuses to start without them) is split across **
 3. **Stale project context:** root `CLAUDE.md` "Technology Stack" and "Architecture" sections describe only the vanilla-JS prototypes ("No server-side runtime", "None — no npm"), contradicting the live FastAPI/React codebase. Also references Windows paths (`E:\Projects\`) while the workspace now runs on Linux. Any agent relying on CLAUDE.md's stack section will mis-model the codebase.
 4. **Service-layer monolith:** SYERP's `service.py` had grown to 3,824 lines (Phases 8–9c) and was split into a `syerp/service/` package at `chore-syerp-service-split` (10 cohesive submodules, unchanged public surface). `plum/service.py` at ~3,000 lines is the remaining monolith and still needs the same treatment (BACKLOG) before it metastasizes.
 5. **No CI:** no `.github/`, no pipeline config anywhere (verified). Lint/test enforcement is manual; the SyerpPartner bug shipping through 4 plans is the direct consequence.
-6. **Tooling friction on Linux:** the only stack launcher is PowerShell (`scripts/uat.ps1`); requires `pwsh` or manual compose commands. Compose comments still reference a Windows podman-compose bug (`compose/compose.yml:57-60`).
+6. **Tooling friction on Linux:** resolved for the launcher — `scripts/uat.sh` (`565588a`) is a bash port of the pwsh-only `scripts/uat.ps1`, so no `pwsh` is required. Compose comments still reference a Windows podman-compose bug (`compose/compose.yml:57-60`).
 7. **Repo weight from legacy artifacts:** `plum/` 33 MB + `flan/` 8.7 MB, including 22 archived FLAN versions (`flan/archive/`) and a 2.6 MB JSON database — harmless but slows clones; consider git-lfs or pruning once re-platforming supersedes them.
 8. **Legacy prototype risks** (XSS via `innerHTML`, localStorage limits, advisory-only checkout locking) — moot for new work since the prototypes are frozen reference (D-ADOPT-4); historical detail archived at `archive/planning-gsd/codebase/CONCERNS.md`.
 9. **Placeholder suite dirs** (`syerp/`, `crumb/`, `mousse/`, `crisp/`, `gelato/` at repo root) contain only `CLAUDE.md` files and can confuse navigation — the real SYERP code is `backend/app/modules/syerp/`, not `syerp/`.

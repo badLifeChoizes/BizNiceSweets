@@ -371,6 +371,12 @@ API container — which is what a self-hoster actually gets.
 **Preconditions:** `frontend/dist` and the API image rebuilt, and the prod stack up on a **fresh**
 volume via `compose.yml` **alone** (no dev overlay) — Phase-5 Tasks 34 and 35. Fixtures seeded.
 
+> ⚠ **The image must be newer than the last commit touching `backend/app/` or `frontend/src/`.**
+> A stale artifact has now silently invalidated this check twice — the v1.0 G2 failure, and again
+> during the Phase-5 verify fix loop, where `fd7ca87` changed `inventory.py` after the image was
+> built and the running container simply did not carry the fix. Rebuild before reading this check,
+> or you are smoke-testing an artifact nobody is going to ship.
+
 - ✅ **Machine already proved:** the stack comes up healthy — `/health/ready` returns
   `{"status":"ok","db":"connected"}`, `alembic current` is at head, and `:8000/` serves the SPA
   rather than a 404 (Phase-5 Task 35). `backend/tests/test_compose_config.py` pins the two-env-file

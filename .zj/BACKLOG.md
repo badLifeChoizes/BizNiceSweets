@@ -246,16 +246,18 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   `post_transfer`'s `from_bin_id` (docstring `inventory.py:618-621`: *"The BIN is NOT validated
   here: bin existence + location-membership is GELATO's domain and the caller's job (D-P12a-3);
   the DB FK on bin_id is the backstop"*) and MOUSSE `issue_components`' per-line `bin_id`
-  (docstring `mousse/service.py:607-610`, same claim — and its `post_issue` primitive repeats it
-  at `inventory.py:1019-1022`, where "checked by the caller" is simply false for the MOUSSE
-  caller). Both are reachable from the API with a mismatched or archived `(location, bin)` pair.
+  (docstring `mousse/service.py:607-610`, same claim — MOUSSE writes its own `InventoryTxn` at
+  `mousse/service.py:764` rather than going through a shared primitive). Both are reachable from
+  the API with a mismatched or archived `(location, bin)` pair.
   Impact is smaller than SC8's — a draw from a foreign or archived pool reads on-hand `0` and is
   rejected by the pool floor — but the *docstrings assert a guarantee nobody provides*, and the
   next primitive written against that contract inherits the hole. Fix: extend SC8's raw-SQL probe
   (**no gelato model import** — D-P12a-3 keeps the hub free of satellite imports) to both paths,
-  and correct the three docstrings; pin as further `verify_gelato.py` scenarios in the shape of
+  and correct both docstrings; pin as further `verify_gelato.py` scenarios in the shape of
   (G1)–(G5). Do it in one pass so all three bin-taking primitives state and enforce the same
-  contract.
+  contract. While there, check `post_issue`'s identical "checked by the caller" docstring
+  (`inventory.py:1019-1022`) against its sole caller, `gelato/service/shipments.py:630` — the
+  claim may hold there, but nobody has verified it.
 - [ ] **GELATO `pick_for_shipment` acquires item locks incrementally in request-line order**
   (Phase 4 verify review question, 2026-07-25 — pre-existing from 12b, the one remaining writer
   outside the Phase-4 lock discipline). `shipments.py:387` calls `post_putaway` per line
@@ -341,6 +343,28 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **The two new QA-doc guard scripts cannot run the documented in-container way**
+  (v4.0 Phase 5 verify, N-1, 2026-08-17) — `backend/scripts/verify_qa_doc.py` and
+  `verify_qa_citations.py` (`ba4c074`, `8352858`) read `.zj/QA.md` and `.zj/SRD.md`, which the
+  `Containerfile` does not copy (it copies `backend/` only). So the house recipe
+  `podman exec … python scripts/verify_*.py` now yields **15/17** rather than 17/17, and the two
+  that fail do so for an environment reason rather than a real one — exactly the kind of noise
+  that trains people to ignore a red. CI runs them from the checkout and is unaffected. Fix:
+  document them as checkout-only beside the sweep recipe, or have them exit 0 with a skip notice
+  when `.zj/` is absent. Same family as the `pytest`-not-in-the-image item below.
+- [ ] **`verify_qa_citations.py` erodes silently if a citation loses its shape**
+  (v4.0 Phase 5 verify, N-2, 2026-08-17) — the extractor matches four documented citation forms;
+  a citation reformatted out of all four is simply not extracted, so the count drops (223 instead
+  of 224) and the script still reports "All assertions PASSED". The anti-vacuum assertion catches a
+  *missing block*, not a *malformed citation inside a present block*. Fix: assert a floor on the
+  extracted count, or fail when a `✅ Machine already proved` block yields zero citations.
+- [ ] **Three `verify_gl.py` citations are only weakly pinned**
+  (v4.0 Phase 5 verify, N-3, 2026-08-17; PLAN `## Noticed` #9(a), still open) — `.zj/QA.md` cites
+  `verify_gl.py (A)`, `(B)`, `(M1)` but that script letters its scenarios `(a)`–`(h)` lower-case,
+  so those three resolve only incidentally. `verify_qa_citations.py` now prints them as `WEAK` on
+  every run, so the rot is visible rather than invisible. Fix properly by re-lettering the
+  letterless `verify_*` scripts to the `(G1)`-style scheme the newer ones use, then tightening the
+  citations.
 - [ ] **The API image carries no `pytest`, so the backend suite cannot run in-container**
   (split out of the now-resolved p1 rebuild item, v4.0 Phase 5 Task 33, 2026-08-17) — the runtime
   stage installs `requirements.txt` only, and the bind-mounted `backend/.venv/bin/pytest` carries
