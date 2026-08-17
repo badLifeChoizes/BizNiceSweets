@@ -61,7 +61,7 @@ go in `.zj/QA.md` §6. No engineering was lost — Tasks 0–19 all stand.
 ### Close-out
 
 - [x] 32. Reconcile the checklist: every check judgeable, every defect homed *(amended)*
-- [ ] 33. Run the full regression gate
+- [x] 33. Run the full regression gate
 - [ ] 34. Rebuild `frontend/dist` and the API container image
 - [ ] 35. Bring the prod stack up on a fresh volume at :8000
 - [ ] ~~36. **[OWNER]** Prod-stack deploy smoke at :8000~~ → sitting 12 of the parallel to-do
@@ -705,8 +705,7 @@ Regression alongside: `verify_gelato`, `verify_inventory`, `verify_mousse`,
 
 ### Task 33 — full regression gate results
 
-Run 2026-08-17 at `fbac89b`. **Every local gate green; the CI clause is NOT met** (see below),
-so Task 33 stays open.
+Run 2026-08-17 at `fbac89b` (local gates) and `81a8f55` (CI). **All gates green — Task 33 complete.**
 
 | Gate | Command | Result | vs baseline |
 |---|---|---|---|
@@ -716,7 +715,7 @@ so Task 33 stays open.
 | Frontend build | `npm run build` | exit 0, built in 812 ms | held |
 | Backend tests | `pytest -q` | **240 passed, 0 skipped**, 209 s, exit 0 | **above** (was 232) |
 | `verify_*` scripts | all 24 in-container | **24/24 exit 0** | held (15 non-API + 9 API) |
-| CI 4/4 green | — | **NOT RUN** | — |
+| CI 4/4 green | run `32059723558` @ `81a8f55` | **4/4 success** | held |
 
 **How the backend suite was run.** In-container `pytest` still does not work (absent from the
 image; the bind-mounted `.venv/bin/pytest` carries host-path shebangs) — the correction recorded
@@ -750,9 +749,15 @@ to say so rather than leaving the stale `+50.00` attribution standing, and `.zj/
 warning now quotes the measured figure. The dev stack was then reset (`down -v`) and re-seeded;
 all **129** literals verified byte-identical to the Task-8 record, so the fixtures are intact.
 
-**Why Task 33 is not ticked.** Its last clause is "all four CI jobs green on `chore-human-uat`,
-record the run ID". The branch has **no upstream** and there are **154 commits unpushed** to
-`origin`. Pushing is an owner call, not an engineer's — pending.
+**CI.** `chore-human-uat` was pushed to `origin` (owner decision, 2026-08-17) — 154 commits, first
+push of the v4.0 stack, so CI exercised it end to end for the first time. **Run `32059723558` at
+`81a8f55`: all four jobs `success`** — `frontend`, `backend-lint`, `backend-tests`,
+`verify-scripts`. https://github.com/badLifeChoizes/BizNiceSweets/actions/runs/32059723558
+
+No environment difference surfaced: every job's clean-runner result matched its local counterpart.
+Only annotation is the standing Node-20 deprecation notice on `actions/checkout@v4` /
+`setup-node@v4` / `setup-python@v5` — pre-existing, not a failure, and already covered by the p3
+"CI hardening" backlog item.
 
 ### Off-plan deviation — `scripts/uat.sh` (bash launcher)
 

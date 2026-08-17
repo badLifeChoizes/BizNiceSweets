@@ -434,12 +434,18 @@ BACKLOG. That protocol was never the problem; the blocking `Done when` was.
   U1 are restored as §7 with all four fix/pin SHAs verified resolvable, plus the two known candidate
   minors. §5 now reads zero real gaps.
 
-### [ ] 33. Run the full regression gate
+### [x] 33. Run the full regression gate
 - **Files:** `docs/tasks/chore-human-uat.md` (record results)
 - **Do:** Hold the baselines: in-container `pytest -q` (**232 passed / 0 skipped**, plus any new tests), the 15 non-API + 9 API `verify_*` scripts, `backend/.venv/bin/ruff check .`, `npm run lint`, `npm run test`, `npm run build`, and all four CI jobs green on `chore-human-uat`. Record the CI run ID.
 - **Done when:** every command exits 0, counts at or above baseline, CI 4/4 green with the run ID recorded.
 - **Verify:** `gh run list --branch chore-human-uat --limit 1` shows all four jobs `success`.
 - **Parallel-ok:** no.
+- **Done (2026-08-17):** ruff 0, eslint 0, vitest **148/45**, vite build 0, pytest **240 passed /
+  0 skipped**, **24/24** `verify_*` exit 0 — both suites above baseline (131 / 232). CI run
+  **`32059723558`** @ `81a8f55`: **4/4 success**. pytest ran against a disposable
+  `postgres:17-alpine` on `:55434` (the in-container route is still broken and compose's `db` is
+  unpublished); the sweep's `+100.00` fixture drift was measured, homed to BACKLOG, and repaired by
+  a fresh-volume re-seed verified byte-identical to the Task-8 record.
 
 ### [ ] 34. Rebuild `frontend/dist` and the API container image
 - **Files:** `frontend/dist/` (rebuilt artifact), no source change
