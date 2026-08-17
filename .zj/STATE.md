@@ -32,10 +32,10 @@ machine-only. Also: `podman-compose build` printed `exit code: 1` and **returned
 hid U2 — never trust its exit status, grep for `Error: building at STEP`.
 
 **Gate at `81a8f55`:** pytest **243 passed / 0 skipped** (baseline 232), 24/24 `verify_*`, ruff +
-eslint 0, vitest 148/45, CI run **32059723558** 4/4 success — the first push of the v4.0 stack, so
-CI exercised 154 commits end to end. Prod stack verified on a **fresh volume** at `:8000`: `/` 200
+eslint 0, vitest 148/45. CI 4/4 success at phase HEAD: run **32064085911** @ `1954b56`; the
+first-push run **32059723558** @ `81a8f55` was also 4/4 but predates the `U2` fix and its pin. Prod stack verified on a **fresh volume** at `:8000`: `/` 200
 serving `index-BQmUVhcG.js`, byte-identical to the host bundle, `alembic current` `0017 (head)`,
-129 fixture literals identical to the Task-8 record, admin login + authed reads 200.
+all 275 derived fixture literals identical to the Task-8 record, admin login + authed reads 200.
 NFR-8 stamped `done`; ROADMAP/BACKLOG/DECISIONS trued up (D-P5-1..11, 137→148); checklist archived.
 
 **What is deliberately NOT done: anyone has run the checklist.** `.zj/QA.md` §6 holds **zero**

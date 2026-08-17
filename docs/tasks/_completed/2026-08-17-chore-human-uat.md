@@ -743,11 +743,11 @@ syerp.report.trial_balance.total_debit        8447.25 -> 8547.25
 syerp.report.trial_balance.total_credit       8447.25 -> 8547.25
 ```
 
-Nothing else moved — all other 125 literals byte-identical. **At least one leaker besides
+Nothing else moved — all other 271 derived literals byte-identical. **At least one leaker besides
 `verify_purchasing.py` therefore exists and is unidentified**; the p3 BACKLOG item was re-worded
 to say so rather than leaving the stale `+50.00` attribution standing, and `.zj/QA.md` §1's
 warning now quotes the measured figure. The dev stack was then reset (`down -v`) and re-seeded;
-all **129** literals verified byte-identical to the Task-8 record, so the fixtures are intact.
+all **275** derived literals verified byte-identical to the Task-8 record, so the fixtures are intact.
 
 **CI.** `chore-human-uat` was pushed to `origin` (owner decision, 2026-08-17) — 154 commits, first
 push of the v4.0 stack, so CI exercised it end to end for the first time. **Run `32059723558` at
@@ -784,7 +784,7 @@ foreground/detached/down modes. Two deliberate divergences from the `.ps1`:
 **Verification.** `bash -n` clean; `--help` and unknown-flag (exit 2) paths exercised;
 `--detach --no-browser` run against the live stack → `API is healthy`, `/health/ready` →
 `{"status":"ok","db":"connected"}`, `:5173` → 200. Fixtures re-checked afterwards with
-`seed_uat_fixtures.py --manifest`: all **129** derived literals byte-identical to the Task-8
+`seed_uat_fixtures.py --manifest`: all **275** derived literals byte-identical to the Task-8
 recorded manifest.
 
 > Cosmetic, pre-existing: `podman-compose` 1.0.6 prints `Error: … name is already in use`

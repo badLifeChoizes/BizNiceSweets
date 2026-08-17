@@ -801,11 +801,13 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Evidence:** `.zj/QA.md` (`493e185`, extended `fbac89b`) — **61 checks**, all judgeable, keyed to
   requirement IDs; **31 of 47** requirements carry a human check and §5 names **zero real gaps**
   (9 not-built, 6 machine-only, NFR-8 itself). Fixtures are reproducible on a fresh volume
-  (`backend/scripts/seed_uat_fixtures.py`, 129 literals, byte-identical across four independent
-  re-seeds). Defect ledger §7: **U0** blocker fixed `4ace2c4` + pin `d870233`; **U1** major fixed
+  (`backend/scripts/seed_uat_fixtures.py`, all **275** derived literals — the full 361-line
+  manifest — byte-identical across four independent re-seeds). Defect ledger §7: **U0** blocker fixed `4ace2c4` + pin `d870233`; **U1** major fixed
   `f508554` + pin `f67f085`; **U2** blocker fixed `8d61cca` + pin `f82ec38`. SC8 landed `e57c1ff`
   + pin `0a7a89f`. Regression gate green at `81a8f55` — pytest **243 passed / 0 skipped**, 24/24
-  `verify_*`, both lint gates 0, CI run **32059723558** 4/4 success. Prod stack verified on a fresh
+  `verify_*`, both lint gates 0. CI 4/4 success at phase HEAD: run **32064085911** @ `1954b56`
+  (the earlier run `32059723558` @ `81a8f55` predates the `U2` fix and its pin, so it never
+  exercised them). Prod stack verified on a fresh
   volume at `:8000` serving the rebuilt bundle (`index-BQmUVhcG.js`).
 - **NOT evidenced:** that any human has run the checklist. Zero readings are recorded in `.zj/QA.md`
   §6. Under D-P5-11 that does not block this requirement, the phase, or the milestone — but it does
