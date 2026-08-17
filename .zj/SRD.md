@@ -797,18 +797,23 @@ future scope (expanded via `/zj:spec` when their milestones near).
   unvalidated bin_id (p2, owner decision), `pick_for_shipment` unsorted item locks (p2),
   `TransactionRead` bin_id omission (p3). Tag `zj/good-04-inventory-race-safety`.)
 
-## NFR-8: Human-verified release readiness  [traces: PRD-12, PRD-5, PRD-7, PRD-8]  **Status: done (v4.0 Phase 5 — checklist delivered; readings pending, deliberately non-blocking per D-P5-11). Pending `/zj:verify 5`.**
+## NFR-8: Human-verified release readiness  [traces: PRD-12, PRD-5, PRD-7, PRD-8]  **Status: verified (v4.0 Phase 5 — checklist delivered; readings pending, deliberately non-blocking per D-P5-11).**
+- **Verified:** d3e68e2
 - **Evidence:** `.zj/QA.md` (`493e185`, extended `fbac89b`) — **61 checks**, all judgeable, keyed to
   requirement IDs; **31 of 47** requirements carry a human check and §5 names **zero real gaps**
   (9 not-built, 6 machine-only, NFR-8 itself). Fixtures are reproducible on a fresh volume
   (`backend/scripts/seed_uat_fixtures.py`, all **275** derived literals — the full 361-line
   manifest — byte-identical across four independent re-seeds). Defect ledger §7: **U0** blocker fixed `4ace2c4` + pin `d870233`; **U1** major fixed
   `f508554` + pin `f67f085`; **U2** blocker fixed `8d61cca` + pin `f82ec38`. SC8 landed `e57c1ff`
-  + pin `0a7a89f`. Regression gate green at `81a8f55` — pytest **243 passed / 0 skipped**, 24/24
-  `verify_*`, both lint gates 0. CI 4/4 success at phase HEAD: run **32064085911** @ `1954b56`
-  (the earlier run `32059723558` @ `81a8f55` predates the `U2` fix and its pin, so it never
-  exercised them). Prod stack verified on a fresh
-  volume at `:8000` serving the rebuilt bundle (`index-BQmUVhcG.js`).
+  + pin `0a7a89f`, extended by the verify fix loop to reject an **archived** bin (`fd7ca87` + pin
+  `947e5d6`, scenario (G5)). **Verified at `d3e68e2`** — pytest **245 passed / 0 skipped**,
+  **17/17** non-API + **9/9** API `verify_*`, both lint gates 0, vitest 148/45; CI run
+  **32072598536** **5/5 success**, including the new `container-image` job that builds the shipped
+  artifact on every push. Prod stack re-driven on a fresh volume at `:8000` against an image
+  rebuilt from the verified tip. The verify fix loop also closed the four criteria that had no
+  automated pin: coverage arithmetic (`verify_qa_doc.py`), citation resolution
+  (`verify_qa_citations.py`), seed idempotency (a `verify-scripts` step on its own database), and
+  the image build itself — each proven non-vacuous by mutation.
 - **NOT evidenced:** that any human has run the checklist. Zero readings are recorded in `.zj/QA.md`
   §6. Under D-P5-11 that does not block this requirement, the phase, or the milestone — but it does
   mean NFR-8 no longer carries the assurance its original wording implied. The module rows caveated
