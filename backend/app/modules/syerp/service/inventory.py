@@ -403,18 +403,26 @@ async def post_adjustment(
     get_item / get_location).
 
     THE BIN **IS** VALIDATED (v4.0 Phase 5, SC8 / D-P5-5). A non-null `bin_id`
-    must both EXIST and BELONG to `location_id`, or the whole adjustment is
-    rejected 422 with no ledger row. Before this check the bin was trusted
-    outright, so a mismatched pair silently booked stock into a bin at another
-    location — the per-bin split at BOTH locations went wrong at once, and the
-    location totals hid it because they were computed from `location_id` alone.
-    The DB FK on bin_id catches only a bin that does not exist at all; it cannot
-    see the membership half.
+    must EXIST, BELONG to `location_id`, and be ACTIVE, or the whole adjustment
+    is rejected 422 with no ledger row — the same three tests GELATO's own
+    execute_putaway applies to a destination bin. Before this check the bin was
+    trusted outright, so a mismatched pair silently booked stock into a bin at
+    another location — the per-bin split at BOTH locations went wrong at once,
+    and the location totals hid it because they were computed from `location_id`
+    alone. The DB FK on bin_id catches only a bin that does not exist at all; it
+    cannot see the membership half. The ACTIVE half is the same failure once
+    more: `list_bins` hides archived bins by default, so stock booked into one
+    is absent from every bin-grain screen while the location total still counts
+    it, and only a hand-crafted negative adjustment naming a bin id the UI will
+    not offer can get it back out. The two rejections carry DIFFERENT 422
+    details ("does not exist at location" vs "is archived", matching
+    execute_putaway's wording) so a tester and an API consumer can tell them
+    apart.
 
-    The check is deliberately ONE raw-SQL existence+membership probe against
-    `gelato_bin`, NOT a gelato service call or model import: D-P12a-3 forbids
-    SYERP importing GELATO (the hub must not depend on a satellite), and the
-    import would also be circular. That is the whole reason validation was
+    The check is deliberately ONE raw-SQL existence+membership+active probe
+    against `gelato_bin`, NOT a gelato service call or model import: D-P12a-3
+    forbids SYERP importing GELATO (the hub must not depend on a satellite), and
+    the import would also be circular. That is the whole reason validation was
     previously deferred to the caller. A raw probe honours the no-imports rule
     while closing the hole, at the cost of naming one table SYERP does not own —
     a trade recorded as SC8.
@@ -433,24 +441,38 @@ async def post_adjustment(
     item = await get_item(db, item_id)  # noqa: F841 — loaded to 404 on missing item
     location = await get_location(db, location_id)
 
-    # SC8 (D-P5-5): a NON-NULL bin must exist AND belong to this location. Runs
-    # BEFORE the lock and before any write, so a rejection costs nothing and
+    # SC8 (D-P5-5): a NON-NULL bin must exist, belong to this location AND be
+    # active — the three tests execute_putaway applies to a destination bin.
+    # Runs BEFORE the lock and before any write, so a rejection costs nothing and
     # persists nothing. ONE raw-SQL probe rather than a gelato import — SYERP is
     # the hub and must not depend on a satellite (D-P12a-3); see the docstring.
+    # It selects `active` rather than `1` so the archived case is distinguishable
+    # from the missing/mismatched one without a second round trip.
     # bin_id is None (the unbinned pool) skips this entirely and stays valid.
     if bin_id is not None:
-        bin_ok = await db.execute(
-            text(
-                "SELECT 1 FROM gelato_bin WHERE id = :bin_id AND location_id = :location_id"
-            ),
-            {"bin_id": bin_id, "location_id": location_id},
-        )
-        if bin_ok.first() is None:
+        bin_row = (
+            await db.execute(
+                text(
+                    "SELECT active FROM gelato_bin "
+                    "WHERE id = :bin_id AND location_id = :location_id"
+                ),
+                {"bin_id": bin_id, "location_id": location_id},
+            )
+        ).first()
+        if bin_row is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
                     f"Bin {bin_id} does not exist at location {location_id}; a "
                     f"binned adjustment must name a bin belonging to that location."
+                ),
+            )
+        if not bin_row[0]:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Bin {bin_id} is archived; a binned adjustment must name an "
+                    f"active bin."
                 ),
             )
 
