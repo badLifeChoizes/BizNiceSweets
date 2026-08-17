@@ -65,7 +65,7 @@ go in `.zj/QA.md` §6. No engineering was lost — Tasks 0–19 all stand.
 - [x] 34. Rebuild `frontend/dist` and the API container image (found + fixed `U2`)
 - [x] 35. Bring the prod stack up on a fresh volume at :8000
 - [ ] ~~36. **[OWNER]** Prod-stack deploy smoke at :8000~~ → sitting 12 of the parallel to-do
-- [ ] 37. Bookkeeping: SRD NFR-8 and requirements-progress *(amended)*
+- [x] 37. Bookkeeping: SRD NFR-8 and requirements-progress *(amended)*
 - [ ] 38. Bookkeeping: ROADMAP, BACKLOG, DECISIONS, and archive the checklist *(amended)*
 
 ## Records

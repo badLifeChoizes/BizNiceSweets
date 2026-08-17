@@ -505,7 +505,7 @@ the stale-image backlog item was about.
 The machine-checkable half — the prod stack coming up healthy at `:8000` on a fresh volume
 with the SPA served and `alembic current` at head — stays a real gate as **Task 35**.
 
-### [ ] 37. Bookkeeping: SRD NFR-8 and requirements-progress  *(amended D-P5-11)*
+### [x] 37. Bookkeeping: SRD NFR-8 and requirements-progress  *(amended D-P5-11)*
 - **Files:** `.zj/SRD.md` (NFR-8, §800), `docs/features/requirements-progress.md`
 - **Do:** Stamp NFR-8 → `done (pending /zj:verify 5)` with evidence: the check count, the coverage tally (31 of 47 requirements carry a human check; zero real gaps — CORE-01/CORE-09 closed at Task 32, NFR-1 re-triaged as machine-only), the defect ledger summary so far, and the SC8 commit. **Rewrite NFR-8's Statement and Verification** per **D-P5-11**: the deliverable is the *documented, runnable, requirement-keyed checklist* (`.zj/QA.md`), not a completed sitting — readings accrue in its §6 result log and are explicitly non-blocking. Add the NFR-8 row to `requirements-progress.md`. **Do not** promote the module SRD rows whose caveat is "UI-flow UAT-pending" — that caveat is honest until someone actually clicks, and promoting it on the strength of an authored-but-unrun check would be exactly the false claim this rescope exists to avoid.
 - **Done when:** NFR-8's Statement and Verification both name `.zj/QA.md` and neither implies a completed run; the progress row exists.
