@@ -1,17 +1,38 @@
 # Plan: Phase 05 — Human click-through UAT (NFR-8)
-Goal: Every shipped UI flow — CORE, PLUM, SYERP (inventory/purchasing/GL/AP/AR/reports), MOUSSE, CRUMB, GELATO — has passed a documented human click-through against the hardened v4.0 stack, with every defect fixed (blocker/major, pinned by an automated test) or homed to BACKLOG with an ID.
-Status: draft — owner decisions D-P5-1..8 settled at `/zj:plan 5` (2026-07-26); next `/zj:build 5`
+Goal: Every shipped UI flow — CORE, PLUM, SYERP (inventory/purchasing/GL/AP/AR/reports), MOUSSE, CRUMB, GELATO — has a **documented, runnable** human check against the hardened v4.0 stack, with every defect found fixed (blocker/major, pinned by an automated test) or homed to BACKLOG with an ID.
+Status: **RESCOPED 2026-08-17 (D-P5-11)** — engineering complete (Tasks 0–19); the owner sittings are no longer plan tasks. Next: close-out Tasks 32–35, 37–38.
 Closes: SRD **NFR-8** (§800) and the final clause of the v4.0 DoD. **Final phase of milestone v4.0.**
+
+> ## Rescope note (2026-08-17, D-P5-11)
+>
+> This phase was planned so that **twelve of its tasks could only be ticked by the owner
+> clicking** — Tasks 20–31 and 36, each with a `Done when:` of the form "every row has `pass`
+> or a defect ID; zero `todo`". That made the phase, and with it the v4.0 milestone, block on
+> a ~3 h sitting. It stalled at 22/41 for three weeks.
+>
+> The owner preference **`QA docs: non-blocking`** now forbids exactly that shape: *"Do not
+> plan tasks whose Done-when is 'the owner ran X' … Record the reading as pending, build
+> everything that does not strictly depend on it, and surface the owner action as a parallel
+> to-do rather than a stop."*
+>
+> So the deliverable is **the checklist, not the reading**. `.zj/QA.md` (commit `493e185`) is
+> the standing, requirement-keyed regression checklist; the readings accrue in its §6 result
+> log whenever the owner runs it. Tasks 20–31 and 36 are struck as plan tasks and restated as
+> a parallel to-do below. No engineering is lost — Tasks 0–19 all stand, and the checks they
+> authored are carried into `.zj/QA.md` verbatim.
+>
+> **What this does not do:** it does not claim anyone has clicked anything. Unrun checks stay
+> `todo` in `.zj/QA.md` §6, which is now a legitimate resting state rather than a failure.
 
 ## Success criteria  (ROADMAP v4.0 Phase 5 row incl. the Phase-4-retro amendment; SRD NFR-8 lines 800–809)
 
-- **SC1 (one consolidated checklist):** `.zj/UAT-v4.0.md` exists as the single checklist. Every shipped UI flow across CORE / PLUM / SYERP / MOUSSE / CRUMB / GELATO has a numbered check carrying (a) the named fixture it uses, (b) what the machine already proved **with the citation**, (c) the **human-only residue**, (d) a status cell. `.zj/UAT-v1.0.md` and `.zj/UAT-v2.0.md` each gain a pointer line to it and stay as history.
+- **SC1 (one consolidated checklist)** *(amended D-P5-11)*: **`.zj/QA.md`** exists as the single standing checklist, keyed to **SRD requirement IDs** rather than to this phase. Every shipped UI flow across CORE / PLUM / SYERP / MOUSSE / CRUMB / GELATO has a numbered check carrying (a) the named fixture it uses, (b) what the machine already proved **with the citation**, (c) the **human-only residue**, (d) a recordable result. It also carries a coverage map naming every requirement with **no** human check. `.zj/UAT-v1.0.md`, `.zj/UAT-v2.0.md` and `.zj/UAT-v4.0.md` each gain a pointer line to it and stay as history. *(Originally: `.zj/UAT-v4.0.md` as the single checklist — superseded, since a phase-shaped doc cannot express requirement coverage and goes stale as phases close.)*
 - **SC2 (fixtures, fresh volume):** `backend/scripts/seed_uat_fixtures.py` idempotently builds the whole named dataset on a **genuinely fresh volume**; a second run changes nothing (proven — stable row counts / codes). Every expected value quoted anywhere in the checklist is derived from it and stated as a **literal**.
 - **SC3 (machine pre-flight):** a record maps each check to the existing `verify_*`/pytest/vitest assertion that proves its backend (or a new probe), so **no check asks the human to confirm something a machine could have confirmed**. Uncovered surfaces get a probe or an explicit `machine-unproven` mark.
-- **SC4 (no todo rows):** every check in `.zj/UAT-v4.0.md` has a recorded result — pass or a defect ID. **Zero `todo` rows at close.**
+- **SC4 (every check is runnable and recordable)** *(amended D-P5-11)*: every check in `.zj/QA.md` is judgeable as written — it names an action and an observable result, so a tester who did not build the feature can only tick it by actually seeing it — and `.zj/QA.md` §6 provides the place to record a reading. **Unrun checks are not a failure**; `todo` is a legitimate resting state. *(Originally: "Zero `todo` rows at close" — struck, because it made the phase block on a ~3 h owner sitting, which `QA docs: non-blocking` forbids.)*
 - **SC5 (defects homed):** every defect is either fixed in-phase **with a pinning automated test that fails on revert** (blocker/major) or has a BACKLOG entry with a defect ID (minor); the checklist links each defect to its fix commit or backlog entry.
-- **SC6 (Phase-4 bin pickers, incl. GELATO-off):** the three Phase-4 pickers — `StockAdjustDialog`, `StockTransferDialog` from-bin, `IssueComponentsDialog` per-line — are human-driven, **including the GELATO-off degraded path**. v4.0's only new UI surface; unit-tested, never human-driven (ROADMAP Phase-5 amendment, 2026-07-25).
-- **SC7 (prod-stack deploy smoke, fresh volume):** `podman-compose -f compose/compose.yml up -d` with a **rebuilt image** and rebuilt `frontend/dist`, served at **:8000** on a fresh volume — login + one write per enabled suite succeeds. Closes BACKLOG p1 "Rebuild `frontend/dist` + the API container image".
+- **SC6 (Phase-4 bin pickers, incl. GELATO-off)** *(amended D-P5-11)*: the three Phase-4 pickers — `StockAdjustDialog`, `StockTransferDialog` from-bin, `IssueComponentsDialog` per-line — each have an authored check in `.zj/QA.md`, **including the GELATO-off degraded path**, keyed to the requirement they exercise (SYERP-10, SYERP-10, MOUSSE-01; the degraded path to CORE-07). v4.0's only new UI surface; unit-tested, never human-driven (ROADMAP Phase-5 amendment, 2026-07-25). *(Originally "are human-driven" — the driving is now a parallel to-do; the authored check is the deliverable.)*
+- **SC7 (prod-stack deploy, fresh volume)** *(amended D-P5-11)*: `podman-compose -f compose/compose.yml up -d` with a **rebuilt image** and rebuilt `frontend/dist` **comes up healthy at :8000 on a fresh volume** — this half is machine-checkable (`/health/ready`, `alembic current`, the SPA served at `/`) and stays a phase gate (Tasks 34–35). Closes BACKLOG p1 "Rebuild `frontend/dist` + the API container image". The **human smoke** on top of it — login + one write per enabled suite — is authored as the **CORE-01** check in `.zj/QA.md` and is a parallel to-do, not a gate. *(Originally one criterion gated on the owner's smoke; split so the rebuild can land without waiting.)*
 - **SC8 (positive-adjust bin membership):** `post_adjustment` rejects a non-null `bin_id` that does not exist or does not belong to `location_id` — a cheap **raw-SQL** existence+membership check against `gelato_bin(id, location_id)`, **no gelato model import** (D-P12a-3's no-imports rule holds), 422 on mismatch, pinned by a new `verify_gelato.py` scenario. The p2 BACKLOG item is checked off.
 - **SC9 (bookkeeping):** SRD NFR-8 → done/verified with an evidence stamp; `docs/features/requirements-progress.md` NFR-8 row added; ROADMAP Phase 5 row updated; the p1 BACKLOG UAT item checked off.
 
@@ -97,6 +118,22 @@ pytest **232 passed / 0 skipped**; **15/15** non-API + **9/9** API `verify_*` ex
   reproduces the bug); deferring to BACKLOG (SC7 would then prove the artifact only under a workaround,
   contradicting its own wording). Rationale: the db container never sees a secret it does not need, and
   the **documented deploy command stays unchanged** — which is the thing U0 broke.
+
+- **D-P5-11 — Rescope: the checklist is the deliverable, the reading is not** (owner, 2026-08-17,
+  driven by the new `QA docs: non-blocking` preference). Twelve tasks (20–31, 36) had a `Done when`
+  only the owner could satisfy; the phase stalled at 22/41 for three weeks and blocked the v4.0
+  milestone behind a ~3 h sitting. **Struck as plan tasks** and restated as a parallel to-do with
+  their dependency order preserved. The consolidated checklist moves from `.zj/UAT-v4.0.md` to
+  **`.zj/QA.md`**, re-keyed from phase success criteria to **SRD requirement IDs**, so it stays true
+  as phases close and can express coverage (29/47 requirements checked; 3 real gaps named). SC1, SC4,
+  SC6, SC7 amended; NFR-8's Statement and Verification rewritten.
+  **This supersedes D-P5-6** (which made `.zj/UAT-v4.0.md` the single runbook) and **D-P5-7**'s
+  "the status table in `.zj/UAT-v4.0.md` is the resumable state" — that role passes to `.zj/QA.md` §6.
+  **Consciously accepted cost:** NFR-8 is now satisfiable by a checklist nobody has run. That is the
+  point — it stops an unrun checklist blocking a milestone — but it means NFR-8 no longer evidences
+  that a human exercised the flows. The module SRD rows carrying "UI-flow UAT-pending" therefore
+  **stay** caveated (Task 37), and whether v4.0 ships on an unrun checklist is a separate owner call
+  at `/zj:milestone`.
 
 ## Decisions needed
 
@@ -334,106 +371,59 @@ Engineer tasks are unmarked. Owner tasks are marked **[OWNER]** and their "Verif
 
 ---
 
-### The owner run (SC4/SC6) — Tasks 20–31, ordered read-only before mutating
+### ~~The owner run (SC4/SC6) — Tasks 20–31~~ → struck as plan tasks (D-P5-11)
 
-Each task: the engineer confirms the stack is up and seeded, restates the checks in scope with their literals, hands over per the **hand-back protocol**, then records results and applies the **defect-handling protocol**. Suites are ordered so no check poisons a later check's fixture.
+**Tasks 20–31 no longer exist as plan tasks.** Each had a `Done when:` of the form "every row
+has `pass` or a defect ID; zero `todo`" — a task the engineer cannot complete and the owner
+must. The `QA docs: non-blocking` preference forbids that shape. The checks they were to drive
+are authored and live in **`.zj/QA.md` §4**, keyed by requirement.
 
-### [ ] 20. **[OWNER]** CORE platform click-through
-- **Files:** `.zj/UAT-v4.0.md` (status + defects)
-- **Do:** Owner runs the ~6 CORE checks from Task 12 (login + session-survives-expiry, Users CRUD + duplicate-email re-entry, RBAC nav as the non-admin fixture user, Settings save/persist, Home + unknown-path fallback). **The module-toggle check is deferred to Task 26** so the toggle's blast radius stays contained there. Engineer records results verbatim.
-- **Done when:** every CORE row has `pass` or a defect ID; zero `todo`.
-- **Verify:** the recorded results in the CORE block of the status table; `grep -c 'todo' ` over the CORE rows → 0.
-- **Parallel-ok:** no (first sitting; also validates login for every later task).
+What is preserved from them is the part that is not in the checklist: **the order to run the
+sittings in**, and why. It is a dependency order, not a preference — a mutating sitting shifts
+the fixtures a read-only sitting reads.
 
-### [ ] 21. **[OWNER]** PLUM read-only click-through
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs the read-only PLUM checks: parts list search/filter + empty state, part detail, BOM tree, **flat BOM dedupe + footer total**, Where-Used labels + sort order, Cost & Margin sources, **below-cost margin red**, Released revision read-only-ness. Nothing here mutates, so it can be re-run freely after any fix.
-- **Done when:** every read-only PLUM row has `pass` or a defect ID.
-- **Verify:** recorded results in the status table.
-- **Parallel-ok:** no.
+#### Parallel to-do — the owner run (no due date, no gate)
 
-### [ ] 22. **[OWNER]** PLUM mutating click-through
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs: new revision + FSM advance, BOM add/remove on a Draft, AVL add + Preferred badge + **duplicate re-add** (v1.0 D2), archive part, and Import/Export — export JSON, export Excel, **"Choose File" opens a dialog**, **drag-drop highlights and selects** (v1.0 D3), re-import → 0 errors → Confirm → "No records deleted", >10 MB rejected, and the parts list refreshing **without F5**. Runs after Task 21 because imports and part creation shift the fixtures Task 21 reads.
-- **Done when:** every mutating PLUM row has `pass` or a defect ID.
-- **Verify:** recorded results in the status table.
-- **Parallel-ok:** no.
+Run whenever worth running. Record readings in `.zj/QA.md` §6. Stop at any point; the result
+log is the resumable state.
 
-### [ ] 23. **[OWNER]** SYERP financial read-only click-through (GL, AP, AR, reports)
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs the read-only financial checks **before any new posting moves the numbers**: GL accounts list, journal-entry list, account register, bills list + bill detail, AP aging footer tie-out, invoices list + invoice detail, receipts list, AR aging, and financial reports TB/BS/IS with the **TB netting zero on screen** — each against the Task-7 literals. `GLAccounts.tsx` has no vitest, so weight it accordingly.
-- **Done when:** every row in this block has `pass` or a defect ID.
-- **Verify:** recorded results in the status table.
-- **Parallel-ok:** no (must precede Tasks 27–30, which post).
+| # | Sitting | `.zj/QA.md` sections | Why here in the order |
+|---|---|---|---|
+| 1 | CORE platform | CORE-02..08 | First — also validates login for every later sitting. Module toggle deliberately deferred to sitting 6. |
+| 2 | PLUM read-only | PLUM-01..09 (read-only checks) | Mutates nothing; re-runnable freely after any fix. |
+| 3 | PLUM mutating | PLUM-03, -04, -07, -10 (write checks) | After 2 — imports and part creation shift the fixtures sitting 2 reads. |
+| 4 | SYERP financial read-only | SYERP-05, -12, -13 | **Before any new posting moves the numbers.** Must precede sittings 7–10. |
+| 5 | SYERP inventory read-only + mutating, incl. adjust/transfer bin pickers | SYERP-10 (incl. `C-SC6-a`, `C-SC6-b`) | Read-only rows first, then adjust/transfer; the two pickers live in exactly those dialogs. |
+| 6 | Module toggle + GELATO-off degraded path | CORE-07 (`C-SC6-d`) | Blast radius contained here. **Toggle GELATO back on before sitting 10** — later sittings depend on it. |
+| 7 | SYERP purchasing | SYERP-11 | After 4 and 5 — receipts move on-hand and post to the GL. |
+| 8 | MOUSSE + per-line issue bin picker | MOUSSE-01 (incl. `C-SC6-c`) | — |
+| 9 | CRUMB | CRUMB-01 | Must precede 10 — GELATO fulfils a confirmed SO from here. |
+| 10 | GELATO | GELATO-01 | Requires GELATO enabled (sitting 6 restored it) and a confirmed SO (sitting 9). |
+| 11 | SYERP money-loop tail | SYERP-12, -13 (write checks) | Last on the dev stack — bill → pay → invoice → receipt, then confirm TB still nets zero on screen. |
+| 12 | Prod-stack smoke at :8000 | CORE-01 | After Tasks 34–35 have rebuilt the image and brought the prod stack up. Proves the *shipped artifact*, not the dev server. |
 
-### [ ] 24. **[OWNER]** SYERP inventory read-only click-through
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs: partners lists + search + show-archived, inventory items list (auto codes, PLUM link, show-archived), item detail (per-location on-hand, total, moving average, on-hand value), the **read-only append-only ledger**, and stock locations incl. `Main` present out-of-the-box.
-- **Done when:** every row in this block has `pass` or a defect ID.
-- **Verify:** recorded results in the status table.
-- **Parallel-ok:** no.
+**Confirming GELATO is back on** after sitting 6, without needing a token:
 
-### [ ] 25. **[OWNER]** SYERP inventory mutating click-through + the adjust/transfer bin pickers
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs the adjust and transfer checks together with SC6 checks (a) and (b) from Task 15 — the `StockAdjustDialog` bin picker and the `StockTransferDialog` from-bin picker — since they live in exactly these dialogs. Includes both rejection toasts (per-location floor and pool floor) and the destination-leg-lands-unbinned assertion (D-P4-5).
-- **Done when:** every adjust/transfer row and SC6 rows (a) and (b) have `pass` or a defect ID.
-- **Verify:** recorded results in the status table.
-- **Parallel-ok:** no.
+```bash
+podman exec compose_db_1 psql -U app -d biznice -tAc "select key, enabled from modules where key='gelato'"
+#   → gelato|t
+```
 
-### [ ] 26. **[OWNER]** Module-toggle propagation and the GELATO-off degraded path
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs the CORE-07 module-toggle check and SC6 check (d): toggle GELATO **off** in Settings→Modules, confirm the sidebar drops it, then re-open all three Phase-4 dialogs and **record what actually happens to the bin pickers** (see Task 15 and `## Noticed` #1 — do not assume they hide). Also try navigating directly to `/gelato/bins`. Then toggle GELATO **back on** and confirm the sidebar restores. Engineer applies the defect protocol to whatever is observed.
-- **Done when:** the toggle row and SC6 row (d) have `pass` or a defect ID, **and** GELATO is confirmed back on (later tasks depend on it).
-- **Verify:** recorded results in the status table; **and** GELATO is confirmed re-enabled straight from the DB, no token needed (table `modules`, natural key `key`, per `backend/app/core/modules_model.py:21-27`):
-  `podman exec compose_db_1 psql -U app -d biznice -tAc "select key, enabled from modules where key='gelato'"` → prints `gelato|t`.
-  (Confirm the db container name with `podman ps`; `POSTGRES_USER` defaults to `app`, `POSTGRES_DB` to `biznice` — `compose/compose.yml:34-35`.)
-- **Parallel-ok:** no (must precede Task 30).
-
-### [ ] 27. **[OWNER]** SYERP purchasing click-through
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs the seven purchasing checks: create (vendor picker lists **only** vendors, auto `PO-####`), approve (lines become non-editable, illegal actions hidden), receive partial → `Partially Received` with on-hand and moving-average moving as expected, receive remainder → `Received`, over-receipt rejection toast with nothing posted, vendor filter, close. Runs after Tasks 23/24 because receipts move on-hand and post to the GL.
-- **Done when:** every purchasing row has `pass` or a defect ID.
-- **Verify:** recorded results in the status table.
-- **Parallel-ok:** no.
-
-### [ ] 28. **[OWNER]** MOUSSE click-through + the per-line issue bin picker
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs WO list/create/release/issue/complete with **WIP visibly clearing to zero**, together with SC6 check (c) — the `IssueComponentsDialog` per-line bin picker.
-- **Done when:** every MOUSSE row and SC6 row (c) have `pass` or a defect ID.
-- **Verify:** recorded results in the status table.
-- **Parallel-ok:** no.
-
-### [ ] 29. **[OWNER]** CRUMB click-through
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs the ~8 CRUMB checks: leads list/create/convert, lead detail, pipeline stage move, opportunity detail, quote create + line pricing + totals, quote FSM + accept, sales orders list, SO confirm showing the soft reservation, communication log append-only-ness. `LeadDetail.tsx`, `OpportunityDetail.tsx`, and `Quotes.tsx` have **no vitest** — weight those heaviest.
-- **Done when:** every CRUMB row has `pass` or a defect ID.
-- **Verify:** recorded results in the status table.
-- **Parallel-ok:** no (must precede Task 30 — GELATO fulfils a confirmed SO).
-
-### [ ] 30. **[OWNER]** GELATO click-through
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs bins CRUD + archive, putaway incl. the suggested bin, and fulfilment **pick → pack → ship** against the SO from Task 29, plus the post-ship state. Requires GELATO enabled (Task 26 restored it).
-- **Done when:** every GELATO row has `pass` or a defect ID.
-- **Verify:** recorded results in the status table.
-- **Parallel-ok:** no.
-
-### [ ] 31. **[OWNER]** SYERP money-loop tail click-through
-- **Files:** `.zj/UAT-v4.0.md`
-- **Do:** Owner runs the write side of the books, in dependency order and last: create a bill from the Task-27 PO receipt, pay it, **invoice from the Task-30 shipment**, record a receipt against that invoice, then re-open Financial Reports and confirm the **TB still nets zero on screen** and AP/AR aging still tie to their control accounts. This is the whole money loop driven through the UI in one sitting.
-- **Done when:** every row in this block has `pass` or a defect ID; the on-screen TB net is zero.
-- **Verify:** recorded results in the status table; `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_reports.py` still exits 0.
-- **Parallel-ok:** no (last owner suite on the dev stack).
+**If a sitting finds a defect,** the defect-handling protocol above still applies in full —
+assign a `U#`, call severity, blocker/major gets fixed with a pinning test, minor goes to
+BACKLOG. That protocol was never the problem; the blocking `Done when` was.
 
 ---
 
-### Close-out — Tasks 32–36
+### Close-out — Tasks 32–35, 37–38
 
-### [ ] 32. Reconcile the checklist: zero `todo`, every defect homed
-- **Files:** `.zj/UAT-v4.0.md`, `.zj/BACKLOG.md`
-- **Do:** Sweep the status table for any `todo` row and either get it run (back to the owner) or, if the owner explicitly declines a check, record that decision verbatim as a `## Deviations` entry — never as a pass. Reconcile the Defects table: every blocker/major has a fix commit **and** a named pinning test; every minor has a BACKLOG item quoting its `U#`.
-- **Done when:** `grep -c 'todo' .zj/UAT-v4.0.md` → 0; every Defects row carries a commit SHA or a backlog link.
-- **Verify:** `grep -n 'todo\|⬜' .zj/UAT-v4.0.md` prints nothing; each fix SHA resolves via `git cat-file -e <sha>^{commit}`.
+### [ ] 32. Reconcile the checklist: every check judgeable, every defect homed  *(amended D-P5-11)*
+- **Files:** `.zj/QA.md`, `.zj/BACKLOG.md`
+- **Do:** Sweep `.zj/QA.md` §4 for any check that is not judgeable as written — a step that says "verify it works" rather than naming an action and an observable result — and fix it. Confirm §3's coverage map is accurate against the SRD and §5 names every requirement with no human check. Reconcile any defects found so far: every blocker/major has a fix commit **and** a named pinning test; every minor has a BACKLOG item quoting its `U#`.
+- **Done when:** every check names an action and an observable result; §3 tallies against the SRD; every recorded defect carries a commit SHA or a backlog link.
+- **Verify:** the §3 covered count equals the number of distinct requirements cited in §4; each fix SHA resolves via `git cat-file -e <sha>^{commit}`.
 - **Parallel-ok:** no.
+- **Not a gate:** unrun checks are expected and fine (D-P5-11). This task audits the *checklist*, never the *readings*. *(Originally "zero `todo` rows" — struck.)*
 
 ### [ ] 33. Run the full regression gate
 - **Files:** `docs/tasks/chore-human-uat.md` (record results)
@@ -456,25 +446,30 @@ Each task: the engineer confirms the stack is up and seeded, restates the checks
 - **Verify:** `curl -sSf -o /dev/null -w '%{http_code}\n' http://localhost:8000/` → `200`; `curl -sSf http://localhost:8000/health/ready`; `podman exec -e PYTHONPATH=/app <prod api container> sh -c 'cd /app && alembic current'` → `0017 (head)`.
 - **Parallel-ok:** no.
 
-### [ ] 36. **[OWNER]** Prod-stack deploy smoke at :8000
-- **Files:** `.zj/UAT-v4.0.md` (a short "prod smoke" section with its own status rows)
-- **Do:** Owner logs in at **http://localhost:8000** (not :5173) and performs **one write per enabled suite** — e.g. edit a partner (SYERP), edit a part (PLUM), create a WO (MOUSSE), log an interaction (CRUMB), create a bin (GELATO) — confirming each succeeds and no error toast appears. This proves the *shipped artifact*, not the dev server: the exact thing the stale-image backlog item was about.
-- **Done when:** login succeeds and one write per enabled suite is recorded as `pass`, or a defect ID exists per the protocol.
-- **Verify:** the recorded results in the prod-smoke section of `.zj/UAT-v4.0.md`.
-- **Parallel-ok:** no.
+### ~~36. **[OWNER]** Prod-stack deploy smoke at :8000~~ → struck as a plan task (D-P5-11)
 
-### [ ] 37. Bookkeeping: SRD NFR-8 and requirements-progress
+Same shape as Tasks 20–31: only the owner could tick it. It is now **sitting 12** in the
+parallel to-do above, and the check itself is authored as **CORE-01** in `.zj/QA.md` — log in
+at `http://localhost:8000` (not `:5173`) and perform one write per enabled suite: edit a
+partner (SYERP), edit a part (PLUM), create a WO (MOUSSE), log an interaction (CRUMB), create
+a bin (GELATO). This proves the *shipped artifact* rather than the dev server, which is what
+the stale-image backlog item was about.
+
+The machine-checkable half — the prod stack coming up healthy at `:8000` on a fresh volume
+with the SPA served and `alembic current` at head — stays a real gate as **Task 35**.
+
+### [ ] 37. Bookkeeping: SRD NFR-8 and requirements-progress  *(amended D-P5-11)*
 - **Files:** `.zj/SRD.md` (NFR-8, §800), `docs/features/requirements-progress.md`
-- **Do:** Stamp NFR-8 → `done (pending /zj:verify 5)` with evidence: the check count and pass tally, the defect ledger summary (blockers/majors fixed with pin names, minors homed), the SC7 prod-smoke result, and the SC8 commit. **True up NFR-8's Verification sentence** to name the single consolidated `.zj/UAT-v4.0.md` per **D-P5-6** (it currently says "`UAT-v1.0.md` round-2 + `UAT-v2.0.md` extended"). Add the NFR-8 row to `requirements-progress.md` in the house format. Also promote the module SRD rows whose only remaining caveat was "UI-flow UAT-pending" (PLUM-04..10, SYERP-10/11, MOUSSE-01) where their checks now passed — cite the check numbers.
-- **Done when:** NFR-8 carries a status + evidence stamp naming `.zj/UAT-v4.0.md`; the progress row exists; every promoted module row cites its check number.
-- **Verify:** `grep -A4 'NFR-8' .zj/SRD.md` shows the new status and the UAT-v4.0 citation; `grep -c 'NFR-8' docs/features/requirements-progress.md` ≥ 1.
+- **Do:** Stamp NFR-8 → `done (pending /zj:verify 5)` with evidence: the check count, the coverage tally (29 of 47 requirements carry a human check; 3 real gaps named), the defect ledger summary so far, and the SC8 commit. **Rewrite NFR-8's Statement and Verification** per **D-P5-11**: the deliverable is the *documented, runnable, requirement-keyed checklist* (`.zj/QA.md`), not a completed sitting — readings accrue in its §6 result log and are explicitly non-blocking. Add the NFR-8 row to `requirements-progress.md`. **Do not** promote the module SRD rows whose caveat is "UI-flow UAT-pending" — that caveat is honest until someone actually clicks, and promoting it on the strength of an authored-but-unrun check would be exactly the false claim this rescope exists to avoid.
+- **Done when:** NFR-8's Statement and Verification both name `.zj/QA.md` and neither implies a completed run; the progress row exists.
+- **Verify:** `grep -A8 'NFR-8' .zj/SRD.md` shows the rewritten clauses citing `.zj/QA.md`; `grep -c 'NFR-8' docs/features/requirements-progress.md` ≥ 1.
 - **Parallel-ok:** no.
 
 ### [ ] 38. Bookkeeping: ROADMAP, BACKLOG, DECISIONS, and archive the checklist
 - **Files:** `.zj/ROADMAP.md` (v4.0 Phase 5 row), `.zj/BACKLOG.md`, `.zj/DECISIONS.md`, `docs/tasks/_completed/2026-07-XX-chore-human-uat.md`
-- **Do:** Update the ROADMAP Phase 5 row with the outcome and evidence. Check off the p1 "Human click-through UAT for v2.0 operations" item and the p1 "Rebuild `frontend/dist` + the API container image" item; check off the p2 "Positive adjustment accepts an unvalidated `bin_id`" item citing the SC8 commit and scenario G; add any new minor defects as items quoting their `U#`. Append **D-P5-1..9** to `.zj/DECISIONS.md`. Archive `docs/tasks/chore-human-uat.md` to `docs/tasks/_completed/{date}-chore-human-uat.md`.
-- **Done when:** all four files updated; the three backlog items are `[x]`; D-P5-1..9 present; the checklist is archived.
-- **Verify:** `grep -c 'D-P5-' .zj/DECISIONS.md` ≥ 9; `grep -n 'Human click-through UAT\|Rebuild `frontend/dist`\|unvalidated `bin_id`' .zj/BACKLOG.md` all show `[x]`; the archived file exists.
+- **Do:** Update the ROADMAP Phase 5 row with the outcome and evidence, **including the rescope** (D-P5-11) so the row does not read as a completed click-through. Check off the p1 "Rebuild `frontend/dist` + the API container image" item; check off the p2 "Positive adjustment accepts an unvalidated `bin_id`" item citing the SC8 commit and scenario G. **Leave the p1 "Human click-through UAT for v2.0 operations" item open** and re-word it to point at `.zj/QA.md` — the checklist now exists, but nobody has run it, and ticking it would be a false claim. Add the owner run to the backlog as a standing non-blocking item. Append **D-P5-1..11** to `.zj/DECISIONS.md`. Archive `docs/tasks/chore-human-uat.md` to `docs/tasks/_completed/{date}-chore-human-uat.md`.
+- **Done when:** all four files updated; the two closable backlog items are `[x]`; the UAT item is open and re-pointed; D-P5-1..11 present; the checklist is archived.
+- **Verify:** `grep -c 'D-P5-' .zj/DECISIONS.md` ≥ 11; `grep -n 'Rebuild `frontend/dist`\|unvalidated `bin_id`' .zj/BACKLOG.md` show `[x]`; the archived file exists.
 - **Parallel-ok:** no (last task).
 
 ## Risks

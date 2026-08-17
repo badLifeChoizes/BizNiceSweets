@@ -1,8 +1,17 @@
 # UAT — v4.0 milestone (consolidated: CORE · PLUM · SYERP · MOUSSE · CRUMB · GELATO)
 
-**This is the single UAT runbook.** Per **D-P5-6** it consolidates and supersedes
-`.zj/UAT-v1.0.md` (PLUM) and `.zj/UAT-v2.0.md` (SYERP inventory & purchasing) for
-*execution*; both are retained as history. Closes SRD **NFR-8**.
+> **Superseded for execution by [`.zj/QA.md`](QA.md)** (D-P5-11, 2026-08-17). All 59 checks
+> below were carried into it **verbatim** — same actions, same fixture literals, same failure
+> modes — but re-keyed from this phase's success criteria onto **SRD requirement IDs**, so the
+> checklist stays true as phases close and can show which requirements have no human check at
+> all. Retained as **history** and as the record of how these checks were derived. Run
+> `.zj/QA.md`, not this file.
+>
+> Three checks changed key on migration: `C-SC6-a`, `C-SC6-b` → **SYERP-10**, `C-SC6-c` →
+> **MOUSSE-01**. They cited `SC6`, a Phase-5 success criterion with no meaning outside it.
+
+Per **D-P5-6** this consolidated `.zj/UAT-v1.0.md` (PLUM) and `.zj/UAT-v2.0.md` (SYERP
+inventory & purchasing) for *execution*; both are retained as history. Traces SRD **NFR-8**.
 
 **59 checks** — 7 CORE · 12 PLUM · 20 SYERP · 4 MOUSSE · 8 CRUMB · 4 GELATO · 4 SC6.
 That is the top of every per-suite range the phase plan specified. Budget **~3 h** of

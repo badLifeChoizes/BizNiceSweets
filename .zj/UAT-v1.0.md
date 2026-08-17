@@ -1,9 +1,10 @@
 # UAT — v1.0 milestone (PLUM)
 
-> **Superseded for execution by [`.zj/UAT-v4.0.md`](UAT-v4.0.md)** (D-P5-6), which consolidates
-> the v1.0 and v2.0 runbooks into one. Retained as **history** — its defect record (G1, G2,
-> D1, D2, D3) is cited throughout v4.0. The **10 of 12** checks still open here are carried
-> forward into v4.0's PLUM block; do not run this file.
+> **Superseded for execution by [`.zj/QA.md`](QA.md)** (D-P5-11; previously by
+> `.zj/UAT-v4.0.md` per D-P5-6, itself now history). Retained as **history** — its defect
+> record (G1, G2, D1, D2, D3) is cited throughout. The **10 of 12** checks still open here
+> were carried into v4.0's PLUM block and from there into `.zj/QA.md` under **PLUM-01..10**;
+> do not run this file.
 
 Per **D-P7-5**, human click-through UAT is a milestone-close activity, run once at
 `/zj:milestone` against the Vite dev server (**http://localhost:5173**, D-P7-1) with the

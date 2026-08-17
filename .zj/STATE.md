@@ -1,5 +1,27 @@
 # STATE — BizNiceSweets
-Updated: 2026-07-26 (**v4.0 Phase 5 BUILD IN FLIGHT — `/zj:build 5`, engineering complete through
+Updated: 2026-08-17 (**v4.0 Phase 5 RESCOPED — D-P5-11; build resumes at Task 32.** The phase had
+stalled at 22/41 for three weeks because twelve of its tasks (20–31, 36) had a `Done when` only the
+owner could satisfy — "every row has `pass` or a defect ID; zero `todo`". The new owner preference
+**`QA docs: non-blocking`** forbids that shape outright, so those tasks are **struck** and restated as
+a parallel to-do with their dependency order preserved (`PLAN.md`).
+**The deliverable is now the checklist, not the reading.** `.zj/QA.md` (`493e185`, 1,595 lines) is the
+standing regression checklist: all 59 checks carried over **verbatim** from `UAT-v4.0.md` but re-keyed
+from phase success criteria onto **SRD requirement IDs**, so it stays true as phases close and can
+express what a phase-shaped doc could not — **coverage**. 29 of 47 requirements carry a human check;
+the other 18 are triaged in §5 as **3 real gaps** (CORE-01 deploy, CORE-09 migrations, NFR-1 audit
+trail), 9 not-built, 5 machine-only, and NFR-8 itself. `C-SC6-a/b/c` were re-keyed onto SYERP-10 and
+MOUSSE-01 — they cited `SC6`, a phase criterion meaningless outside Phase 5.
+SC1/SC4/SC6/SC7 amended; NFR-8's Statement and Verification rewritten; `UAT-v1.0/v2.0/v4.0` all now
+carry pointer lines to `.zj/QA.md` and are history.
+**Consciously accepted:** NFR-8 is now satisfiable by a checklist nobody has run. That is the point —
+it stops an unrun checklist blocking a milestone — but it means NFR-8 no longer evidences that a human
+exercised the flows, so the module rows caveated "UI-flow UAT-pending" **stay** caveated, and whether
+v4.0 ships on an unrun checklist is a separate owner call at `/zj:milestone`.
+**Next action: Task 32** (reconcile the checklist — audits the checklist, never the readings), then
+33–35, 37–38. The owner run is a parallel to-do with no due date; readings go in `.zj/QA.md` §6.
+**An engineer must still never tick an owner check or infer a pass.**)
+
+Prior: 2026-07-26 (**v4.0 Phase 5 BUILD IN FLIGHT — `/zj:build 5`, engineering complete through
 Task 19; PAUSED AWAITING THE OWNER RUN.** Branch `chore-human-uat` (cut off `c02d80b` per D-P5-9 then
 fast-forwarded to the plan-carrying tip `4171605` — docs-only, code-identical; trivial deviation, same
 pattern as Phases 3/4/13). Task count grew **39 → 41**: two defect-fix tasks added mid-build (8a, 10a).

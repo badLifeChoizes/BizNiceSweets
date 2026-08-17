@@ -50,30 +50,23 @@ plan's hand-back protocol, an engineer must never tick an owner check or infer a
 - [x] 18. Add the positive-adjust bin existence + membership check
 - [x] 19. Pin the membership check with a new `verify_gelato.py` scenario (G)
 
-### The owner run (SC4/SC6) — read-only before mutating
+### ~~The owner run (SC4/SC6) — Tasks 20–31~~ → struck as tasks (D-P5-11, 2026-08-17)
 
-- [ ] 20. **[OWNER]** CORE platform click-through
-- [ ] 21. **[OWNER]** PLUM read-only click-through
-- [ ] 22. **[OWNER]** PLUM mutating click-through
-- [ ] 23. **[OWNER]** SYERP financial read-only click-through (GL, AP, AR, reports)
-- [ ] 24. **[OWNER]** SYERP inventory read-only click-through
-- [ ] 25. **[OWNER]** SYERP inventory mutating click-through + adjust/transfer bin pickers
-- [ ] 26. **[OWNER]** Module-toggle propagation and the GELATO-off degraded path
-- [ ] 27. **[OWNER]** SYERP purchasing click-through
-- [ ] 28. **[OWNER]** MOUSSE click-through + the per-line issue bin picker
-- [ ] 29. **[OWNER]** CRUMB click-through
-- [ ] 30. **[OWNER]** GELATO click-through
-- [ ] 31. **[OWNER]** SYERP money-loop tail click-through
+Tasks 20–31 and 36 each had a `Done when` only the owner could satisfy. The owner preference
+**`QA docs: non-blocking`** forbids that shape, so they are no longer checklist items. The
+checks they were to drive live in **`.zj/QA.md`** (commit `493e185`), keyed by requirement;
+the twelve sittings and their dependency order are a **parallel to-do** in `PLAN.md`. Readings
+go in `.zj/QA.md` §6. No engineering was lost — Tasks 0–19 all stand.
 
 ### Close-out
 
-- [ ] 32. Reconcile the checklist: zero `todo`, every defect homed
+- [ ] 32. Reconcile the checklist: every check judgeable, every defect homed *(amended)*
 - [ ] 33. Run the full regression gate
 - [ ] 34. Rebuild `frontend/dist` and the API container image
 - [ ] 35. Bring the prod stack up on a fresh volume at :8000
-- [ ] 36. **[OWNER]** Prod-stack deploy smoke at :8000
-- [ ] 37. Bookkeeping: SRD NFR-8 and requirements-progress
-- [ ] 38. Bookkeeping: ROADMAP, BACKLOG, DECISIONS, and archive the checklist
+- [ ] ~~36. **[OWNER]** Prod-stack deploy smoke at :8000~~ → sitting 12 of the parallel to-do
+- [ ] 37. Bookkeeping: SRD NFR-8 and requirements-progress *(amended)*
+- [ ] 38. Bookkeeping: ROADMAP, BACKLOG, DECISIONS, and archive the checklist *(amended)*
 
 ## Records
 

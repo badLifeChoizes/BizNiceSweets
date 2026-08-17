@@ -798,13 +798,25 @@ future scope (expanded via `/zj:spec` when their milestones near).
   `TransactionRead` bin_id omission (p3). Tag `zj/good-04-inventory-race-safety`.)
 
 ## NFR-8: Human-verified release readiness  [traces: PRD-12, PRD-5, PRD-7, PRD-8]  **Status: planned**
-- **Statement:** Before the milestone closes, every shipped user-facing flow — v1.0 PLUM
+- **Statement** *(rewritten 2026-08-17, D-P5-11)*: every shipped user-facing flow — v1.0 PLUM
   (parts/BOM/costing/AVL/import-export), v2.0 SYERP operations + MOUSSE, v3.0 CRUMB + GELATO + AR —
-  shall be exercised by a **documented human click-through** against the running stack, with a
-  pass/defect result recorded per flow.
-- **Verification:** the consolidated UAT checklist (`.zj/UAT-v1.0.md` round-2 + `.zj/UAT-v2.0.md`
-  extended with GL/AP/reports/MOUSSE + new CRUMB/GELATO/AR checks) is complete; each defect found is
-  fixed or homed to BACKLOG with an ID.
+  shall have a **documented, runnable human check** against the running stack, keyed to the
+  requirement it exercises, with a place to record a pass/defect result. Requirements with **no**
+  human check shall be named rather than left implicit. The *reading* of those checks is an
+  ongoing owner activity that accrues over time; it is explicitly **not** a precondition for a
+  phase or milestone to close.
+- **Verification:** `.zj/QA.md` exists as the single standing regression checklist — keyed to SRD
+  requirement IDs, carrying for each check the named fixture, the machine assertion that already
+  proves its backend (with citation), the human-only residue, and the failure to watch for; plus a
+  coverage map (§3), an explicit gap list (§5), and a result log (§6). Each defect found when it is
+  run is fixed or homed to BACKLOG with an ID.
+- **Deliberately not required:** a completed run. *(Was: "Before the milestone closes … shall be
+  exercised by a documented human click-through", verified by the UAT docs being "complete". That
+  made v4.0 block on a ~3 h sitting and stalled Phase 5 at 22/41 for three weeks. The owner
+  preference `QA docs: non-blocking` forbids gating on an owner run — so the checklist is the
+  deliverable and the reading is a parallel to-do. **This requirement is therefore satisfied by an
+  unrun checklist, and that is intentional** — it does not assert that anyone has clicked anything.
+  Whether v4.0 should ship on an unrun checklist is a separate owner call at `/zj:milestone`.)*
 - **Source:** D-M2-2 (deferred at the v2.0 close; owed v1.0 round-2 is 2/12) + owner include-decision
   at the v4.0 spec (D-M4-1). The long-standing pre-public-release gate.
 
