@@ -312,11 +312,19 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   matters given the first-class traceability constraint. Phase 4 fixed the same shape in
   `post_receipt` (`73e45c2`) and `post_transfer` (`5a45a7b`); fix = `await db.refresh(item)`
   after the lock. Fold in whenever either function is next touched.
-- [ ] **`verify_purchasing.py` leaves orphan `po_receipt`-sourced JEs behind on every run**
-  (Phase 4 PLAN `## Noticed`, retro'd 2026-07-25) — its cleanup doesn't delete the journal
-  entries its receipts post, so dev/CI databases accumulate orphan source rows run over run.
-  Cosmetic (no assertion depends on a clean GL), but it makes hand-inspecting a dev DB noisier
-  and every other script cleans up after itself — `verify_inventory_race.py` (Phase 4) is the
+- [ ] **`verify_*` scripts leave orphan journal entries behind — at least two leakers, one
+  unidentified** (Phase 4 PLAN `## Noticed`, retro'd 2026-07-25; **re-measured Phase-5 Task 33,
+  2026-08-17**) — `verify_purchasing.py`'s cleanup doesn't delete the journal entries its
+  receipts post, so dev/CI databases accumulate orphan source rows run over run.
+  **New measurement:** the full 24-script sweep against a freshly-seeded volume drifts
+  **`+100.00`** on total debit, total credit and total liabilities (`total_assets`
+  7991.75 → 8091.75, trial-balance 8447.25 → 8547.25). That is **double** the `+50.00`
+  previously attributed to `verify_purchasing.py` alone, so **at least one other script leaks
+  too and has not been identified** — isolating it is the first step of this item. Per-document
+  literals and aging buckets were unaffected in both measurements.
+  Cosmetic (no assertion depends on a clean GL), but it makes hand-inspecting a dev DB noisier,
+  it forces a fresh-volume re-seed before `.zj/QA.md`'s aggregate checks can be trusted, and
+  every other script cleans up after itself — `verify_inventory_race.py` (Phase 4) is the
   current template.
 - [ ] **`TransactionRead` omits `bin_id`; MOUSSE issue audit records no per-line bins** (Phase 4
   verify review question, 2026-07-25) — the transactions API/FE cannot show which pool a

@@ -34,10 +34,24 @@ Re-read fixtures without changing anything:
 podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py --manifest
 ```
 
-> ⚠ **Do not run any `backend/scripts/verify_*.py` script during a run.**
-> `verify_purchasing.py` leaves its receipt journal entries behind (+50.00 on total debit,
-> total credit and total liabilities), which shifts the trial-balance and balance-sheet
-> aggregates and makes the SYERP-12 reporting checks look broken when they are not.
+> ⚠ **Do not run any `backend/scripts/verify_*.py` script during a run.** They leave journal
+> entries behind, which shifts the trial-balance and balance-sheet aggregates and makes the
+> SYERP-12 reporting checks look broken when they are not.
+>
+> **Measured 2026-08-17 (Phase-5 Task 33), full 24-script sweep: `+100.00`** on total debit,
+> total credit and total liabilities — `total_assets` 7991.75 → 8091.75, `total_liabilities`
+> 57.75 → 157.75, trial-balance debit/credit 8447.25 → 8547.25. Every other literal, including
+> all per-document values and the aging buckets, was unaffected.
+>
+> Note this is **double** the `+50.00` previously recorded for `verify_purchasing.py` alone, so
+> at least one other script also leaks. The second leaker is **not yet identified** — see the
+> p3 BACKLOG item. If you have already run them, re-seed on a fresh volume before trusting §2's
+> aggregate literals:
+>
+> ```bash
+> ./scripts/uat.sh --fresh --detach
+> podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py
+> ```
 
 ### How to read a check
 

@@ -705,7 +705,54 @@ Regression alongside: `verify_gelato`, `verify_inventory`, `verify_mousse`,
 
 ### Task 33 — full regression gate results
 
-*(pending)*
+Run 2026-08-17 at `fbac89b`. **Every local gate green; the CI clause is NOT met** (see below),
+so Task 33 stays open.
+
+| Gate | Command | Result | vs baseline |
+|---|---|---|---|
+| Backend lint | `backend/.venv/bin/ruff check .` | `All checks passed!` exit 0 | held |
+| Frontend lint | `npm run lint` | exit 0, 0 warnings | held |
+| Frontend tests | `npm run test -- --run` | **148 passed / 45 files**, exit 0 | **above** (was 131) |
+| Frontend build | `npm run build` | exit 0, built in 812 ms | held |
+| Backend tests | `pytest -q` | **240 passed, 0 skipped**, 209 s, exit 0 | **above** (was 232) |
+| `verify_*` scripts | all 24 in-container | **24/24 exit 0** | held (15 non-API + 9 API) |
+| CI 4/4 green | — | **NOT RUN** | — |
+
+**How the backend suite was run.** In-container `pytest` still does not work (absent from the
+image; the bind-mounted `.venv/bin/pytest` carries host-path shebangs) — the correction recorded
+at Task 16 holds. The compose `db` is deliberately not published to the host (T-01-12), so there
+is no host-reachable Postgres either. Run against a **disposable** `postgres:17-alpine` on
+`:55434`, exactly as `tests/conftest.py` documents for the host path, which also guarantees the
+suite could not touch the seeded dev database. Container removed afterwards.
+
+```bash
+podman run -d --name bns-test-pg -e POSTGRES_USER=app -e POSTGRES_PASSWORD=<from .env.db> \
+  -e POSTGRES_DB=postgres -p 55434:5432 postgres:17-alpine
+cd backend && POSTGRES_HOST=localhost POSTGRES_PORT=55434 POSTGRES_PASSWORD=<pw> \
+  JWT_SECRET=<from .env> BNS_ADMIN_PASSWORD=<from .env> TEST_POSTGRES_DB=biznice_test \
+  ./.venv/bin/pytest -q
+```
+
+**Fixture drift measured and repaired.** The 24 `verify_*` scripts were run against the seeded
+dev database and, as expected, polluted it — but by **`+100.00`**, not the `+50.00` the runbook
+recorded for `verify_purchasing.py` alone:
+
+```
+syerp.report.balance_sheet.total_assets       7991.75 -> 8091.75
+syerp.report.balance_sheet.total_liabilities    57.75 ->  157.75
+syerp.report.trial_balance.total_debit        8447.25 -> 8547.25
+syerp.report.trial_balance.total_credit       8447.25 -> 8547.25
+```
+
+Nothing else moved — all other 125 literals byte-identical. **At least one leaker besides
+`verify_purchasing.py` therefore exists and is unidentified**; the p3 BACKLOG item was re-worded
+to say so rather than leaving the stale `+50.00` attribution standing, and `.zj/QA.md` §1's
+warning now quotes the measured figure. The dev stack was then reset (`down -v`) and re-seeded;
+all **129** literals verified byte-identical to the Task-8 record, so the fixtures are intact.
+
+**Why Task 33 is not ticked.** Its last clause is "all four CI jobs green on `chore-human-uat`,
+record the run ID". The branch has **no upstream** and there are **154 commits unpushed** to
+`origin`. Pushing is an owner call, not an engineer's — pending.
 
 ### Off-plan deviation — `scripts/uat.sh` (bash launcher)
 
