@@ -142,7 +142,26 @@ Both resolve a compose runner automatically (`podman-compose` →
 > **The launchers do not seed the named UAT fixtures.** `--fresh` leaves the
 > database holding only the automatic startup seeds (chart of accounts, admin
 > user). The UAT fixtures are a separate explicit step — see
-> [`.zj/UAT-v4.0.md`](../../.zj/UAT-v4.0.md) §1.1 step 5.
+> [`.zj/QA.md`](../../.zj/QA.md) §1:
+>
+> ```bash
+> podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py
+> ```
+
+> **That seed command only works against a UAT stack.** podman-compose derives its
+> project name from the directory of the *first* compose file — `compose/` for the
+> prod stack and for the dev overlay alike — so both produce the container
+> `compose_api_1` and the volume `compose_pgdata`, and the command above cannot tell
+> them apart. What it writes is append-only (an opening-capital journal entry, a
+> manual JE, a received PO, a posted bill, a payment, an AR invoice, a receipt) plus
+> an active login whose password is committed to this repository. So the **stack**
+> opts in: `compose/compose.dev.yml` sets `BNS_ALLOW_UAT_SEED=1` on the `api`
+> service and `compose/compose.yml` never does. Against a prod stack the same command
+> refuses with exit 3 and writes nothing; to load fixtures into a prod artifact
+> deliberately (the `C-CORE-08` smoke, on a fresh volume) pass the opt-in for that one
+> run: `podman exec -e PYTHONPATH=/app -e BNS_ALLOW_UAT_SEED=1 compose_api_1 …`.
+> Independently, the seed refuses if the ledger already holds journal entries it did
+> not post itself. `--manifest` is read-only and runs under both guards.
 
 ---
 

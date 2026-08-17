@@ -34,6 +34,29 @@ Re-read fixtures without changing anything:
 podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py --manifest
 ```
 
+> **The seed command above only works against a UAT stack.** podman-compose names both the
+> dev and the prod stack after the `compose/` directory, so they share the container
+> `compose_api_1` **and** the volume `compose_pgdata` — the command cannot tell them apart,
+> and what it writes (an opening-capital JE, a manual JE, a received PO, a posted bill, a
+> payment, an AR invoice, a receipt) is append-only. So the **stack** opts in, not the
+> command: `compose/compose.dev.yml` sets `BNS_ALLOW_UAT_SEED=1` on `api`, and
+> `compose/compose.yml` (production) never does. Bring the stack up with the dev overlay
+> (`./scripts/uat.sh` does) and the line above is unchanged; run it against a prod stack and
+> it refuses, exit 3, having written nothing.
+>
+> For a **deliberate** fixture load into a prod artifact — the `C-CORE-08` smoke, on a fresh
+> volume — say so explicitly, per run:
+>
+> ```bash
+> podman exec -e PYTHONPATH=/app -e BNS_ALLOW_UAT_SEED=1 compose_api_1 \
+>   python scripts/seed_uat_fixtures.py
+> ```
+>
+> A second guard is independent of the first and has no override: the seed refuses if the
+> ledger already holds any journal entry it did not post itself (real books, or the residue
+> of a `verify_*` sweep — see the warning below). `--manifest` is read-only and runs under
+> both guards.
+
 > ⚠ **Do not run any `backend/scripts/verify_*.py` script during a run.** They leave journal
 > entries behind, which shifts the trial-balance and balance-sheet aggregates and makes the
 > SYERP-12 reporting checks look broken when they are not.
@@ -45,8 +68,9 @@ podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py
 >
 > Note this is **double** the `+50.00` previously recorded for `verify_purchasing.py` alone, so
 > at least one other script also leaks. The second leaker is **not yet identified** — see the
-> p3 BACKLOG item. If you have already run them, re-seed on a fresh volume before trusting §2's
-> aggregate literals:
+> p3 BACKLOG item. If you have already run them, re-seed on a **fresh volume** before trusting
+> §2's aggregate literals — the seed's foreign-ledger guard will refuse to re-seed over their
+> leftover entries in place, which is the same instruction enforced:
 >
 > ```bash
 > ./scripts/uat.sh --fresh --detach
