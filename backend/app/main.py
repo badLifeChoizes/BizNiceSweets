@@ -80,6 +80,7 @@ importlib.import_module("app.modules.plum")
 importlib.import_module("app.modules.mousse")
 importlib.import_module("app.modules.crumb")
 importlib.import_module("app.modules.gelato")
+importlib.import_module("app.modules.flan")
 importlib.import_module("app.modules.auth")
 
 # Fully populate Base.metadata before serving. Module __init__ imports only the
