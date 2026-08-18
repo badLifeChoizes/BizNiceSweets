@@ -3,6 +3,153 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Phase 05 — Human click-through UAT (v4.0, NFR-8, verified 2026-08-17)
+
+Rescoped mid-flight (D-P5-11): the deliverable became `.zj/QA.md` — 61 requirement-keyed residue
+checks over a reproducible fixture seed (275 derived literals, byte-identical across re-seeds) —
+and explicitly **not** the owner's reading of it. Shipped anyway, before anyone clicked: two
+**blockers** (`U0` fresh-volume deploy, `U2` the API image could not be built at all), one major
+(`U1` 500 on duplicate email), and SC8's bin existence+membership+active probe. Verifier's first
+pass was **GAPS** (5 major / 5 minor; reviewer 4 major / 3 minor); the owner ran the full fix loop
+and re-verification at `d3e68e2` returned **PASS — 0 blocker, 0 major, 6 minor**.
+
+### Surprises (assumption → corrected truth)
+
+- **Five phases of green gates never once proved the artifact a self-hoster actually gets.** `U2`:
+  `COPY frontend/package*.json` never matched the dotfile `frontend/.npmrc`, so `npm ci` ran without
+  `legacy-peer-deps=true` and the image **could not be built at all** — masked for five phases
+  because everyone worked against a long-lived stale image and the dev overlay, which bind-mounts
+  over `frontend/dist` anyway. `U0` is the same shape one layer down: `db` got `POSTGRES_PASSWORD`
+  by interpolation only from a `compose/.env` that does not exist, which is **invisible for the life
+  of a volume** (an initialized `PGDATA` never re-reads it) and therefore blocks only a *first-ever*
+  deploy. Keeper: **the deployable artifact is its own deliverable and needs its own standing gate.**
+  A suite that runs from a checkout says nothing about the image, and a stack that has been up for
+  months says nothing about `up` on a fresh volume. Both are now CI-resident (`container-image` job;
+  `test_compose_config.py`), and the fix-loop's own new pin caught the class again — see the cost
+  sinks.
+- **A config-pinning test can go green against the exact broken config it was written to catch.**
+  The pre-fix `compose.yml` carried a comment stating the *intent* — "POSTGRES_PASSWORD comes from
+  ../.env (env_file)" — that was never implemented, so a naive substring search would have passed on
+  the broken file. `test_compose_config.py` strips comments before matching, and its RED-on-revert
+  was driven with the corrected prose left in place so the red could not come from a comment.
+  Keeper: **pin config on parsed, comment-stripped structure, and RED-drive with the documentation
+  left intact** — otherwise you are asserting the file's good intentions.
+- **A runbook nobody has executed verbatim is prose, not a runbook.** Executing the plan's own
+  bring-up block (T16) produced three doc bugs in one sitting: a prose *"wait a few seconds"*
+  followed by a bare `curl` that returns `curl: (56) Recv failure: Connection reset` (a wait is not
+  a command; the owner concludes the stack is broken), a *"~40 s"* seed that is actually **~5 s**
+  (the engineer's own earlier claim, wrong, and already copied into the plan), and undocumented
+  `alembic` INFO lines. The few-second race is what makes it insidious — it bites some readers and
+  not others. Keeper: **"run your own documentation verbatim on a clean machine" is a task with its
+  own findings.** Plan it; don't fold it into authoring.
+- **The fixture can manufacture a false defect that no balance assertion can see.** Two caught at
+  build time: a manual JE aimed at a control account would have broken the AR/AP tie-out with no
+  offsetting subledger document; and the seed paid a bill and an expense out of a **never-funded**
+  cash account, so the Balance Sheet reported **total assets −258.25** while the books were still
+  perfectly `in_balance` — masked on the dev DB by unrelated litter. An owner reading that would
+  have reported a real-looking defect that isn't one. Keeper: **fixture layers need domain
+  invariants beyond "it balances"** — `total_assets > 0`, both aging tie-outs, net-zero — asserted
+  on **every** seed run, because the cost of a false defect is owner trust, not just time.
+- **"Just don't point it at prod" is not a safeguard when the tooling cannot tell prod from dev.**
+  podman-compose derives its project name from the *directory of the first compose file*, which is
+  `compose/` for both the prod invocation and the dev overlay — same container `compose_api_1`,
+  same volume `compose_pgdata`. The documented seed command therefore targets whichever stack is
+  up, and the seed posts **append-only, irreversible** JEs (opening capital, a bill, a payment, an
+  AR invoice, a receipt) plus a login whose password is committed to the repo. Keeper: **a
+  destructive script must be gated by an explicit env opt-in a copy-pasted command cannot satisfy**
+  (`BNS_ALLOW_UAT_SEED=1`, set by the dev overlay and never by prod) — never by a naming convention
+  or a reader's care.
+- **Aggregate ledger figures on a shared dev DB are litter, not data.** The dominant trial-balance
+  line (4950.00 GR/IR) was orphaned `po_receipt` JEs that `verify_purchasing.py`'s cleanup never
+  removed — measured at exactly **+50.00 per twelve-script sweep**, accumulated over many phases.
+  Keeper: **never quote a whole-ledger aggregate as a fixture literal.** Document-scoped literals
+  (numbers, aging buckets, control-account balances) are stable; TB/BS totals drift under any
+  `verify_*` run and read as a regression that isn't one.
+
+### What worked (repeat)
+
+- **Design each fixture against the failure modes, not for realism.** The PLUM cost tree got a
+  **second** costed leaf on purpose: with one leaf the roll-up total is structurally identical to
+  that leaf's extended cost, so a footer printing a single flat row looks correct — with two, no
+  flat row equals `99.15` and the v1.0 triple-count bug reads an unmistakable `239.40`. Same
+  discipline in MOUSSE: one `IssueComponentsDialog` shows two lines with **opposite** bin
+  requirements (fully-binned → pool 0 → must name a bin; entirely unbinned → issues with none), and
+  both pool states are asserted every seed so drift fails the seed instead of quietly voiding the
+  check. Keeper: for every check, ask *what number would a wrong implementation print* — if it is
+  the same number, the fixture proves nothing.
+- **Suite-local, `C-`-prefixed check IDs.** `C-CORE-05` can never be mistaken for SRD `CORE-05`,
+  and a late 59th check appends as `C-SYERP-20` without renumbering anything the owner may already
+  have reported against. Corollary learned the hard way: the scheme does not save a sloppy checker —
+  `grep -qF "CORE-05"` matches `C-CORE-05`, so the requirement-coverage greps had to be delimited on
+  **both** sides (`[(,] ?ID[,)]`) to match mid-list occurrences without matching check IDs.
+- **Re-keying the checklist from phase success criteria onto SRD requirement IDs** is what turned a
+  one-shot UAT script into a standing asset: it survives its own phase's closure, expresses coverage
+  (31 of 47 requirements), and can be extended by future phases instead of superseded. Three
+  per-milestone UAT docs collapsed into one with pointer lines.
+- **The verifier re-driving every claimed fix instead of reading the engineers' reports**, and
+  proving each new pin non-vacuous by mutation rather than by exit code. That is what surfaced the
+  citation checker's silent-erosion edge (a reformatted citation drops out of the pinned set and the
+  script still prints "All assertions PASSED"), a wrong tertiary claim in a freshly-filed backlog
+  item (MOUSSE never calls `post_issue`), and the stale prod artifact. It runs both ways: the
+  verifier's own two first-pass errors were caught by the engineers and folded in. **A fix loop
+  converges on bidirectional honesty, not on deference in either direction.**
+- **An owner-attributed rescope survives adversarial review when it keeps both halves stated.**
+  D-P5-11 is the exact shape of a criterion quietly redefined to match what got built, and it was
+  explicitly attacked as such. It held because it is owner-attributed, names the decisions it
+  supersedes (D-P5-6, D-P5-7), preserves every struck SC's original wording inline with its reason,
+  states the accepted cost out loud, and repeats "NOT evidenced, by design" across SRD / ROADMAP /
+  BACKLOG / requirements-progress. Keeper: **that checklist is the test for any future rescope.**
+- **Phase 3's CI glob keeps paying.** Four new guards (`verify_qa_doc.py`, `verify_qa_citations.py`,
+  the seed-idempotency step, scenario `(G5)`) entered standing protection with zero wiring. Nth
+  consecutive dividend from the maintenance-proof glob.
+
+### Cost sinks (time planning didn't predict)
+
+- **Twelve tasks whose `Done when` only the owner could satisfy stalled the phase at 22/41 for
+  three weeks and held the whole milestone behind one ~3 h sitting.** This is the single largest
+  cost in the phase and it was structural, not circumstantial. It is now an owner preference
+  (`QA docs: non-blocking`) and it is the rule: **never write a plan task whose Done-when is "the
+  owner ran X".** Produce the runbook, build everything that does not strictly depend on the
+  reading, record the reading as pending, and surface the owner action as a **parallel to-do**.
+- **The plan disagreed with itself about size from day one.** D-P5-1 set "~40–50 checks, est.
+  2–3 h" while the plan's own per-suite maxima summed to **exactly 59** — the estimate had been
+  copied into the summary instead of derived from the rows. The overage was never padding, and the
+  owner rightly kept full coverage. Keeper: **when a plan states both an aggregate estimate and
+  per-unit targets, reconcile them at plan time** — one of the two is wrong, and finding out at
+  task 15 costs a decision the owner should have made at task 0.
+- **The prod artifact went stale for the second time in the project's history, inside the phase
+  whose own risk register names that exact failure** ("any commit touching `backend/app/` or
+  `frontend/src/` after Task 34 → re-run 34–36 … exactly the v1.0 G2 failure"). The fix loop landed
+  `fd7ca87` after the image was built; the running container demonstrably lacked the fix. A written
+  risk is not a control. Now a warning banner on the SC7 check in `.zj/QA.md`; worth making
+  mechanical (compare image build time to the last product commit) the next time it bites.
+- **The fresh volume was destroyed and re-seeded three times at Task 8** (once for `U0`, once for
+  the negative-assets fixture bug, once to clear the `verify_*` litter so the live stack matched the
+  recorded manifest byte-for-byte). Each cycle is cheap; three of them were not budgeted. Any phase
+  whose deliverable quotes literals should budget **N** fresh-volume cycles, not one.
+
+### Deferred (homed)
+
+- Filed at the verify close (`fa5b21f`, `bf0bb0b`): **N-1** the two QA-doc guard scripts cannot run
+  the documented in-container way (p3), **N-2** `verify_qa_citations.py` erodes silently when a
+  citation loses its shape (p3), **N-3** three `verify_gl.py` citations only weakly pinned — the
+  letterless `verify_*` scripts still need scenario letters (p3), and the **p2 bin-validation item**
+  for `post_transfer` / MOUSSE `issue_components`, whose docstrings still assert a guarantee nobody
+  provides. **N-4/N-5** were corrections applied in place; **N-6** (stale artifact) is now the SC7
+  precondition banner in `.zj/QA.md`.
+- Homed at retro, all previously unhomed PLAN `## Noticed` / reviewer questions: **module
+  enable/disable is UI-only — no server-side gate** (p2; `/api/v1/<module>/*` still serves a
+  disabled module, and the three Phase-4 dialogs' docstrings are wrong about why they hide);
+  **the commented module-service templates in `compose.yml` still carry `env_file: ../.env` alone**
+  (p3 — D-P5-10's drift pre-seeded into the file); **`POSTGRES_PASSWORD` is interpolated into the
+  DSN unencoded** (p3 — a `@` or `/` in a first-time self-hoster's new password yields an opaque
+  asyncpg parse error on first boot); **operator-facing error copy names entities by numeric id**
+  and `update_cost` reports the wrong noun (p3); **Receipts and Payments have no human document
+  number** (p3 — every sibling document has one).
+- Not deferred, deliberately: the **p1 human-UAT backlog item stays open**. `.zj/QA.md` §6 holds
+  zero readings and per D-P5-11 it ticks only when a person clicks. Whether v4.0 ships on an unrun
+  checklist is the owner's call at `/zj:milestone`.
+
 ## Phase 04 — Inventory ledger race-safety (v4.0, NFR-7, verified 2026-07-25)
 
 Shared `SELECT … FOR UPDATE` item-master/PO-header lock across `post_receipt`/`post_adjustment`/

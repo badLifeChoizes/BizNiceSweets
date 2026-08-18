@@ -1,5 +1,56 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-17 (**v4.0 Phase 5 VERIFIED — `/zj:verify 5`, verdict PASS after a full fix loop.**
+Updated: 2026-08-18 (**v4.0 Phase 5 RETRO'D — `/zj:retro 5`. Phase CLOSED**, ROADMAP Phase 5 →
+`[done — verified 2026-08-17 + retro'd 2026-08-18]`. **This closes the final phase of milestone v4.0.**
+
+**LEARNINGS Phase 05 banked.** Headline keepers, in cost order:
+1. **Five phases of green gates never once proved the artifact a self-hoster actually gets.** `U2`
+   (the API image could not be built **at all** — `COPY frontend/package*.json` never matched the
+   dotfile `.npmrc`) and `U0` (fresh-volume deploy blocked — `db` got its password by interpolation
+   from a `compose/.env` that does not exist) are the *same blind spot at two layers*, and both were
+   invisible precisely because everyone worked against a long-lived stale image on an already-
+   initialized volume. Both now CI-resident (`container-image` job; `test_compose_config.py`).
+2. **A config-pinning test can go green against the exact broken config it was written to catch** —
+   the pre-fix `compose.yml` carried a comment stating the intent it never implemented. Pin on
+   parsed, comment-stripped structure; RED-drive with the prose left intact.
+3. **A runbook nobody has executed verbatim is prose.** Running the phase's own bring-up block found
+   three doc bugs in one sitting, including a prose *"wait a few seconds"* where a command belonged
+   (the bare `curl` after it returns `Connection reset` — the owner concludes the stack is broken).
+4. **The fixture can manufacture a *false* defect no balance assertion can see** — total assets
+   **−258.25** while the books were perfectly `in_balance` (an unfunded cash account). Fixture layers
+   need domain invariants beyond "it balances", asserted every seed run.
+5. **"Don't point it at prod" is not a safeguard when podman-compose names both stacks `compose`.**
+   A destructive seed needs an explicit env opt-in a copy-pasted command cannot satisfy.
+6. **Aggregate ledger figures on a shared dev DB are litter** (+50.00 per `verify_*` sweep, 4950.00
+   accumulated) — never quote a whole-ledger total as a fixture literal.
+
+**Biggest cost sink, and it was structural:** twelve tasks whose `Done when` only the owner could
+satisfy **stalled the phase at 22/41 for three weeks and held the entire milestone** behind one ~3 h
+sitting. Now an owner preference (`QA docs: non-blocking`) and a standing rule: never write a plan
+task gated on the owner running something. Second: the plan disagreed with itself about size from day
+one (D-P5-1's "~40–50 checks" vs. its own per-suite maxima summing to exactly 59) — reconcile
+aggregate estimates against per-unit targets at plan time.
+
+**Five previously unhomed items filed** (PLAN `## Noticed` + reviewer questions): **p2 — module
+enable/disable has no server-side gate** (`/api/v1/<module>/*` still serves a disabled module; CORE-07
+*as written* is satisfied, so it is an unbuilt capability, but the three Phase-4 dialogs' docstrings
+are wrong about why they hide — the docstring half is cheap and should be done now); **p3** — the
+commented `compose.yml` module templates that re-introduce `U0`, the unencoded `POSTGRES_PASSWORD` in
+the DSN (an `@` in a first-time self-hoster's password = opaque asyncpg error on first boot),
+operator-facing error copy naming entities by numeric id, and Receipts/Payments having no human
+document number.
+
+**No future-phase resize** — Phase 5 was the last of v4.0. The module-gate item is homed as a
+**Quality & release** candidate rather than forced into this milestone (v4.0's DoD ships no new
+end-user capability). The **p1 human-UAT backlog item stays open by design** — `.zj/QA.md` §6 holds
+zero readings, and per D-P5-11 it ticks only when a person clicks.
+
+**Next action:** `/zj:milestone` — close out v4.0. **The owner's call there:** whether v4.0 ships on a
+checklist nobody has run. NFR-8 as re-worded does not claim a human exercised any flow, and the
+per-module "UI flow still UAT-pending" caveats stay. Read NFR-8's "NOT evidenced" bullet first. Also
+offered: `/zj:log phase 5` to file the formal work log for the record. The stack is up and seeded at
+**http://localhost:8000**. **An engineer must still never tick an owner check or infer a pass.**)
+
+Prior: 2026-08-17 (**v4.0 Phase 5 VERIFIED — `/zj:verify 5`, verdict PASS after a full fix loop.**
 Tip `bbd795b`, tag **`zj/good-05-human-uat`**. **This closes the final phase of milestone v4.0.**
 
 **First pass was GAPS, honestly.** Verifier: 5 major / 5 minor. Reviewer: 4 major / 3 minor, 0 blocker.

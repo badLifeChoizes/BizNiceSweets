@@ -1,5 +1,10 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-08-17 (v4.0 Phase 5 `/zj:verify 5` fix loop — gap G-5: the p2 item PLAN `## Noticed`
+Updated: 2026-08-18 (v4.0 Phase 5 **retro** — five previously unhomed PLAN `## Noticed` items and
+reviewer questions filed: p2 **module enable/disable has no server-side gate**; p3 the commented
+`compose.yml` module templates that re-introduce `U0`, the unencoded `POSTGRES_PASSWORD` in the DSN,
+operator-facing error copy naming entities by numeric id, and Receipts/Payments having no human
+document number)
+Prior: 2026-08-17 (v4.0 Phase 5 `/zj:verify 5` fix loop — gap G-5: the p2 item PLAN `## Noticed`
 #13 promised for `post_transfer` / MOUSSE `issue_components`' unvalidated bins is **now filed**;
 the p3 `uat.ps1` env-file item is **RESOLVED** (reviewer #4 — the `.env.db` block is ported from
 `scripts/uat.sh`))
@@ -341,6 +346,23 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   next touching the AP screens/schemas.
 - [ ] **Dependency license audit** (NFR-2) — required before public open-source release.
 
+- [ ] **Module enable/disable is UI-only — there is no server-side gate** (v4.0 Phase 5 PLAN
+  `## Noticed` #1, homed at retro 2026-08-18) — `backend/app/core/modules_router.py` stores the
+  `enabled` flag and nothing reads it: `grep -rn 'require_module\|module_enabled' backend/app/`
+  returns nothing, and `frontend/src/App.tsx` has no per-module route guard. Disabling GELATO only
+  filters the sidebar (`AppShell.tsx:37-46` `getVisibleModules`); `/api/v1/gelato/*` still serves any
+  authorized user and `/gelato/bins` stays directly reachable by URL. **CORE-07 as written is
+  satisfied** ("Admin can enable or disable individual modules", verified by "toggle updates nav
+  live"), so this is an unbuilt capability rather than a defect against a shipped requirement — but
+  the SRD statement reads stronger than the implementation, and a self-hoster who disables a module
+  for policy reasons will assume it is off. Consequence today: the three Phase-4 dialogs' docstrings
+  ("Hidden … when the bins query errors (GELATO off)" — `StockAdjustDialog.tsx:20-21`,
+  `StockTransferDialog.tsx:20`, `IssueComponentsDialog.tsx:149-151`) are **wrong about the cause**;
+  the real `isError` trigger is an RBAC 403 or a network failure. Fix in two parts, separable: (a)
+  correct the three docstrings now — cheap, and they currently mislead; (b) add a
+  `require_module(<key>)` router dependency plus a route guard, and true up CORE-07's statement.
+  Natural home is the **Quality & release** candidate milestone.
+
 ## p3 — hygiene
 
 - [ ] **The two new QA-doc guard scripts cannot run the documented in-container way**
@@ -527,3 +549,35 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   deposit liability account. Revisit alongside invoice void / credit memos (the other Phase-13 p3
   deferrals) when sell-side revenue-recognition work is scoped. Until then the report tie-out is
   correct for every date ordering and the GL always balances.
+
+- [ ] **The commented module-service templates in `compose.yml` re-introduce `U0`** (v4.0 Phase 5
+  PLAN `## Noticed` #7(a) + reviewer question, homed at retro 2026-08-18) — the commented-out stubs
+  at `compose/compose.yml:111-157` (`plum-worker`, `gelato-worker`, …) all carry `env_file: ../.env`
+  **alone**. D-P5-10 moved the database credentials to `.env.db` and pinned the two-file form for
+  `db` and `api` only, so whoever uncomments a module service gets the app secrets and **no**
+  database credentials — the exact drift D-P5-10 exists to prevent, pre-seeded into the file. Fix:
+  update the templates to the two-file form, and extend `backend/tests/test_compose_config.py` to
+  assert it for every service that declares an `env_file` (commented blocks included, or at minimum
+  a comment warning).
+- [ ] **`POSTGRES_PASSWORD` is interpolated into the DSN without URL-encoding** (v4.0 Phase 5
+  reviewer question, homed at retro 2026-08-18) — `backend/app/core/config.py:52-56` and
+  `backend/scripts/seed_uat_fixtures.py:269`. Pre-existing, but `.env.db.example` now tells a
+  first-time self-hoster to "set a strong, unique password" in a brand-new file, so a password
+  containing `@`, `/`, `:` or `#` yields an opaque asyncpg parse failure on **first boot** — the
+  worst possible moment, and the same first-deploy blast radius as `U0`. Fix: `quote_plus()` the
+  password when building the DSN (both sites), or at minimum a one-line warning in
+  `.env.db.example`.
+- [ ] **Operator-facing error copy names entities by numeric id, and one message reports the wrong
+  noun** (v4.0 Phase 5 PLAN `## Noticed` #4(a), #4(g), #13, homed at retro 2026-08-18) — the
+  unbinned-pool rejection reads *"exceeds the unbinned pool at location 374"* and SC8's reads
+  *"Bin 5 does not exist at location 6"*; if either reaches a toast the operator sees a database id
+  where the screen shows `UAT-LOC-A`. Consistent with existing house style, so fix them together
+  rather than one-off. Separately, `update_cost` rejects a Released revision with *"BOM lines can
+  only be edited on Draft revisions."* (`plum/service.py:2029`) — copy-pasted from `add_bom_line`;
+  correct behaviour, wrong noun, and the user is editing a cost.
+- [ ] **Receipts and Payments have no human document number** (v4.0 Phase 5 PLAN `## Noticed` #4(k),
+  homed at retro 2026-08-18) — `ReceiptRead` / `PaymentRead` expose only `id`, date, amount and a
+  free-text `reference`, unlike `BILL-####` / `INV-####` / `PO-####` / `SO-####`. The Receipts and
+  Payments lists therefore identify a row by UUID, and nothing enforces `reference` uniqueness. A
+  cash-application dispute has no document to point at. Fix: a sequenced `RCT-####` / `PMT-####`
+  alongside the existing generators when the AR/AP screens are next touched.
