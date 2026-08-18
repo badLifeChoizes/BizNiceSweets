@@ -5,9 +5,15 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** Wave A complete (1-6). **12 of 35 tasks done** — Wave B at 6/12 (tasks 7, 8, 9,
-10, 11) plus Wave C's Task 19. In flight: **12** (phase CRUD + cascade, `service/phases.py` +
-`service/__init__.py`) and **20** (task/roster/assignment query hooks, `frontend/.../flan/hooks.ts`).
+**Current task:** Wave A complete (1-6). **13 of 35 tasks done** — Wave B at 6/12 (7, 8, 9, 10, 11)
+plus Wave C's 19 and 20. In flight: **12** (phase CRUD + cascade) and **21** (FLAN nav + project
+switcher).
+
+**⚠ Wave C screens 22-25 are HELD until Tasks 17-18 land** (manager decision). Their Done-when
+asserts the create dialogs POST "the exact payload shape the router accepts", and `router.py` is
+still the Task 5 stub — there is no router to be exact against, and a screen test written to a
+guessed shape is the 11a/11b defect with a green test on top. Tasks 19-21 were safe to pull forward
+because their contract is `schemas.py`, which exists. **Finish Wave B (13→18) before resuming 22-25.**
 
 **Next:** 12 → 13 → 14 → 15 → 16 → 17 → 18, then the rest of Wave C. **Scheduling constraint:**
 tasks 10, 12, 13, 14, 15, 16 **all touch `service/__init__.py`**, so they cannot run concurrently
@@ -57,8 +63,8 @@ UI (Task 25) will set an expectation either way.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
 `### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An
-uncommitted `service/phases.py` + `service/__init__.py` is Task 12 mid-write; an uncommitted
-`frontend/src/routes/flan/hooks.ts` is Task 20.
+uncommitted `service/phases.py` + `service/__init__.py` is Task 12 mid-write; untracked files under
+`frontend/src/routes/flan/components/` are Task 21.
 
 **Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
 `flan_*` tables; all five load-bearing constraint shapes in the database (`flan_task.phase_id`,
