@@ -471,7 +471,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
   (live `PRJ-9 → PRJ-10` proof is `verify_flan.py` scenario (B), Task 28)
 - **Parallel-ok:** yes (independent of Tasks 11/12)
 
-### [ ] 14. Implement task CRUD with server-side date validation
+### [x] 14. Implement task CRUD with server-side date validation
 - **Serves:** FLAN-01.3
 - **Files:** `backend/app/modules/flan/service/tasks.py` (new),
   `backend/app/modules/flan/service/__init__.py`
@@ -618,7 +618,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
   tests in Tasks 22-25)
 - **Parallel-ok:** no (needs Task 19)
 
-### [ ] 22. Build the FLAN Projects list screen
+### [x] 22. Build the FLAN Projects list screen
 - **Serves:** FLAN-01.1, FLAN-01.6
 - **Files:** `frontend/src/routes/flan/Projects.tsx` (new),
   `frontend/src/routes/flan/Projects.test.tsx` (new),
@@ -635,7 +635,32 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS/frontend && npx vitest run src/routes/flan/Projects.test.tsx`
 - **Parallel-ok:** yes (with Tasks 23-25)
 
-### [ ] 23. Build the project Phases screen showing the derived dates and %
+### [ ] 22a. Build the project edit dialog  ⟵ **ADDED AT BUILD (owner decision)**
+- **Serves:** FLAN-01.1 (the "**edit**" verb, which no planned task covered)
+- **Files:** `frontend/src/routes/flan/components/ProjectEditDialog.tsx` (new),
+  `frontend/src/routes/flan/Projects.tsx`, `frontend/src/routes/flan/Projects.test.tsx`
+- **Why this task exists:** FLAN-01.1 reads "Create/view/**edit**/archive a project". Tasks 22-26 as
+  planned build create, view and archive — **nothing edits a project**. Phases, Tasks and Team each
+  got an edit dialog; Project was the only one that did not. The backend has supported it since Task
+  10 (`update_project`, verified) and Task 19 wrote `useUpdateProject`, which no screen called. Found
+  by Task 22's engineer; the owner chose to close it in-phase rather than narrow the SRD.
+- **Do:** Mirror `ProjectCreateDialog.tsx`. Fields: name, category, currency, description,
+  start_date, gate_date, and `key_prefix`. Wire it to `useUpdateProject` from a row action on the
+  Projects table. `key_prefix` is **editable until the project's first task exists, then immutable**
+  (D-V5P1-2) — the server returns **422** with a `detail` naming the reason, which must surface
+  through `toast.error`. Do **not** try to predict the lock client-side; let the server decide and
+  render its message.
+- **Done when:** the colocated Vitest asserts (a) the dialog opens pre-filled with the row's **actual
+  values** (assert the rendered values, not just that inputs exist — the standing LEARNINGS
+  counter-measure), (b) the PATCH body contains only keys present in `ProjectUpdate.model_fields`
+  and omits `id` and `active`, (c) a mocked 422 on `key_prefix` surfaces the server's `detail` via
+  `toast.error`.
+- **Verify:** `cd $BNS/frontend && npx vitest run src/routes/flan/Projects.test.tsx && npm run lint && npx tsc -b --force`,
+  plus the real-schema field-set check that Tasks 22 and 23 used:
+  `podman run --rm --network compose_default -v "$PWD/backend:/app:z" -w /app --env-file .env --env-file .env.db -e PYTHONPATH=/app compose_api python -c "from app.modules.flan.schemas import ProjectUpdate; print(sorted(ProjectUpdate.model_fields))"`
+- **Parallel-ok:** no (shares `Projects.tsx` / `Projects.test.tsx` with Task 22, which has landed)
+
+### [x] 23. Build the project Phases screen showing the derived dates and %
 - **Serves:** FLAN-01.2
 - **Files:** `frontend/src/routes/flan/Phases.tsx` (new),
   `frontend/src/routes/flan/Phases.test.tsx` (new)
@@ -1174,6 +1199,36 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
 - **Task 13 — `generate_task_key(db, project_id, key_prefix)` takes two scalars**, not a `Project`
   instance, keeping `keys.py` free of a model import; Task 14 already holds the locked project row.
 
+- **⚠ OWNER DECISION — Task 22a added: FLAN-01.1's "edit" verb was covered by no task.** The
+  criterion reads "Create/view/**edit**/archive a project"; Tasks 22-26 build create, view and
+  archive only. Phases, Tasks and Team each got an edit dialog — Project was the sole omission, and
+  the backend had supported it since Task 10 with `useUpdateProject` written and called by nothing.
+  Found by Task 22's engineer. The owner chose to **close it in-phase** rather than narrow the SRD,
+  so Task 22a is inserted into Wave C. Without it, verify could not have honestly marked FLAN-01
+  complete.
+- **⚠ OWNER DECISION — no reactivation path for a soft-removed roster member, deliberately.**
+  FLAN-01.4 does not ask for one; the member row and its history survive, so a later phase can add
+  it additively. Task 15's brief records the omission as a decision in the module docstring so it
+  does not read as an oversight later.
+- **⚠ DEFECT FIXED IN-BUILD (`5b3d09f`) — `useDeletePhase` invalidated only `phasesKey`.**
+  `flan_task.phase_id` carries `ondelete="CASCADE"`, so deleting a phase destroys its tasks in the
+  database; the Tasks screen would have gone on listing rows that no longer exist. Found by Task 23's
+  engineer. This is the same stale-cache class as the plan's top-listed risk but on the **delete**
+  path, which the Risks table's row covers only for writes — worth carrying into LEARNINGS as a
+  widening of that rule: *a cascade is a write to a table you did not name*.
+- **Task 14 — `create_task(db, data, project_id=None)` takes an optional scope argument.** Task 18's
+  route is `POST /flan/projects/{project_id}/tasks`; without it the router would have to re-derive
+  and compare the phase's project itself, or a task posted to project A with a phase in project B
+  would silently land in B. `Task.project_id` still comes from `phase.project_id`, never the client.
+- **Task 14 — exhausting the 3 key-generation attempts raises 409**, not a re-raised `IntegrityError`
+  (the plan set the bound but not the terminal status). 409 is the house status for a unique-key
+  conflict and avoids a 500 on a path that is a conflict, not a bug.
+- **Task 14 — `list_tasks` orders by `CAST(substring(key, '[0-9]+$') AS NUMERIC)`,** `NUMERIC` never
+  `INTEGER` per D-P8-6, with the regex form returning NULL rather than throwing on a hand-edited
+  non-numeric key. This is the D-V5P1-7 sorting consequence discharged.
+- **Task 23 — rows are deliberately NOT clickable.** Navigating a phase row to a phase-filtered Tasks
+  screen would have guessed Task 24's query-param contract before it existed.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1274,3 +1329,13 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   like `ABCDEFGHIJ-999999999` would increment to 21 chars and hit the column limit. Needs ~10^9 tasks
   in one project, and Postgres would raise on insert rather than truncate, so it is not a live risk —
   but `String(20)` → `String(32)` in a later migration is the cheap airtight fix.
+
+- **Task 14's engineer reported the `app/core/models.py` aggregator line as still commented out —
+  that is WRONG.** Verified at `backend/app/core/models.py:22`: `from app.modules.flan import models
+  as flan_models  # noqa: F401`, uncommented by Task 2 in `fdf556c`. Recorded because an incorrect
+  Noticed entry is itself a hazard — a later engineer acting on it would "fix" a line that is already
+  correct.
+- **`delete_phase` returns the pre-delete task count, which no UI consumes.** The confirmation copy is
+  built *before* the call from `PhaseRead.task_count`, and `useDeletePhase` types the result `void`.
+  The returned count is used only by the router's audit detail (Task 17). Not a defect — a redundancy
+  worth knowing before someone "simplifies" the return away.

@@ -27,7 +27,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 - [x] 11. Implement the phase-derived dates and % rollup  ⟵ **THE CRUX** — _FLAN-01.2 (D-V5-1)_
 - [x] 12. Implement phase CRUD with delete-cascades-to-tasks — _FLAN-01.2_
 - [x] 13. Implement the numeric-safe task key generator — _FLAN-01.3 (D-P8-6)_
-- [ ] 14. Implement task CRUD with server-side date validation — _FLAN-01.3_
+- [x] 14. Implement task CRUD with server-side date validation — _FLAN-01.3_
 - [ ] 15. Implement team-roster CRUD with removal clearing assignments — _FLAN-01.4_
 - [ ] 16. Implement phase and task assignment set/clear — _FLAN-01.5_
 - [ ] 17. Expose the project and phase endpoints on the FLAN router — _FLAN-01.1, FLAN-01.2, FLAN-01.6, FLAN-01.7 (NFR-1, CORE-05)_
@@ -38,8 +38,9 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 - [x] 19. Add the FLAN project and phase query hooks — _FLAN-01.1, FLAN-01.2, FLAN-01.6_
 - [x] 20. Add the FLAN task, roster and assignment query hooks — _FLAN-01.3, FLAN-01.4, FLAN-01.5_
 - [x] 21. Build the FLAN nav with the project switcher — _FLAN-01.6 (D-V5P1-3)_
-- [ ] 22. Build the FLAN Projects list screen — _FLAN-01.1, FLAN-01.6_
-- [ ] 23. Build the project Phases screen showing the derived dates and % — _FLAN-01.2_
+- [x] 22. Build the FLAN Projects list screen — _FLAN-01.1, FLAN-01.6_
+- [ ] 22a. Build the project edit dialog (ADDED AT BUILD, owner decision) — _FLAN-01.1_
+- [x] 23. Build the project Phases screen showing the derived dates and % — _FLAN-01.2_
 - [ ] 24. Build the project Tasks screen — _FLAN-01.3, FLAN-01.5_
 - [ ] 25. Build the project Team roster screen — _FLAN-01.4_
 - [ ] 26. Wire the FLAN routes into App.tsx with the `/flan` redirect — _FLAN-01.6, FLAN-01.7 (CORE-07/08)_
