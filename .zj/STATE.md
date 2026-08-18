@@ -5,8 +5,8 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** Wave A complete (1-6). **11 of 35 tasks done** — Wave B at 5/12 (tasks 7, 8, 9,
-11) plus Wave C's Task 19. In flight: **10** (project CRUD + archive, `service/projects.py` +
+**Current task:** Wave A complete (1-6). **12 of 35 tasks done** — Wave B at 6/12 (tasks 7, 8, 9,
+10, 11) plus Wave C's Task 19. In flight: **12** (phase CRUD + cascade, `service/phases.py` +
 `service/__init__.py`) and **20** (task/roster/assignment query hooks, `frontend/.../flan/hooks.ts`).
 
 **Next:** 12 → 13 → 14 → 15 → 16 → 17 → 18, then the rest of Wave C. **Scheduling constraint:**
@@ -38,6 +38,12 @@ first**. The amendment is written into Task 27's own text in `PLAN.md`, not only
 **Engineers no longer touch `docs/tasks/feature-flan-core.md` — the manager owns it** (two parallel
 engineers collided on it; one swept the other's tick into commit `cde26d9`).
 
+**⚠ The plan's Verify lines have now been weaker than the property twice — check the rest.**
+(1) Task 27's A0 asserted the empty phase in a way Task 29's mutation 3 could not detect (amended in
+place). (2) Task 20's Verify is `grep -c "phasesKey"` — a *count*, which cannot show *which* hooks
+invalidate; four need it, and a file with four mentions passes regardless. Treat the remaining Verify
+commands in Waves C and D as drafts to check, not gates to trust.
+
 **⚠ Open trap for Task 14.** `TaskCreate` accepts `assignee_ids` and `tags`, but the plan's Task 14
 spec never says `create_task` consumes them. If it does not, the API accepts both and silently drops
 the data — the "green backend, dead through the UI" class that shipped in 11a and 11b. Task 14's
@@ -51,7 +57,7 @@ UI (Task 25) will set an expectation either way.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
 `### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An
-uncommitted `service/projects.py` + `service/__init__.py` is Task 10 mid-write; an uncommitted
+uncommitted `service/phases.py` + `service/__init__.py` is Task 12 mid-write; an uncommitted
 `frontend/src/routes/flan/hooks.ts` is Task 20.
 
 **Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
