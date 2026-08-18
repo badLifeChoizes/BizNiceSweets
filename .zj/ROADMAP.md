@@ -402,11 +402,16 @@ rested entirely on the standalone `verify_*` scripts + Vitest for **three** mile
 infra debt rode unpaid, and the shared inventory-ledger row-lock now has multiple writers. Harden the
 foundation before adding more features. **No new end-user capability ships in this milestone.**
 
-**Definition of done (confirmed at `/zj:spec`, D-M4-1 — traces PRD-12):** *"The full test suite
-(integration + unit) runs green in a GitHub Actions CI pipeline on every push, both lint gates enforce
-a zero-violation baseline, the inventory ledger is race-safe across every writer, and every shipped UI
-flow has passed a documented human click-through — so a new deploy is trustworthy without a manual
-`verify_*` run."*
+**Definition of done (confirmed at `/zj:spec`, D-M4-1 — traces PRD-12; C4 clause amended at close,
+D-M4-4):** *"The full test suite (integration + unit) runs green in a GitHub Actions CI pipeline on
+every push, both lint gates enforce a zero-violation baseline, the inventory ledger is race-safe
+across every writer, and every shipped UI flow has a **documented, runnable human check** keyed to the
+requirement it exercises — so a new deploy is trustworthy without a manual `verify_*` run."*
+
+> **C4 amended at close (D-M4-4).** Originally "has **passed** a documented human click-through".
+> D-P5-11 had already moved NFR-8 and PRD-12's acceptance signal to "the checklist is the
+> deliverable"; the DoD sentence was the last unamended copy, so the audit found C4 NOT MET on its
+> literal wording. Accepted cost: v4.0 carries no human-exercised UI evidence.
 
 **Scope (D-M4-1):** NFR-4 (CI), NFR-5 (pytest harness repair + `verify_*` ported into the suite),
 NFR-6 (both lint gates fixed-to-clean, D-M4-3), NFR-7 (shared inventory FOR-UPDATE lock + inbound

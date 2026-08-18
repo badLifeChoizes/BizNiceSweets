@@ -108,10 +108,17 @@ future scope (expanded via `/zj:spec` when their milestones near).
 ## PLUM (PLM Port — v1 Core)
 
 ## PLUM-01: Part CRUD  [traces: PRD-5]  **Status: implemented**
-- **Verified:** a88431c (re-stamped 2026-07-11 — `service.py` changed again for the AVL D2 fix,
-  which does not touch the part-CRUD or numbering paths; part CRUD re-proven live after that commit,
-  201 on create and numeric successor still correct past the 5→6-digit boundary; guarded by
-  `backend/scripts/verify_part_numbering.py` + `backend/tests/plum/test_part_number.py`)
+- **Verified:** ad05c7a (**re-stamped 2026-08-18 at the v4.0 milestone close** — `zj doctor` flagged
+  PLUM-01 stale-verified because `0005_plum_tables.py`, `models.py` and `router.py` all changed after
+  the `a88431c` stamp. The milestone audit re-verified it at `ad05c7a`: the only post-stamp change to
+  those files is ruff autofix `d2b9b9c` (`Optional[X]`→`X|None`, `datetime.UTC`), semantically inert.
+  Re-driven live through the real HTTP router — create returned `P00001`, the numeric successor past
+  `P9999999999` returned `P10000000000` with **no int4 overflow 500** (the v1.0 Phase-7 blocker
+  `7562a02` stays fixed), duplicate part number 409s, archive OK; `backend/tests/plum/test_part_number.py`
+  14 passed. See `.zj/MILESTONE-v4.0-AUDIT.md` § PLUM-01 re-verification.
+  Prior stamp a88431c, re-stamped 2026-07-11 — `service.py` changed for the AVL D2 fix, which does not
+  touch the part-CRUD or numbering paths; guarded by `backend/scripts/verify_part_numbering.py` +
+  `backend/tests/plum/test_part_number.py`)
 - **Statement:** User can create, view, edit, and delete parts.
 - **Evidence:** `backend/app/modules/plum/models.py`, `backend/app/modules/plum/service.py`, `backend/app/modules/plum/router.py`, migration `backend/alembic/versions/0005_plum_tables.py`; `frontend/src/routes/plum/PartsList.tsx`, `frontend/src/routes/plum/components/PartSheet.tsx`; `backend/tests/plum/test_parts.py`; human UAT 10 of 10 in Phase 5.
 - **Defect (resolved, Phase 7 `1b8bfa1`):** `generate_part_number()` used lexicographic `MAX`

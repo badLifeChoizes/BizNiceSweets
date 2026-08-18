@@ -2,13 +2,20 @@
 
 Tracks completed requirements by phase, with implementing plans and evidence.
 
-> **Evidence caveat (Phase 7, D-P7-4):** the PLUM pytest files below (`test_bom.py`,
-> `test_avl.py`, `test_costing.py`, `test_import_export.py`, `test_parts.py`) have **never
-> actually run** — a broken `skip_if_no_db` probe silently skipped them, which is how the
-> `SyerpPartner` 500 shipped through Phase 6 marked "Complete". Harness repair is BACKLOG p1.
-> Phase-7 status below reflects *verified* reality: code fixes proven by live-DB standalone
-> proofs, and flow-level UI confirmation deferred to the v1.0 milestone UAT
-> (`.zj/UAT-v1.0.md`, D-P7-5) — **not** claimed Complete on an unrun test.
+> **Evidence caveat (Phase 7, D-P7-4) — RESOLVED by v4.0 Phase 2a (2026-07-22).** The PLUM pytest
+> files below (`test_bom.py`, `test_avl.py`, `test_costing.py`, `test_import_export.py`,
+> `test_parts.py`) had **never actually run** — a broken `skip_if_no_db` probe silently skipped
+> them, which is how the `SyerpPartner` 500 shipped through Phase 6 marked "Complete". All four
+> root causes are now fixed at the harness layer (`backend/tests/conftest.py`); the suite runs
+> **245 passed / 0 skipped**, a live database is a *hard* requirement (no-DB fails loud), and
+> `backend/tests/test_harness_selfcheck.py` pins the zero-silent-skip invariant so this exact
+> regression can never return silently. The whole suite now also runs on every push in CI.
+>
+> **Still true below:** "pending harness" in an Evidence cell means that cell was written before
+> the repair and has not been re-audited — the tests referenced now run, but the cell text is
+> historical. "UI UAT pending" is a *separate* and still-open matter: `.zj/QA.md` is the standing
+> human checklist and holds zero readings (NFR-8 / D-P5-11), so flow-level UI confirmation
+> remains outstanding by design.
 
 ---
 
