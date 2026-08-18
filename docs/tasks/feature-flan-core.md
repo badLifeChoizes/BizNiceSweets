@@ -20,9 +20,9 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 
 ### Wave B — service + router
 
-- [ ] 7. Write the project and phase Pydantic schemas — _FLAN-01.1, FLAN-01.2_
+- [x] 7. Write the project and phase Pydantic schemas — _FLAN-01.1, FLAN-01.2_
 - [ ] 8. Write the task, roster and assignment Pydantic schemas — _FLAN-01.3, FLAN-01.4, FLAN-01.5_
-- [ ] 9. Build the flan service package skeleton with the archived-project guard — _FLAN-01.1_
+- [x] 9. Build the flan service package skeleton with the archived-project guard — _FLAN-01.1_
 - [ ] 10. Implement project CRUD and archive in the service — _FLAN-01.1, FLAN-01.6_
 - [ ] 11. Implement the phase-derived dates and % rollup  ⟵ **THE CRUX** — _FLAN-01.2 (D-V5-1)_
 - [ ] 12. Implement phase CRUD with delete-cascades-to-tasks — _FLAN-01.2_
