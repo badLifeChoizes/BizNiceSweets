@@ -503,7 +503,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
   until Task 31 adds the package — acceptable, ruff is the gate here)
 - **Parallel-ok:** no (needs Task 13)
 
-### [ ] 15. Implement team-roster CRUD with removal clearing assignments
+### [x] 15. Implement team-roster CRUD with removal clearing assignments
 - **Serves:** FLAN-01.4
 - **Files:** `backend/app/modules/flan/service/roster.py` (new),
   `backend/app/modules/flan/service/__init__.py`
@@ -1228,6 +1228,22 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   non-numeric key. This is the D-V5P1-7 sorting consequence discharged.
 - **Task 23 — rows are deliberately NOT clickable.** Navigating a phase row to a phase-filtered Tasks
   screen would have guessed Task 24's query-param contract before it existed.
+
+- **⚠ Task 15 — the plan's `user_id` conflict rule would have 500'd, and was widened.** The plan says
+  422 when "no other **active** member of the project already links it". But
+  `uq_flan_member_project_user` is on `(project_id, user_id)` with **no `active` predicate** — it is
+  not a partial index — so a literal implementation lets a re-link past the service check and then
+  raises `IntegrityError` at flush: a 500 on a user-input path. `_require_linkable_user` therefore
+  422s in **both** cases, with distinct details ("already linked to member X" vs "still linked to
+  removed member X; a removed member keeps its user link"). A later phase wanting re-link-after-removal
+  needs either a partial unique index or a link-clearing step in `remove_member`.
+- **Task 15 — the real auth column is `is_active`, not `deactivated`** (`auth/models.py:64`), and it
+  is deliberately **not** checked. Refusing a deactivated user's link would contradict FLAN-01.4
+  ("deactivating a user account does not delete the roster row or any of its history"). Proven by
+  scenario (f): the roster row, its `user_id` and its assignment rows all survive deactivation.
+- **Task 15 — `remove_member` returns `int`** (assignments cleared) for Task 18's audit detail,
+  mirroring `delete_phase`'s cascaded-task count. The FE hook types the result `void`, so both are
+  satisfied.
 
 ## Noticed
 

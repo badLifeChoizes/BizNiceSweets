@@ -28,7 +28,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 - [x] 12. Implement phase CRUD with delete-cascades-to-tasks — _FLAN-01.2_
 - [x] 13. Implement the numeric-safe task key generator — _FLAN-01.3 (D-P8-6)_
 - [x] 14. Implement task CRUD with server-side date validation — _FLAN-01.3_
-- [ ] 15. Implement team-roster CRUD with removal clearing assignments — _FLAN-01.4_
+- [x] 15. Implement team-roster CRUD with removal clearing assignments — _FLAN-01.4_
 - [ ] 16. Implement phase and task assignment set/clear — _FLAN-01.5_
 - [ ] 17. Expose the project and phase endpoints on the FLAN router — _FLAN-01.1, FLAN-01.2, FLAN-01.6, FLAN-01.7 (NFR-1, CORE-05)_
 - [ ] 18. Expose the task, roster and assignment endpoints on the FLAN router — _FLAN-01.3, FLAN-01.4, FLAN-01.5, FLAN-01.7 (NFR-1, CORE-05)_
