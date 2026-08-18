@@ -1,59 +1,24 @@
 """SYERP service — AP aging and financial statements (trial balance, P&L, balance sheet)."""
 from __future__ import annotations
 
-import re
-from collections.abc import Mapping
-from datetime import date, datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, NamedTuple
+from datetime import date
+from decimal import Decimal
+from typing import TYPE_CHECKING
 
-from fastapi import HTTPException, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
 
-    from app.modules.syerp.models import (
-        Bill,
-        BillLine,
-        GLAccount,
-        InventoryItem,
-        JournalEntry,
-        JournalLine,
-        Partner,
-        PurchaseOrder,
-        PurchaseOrderLine,
-        StockLocation,
-    )
     from app.modules.syerp.schemas import (
-        AccountRegisterRead,
         ApAgingReport,
         ArAgingReport,
         BalanceSheetReport,
-        BillLineCreate,
-        BillRead,
-        InventoryItemCreate,
-        InventoryItemUpdate,
-        ItemOnHandRead,
-        JournalEntryRead,
-        PartnerCreate,
-        PartnerUpdate,
-        POCreate,
-        POLineCreate,
-        POLineRead,
-        POLineUpdate,
-        PORead,
         ProfitLossReport,
-        StockLocationCreate,
-        StockLocationUpdate,
-        TransactionRead,
         TrialBalanceReport,
-        UnbilledReceiptRead,
     )
 
 from app.modules.syerp.service.accounts import _gl_account_id_by_code
-
 
 # ===== Phase 9c reports =====
 #
@@ -75,7 +40,7 @@ from app.modules.syerp.service.accounts import _gl_account_id_by_code
 # Money is exact Decimal throughout (never float — D-11).
 
 
-async def ap_aging_report(db: AsyncSession, as_of: date | None = None) -> "ApAgingReport":
+async def ap_aging_report(db: AsyncSession, as_of: date | None = None) -> ApAgingReport:
     """
     Accounts-payable aging schedule as of a date, tied out to the 2110 control (AC6).
 
@@ -238,7 +203,7 @@ async def ap_aging_report(db: AsyncSession, as_of: date | None = None) -> "ApAgi
     )
 
 
-async def ar_aging_report(db: AsyncSession, as_of: date | None = None) -> "ArAgingReport":
+async def ar_aging_report(db: AsyncSession, as_of: date | None = None) -> ArAgingReport:
     """
     Accounts-receivable aging schedule as of a date, tied out to the 1120 control.
 
@@ -427,7 +392,7 @@ async def ar_aging_report(db: AsyncSession, as_of: date | None = None) -> "ArAgi
     )
 
 
-async def trial_balance(db: AsyncSession, as_of: date | None = None) -> "TrialBalanceReport":
+async def trial_balance(db: AsyncSession, as_of: date | None = None) -> TrialBalanceReport:
     """
     Trial balance as of a date — every posting account's net debit/credit (AC7).
 
@@ -496,7 +461,7 @@ async def trial_balance(db: AsyncSession, as_of: date | None = None) -> "TrialBa
 
 async def profit_loss(
     db: AsyncSession, date_from: date, date_to: date
-) -> "ProfitLossReport":
+) -> ProfitLossReport:
     """
     Profit & loss over an inclusive [date_from, date_to] window (AC7).
 
@@ -564,7 +529,7 @@ async def profit_loss(
     )
 
 
-async def balance_sheet(db: AsyncSession, as_of: date | None = None) -> "BalanceSheetReport":
+async def balance_sheet(db: AsyncSession, as_of: date | None = None) -> BalanceSheetReport:
     """
     Balance sheet as of a date — assets vs. liabilities + equity (AC7).
 

@@ -31,6 +31,14 @@ services:
     environment:
       UVICORN_RELOAD: "true"
       WATCHFILES_FORCE_POLLING: "true"
+      # Declares THIS stack a UAT stack, which is what lets
+      # backend/scripts/seed_uat_fixtures.py write its named fixtures here.
+      # compose.yml (production) must NEVER set this: podman-compose names both
+      # stacks after the compose/ directory, so prod and dev share the container
+      # name compose_api_1 — this variable, not the command typed, is what tells
+      # them apart. A deliberate load into a prod artifact passes it per run:
+      #   podman exec -e BNS_ALLOW_UAT_SEED=1 …
+      BNS_ALLOW_UAT_SEED: "1"
 
   # ---------------------------------------------------------------------------
   # frontend — Vite dev server with HMR

@@ -97,6 +97,9 @@ function mockGetByUrl() {
     if (url.endsWith('/onhand')) return Promise.resolve({ data: ONHAND })
     if (url.endsWith('/transactions')) return Promise.resolve({ data: TRANSACTIONS })
     if (url.includes('/inventory/locations')) return Promise.resolve({ data: LOCATIONS })
+    // The dialogs' useBins query (Phase 4, Tasks 10/11) — no bins here, so the
+    // optional bin pickers stay hidden and payloads carry bin_id: null.
+    if (url.includes('/bins')) return Promise.resolve({ data: [] })
     return Promise.resolve({ data: ITEM })
   })
 }

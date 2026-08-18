@@ -31,7 +31,7 @@ _MODULE_SEEDS: list[tuple[str, str, bool, int]] = [
 ]
 
 
-async def seed_modules_table(db: "AsyncSession") -> None:
+async def seed_modules_table(db: AsyncSession) -> None:
     """
     Idempotent module seed — insert only if key not present.
 

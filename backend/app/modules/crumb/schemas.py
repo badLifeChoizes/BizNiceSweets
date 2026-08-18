@@ -29,10 +29,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ---------------------------------------------------------------------------
 # Leads (CRUMB-01)
@@ -50,9 +48,9 @@ class LeadCreate(BaseModel):
     """
 
     name: str = Field(..., min_length=1)
-    company: Optional[str] = None
-    contact: Optional[str] = None
-    source: Optional[str] = None
+    company: str | None = None
+    contact: str | None = None
+    source: str | None = None
 
 
 class LeadUpdate(BaseModel):
@@ -63,10 +61,10 @@ class LeadUpdate(BaseModel):
     links and lifecycle status are moved by dedicated endpoints, not here.
     """
 
-    name: Optional[str] = None
-    company: Optional[str] = None
-    contact: Optional[str] = None
-    source: Optional[str] = None
+    name: str | None = None
+    company: str | None = None
+    contact: str | None = None
+    source: str | None = None
 
 
 class LeadRead(BaseModel):
@@ -80,13 +78,13 @@ class LeadRead(BaseModel):
 
     id: str
     name: str
-    company: Optional[str] = None
-    contact: Optional[str] = None
-    source: Optional[str] = None
+    company: str | None = None
+    contact: str | None = None
+    source: str | None = None
     status: str
     active: bool
-    partner_id: Optional[str] = None
-    opportunity_id: Optional[str] = None
+    partner_id: str | None = None
+    opportunity_id: str | None = None
     actor_id: str
     created_at: datetime
 
@@ -104,10 +102,10 @@ class LeadLinkCustomerRequest(BaseModel):
     Both are optional at the schema boundary; the service enforces exactly-one.
     """
 
-    partner_id: Optional[str] = None
-    new_customer_name: Optional[str] = None
-    is_customer: Optional[bool] = None
-    is_supplier: Optional[bool] = None
+    partner_id: str | None = None
+    new_customer_name: str | None = None
+    is_customer: bool | None = None
+    is_supplier: bool | None = None
 
 
 class LeadToOpportunityRequest(BaseModel):
@@ -120,8 +118,8 @@ class LeadToOpportunityRequest(BaseModel):
     """
 
     name: str = Field(..., min_length=1)
-    estimated_value: Optional[Decimal] = None
-    expected_close_date: Optional[date] = None
+    estimated_value: Decimal | None = None
+    expected_close_date: date | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -141,9 +139,9 @@ class OpportunityCreate(BaseModel):
 
     name: str = Field(..., min_length=1)
     partner_id: str
-    estimated_value: Optional[Decimal] = None
-    expected_close_date: Optional[date] = None
-    lead_id: Optional[str] = None
+    estimated_value: Decimal | None = None
+    expected_close_date: date | None = None
+    lead_id: str | None = None
 
 
 class OpportunityUpdate(BaseModel):
@@ -154,9 +152,9 @@ class OpportunityUpdate(BaseModel):
     lifecycle moved only via the stage-transition endpoint, never a free edit.
     """
 
-    name: Optional[str] = None
-    estimated_value: Optional[Decimal] = None
-    expected_close_date: Optional[date] = None
+    name: str | None = None
+    estimated_value: Decimal | None = None
+    expected_close_date: date | None = None
 
 
 class OpportunityRead(BaseModel):
@@ -169,9 +167,9 @@ class OpportunityRead(BaseModel):
     id: str
     name: str
     partner_id: str
-    lead_id: Optional[str] = None
-    estimated_value: Optional[Decimal] = None
-    expected_close_date: Optional[date] = None
+    lead_id: str | None = None
+    estimated_value: Decimal | None = None
+    expected_close_date: date | None = None
     stage: str
     actor_id: str
     created_at: datetime
@@ -211,11 +209,11 @@ class QuoteLineCreate(BaseModel):
     applies the per-line default (D-V3-14). All amounts are Decimal (never float).
     """
 
-    plum_part_id: Optional[str] = None
-    description: Optional[str] = None
+    plum_part_id: str | None = None
+    description: str | None = None
     quantity: Decimal = Field(..., gt=0)
-    unit_price: Optional[Decimal] = None
-    markup_pct: Optional[Decimal] = None
+    unit_price: Decimal | None = None
+    markup_pct: Decimal | None = None
 
 
 class QuoteLineRead(BaseModel):
@@ -229,11 +227,11 @@ class QuoteLineRead(BaseModel):
 
     id: str
     quote_id: str
-    plum_part_id: Optional[str] = None
-    description: Optional[str] = None
+    plum_part_id: str | None = None
+    description: str | None = None
     quantity: Decimal
     unit_price: Decimal
-    markup_pct: Optional[Decimal] = None
+    markup_pct: Decimal | None = None
     sort_order: int
 
     # Service-derived (not an ORM column) — filled by the detail loader.
@@ -252,7 +250,7 @@ class QuoteCreate(BaseModel):
     """
 
     partner_id: str
-    opportunity_id: Optional[str] = None
+    opportunity_id: str | None = None
     lines: list[QuoteLineCreate] = Field(default_factory=list)
 
 
@@ -265,7 +263,7 @@ class QuoteRead(BaseModel):
     id: str
     quote_number: str
     partner_id: str
-    opportunity_id: Optional[str] = None
+    opportunity_id: str | None = None
     status: str
     actor_id: str
     created_at: datetime
@@ -307,7 +305,7 @@ class OpportunityToQuoteRequest(BaseModel):
     service creates an empty-lined draft quote against the opportunity's partner.
     """
 
-    lines: Optional[list[QuoteLineCreate]] = None
+    lines: list[QuoteLineCreate] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -329,10 +327,10 @@ class InteractionCreate(BaseModel):
     partner_id: str
     interaction_type: str
     body: str
-    lead_id: Optional[str] = None
-    opportunity_id: Optional[str] = None
-    quote_id: Optional[str] = None
-    occurred_at: Optional[datetime] = None
+    lead_id: str | None = None
+    opportunity_id: str | None = None
+    quote_id: str | None = None
+    occurred_at: datetime | None = None
 
 
 class InteractionRead(BaseModel):
@@ -343,9 +341,9 @@ class InteractionRead(BaseModel):
 
     id: str
     partner_id: str
-    lead_id: Optional[str] = None
-    opportunity_id: Optional[str] = None
-    quote_id: Optional[str] = None
+    lead_id: str | None = None
+    opportunity_id: str | None = None
+    quote_id: str | None = None
     interaction_type: str
     occurred_at: datetime
     body: str
@@ -372,9 +370,9 @@ class SalesOrderLineCreate(BaseModel):
     is server-owned (the reservation accumulator) and so absent here.
     """
 
-    item_id: Optional[str] = None
-    plum_part_id: Optional[str] = None
-    description: Optional[str] = None
+    item_id: str | None = None
+    plum_part_id: str | None = None
+    description: str | None = None
     qty_ordered: Decimal = Field(..., gt=0)
     unit_price: Decimal
 
@@ -393,9 +391,9 @@ class SalesOrderLineRead(BaseModel):
 
     id: str
     sales_order_id: str
-    item_id: Optional[str] = None
-    plum_part_id: Optional[str] = None
-    description: Optional[str] = None
+    item_id: str | None = None
+    plum_part_id: str | None = None
+    description: str | None = None
     qty_ordered: Decimal
     unit_price: Decimal
     qty_reserved: Decimal
@@ -422,8 +420,8 @@ class SalesOrderCreate(BaseModel):
     """
 
     partner_id: str
-    order_date: Optional[date] = None
-    required_date: Optional[date] = None
+    order_date: date | None = None
+    required_date: date | None = None
     lines: list[SalesOrderLineCreate] = Field(default_factory=list)
 
 
@@ -439,11 +437,11 @@ class SalesOrderRead(BaseModel):
     id: str
     so_number: str
     partner_id: str
-    source_quote_id: Optional[str] = None
-    source_opportunity_id: Optional[str] = None
+    source_quote_id: str | None = None
+    source_opportunity_id: str | None = None
     status: str
     order_date: date
-    required_date: Optional[date] = None
+    required_date: date | None = None
     actor_id: str
     created_at: datetime
 
@@ -487,5 +485,5 @@ class QuoteToSalesOrderRequest(BaseModel):
     → the service defaults it to today.
     """
 
-    order_date: Optional[date] = None
-    required_date: Optional[date] = None
+    order_date: date | None = None
+    required_date: date | None = None

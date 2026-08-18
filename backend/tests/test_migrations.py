@@ -17,8 +17,6 @@ import importlib
 import subprocess
 import sys
 
-import pytest
-
 
 def test_alembic_config_loads() -> None:
     """Alembic config object loads and exposes the script location."""

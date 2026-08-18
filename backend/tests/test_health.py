@@ -6,7 +6,6 @@ Maps to CORE-01 (liveness, /docs reachable) and CORE-09 (readiness checks DB).
 test_liveness: passes without a live database.
 test_readiness: passes when a DB is reachable; skipped otherwise.
 """
-import pytest
 import httpx
 
 

@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
-from datetime import date, datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, NamedTuple
 
 from fastapi import HTTPException, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import Integer, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
@@ -17,44 +16,16 @@ if TYPE_CHECKING:
     from app.modules.syerp.models import (
         Bill,
         BillLine,
-        GLAccount,
-        InventoryItem,
-        JournalEntry,
-        JournalLine,
-        Partner,
-        PurchaseOrder,
-        PurchaseOrderLine,
-        StockLocation,
     )
     from app.modules.syerp.schemas import (
-        AccountRegisterRead,
-        ApAgingReport,
-        BalanceSheetReport,
         BillLineCreate,
         BillRead,
-        InventoryItemCreate,
-        InventoryItemUpdate,
-        ItemOnHandRead,
-        JournalEntryRead,
-        PartnerCreate,
-        PartnerUpdate,
-        POCreate,
-        POLineCreate,
-        POLineRead,
-        POLineUpdate,
-        PORead,
-        ProfitLossReport,
-        StockLocationCreate,
-        StockLocationUpdate,
-        TransactionRead,
-        TrialBalanceReport,
+        PaymentRead,
         UnbilledReceiptRead,
     )
 
-from app.modules.syerp.service._common import _COST_QUANTUM
 from app.modules.syerp.service.accounts import _gl_account_id_by_code
 from app.modules.syerp.service.journal import _require_gl_account, post_journal_entry
-
 
 # ---------------------------------------------------------------------------
 # Accounts-payable pure helpers (Phase 9b, SYERP-12)
@@ -77,7 +48,7 @@ from app.modules.syerp.service.journal import _require_gl_account, post_journal_
 _BILL_NUMBER_RE = re.compile(r"^BILL-[0-9]+$")
 
 
-def _next_bill_number(existing_numbers: "Iterable[str]") -> str:
+def _next_bill_number(existing_numbers: Iterable[str]) -> str:
     """
     Compute the next BILL-#### number from the set of existing bill numbers.
 
@@ -228,7 +199,7 @@ async def _already_billed_qty(db: AsyncSession, po_line_id: str) -> Decimal:
 
 async def list_unbilled_receipts(
     db: AsyncSession, vendor_id: str
-) -> "list[UnbilledReceiptRead]":
+) -> list[UnbilledReceiptRead]:
     """
     List a vendor's received-but-not-fully-billed PO lines (SC1 — matched picker).
 
@@ -303,9 +274,9 @@ async def create_bill(
     vendor_id: str,
     vendor_invoice_ref: str | None,
     bill_date: date | None = None,
-    lines: "Iterable[BillLineCreate]",
+    lines: Iterable[BillLineCreate],
     actor_id: str,
-) -> "BillRead":
+) -> BillRead:
     """
     Create a draft vendor bill with three-way PO match validation (SC2, D-P9b-1/2/3).
 
@@ -499,7 +470,7 @@ async def create_bill(
 
 async def _get_bill_row(
     db: AsyncSession, bill_id: str, *, for_update: bool = False
-) -> "Bill":
+) -> Bill:
     """
     Load a Bill ORM row by id (internal helper).
 
@@ -523,7 +494,7 @@ async def _get_bill_row(
     return bill
 
 
-async def _load_bill_lines(db: AsyncSession, bill_id: str) -> "list[BillLine]":
+async def _load_bill_lines(db: AsyncSession, bill_id: str) -> list[BillLine]:
     """Return a bill's lines ordered by line_no (no ORM relationship — Pitfall 2)."""
     from app.modules.syerp.models import BillLine
 
@@ -551,8 +522,8 @@ async def _bill_paid_amount(db: AsyncSession, bill_id: str) -> Decimal:
 
 
 def _bill_to_read(
-    bill: "Bill", lines: "Iterable[BillLine]", paid: Decimal
-) -> "BillRead":
+    bill: Bill, lines: Iterable[BillLine], paid: Decimal
+) -> BillRead:
     """
     Assemble a BillRead from a Bill ORM row, its lines, and its allocated total.
 
@@ -581,7 +552,7 @@ def _bill_to_read(
     )
 
 
-async def get_bill(db: AsyncSession, bill_id: str) -> "BillRead":
+async def get_bill(db: AsyncSession, bill_id: str) -> BillRead:
     """
     Load a bill (header + nested lines + derived roll-ups) by id.
 
@@ -597,7 +568,7 @@ async def list_bills(
     db: AsyncSession,
     vendor_id: str | None = None,
     status: str | None = None,
-) -> "list[BillRead]":
+) -> list[BillRead]:
     """
     List bills (newest-first), optionally filtered by vendor and/or status.
 
@@ -648,7 +619,7 @@ async def list_bills(
 
 async def advance_bill_status(
     db: AsyncSession, bill_id: str, target: str, actor_id: str
-) -> "BillRead":
+) -> BillRead:
     """
     Advance an AP bill through the FSM (Phase 9b, SYERP-12 AC4/5).
 
@@ -681,7 +652,7 @@ async def advance_bill_status(
     return await get_bill(db, bill_id)
 
 
-async def post_bill(db: AsyncSession, bill_id: str, actor_id: str) -> "BillRead":
+async def post_bill(db: AsyncSession, bill_id: str, actor_id: str) -> BillRead:
     """
     Post a draft AP bill to the GL, flipping it draft -> posted (SYERP-12 AC4, SC3).
 
@@ -752,7 +723,7 @@ async def post_bill(db: AsyncSession, bill_id: str, actor_id: str) -> "BillRead"
     )
 
     bill.status = "posted"
-    bill.posted_at = datetime.now(timezone.utc)
+    bill.posted_at = datetime.now(UTC)
 
     await db.commit()
     return await get_bill(db, bill.id)
@@ -764,9 +735,9 @@ async def record_payment(
     payment_date: date,
     cash_account_id: int,
     reference: str | None,
-    allocations: "Iterable[object]",
+    allocations: Iterable[object],
     actor_id: str,
-) -> "PaymentRead":
+) -> PaymentRead:
     """
     Record a cash payment against one or more posted AP bills (SYERP-12 AC5, SC4).
 
@@ -851,7 +822,7 @@ async def record_payment(
     # open_balance is derived exactly as Task 5: total billed - coalesced prior paid
     # (each side coalesced). Same-bill allocations accumulate so they cannot jointly
     # overpay a single open balance.
-    bill_rows: dict[str, "Bill"] = {}
+    bill_rows: dict[str, Bill] = {}
     bill_total_by_id: dict[str, Decimal] = {}
     open_balance_by_id: dict[str, Decimal] = {}
     claimed_by_id: dict[str, Decimal] = {}
@@ -953,7 +924,7 @@ async def record_payment(
     )
 
 
-async def list_payments(db: AsyncSession) -> "list[PaymentRead]":
+async def list_payments(db: AsyncSession) -> list[PaymentRead]:
     """
     List all recorded cash payments (SYERP-12 AC5), each with its allocations nested.
 

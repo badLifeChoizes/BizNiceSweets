@@ -42,9 +42,11 @@ Threat mitigations baked into schema:
            duplicate BOM/AVL rows at the DB level.
   T-06-04: Numeric(18,6) for all cost/qty columns (not float) — exact fixed-point.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

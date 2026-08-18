@@ -25,7 +25,6 @@ from app.modules.syerp.service import (
     _po_rollup_status,
 )
 
-
 # ---------------------------------------------------------------------------
 # _next_po_number — pure, no-DB digit-boundary guarantee
 # ---------------------------------------------------------------------------

@@ -22,9 +22,7 @@ collectable by pytest so the test map is in place for 05-02 to drive.
 
 Pattern mirrors backend/tests/syerp/test_partners.py exactly.
 """
-import pytest
 import httpx
-
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/plum/parts — create part (PLUM-01)
@@ -111,6 +109,7 @@ async def test_update_part(
 
     # Verify AuditLog row was written (mirrors test_update_partner_writes_audit pattern)
     from sqlalchemy import select
+
     from app.core.db import AsyncSessionLocal
     from app.modules.auth.models import AuditLog
 
@@ -193,11 +192,24 @@ async def test_create_requires_write_permission(
     client: httpx.AsyncClient,
     skip_if_no_db: None,
 ) -> None:
-    """Token with only plum:read (no plum:write) → 403 on part create (D-10)."""
-    from app.modules.auth.service import create_access_token
+    """Token for a real user lacking plum:write → 403 on part create (D-10).
 
+    Shipped RBAC authorizes from the subject's DB roles, ignoring the JWT
+    `perms` claim, so this mints a token for a genuinely limited user — NOT
+    the wildcard admin, who would be granted regardless of the claim. A user
+    provisioned with no roles lacks plum:write, so the gate returns a real 403.
+    """
+    from app.modules.auth.service import create_access_token
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
+
+    admin_token = await admin_login_token(client)
+    user = await create_regular_user(
+        client, admin_token, "limited@test.example", "pass123"
+    )
+    # Even a token carrying plum:read is denied — the claim is ignored and the
+    # user has no roles granting plum:write.
     read_only_token = create_access_token(
-        subject="readonly-user-id", permissions=["plum:read"]
+        subject=user["id"], permissions=["plum:read"]
     )
 
     response = await client.post(

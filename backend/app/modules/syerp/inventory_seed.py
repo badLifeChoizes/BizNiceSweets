@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 DEFAULT_LOCATION_NAME = "Main"
 
 
-async def seed_default_location(db: "AsyncSession") -> None:
+async def seed_default_location(db: AsyncSession) -> None:
     """
     Idempotent seed of the default "Main" stock location.
 

@@ -65,18 +65,47 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
       ONE succeeds and the other raises 422 (7+7 > 10); the pool and bin never go
       negative; final unbinned == 3 and bin == 7 EXACTLY. Repeated several
       iterations (fresh item each) to make the race reliable.
-  (E) BIN-BLIND MOVEMENT BOUNDARY (Phase 12a review MAJOR, documented): 12a makes
-      ONLY putaway bin-aware; the pre-existing bin-BLIND draws (post_transfer /
-      post_adjustment / MOUSSE issue) leave the bin figure stale and the unbinned
-      pool negative. This PINS that known limitation (12b closes it) AND proves the
-      SC3 location roll-up identity (Σ bins + unbinned == location total) and
-      location on-hand still hold exactly after a bin-blind draw — the split lies,
-      but location truth is intact. See BACKLOG p2 + PLAN Risk.
+  (E) BIN-AWARE ADJUSTMENT (SC3, D-P4-1 — the Phase 4 fix): receive 10 unbinned,
+      putaway all 10 into bin E1. (E1) a bin-blind post_adjustment(-10,
+      bin_id=None) draws ONLY the now-empty UNBINNED pool and is rejected 422
+      with NO ledger rows written; (E2) naming the bin — post_adjustment(-10,
+      bin_id=E1) — succeeds: the bin pool falls to 0, the unbinned pool stays 0,
+      neither ever negative; (E3) the roll-up identity Σ bins + unbinned ==
+      per-location total == 0 still holds Decimal-EXACT.
+  (F) BIN-AWARE TRANSFER + POSITIVE ADJUST INTO A BIN (SC3, D-P4-1/5/6 — the
+      Phase 4 fix): fresh item + fresh destination location; receive 10 unbinned
+      at Main, putaway ALL 10 into bin F1. (F1) a bin-blind post_transfer(5,
+      from_bin_id=None) draws ONLY the now-empty UNBINNED source pool and is
+      rejected 422 with NO ledger rows written (row-count oracle as in E1);
+      (F2) naming the bin — from_bin_id=F1 — succeeds: the OUT leg carries
+      bin_id=F1 and the IN leg lands UNBINNED at the destination (bin_id NULL,
+      D-P4-5); source bin pool and BOTH location totals are Decimal-EXACT;
+      (F3) a POSITIVE post_adjustment(+4, bin_id=F1) lands directly in that bin
+      (D-P4-6): the bin's get_bin_on_hand rises by exactly 4 with no floor
+      guard fired.
+  (G) BIN EXISTENCE + LOCATION MEMBERSHIP (SC8, D-P5-5 — the v4.0 Phase 5 fix):
+      two throwaway locations, each with its own bin (G_A at location A, G_B at
+      location B), stock received at B. (G1) a POSITIVE post_adjustment(+5) at
+      location B naming location A's bin is rejected 422 and writes NO ledger
+      rows (row-count oracle as in E1/F1) — before this check the mismatched pair
+      was trusted outright and silently booked stock into a bin at the OTHER
+      location, corrupting the per-bin split at both while the location totals,
+      computed from location_id alone, hid it. (G2) a bin id that does not exist
+      at all is rejected the same way. (G3) the MATCHING pair (+5 at B naming
+      B's own bin) still succeeds and raises that bin's get_bin_on_hand by
+      exactly 5, so the guard rejects a MISMATCHED bin and not a legitimate one
+      (D-P4-6 is preserved). (G4) bin_id=None is untouched: it still means the
+      location's unbinned pool and still posts, so D-P4-1's explicit-or-unbinned
+      contract — and the SC6 zero-pool fixture that depends on it — is intact.
+      (G5) an ARCHIVED bin of B's own is rejected 422 with NO ledger rows, the
+      third test execute_putaway applies to a destination bin: list_bins hides
+      archived bins by default, so stock booked into one is invisible on every
+      bin-grain screen while the location total still counts it.
 
-The script uses uniquely-suffixed throwaway SYERP items / GELATO bins and CLEANS
-UP after itself (inventory txns -> bins -> inventory items) in a finally block, so
-it is safe to re-run against the same database. The seeded "Main" stock location is
-reused and left in place (real deploy state).
+The script uses uniquely-suffixed throwaway SYERP items / GELATO bins / stock
+locations and CLEANS UP after itself (inventory txns -> bins -> inventory items ->
+locations) in a finally block, so it is safe to re-run against the same database.
+The seeded "Main" stock location is reused and left in place (real deploy state).
 """
 from __future__ import annotations
 
@@ -102,15 +131,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app.core.models  # noqa: F401
 from app.modules.gelato.models import Bin
 from app.modules.gelato.schemas import BinCreate, PutawayRequest
-from app.modules.gelato.service import create_bin, execute_putaway, get_bin_on_hand
+from app.modules.gelato.service import (
+    archive_bin,
+    create_bin,
+    execute_putaway,
+    get_bin_on_hand,
+)
 from app.modules.syerp.inventory_seed import DEFAULT_LOCATION_NAME, seed_default_location
 from app.modules.syerp.models import InventoryItem, InventoryTxn, StockLocation
-from app.modules.syerp.schemas import InventoryItemCreate
+from app.modules.syerp.schemas import InventoryItemCreate, StockLocationCreate
 from app.modules.syerp.service import (
     create_item,
+    create_location,
     get_item_onhand,
     post_adjustment,
     post_receipt,
+    post_transfer,
 )
 
 # ---------------------------------------------------------------------------
@@ -215,6 +251,7 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
     # Throwaway-row registries for the finally cleanup.
     item_ids: set[str] = set()
     bin_ids: set[int] = set()
+    loc_ids: set[int] = set()
 
     try:
         # Seed (idempotent) + reuse the "Main" stock location for on-hand receipts.
@@ -390,19 +427,15 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
         await run_concurrency(session_factory, unique, actor_id, main_id, item_ids, bin_ids)
 
         # ===================================================================
-        # (E) BIN-BLIND MOVEMENT BOUNDARY (Phase 12a review MAJOR, documented)
+        # (E) BIN-AWARE ADJUSTMENT (SC3, D-P4-1 — the Phase 4 fix)
         # ===================================================================
-        # 12a makes ONLY putaway bin-aware. The pre-existing SYERP/MOUSSE draw
-        # primitives (post_transfer / post_adjustment / MOUSSE issue) are bin-BLIND:
-        # they write bin_id=NULL and floor-guard per-LOCATION, not per-bin. So after
-        # stock is put into a bin, a bin-blind draw out of the location leaves the
-        # bin figure STALE (overstated) and the unbinned pool NEGATIVE. This is the
-        # known boundary 12b closes (bin-aware pick/issue). This scenario PINS that
-        # behavior so 12b's fix visibly changes it, and — the load-bearing part —
-        # proves the LOCATION roll-up identity (SC3) survives a bin-blind draw: the
-        # split lies, but Σ bins + unbinned == location total still holds exactly,
-        # and location/total on-hand stay correct. See BACKLOG p2 (bin-aware
-        # transfer/issue/adjust) and PLAN Risk "Bin split desyncs...".
+        # Phase 4 (NFR-7 / D-P4-1) made post_adjustment bin-aware under the
+        # explicit-or-unbinned contract: bin_id=None draws ONLY the location's
+        # UNBINNED pool (and floor-guards it), and a negative delta naming a bin
+        # floor-guards THAT bin's pool — the server never auto-allocates across
+        # bins, so a write-off at a fully-binned location must name the bin.
+        # This replaces the 12a-era pin of the old bin-blind behavior (stale bin
+        # figure + negative unbinned pool): the desync path is now a 422.
         item_e = await _make_item(session_factory, unique, "E")
         item_ids.add(item_e)
         bin_e = await _make_bin(session_factory, main_id, f"E1-{unique}")
@@ -418,33 +451,328 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
                 ),
                 actor_id,
             )
-        # A BIN-BLIND draw of the full 10 out of the location (per-location floor
-        # guard sees 10 on hand, so it passes) — writes a bin_id=NULL leg.
+        # (E1) A bin-blind draw of the full 10 (bin_id=None) targets the now-EMPTY
+        # unbinned pool — rejected 422 with NO ledger rows written. Row-count
+        # oracle as in (C): receipt + two putaway legs == 3 rows before and after.
+        e_rows_before = await _ledger_rows(session_factory, item_e)
+        try:
+            async with session_factory() as session:
+                await post_adjustment(
+                    session, item_e, main_id, Decimal("-10"),
+                    "bin-blind draw against an empty unbinned pool", actor_id,
+                    bin_id=None,
+                )
+            check(
+                "(E1/SC3/D-P4-1) bin-blind adjustment (-10, bin_id=None) against an "
+                "empty unbinned pool is rejected",
+                False, "adjustment succeeded over the unbinned-pool floor",
+            )
+        except HTTPException as exc:
+            check(
+                "(E1/SC3/D-P4-1) bin-blind adjustment (-10, bin_id=None) draws ONLY "
+                "the empty unbinned pool and is rejected 422",
+                exc.status_code == 422,
+                f"status={exc.status_code}",
+            )
+        e_rows_after = await _ledger_rows(session_factory, item_e)
+        check(
+            "(E1/SC3) the rejected bin-blind adjustment wrote NO ledger rows "
+            "(row count unchanged after the rejected call)",
+            e_rows_after == e_rows_before == 3,
+            f"before={e_rows_before!r} after={e_rows_after!r}",
+        )
+        # (E2) Naming the bin succeeds: the bin pool falls to 0 and the unbinned
+        # pool stays 0 — neither ever goes negative.
         async with session_factory() as session:
             await post_adjustment(
                 session, item_e, main_id, Decimal("-10"),
-                "bin-blind draw (12a boundary characterization)", actor_id,
+                "bin-aware write-off from bin E1", actor_id,
+                bin_id=bin_e,
             )
         async with session_factory() as session:
             e_bin = await get_bin_on_hand(session, item_e, main_id, bin_e)
             e_unbinned = await get_bin_on_hand(session, item_e, main_id, None)
         e_loc_total = await _location_total(session_factory, item_e, main_id)
         check(
-            "(E/boundary) after a bin-blind draw the bin figure is STALE (bin_e still "
-            "reports 10, unbinned pool is -10) — the documented 12a limitation 12b closes",
-            e_bin == Decimal("10") and e_unbinned == Decimal("-10"),
+            "(E2/SC3/D-P4-1) bin-aware adjustment (-10, bin_id=E1) succeeds: the bin "
+            "pool falls to 0 and the unbinned pool stays 0 — never negative",
+            e_bin == Decimal("0") and e_unbinned == Decimal("0"),
             f"bin_e={e_bin!r} unbinned={e_unbinned!r}",
         )
         check(
-            "(E/SC3 preserved) the LOCATION roll-up identity survives the bin-blind draw: "
-            "Σ bins + unbinned == per-location total (10 + -10 == 0) Decimal-EXACT, and the "
-            "location total is correct (0) — the split lies but location truth is intact",
+            "(E3/SC3) the roll-up identity holds after the bin-aware draw: "
+            "Σ bins + unbinned == per-location total == 0 Decimal-EXACT",
             (e_bin + e_unbinned) == e_loc_total == Decimal("0"),
             f"rollup={(e_bin + e_unbinned)!r} location_total={e_loc_total!r}",
         )
 
+        # ===================================================================
+        # (F) BIN-AWARE TRANSFER + POSITIVE ADJUST INTO A BIN (SC3, D-P4-1/5/6)
+        # ===================================================================
+        # Phase 4 made post_transfer bin-aware under the same explicit-or-
+        # unbinned contract as adjustments (D-P4-1): from_bin_id=None draws
+        # ONLY the source location's UNBINNED pool (and floor-guards it); a
+        # named bin draws that single bin. The IN leg always lands UNBINNED at
+        # the destination — putaway directs it later (D-P4-5). And a POSITIVE
+        # adjustment may target a bin directly (cycle-count "found in bin",
+        # D-P4-6) with no floor guard on additions. Pins the behaviors the
+        # Phase-4 verification could only hand-check.
+        item_f = await _make_item(session_factory, unique, "FT")
+        item_ids.add(item_f)
+        bin_f = await _make_bin(session_factory, main_id, f"FT1-{unique}")  # "bin F1"
+        bin_ids.add(bin_f)
+        async with session_factory() as session:
+            dest = await create_location(
+                session, StockLocationCreate(name=f"VERIFY-GELATO dest {unique}")
+            )
+        dest_id = dest.id
+        loc_ids.add(dest_id)
+        async with session_factory() as session:
+            await post_receipt(session, item_f, main_id, Decimal("10"), Decimal("6"), actor_id)
+        async with session_factory() as session:
+            await execute_putaway(
+                session,
+                PutawayRequest(
+                    item_id=item_f, location_id=main_id, to_bin_id=bin_f,
+                    qty=Decimal("10"), from_bin_id=None,
+                ),
+                actor_id,
+            )
+        # (F1) A bin-blind transfer of 5 (from_bin_id=None) draws the now-EMPTY
+        # unbinned source pool — rejected 422 with NO ledger rows written.
+        # Row-count oracle as in (E1): receipt + two putaway legs == 3 rows.
+        f_rows_before = await _ledger_rows(session_factory, item_f)
+        try:
+            async with session_factory() as session:
+                await post_transfer(
+                    session, item_f, main_id, dest_id, Decimal("5"), actor_id,
+                    from_bin_id=None,
+                )
+            check(
+                "(F1/SC3/D-P4-1) bin-blind transfer (5, from_bin_id=None) out of a "
+                "fully-binned source is rejected",
+                False, "transfer succeeded over the unbinned-pool floor",
+            )
+        except HTTPException as exc:
+            check(
+                "(F1/SC3/D-P4-1) bin-blind transfer (5, from_bin_id=None) draws ONLY "
+                "the empty unbinned source pool and is rejected 422",
+                exc.status_code == 422,
+                f"status={exc.status_code}",
+            )
+        f_rows_after = await _ledger_rows(session_factory, item_f)
+        check(
+            "(F1/SC3) the rejected bin-blind transfer wrote NO ledger rows "
+            "(row count unchanged after the rejected call)",
+            f_rows_after == f_rows_before == 3,
+            f"before={f_rows_before!r} after={f_rows_after!r}",
+        )
+        # (F2) Naming the bin succeeds: the OUT leg carries bin_id=F1, the IN
+        # leg lands UNBINNED at the destination (bin_id NULL, D-P4-5); the
+        # source bin pool and BOTH location totals are Decimal-exact.
+        async with session_factory() as session:
+            legs = await post_transfer(
+                session, item_f, main_id, dest_id, Decimal("5"), actor_id,
+                from_bin_id=bin_f,
+            )
+        # TransactionRead omits bin_id, so read the legs' bin_ids straight off
+        # the ledger rows by the returned ids (the assertion's own truth).
+        async with session_factory() as session:
+            out_bin = (
+                await session.execute(
+                    select(InventoryTxn.bin_id).where(InventoryTxn.id == legs[0].id)
+                )
+            ).scalar()
+            in_bin = (
+                await session.execute(
+                    select(InventoryTxn.bin_id).where(InventoryTxn.id == legs[1].id)
+                )
+            ).scalar()
+            f_bin_pool = await get_bin_on_hand(session, item_f, main_id, bin_f)
+            f_unbinned = await get_bin_on_hand(session, item_f, main_id, None)
+        f_src_total = await _location_total(session_factory, item_f, main_id)
+        f_dest_total = await _location_total(session_factory, item_f, dest_id)
+        check(
+            "(F2/SC3/D-P4-5) bin-aware transfer (5, from_bin_id=F1) succeeds: the OUT "
+            "leg carries bin_id=F1 and the IN leg lands UNBINNED (bin_id NULL) at the "
+            "destination",
+            legs[0].quantity == Decimal("-5") and out_bin == bin_f
+            and legs[1].quantity == Decimal("5") and in_bin is None,
+            f"out_qty={legs[0].quantity!r} out_bin={out_bin!r} "
+            f"in_qty={legs[1].quantity!r} in_bin={in_bin!r}",
+        )
+        check(
+            "(F2/SC3) source bin pool and BOTH location totals are Decimal-EXACT "
+            "after the transfer (bin 10-5==5, unbinned 0, source total 5, dest total 5)",
+            f_bin_pool == Decimal("5") and f_unbinned == Decimal("0")
+            and f_src_total == Decimal("5") and f_dest_total == Decimal("5"),
+            f"bin={f_bin_pool!r} unbinned={f_unbinned!r} "
+            f"src_total={f_src_total!r} dest_total={f_dest_total!r}",
+        )
+        # (F3) A POSITIVE adjustment naming the bin lands directly in that bin
+        # (D-P4-6): the bin's pool rises by exactly the delta, no floor guard
+        # fires on an addition.
+        async with session_factory() as session:
+            await post_adjustment(
+                session, item_f, main_id, Decimal("4"),
+                "cycle count found stock in bin F1", actor_id,
+                bin_id=bin_f,
+            )
+        async with session_factory() as session:
+            f_bin_after = await get_bin_on_hand(session, item_f, main_id, bin_f)
+            f_unbinned_after = await get_bin_on_hand(session, item_f, main_id, None)
+        check(
+            "(F3/SC3/D-P4-6) a POSITIVE adjustment (+4, bin_id=F1) raises that bin's "
+            "get_bin_on_hand by exactly 4 (5+4==9) with no floor guard fired; the "
+            "unbinned pool is untouched (0)",
+            f_bin_after == Decimal("9") and f_unbinned_after == Decimal("0"),
+            f"bin={f_bin_after!r} unbinned={f_unbinned_after!r}",
+        )
+
+        # ===================================================================
+        # (G) BIN EXISTENCE + LOCATION MEMBERSHIP (SC8, D-P5-5)
+        # ===================================================================
+        # post_adjustment validates a NON-NULL bin_id against gelato_bin with ONE
+        # raw-SQL existence+membership probe (SYERP must not import gelato models,
+        # D-P12a-3). Two locations each with their own bin make the mismatch
+        # expressible at all: with a single location every bin trivially belongs to
+        # it, which is exactly why the hole survived Phase 4's bin-awareness work.
+        item_g = await _make_item(session_factory, unique, "G")
+        item_ids.add(item_g)
+        async with session_factory() as session:
+            loc_g_a = await create_location(
+                session, StockLocationCreate(name=f"VERIFY-GELATO G-A {unique}")
+            )
+            loc_g_b = await create_location(
+                session, StockLocationCreate(name=f"VERIFY-GELATO G-B {unique}")
+            )
+        loc_ids.update({loc_g_a.id, loc_g_b.id})
+        bin_g_a = await _make_bin(session_factory, loc_g_a.id, f"GA1-{unique}")
+        bin_g_b = await _make_bin(session_factory, loc_g_b.id, f"GB1-{unique}")
+        bin_ids.update({bin_g_a, bin_g_b})
+        async with session_factory() as session:
+            await post_receipt(
+                session, item_g, loc_g_b.id, Decimal("10"), Decimal("2"), actor_id
+            )
+
+        g_rows_before = await _ledger_rows(session_factory, item_g)
+
+        # (G1) MISMATCH: adjust at location B while naming location A's bin.
+        g1_status = None
+        async with session_factory() as session:
+            try:
+                await post_adjustment(
+                    session, item_g, loc_g_b.id, Decimal("5"),
+                    "SC8 mismatched bin", actor_id,
+                    bin_id=bin_g_a,
+                )
+            except HTTPException as exc:
+                g1_status = exc.status_code
+        g_rows_after_mismatch = await _ledger_rows(session_factory, item_g)
+        check(
+            "(G1/SC8/D-P5-5) a POSITIVE adjustment (+5) at location B naming location "
+            "A's bin is REJECTED 422 and writes NO ledger rows — the bin must belong to "
+            "the location. Reverting the membership probe in post_adjustment regresses "
+            "this to a silent success that books stock into a bin at the WRONG location.",
+            g1_status == 422 and g_rows_after_mismatch == g_rows_before,
+            f"status={g1_status!r} rows {g_rows_before}->{g_rows_after_mismatch}",
+        )
+
+        # (G2) A bin id that does not exist at all — the FK's half of the guard.
+        g2_status = None
+        async with session_factory() as session:
+            try:
+                await post_adjustment(
+                    session, item_g, loc_g_b.id, Decimal("5"),
+                    "SC8 nonexistent bin", actor_id,
+                    bin_id=-1,
+                )
+            except HTTPException as exc:
+                g2_status = exc.status_code
+        check(
+            "(G2/SC8) a bin_id that does not exist at all is REJECTED 422 (not a raw "
+            "IntegrityError/500 from the FK) and writes NO ledger rows",
+            g2_status == 422
+            and await _ledger_rows(session_factory, item_g) == g_rows_before,
+            f"status={g2_status!r}",
+        )
+
+        # (G3) The MATCHING pair still succeeds — the guard must reject a MISMATCHED
+        # bin, never a legitimate one (D-P4-6 preserved).
+        async with session_factory() as session:
+            g_bin_before = await get_bin_on_hand(session, item_g, loc_g_b.id, bin_g_b)
+        async with session_factory() as session:
+            await post_adjustment(
+                session, item_g, loc_g_b.id, Decimal("5"),
+                "SC8 matching bin", actor_id,
+                bin_id=bin_g_b,
+            )
+        async with session_factory() as session:
+            g_bin_after = await get_bin_on_hand(session, item_g, loc_g_b.id, bin_g_b)
+        check(
+            "(G3/SC8/D-P4-6) the MATCHING (location B, bin of B) pair still SUCCEEDS and "
+            "raises that bin's get_bin_on_hand by exactly 5 — the new guard rejects a "
+            "mismatched bin, not a legitimate binned adjustment",
+            g_bin_after - g_bin_before == Decimal("5"),
+            f"bin {g_bin_before!r}->{g_bin_after!r}",
+        )
+
+        # (G4) bin_id=None must be COMPLETELY untouched by the membership probe: it
+        # still means the unbinned pool (D-P4-1). The SC6 zero-pool fixture design
+        # rests on this — if NULL started 422-ing, every "must name a bin" check in
+        # the UAT runbook would pass for the wrong reason.
+        async with session_factory() as session:
+            g_pool_before = await get_bin_on_hand(session, item_g, loc_g_b.id, None)
+        async with session_factory() as session:
+            await post_adjustment(
+                session, item_g, loc_g_b.id, Decimal("3"),
+                "SC8 unbinned pool still valid", actor_id,
+                bin_id=None,
+            )
+        async with session_factory() as session:
+            g_pool_after = await get_bin_on_hand(session, item_g, loc_g_b.id, None)
+        check(
+            "(G4/SC8/D-P4-1) bin_id=None is UNTOUCHED by the membership probe — it still "
+            "means the location's unbinned pool and still posts, raising that pool by "
+            "exactly 3. The SC6 zero-pool fixtures depend on NULL keeping this meaning.",
+            g_pool_after - g_pool_before == Decimal("3"),
+            f"pool {g_pool_before!r}->{g_pool_after!r}",
+        )
+
+        # (G5) ARCHIVED: the bin exists AND belongs to the location, so only the
+        # `active` clause can reject it. The delta is deliberately POSITIVE (+5):
+        # D-P4-6 gives positives no pool floor and the location floor passes
+        # trivially, so neither floor guard can hijack the red — and the row is
+        # really there, so the FK is satisfied too. Archived through the REAL
+        # archive_bin service, exactly as POST /gelato/bins/{id}/archive does it
+        # (bins are only ever soft-deleted).
+        async with session_factory() as session:
+            await archive_bin(session, bin_g_b)
+        g_rows_before_archived = await _ledger_rows(session_factory, item_g)
+        g5_status = None
+        async with session_factory() as session:
+            try:
+                await post_adjustment(
+                    session, item_g, loc_g_b.id, Decimal("5"),
+                    "SC8 archived bin", actor_id,
+                    bin_id=bin_g_b,
+                )
+            except HTTPException as exc:
+                g5_status = exc.status_code
+        g_rows_after_archived = await _ledger_rows(session_factory, item_g)
+        check(
+            "(G5/SC8) a POSITIVE adjustment (+5) naming an ARCHIVED bin OF THIS "
+            "LOCATION is REJECTED 422 and writes NO ledger rows — the same third test "
+            "execute_putaway applies ('is archived'). Dropping `AND active` from the "
+            "probe regresses this to a silent success that books stock into a bin "
+            "list_bins hides, so the location total counts it and no bin-grain screen "
+            "shows it.",
+            g5_status == 422 and g_rows_after_archived == g_rows_before_archived,
+            f"status={g5_status!r} rows {g_rows_before_archived}->{g_rows_after_archived}",
+        )
+
     finally:
-        await _cleanup(session_factory, item_ids, bin_ids)
+        await _cleanup(session_factory, item_ids, bin_ids, loc_ids)
         await engine.dispose()
 
 
@@ -558,15 +886,19 @@ async def run_concurrency(
 # ---------------------------------------------------------------------------
 
 
-async def _cleanup(session_factory, item_ids: set[str], bin_ids: set[int]) -> None:
+async def _cleanup(
+    session_factory, item_ids: set[str], bin_ids: set[int], loc_ids: set[int]
+) -> None:
     """
     Delete the throwaway rows in FK-safe order: inventory txns (they FK into both
-    items and bins) -> bins (FK into the location) -> inventory items. The seeded
-    "Main" stock location is reused and left in place (real deploy state).
+    items and bins) -> bins (FK into the location) -> inventory items -> throwaway
+    stock locations (scenario F's destination). The seeded "Main" stock location is
+    reused and left in place (real deploy state).
     """
     async with session_factory() as session:
         item_list = list(item_ids)
         bin_list = list(bin_ids)
+        loc_list = list(loc_ids)
 
         if item_list:
             await session.execute(
@@ -577,6 +909,10 @@ async def _cleanup(session_factory, item_ids: set[str], bin_ids: set[int]) -> No
         if item_list:
             await session.execute(
                 delete(InventoryItem).where(InventoryItem.id.in_(item_list))
+            )
+        if loc_list:
+            await session.execute(
+                delete(StockLocation).where(StockLocation.id.in_(loc_list))
             )
 
         await session.commit()

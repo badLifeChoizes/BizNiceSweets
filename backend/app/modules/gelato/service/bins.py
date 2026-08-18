@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-async def create_bin(db: AsyncSession, data: "BinCreate") -> "Bin":
+async def create_bin(db: AsyncSession, data: BinCreate) -> Bin:
     """
     Insert a new storage bin inside a SYERP stock location.
 
@@ -84,7 +84,7 @@ async def create_bin(db: AsyncSession, data: "BinCreate") -> "Bin":
     return bin_
 
 
-async def get_bin(db: AsyncSession, bin_id: int) -> "Bin":
+async def get_bin(db: AsyncSession, bin_id: int) -> Bin:
     """
     Load a bin by id. Raises HTTP 404 if no bin with the given id exists
     (mirrors syerp/service.get_partner).
@@ -100,7 +100,7 @@ async def get_bin(db: AsyncSession, bin_id: int) -> "Bin":
     return bin_
 
 
-async def update_bin(db: AsyncSession, bin_id: int, data: "BinUpdate") -> "Bin":
+async def update_bin(db: AsyncSession, bin_id: int, data: BinUpdate) -> Bin:
     """
     Apply a partial update to a bin (PATCH semantics).
 
@@ -119,7 +119,7 @@ async def update_bin(db: AsyncSession, bin_id: int, data: "BinUpdate") -> "Bin":
     return bin_
 
 
-async def archive_bin(db: AsyncSession, bin_id: int) -> "Bin":
+async def archive_bin(db: AsyncSession, bin_id: int) -> Bin:
     """
     Set a bin's active flag to False (soft-delete / archive) — toggles it out of
     putaway rotation without deleting it. Raises HTTP 404 if the bin does not
@@ -136,7 +136,7 @@ async def list_bins(
     db: AsyncSession,
     location_id: int,
     include_archived: bool = False,
-) -> list["Bin"]:
+) -> list[Bin]:
     """
     Return the bins in one stock location, ordered by code.
 

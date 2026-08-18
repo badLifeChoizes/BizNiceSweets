@@ -1,5 +1,6 @@
 # DECISIONS — BizNiceSweets
-Updated: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — D-M4-1..3 scope/CI-platform/lint-baseline; v3.0 shipped to master via PR #3, D-M3-4 updated; 137 decisions)
+Updated: 2026-08-17 (v4.0 Phase 5 close — D-P5-1..11 appended, incl. D-P5-10 the dedicated `.env.db` that fixed blocker U0, and D-P5-11 the rescope making the QA checklist the deliverable rather than the owner's reading; 148 decisions)
+Prior: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — D-M4-1..3 scope/CI-platform/lint-baseline; v3.0 shipped to master via PR #3, D-M3-4 updated; 137 decisions)
 
 Recovered decisions are marked `(recovered)` with their original source (now archived).
 Numbering is append-only.
@@ -8,7 +9,7 @@ Numbering is append-only.
 ## Index
 
 One line per decision, newest last. Entries below are append-only — regenerate this index
-at milestone close, never hand-edit it. 134 decisions.
+at milestone close, never hand-edit it. 167 decisions (regenerated at the v4.0 close, 2026-08-18).
 
 - **D-1:** Business domain = hybrid open-source business suite of 7 integrated suites (SYERP, PLUM, FLAN, MOUSSE, CRUMB, GELATO, CRISP), each usable standalone…
 - **D-2:** Manufacturing (facilities, work centers, routings) lives in MOUSSE, not PLUM — PLUM is product *development*; released products hand off to MOUSSE
@@ -147,6 +148,37 @@ at milestone close, never hand-edit it. 134 decisions.
 - **D-M4-1:** v4.0 scope = CI + lint + test-harness repair + inventory race-safety + human UAT; CRISP/offline groundwork deferred (owner, /zj:spec)…
 - **D-M4-2:** CI platform = GitHub Actions — repo already on GitHub, free zero-setup runners + Postgres service container + status on each commit/PR…
 - **D-M4-3:** Lint enforcement = fix-to-clean (zero-violation baseline), not baseline-and-ratchet — honest green from day one…
+- **D-P1-1:** Pin `eslint-plugin-react-hooks` to `^5` — v7's `recommended` silently absorbed the React-Compiler ruleset (54 errors/41 files vs the intended 11), and adopting it would balloon a gate standup into a codebase-wide quality project…
+- **D-P2a-1:** Test isolation = dedicated `biznice_test` DB + session NullPool engine + per-test TRUNCATE…RESTART IDENTITY CASCADE + reseed (chosen over savepoint-rollback because the service layer commits pervasively)…
+- **D-P2a-2:** Phase 2 (NFR-5) split 2a/2b; concurrency mutation-proofs STAY in standalone `verify_*` (not ported to pytest), which is what lets 2a skip in-pytest cross-session concurrency…
+- **D-P2a-3:** Branch `chore-pytest-harness-repair` off `zj/good-01-lint-gates-clean` @ `dd401d1`; unmerged v4.0 stack to milestone close…
+- **D-P2a-4:** SC3 needs a seeded `User(id="admin-user")` bound to the admin role — RBAC resolves permissions from the DB user, not the token claim…
+- **D-P2a-5:** Seed a fixed test-identity roster in `_isolate` (min churn) rather than rewriting the ~100 never-run tests — they assume claim-based tokens, but shipped RBAC reads permissions from the DB user…
+- **D-P2b-1:** Phase 2b is a single phase (not sub-split) — each crux is a bounded sequential assertion, no concurrency to port…
+- **D-P2b-2:** Coverage depth = headline crux assertion + its close supporting sequential asserts (control↔subledger EQUALITY, negative-path rejects) — not a full re-port, not minimal-only…
+- **D-P2b-3:** Audit/RBAC = one HTTP `client`-layer test per NEW module (MOUSSE/CRUMB/GELATO/AR) + inventory; all other accounting cruxes at the service layer…
+- **D-P2b-4:** The HTTP audit/RBAC tests mint their own read/write/noperm Users+Roles in a LOCAL per-test fixture (swept by the next TRUNCATE), NOT via the shared `_isolate` roster…
+- **D-P2b-5:** The ported AR crux seeds shipped SO lines by driving the REAL GELATO/CRUMB ship flow (not hand-stamped `qty_shipped`/hand-posted COGS) — the 11a/11b dead-through-UI keeper…
+- **D-P2b-6:** Ported service cruxes go in NEW test files; the existing pure/no-DB tests are left untouched and stay green…
+- **D-P3-4:** (owner, `/zj:build 3`) conftest's DB-reachability probe checks the maintenance `postgres` DB (always exists), not the not-yet-created `biznice_test` — fixes a fresh-server abort that would break the CI backend-tests job…
+
+- **D-P4-1:** Bin semantics on draw paths = explicit-or-unbinned (`NULL` draws only the unbinned pool, floor-guarded; no server-side auto-allocation) — traceability-first, the ledger records what the operator did…
+- **D-P4-2:** Phase 4 stays a single phase — the lock discipline and bin-awareness touch the same four functions, so a split would ship each file twice…
+- **D-P4-3:** GELATO pick-path Q1/Q2 shipment-header races stay BACKLOG p2 — outside NFR-7, they don't corrupt the inventory ledger…
+- **D-P4-4:** Branch `chore-inventory-race-safety` off the Phase-3 tip, continuing the unmerged v4.0 stack…
+- **D-P4-5:** Transfer in-leg lands UNBINNED at the destination — naming a destination bin server-side would be auto-allocation, forbidden by D-P4-1; putaway directs it…
+- **D-P4-6:** Positive adjustments may target a bin (cycle-count "found in bin") and take no floor guard — a pool cannot be overdrawn by adding…
+- **D-P5-1:** UAT breadth = residue-only, full coverage — every shipped flow gets a check naming only what a machine cannot confirm; an agent pre-flight proves each flow's backend first…
+- **D-P5-2:** Click-through on the Vite dev overlay at :5173 (HMR = fix-and-recheck in seconds) plus one prod-stack smoke on a fresh volume at :8000…
+- **D-P5-3:** Fixtures = an idempotent seed script on a fresh DB — the v1.0 UAT was burned when the dev volume was recreated and its listed fixtures vanished…
+- **D-P5-4:** Defect policy = fix blocker/major in-phase with a pinning test; home minors to BACKLOG with a defect ID…
+- **D-P5-5:** Positive-adjust bin membership — ADD the check (SC8) rather than accept-and-document; resolves the p2 owner call…
+- **D-P5-6:** One consolidated UAT runbook rather than three per-milestone docs (superseded by D-P5-11)…
+- **D-P5-7:** Run mechanics = interactive, suite by suite, with the status table as resumable state (its resumable-state role superseded by D-P5-11)…
+- **D-P5-8:** CORE platform surfaces (login/refresh, Users admin, RBAC nav, module toggles, Settings) are IN UAT scope — needed for the GELATO-off path anyway, and it makes "every shipped UI flow" literally true…
+- **D-P5-9:** Branch `chore-human-uat` off the Phase-4 tip, continuing the unmerged v4.0 stack…
+- **D-P5-10:** `U0` fix = a dedicated `.env.db` holding `POSTGRES_*` only — the db container never sees `JWT_SECRET`/`BNS_ADMIN_PASSWORD` it doesn't need, and the documented deploy command stays unchanged (which is the thing U0 broke)…
+- **D-P5-11:** Rescope — the QA checklist is the deliverable, the owner's reading is not; twelve tasks gated on the owner stalled the phase at 22/41 for three weeks. Consciously accepted: NFR-8 no longer evidences that a human exercised the flows. Supersedes D-P5-6/D-P5-7…
 
 ## Product & Architecture
 
@@ -1028,3 +1060,175 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   than recording current violations as an accepted baseline and gating only new ones. *Why:* an honest
   green from day one; the codebase is disciplined enough that the count should be tractable (revisit to
   ratchet only if the fix-to-clean effort proves outsized at plan).
+
+## v4.0 Phase 1 build (lint gates fixed-to-clean, 2026-07-21)
+
+- **D-P1-1 (owner, `/zj:build 1`):** **Pin `eslint-plugin-react-hooks` to `^5`** for the frontend
+  gate. Phase 1's plan scoped "react-hooks recommended" as the classic 2-rule set
+  (`rules-of-hooks` error + `exhaustive-deps` warn), matching the 6 pre-existing `exhaustive-deps`
+  disable sites. But `npm install` (Task 1) pulled **v7.1.1**, whose `recommended`/`flat.recommended`
+  preset was silently **redefined to bundle the full React-Compiler ruleset** (`set-state-in-effect`,
+  `refs`, `immutability`, `purity`, `set-state-in-render`, …) — surfacing **54 errors / 41 files**,
+  42 of them behavior-sensitive `set-state-in-effect`. Under the plan's intended surface it is only
+  **11 errors / 9 files** (bounded, mostly mechanical). *Why v5, not "keep v7 + disable the compiler
+  rules":* pinning to a plugin version whose `recommended` already equals the intended set honors the
+  owner's standing "**recommended rulesets only, no broadening**" decision without the config having to
+  explicitly opt OUT of half its own plugin's preset; adopting the compiler ruleset (~44 behavior fixes
+  across 41 files) would balloon a gate-standup chore into a codebase-wide quality project, out of scope
+  for NFR-6. Amends the Task-1 dependency version committed at `911108d`. Residual 11 (6
+  `react-refresh/only-export-components`, 4 stale unused-disable directives, 1 `rules-of-hooks` false
+  positive on `AppShell`'s `use`-prefixed pure helper `useVisibleModules`) resolved within Task 4.
+
+## v4.0 Phase 2a plan (pytest harness repair, 2026-07-21)
+
+- **D-P2a-1 (owner steer, `/zj:plan 2`):** **Per-test isolation = dedicated test database + truncate-reset**,
+  not savepoint/transaction-rollback. A separate `biznice_test` DB (overridable via `TEST_POSTGRES_DB`)
+  is migrated once per session via `alembic upgrade head`; a session-scoped async engine uses
+  `poolclass=NullPool`; each test is preceded by `TRUNCATE <all model tables except alembic_version>
+  RESTART IDENTITY CASCADE` + a re-run of the idempotent seeds. *Why over the "cleaner" savepoint +
+  shared-connection approach:* the service layer calls `db.commit()` pervasively and HTTP-client tests
+  commit through the app's own `get_db` session (a different connection than a test's direct session),
+  so a rollback bound to one connection cannot isolate the other; truncate-reset is robust regardless of
+  how many sessions/connections committed. NullPool is simultaneously the fix for root-cause #2 (no
+  cross-event-loop asyncpg connection reuse). A separate DB (not the running `biznice`) means the
+  per-test TRUNCATE can never wipe live app/dev data — conftest **force-sets** `POSTGRES_DB=biznice_test`
+  (unconditional, since the container already exports `POSTGRES_DB=biznice`) before `import app.main`.
+- **D-P2a-2 (owner, `/zj:plan 2`):** **Phase 2 (NFR-5) is split 2a/2b**, mirroring 9a/b/c & 11a/b.
+  **2a** repairs the harness and greens the *existing* ~100 DB-backed tests (0 silent skips). **2b**
+  (a separate later phase) ports the DoD-named `verify_*` cruxes (inventory moving-avg + audit/RBAC,
+  GL/AP/AR ties, MOUSSE WIP-clears, CRUMB reservation, GELATO ship COGS) into pytest. **The concurrency
+  mutation-proofs (`asyncio.gather`/`Barrier` + `FOR UPDATE`) STAY in the standalone `verify_*` scripts**
+  (run as a separate CI step) and are NOT ported. *Why:* they need real cross-session concurrent commits,
+  which is incompatible with any rollback-isolation model and would force fragile shared-connection
+  machinery; they are proven load-bearing where they live (verify_ap j/k, verify_mousse F, verify_gelato_ship h).
+  Keeping them out of pytest is precisely what lets 2a's isolation model stay simple.
+- **D-P2a-3 (`/zj:plan 2`):** **Branch `chore-pytest-harness-repair`** cut off the Phase-1 verified tip
+  `zj/good-01-lint-gates-clean` @ `dd401d1`; unmerged, stacks to the v4.0 milestone close (same pattern
+  as v3.0's 11a→13 stack). No Alembic schema change expected — the test DB uses existing migrations.
+- **D-P2a-4 (`/zj:plan 2`, from architect recon):** SC3 ("root cause #3 — admin-user seed") is satisfied
+  by seeding, per test, BOTH the real admin (`seed_admin_user`) AND a `User(id="admin-user")` bound to
+  the admin (wildcard) role. *Why the second row:* `get_current_user` resolves the token `sub` to a DB
+  user and `require_permission` reads permissions **from that DB user, not from the token's `permissions`
+  claim** (verified in `app/modules/auth/dependencies.py`). The plum/syerp tests mint
+  `create_access_token(subject="admin-user", …)`, so without a `User(id="admin-user")` row those tokens
+  authenticate to nothing and every RBAC-gated call 401s. `User.id` is `String(36)`, so `"admin-user"`
+  is a legal PK. This is a harness seed, not a product change.
+- **D-P2a-5 (owner, `/zj:build 2a` Wave B):** the ~100 never-run tests were written against a **claim-based
+  token model** (mint `create_access_token(subject=<name>, permissions=[…])` and assume the claim grants
+  access), but shipped RBAC **ignores the claim** and derives permissions from the DB user (D-P2a-4). This
+  surfaced as 32 first-run failures; ~15 are RBAC-identity drift. **Chosen (owner): seed a fixed test-identity
+  roster (min churn) over rewriting every test.** The per-test `_isolate` seed is extended beyond
+  `admin-user`=wildcard to cover every DB-backed static subject the tests mint (`syerp-reader`→role[syerp:read],
+  writers→[…:write], etc.), each bound to a role granting **exactly** the permission its name/intent implies —
+  so positive named-subject tests pass with zero edits and negative tests that probe a *genuinely-limited*
+  seeded identity deny correctly by real DB role. Only the few negatives that mint the **real admin** (wildcard)
+  with a stripped claim are unsalvageable and get rewritten to a genuinely-limited real user. Also mechanical
+  (either way): conftest **forces** `BNS_ADMIN_EMAIL=admin@test.local` / `BNS_ADMIN_PASSWORD=testadminpass`
+  so the hard-coded login-cred tests pass; and ~7 domain/schema drifts (costing math, import-export,
+  create-user body) are fixed per-package. No blanket skips; `xfail(reason=…)` only for a real product bug,
+  logged in PLAN `## Noticed`. *Why roster over rewrite:* faster to green with the least churn on
+  never-run tests, and the seeded roles keep RBAC assertions meaningful (an identity that lacks a perm still
+  denies by real DB role). The roster lives in the shared `_isolate` fixture, so every package inherits it.
+- **D-P2b-1 (owner, `/zj:plan 2b`):** **Phase 2b is a single phase, not sub-split.** Each DoD crux is a bounded
+  sequential assertion sharing the repaired-harness pattern; the concurrency scenarios that would have driven a
+  split stay in `verify_*` (D-P2a-2), so the split-driving risk isn't present. *Why:* nothing to parallelize or
+  isolate across a wave boundary — the cruxes differ only by module, not by mechanism.
+- **D-P2b-2 (owner, `/zj:plan 2b`):** **Coverage depth = headline + key supporting asserts per crux.** The headline
+  red-on-revert assertion PLUS its close supporting sequential asserts (control↔subledger EQUALITY, negative-path
+  rejects, tie-outs) — NOT a full re-port of every `verify_*` assertion, NOT minimal-headline-only. *Why:* the
+  headline alone can pass vacuously; the full re-port duplicates the scripts (which stay as the concurrency proof).
+- **D-P2b-3 (owner, `/zj:plan 2b`):** **Audit/RBAC = one HTTP `client`-layer test per NEW module surface**
+  (MOUSSE/CRUMB/GELATO/AR) + inventory (owner named it in the SRD); all other accounting cruxes assert at the
+  service layer via `seeded_ledger_db`/`async_db_session`. *Why:* mirrors the `verify_*`/`verify_*_api` split —
+  one representative HTTP proof of 401/403/2xx + attributable audit per surface is enough; re-driving every route
+  over HTTP is the scripts' job.
+- **D-P2b-4 (architect, `/zj:plan 2b`):** **The four HTTP audit/RBAC tests mint their own read/write/noperm
+  Users+Roles in a LOCAL per-test fixture**, NOT by extending the shared `_isolate` roster. *Why:* three identities
+  × four modules = 12 rows; loading them into `_isolate` taxes all ~230 existing tests on every function-scoped
+  truncate+reseed for no benefit to service-layer tests. Local creation runs after `_isolate` on the clean per-test
+  DB and is swept by the next test's TRUNCATE — no cleanup code. RBAC reads DB roles (D-P2a-4), so a genuine 403
+  needs a real limited seeded User; 401 is only the no-token case.
+- **D-P2b-5 (architect, `/zj:plan 2b`):** **The ported AR crux seeds its shipped SO lines by driving the REAL
+  GELATO/CRUMB ship flow** (`execute_putaway/pick/pack/ship` + `create_sales_order/confirm_sales_order`, the
+  `verify_ar._seed_shipped_line` shape), NOT by hand-stamping `qty_shipped` / hand-posting COGS. *Why:* the 11a/11b
+  keeper — hand-fed shapes the UI never sends have twice certified dead features green; the AR match must run against
+  genuinely-shipped qty and a genuinely-posted COGS JE. (GELATO's own ported crux drives the same real flow.)
+- **D-P2b-6 (architect, `/zj:plan 2b`):** **Ported service cruxes go in NEW test files**
+  (`test_inventory_service.py`, `test_gl_posting.py`, `test_ap_posting.py`, `test_ar.py`, `tests/mousse|crumb|gelato/…`)
+  so the existing pure/no-DB tests (`test_ap.py`, `test_gl.py`, `test_inventory.py`, `test_gl_journal.py`,
+  `test_purchasing.py`) are untouched and stay green. *Why:* the pure tests exercise the helper math with no DB and
+  are a distinct, faster layer; co-mingling the DB-backed cruxes into them would couple two isolation regimes.
+- **D-P3-4 (owner, `/zj:build 3`):** **conftest's DB-reachability probe (`_check_db_available`) connects to the
+  maintenance `postgres` database, not the test database (`settings.postgres_db` = `biznice_test`).** *Why:* the probe
+  ran before `_provision_test_database` creates `biznice_test`, so on a fresh server — exactly the ephemeral CI
+  `postgres:17` service — it connected to a non-existent DB, returned False, and aborted the whole session
+  ("no live PostgreSQL … reachable") before provisioning could run. The 2a/2b "232 passed" runs only worked because
+  `biznice_test` persisted from earlier sessions. Probing the always-present `postgres` maintenance DB realizes the
+  harness's documented self-provisioning contract and is strictly more robust (the CREATE-DATABASE step already
+  targets `postgres`). Verified: fresh `postgres:17` (no `biznice_test`) → self-provisions → 232 passed / 0 skipped.
+  Test-infra only (`backend/tests/conftest.py`); no product-code (`backend/app/`) change. Alternative considered and
+  rejected: a `CREATE DATABASE` step in `ci.yml` — leaves the self-provisioning claim false and adds a latent trap
+  every fresh run must remember. Surfaced as a MATERIAL deviation during T2 build; owner chose the probe fix.
+
+## v4.0 Phase 4 plan (inventory ledger race-safety, 2026-07-25)
+
+- **D-P4-1 (owner, `/zj:plan 4`):** **Bin semantics on draw paths = explicit-or-unbinned.** All three
+  newly bin-aware draw primitives (`post_adjustment`, `post_transfer`, MOUSSE `issue_components`)
+  take an optional `bin_id`; `NULL` draws ONLY the unbinned pool and floor-guards it (422 when
+  insufficient — the operator must name a bin). No server-side auto-allocation. Why: mirrors 12b's
+  operator-selected staging bin (D-P12b-9); traceability-first (medical-device origin) — the ledger
+  records what the operator actually did, not what an allocator guessed. Accepted behavior change:
+  an adjust/transfer/issue at a fully-binned location now requires a bin (build sweep found zero
+  existing fixtures affected).
+- **D-P4-2 (owner, `/zj:plan 4`):** **Single phase, no 4a/4b sub-split.** The lock discipline and
+  bin-awareness touch the same four functions; splitting would ship each file twice.
+- **D-P4-3 (owner, `/zj:plan 4`):** **GELATO pick-path Q1/Q2 shipment-header races stay BACKLOG p2.**
+  Outside NFR-7 — they don't corrupt the inventory ledger.
+- **D-P4-4 (`/zj:plan 4`):** **Branch = fresh `chore-inventory-race-safety` off the Phase-3 tip
+  `db725fd`**, continuing the unmerged v4.0 stack (D-P3 precedent). At T0 the cut was made from the
+  plan-carrying docs-only tip `7a71fd0` (code-identical; 12a/12b/P3 precedent so PLAN.md rides the
+  branch).
+- **D-P4-5 (owner-confirmed, `/zj:plan 4`):** **Transfer in-leg lands UNBINNED at the destination**
+  (`bin_id=NULL` on the `+qty` leg); only `from_bin_id` is added to the payload. Why: destination
+  bins belong to a different location's bin set — naming one server-side would be auto-allocation
+  (forbidden by D-P4-1). Stock arrives in the destination's unbinned pool and is directed by
+  putaway, exactly the receive→putaway flow 12a/12b established.
+- **D-P4-6 (owner-confirmed, `/zj:plan 4`):** **Positive adjustments may target a bin** (cycle-count
+  "found in bin" case, adds directly to that bin's pool); `NULL` adds to the unbinned pool (prior
+  behavior). Additions take NO pool floor guard — a pool cannot be overdrawn by adding; only
+  negative deltas floor-guard the named pool.
+
+- **D-P5-1 — UAT breadth = residue-only, full coverage.** Every shipped flow gets a check; each names only what a machine cannot confirm (labels, badges, colours, toast *absence*, auto-refresh without F5, empty states, sort order, read-only-ness). An agent pre-flight proves each flow's backend first. Target **~40–50 checks**, est. **2–3 h** of owner time. Copy `.zj/UAT-v1.0.md`'s "machine already proved" / "residue only a human can confirm" split.
+- **D-P5-2 — Environment = dev overlay for the click-through + one prod-stack smoke.** Click-through on the Vite dev server **:5173** (D-P7-1 precedent; HMR means a defect is fixed and re-checked in seconds). Separately, one task brings the **prod** stack up on a fresh volume at **:8000** and smokes login + one write per suite (SC7).
+- **D-P5-3 — Fixtures = idempotent seed script on a fresh DB** (SC2). The v1.0 UAT was burned by exactly this ("the previously-listed fixtures no longer exist — the dev volume was recreated"). The script is reusable for every future milestone UAT.
+- **D-P5-4 — Defect policy = fix blocker/major in-phase with a pinning test; home minor to BACKLOG with a defect ID.** Matches the v1.0 D1/D2/D3 handling and every prior milestone.
+- **D-P5-5 — Positive-adjust bin membership: ADD the check** (SC8), not accept-and-document. Resolves the p2 BACKLOG item's owner call.
+- **D-P5-6 — One consolidated `.zj/UAT-v4.0.md`**, not three per-milestone docs. This **amends NFR-8's literal wording** ("`UAT-v1.0.md` round-2 + `UAT-v2.0.md` extended") — same coverage, one runbook. The SRD sentence is trued up at Task 33.
+- **D-P5-7 — Run mechanics = interactive, suite by suite.** The build brings the stack up and pre-flights a suite, the **owner** clicks through it and reports results; the engineer records them and fixes defects live, then moves to the next suite. **The status table in `.zj/UAT-v4.0.md` is the resumable state** — the run must survive being paused across sessions.
+- **D-P5-8 — CORE platform surfaces are IN scope** (~6 checks): login + token refresh, Users admin CRUD, RBAC nav filtering, module-toggle propagation, Settings. The module-toggle check is needed anyway for SC6's GELATO-off path, and it makes "every shipped UI flow" literally true.
+- **D-P5-9 — Branch:** cut a fresh `chore-human-uat` off the current tip **`c02d80b`** on `chore-inventory-race-safety` (the unmerged v4.0 stack), same pattern as D-P4-4. `.vscode/settings.json` is unstaged-dirty (owner's) — **leave it**.
+- **D-P5-10 — `U0` fix shape = a dedicated db env file** (owner, AskUserQuestion at Task 8, 2026-07-26).
+  Split into `.env` (app secrets, unchanged) + **`.env.db`** (`POSTGRES_*` only); `db` gets
+  `env_file: ../.env.db` and loses the `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}` line from
+  `environment:` (which takes precedence and would keep overriding it to empty). Rejected alternatives:
+  `env_file: ../.env` on `db` (one line, but spreads `JWT_SECRET` — the auth system's master key — and
+  `BNS_ADMIN_PASSWORD` into a container that needs neither, visible in `podman inspect`);
+  `--env-file .env` on every documented command (no restructure, but a forgotten flag silently
+  reproduces the bug); deferring to BACKLOG (SC7 would then prove the artifact only under a workaround,
+  contradicting its own wording). Rationale: the db container never sees a secret it does not need, and
+  the **documented deploy command stays unchanged** — which is the thing U0 broke.
+- **D-P5-11 — Rescope: the checklist is the deliverable, the reading is not** (owner, 2026-08-17,
+  driven by the new `QA docs: non-blocking` preference). Twelve tasks (20–31, 36) had a `Done when`
+  only the owner could satisfy; the phase stalled at 22/41 for three weeks and blocked the v4.0
+  milestone behind a ~3 h sitting. **Struck as plan tasks** and restated as a parallel to-do with
+  their dependency order preserved. The consolidated checklist moves from `.zj/UAT-v4.0.md` to
+  **`.zj/QA.md`**, re-keyed from phase success criteria to **SRD requirement IDs**, so it stays true
+  as phases close and can express coverage (29/47 requirements checked; 3 real gaps named). SC1, SC4,
+  SC6, SC7 amended; NFR-8's Statement and Verification rewritten.
+  **This supersedes D-P5-6** (which made `.zj/UAT-v4.0.md` the single runbook) and **D-P5-7**'s
+  "the status table in `.zj/UAT-v4.0.md` is the resumable state" — that role passes to `.zj/QA.md` §6.
+  **Consciously accepted cost:** NFR-8 is now satisfiable by a checklist nobody has run. That is the
+  point — it stops an unrun checklist blocking a milestone — but it means NFR-8 no longer evidences
+  that a human exercised the flows. The module SRD rows carrying "UI-flow UAT-pending" therefore
+  **stay** caveated (Task 37), and whether v4.0 ships on an unrun checklist is a separate owner call
+  at `/zj:milestone`.

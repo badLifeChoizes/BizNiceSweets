@@ -21,8 +21,24 @@ and collectable by pytest so the test map is in place for 06-02 to drive.
 
 Pattern mirrors backend/tests/plum/test_revisions.py (when it exists) exactly.
 """
-import pytest
 import httpx
+import pytest
+
+
+async def _first_revision_id(
+    client: httpx.AsyncClient, token: str, part_id: str
+) -> str:
+    """Return the id of a part's first revision.
+
+    POST /plum/parts returns the list-item shape (current_revision_status, no
+    embedded revisions); the revision id lives on the detail response
+    (GET /plum/parts/{id} → PartDetailRead.revisions).
+    """
+    detail = await client.get(
+        f"/api/v1/plum/parts/{part_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    return detail.json()["revisions"][0]["id"]
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +75,7 @@ async def test_effective_cost_vendor(
         headers={"Authorization": f"Bearer {token}"},
     )
     part_id = part_resp.json()["id"]
-    revision_id = part_resp.json().get("revisions", [{}])[0].get("id")
+    revision_id = await _first_revision_id(client, token, part_id)
 
     avl_resp = await client.post(
         f"/api/v1/plum/parts/{part_id}/avl",
@@ -121,7 +137,7 @@ async def test_effective_cost_manual(
         headers={"Authorization": f"Bearer {token}"},
     )
     part_id = part_resp.json()["id"]
-    revision_id = part_resp.json().get("revisions", [{}])[0].get("id")
+    revision_id = await _first_revision_id(client, token, part_id)
 
     # Set manual cost only (no vendor link)
     await client.patch(
@@ -176,7 +192,7 @@ async def test_effective_cost_rollup(
         headers={"Authorization": f"Bearer {token}"},
     )
     child_id = child_resp.json()["id"]
-    child_revision_id = child_resp.json().get("revisions", [{}])[0].get("id")
+    child_revision_id = await _first_revision_id(client, token, child_id)
 
     # Set child manual cost to 5.00
     await client.patch(
@@ -192,7 +208,7 @@ async def test_effective_cost_rollup(
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    parent_revision_id = parent_resp.json().get("revisions", [{}])[0].get("id")
+    parent_revision_id = await _first_revision_id(client, token, parent_id)
     cost_resp = await client.get(
         f"/api/v1/plum/parts/{parent_id}/revisions/{parent_revision_id}/cost",
         headers={"Authorization": f"Bearer {token}"},
@@ -232,7 +248,7 @@ async def test_release_snapshots_cost(
         headers={"Authorization": f"Bearer {token}"},
     )
     part_id = part_resp.json()["id"]
-    revision_id = part_resp.json().get("revisions", [{}])[0].get("id")
+    revision_id = await _first_revision_id(client, token, part_id)
 
     # Set manual cost to 20.00 before release
     await client.patch(
@@ -292,7 +308,7 @@ async def test_margin_computation(
         headers={"Authorization": f"Bearer {token}"},
     )
     part_id = part_resp.json()["id"]
-    revision_id = part_resp.json().get("revisions", [{}])[0].get("id")
+    revision_id = await _first_revision_id(client, token, part_id)
 
     # Cost = 10.00, sale = 15.00 → margin = 5.00, margin_pct = 50%
     await client.patch(

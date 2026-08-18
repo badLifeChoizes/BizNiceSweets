@@ -81,6 +81,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 # syerp_inventory_item — every table must be registered before the FKs resolve;
 # the Task-8 lesson).
 import app.core.models  # noqa: F401
+import app.modules.syerp.service as gl_service
 from app.modules.syerp.inventory_seed import seed_default_location
 from app.modules.syerp.models import (
     GLAccount,
@@ -100,7 +101,6 @@ from app.modules.syerp.schemas import (
     POLineCreate,
     StockLocationCreate,
 )
-import app.modules.syerp.service as gl_service
 from app.modules.syerp.service import (
     add_line,
     advance_po_status,

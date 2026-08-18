@@ -12,8 +12,6 @@ Notes:
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import BaseModel
 
 
@@ -35,4 +33,4 @@ class ModuleUpdate(BaseModel):
     All fields optional — omit to leave unchanged.
     """
 
-    enabled: Optional[bool] = None
+    enabled: bool | None = None

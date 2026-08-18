@@ -1,61 +1,27 @@
 """SYERP service — on-hand derivation, moving-average costing, receipts, adjustments, transfers."""
 from __future__ import annotations
 
-import re
-from collections.abc import Mapping
-from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from app.modules.syerp.models import (
-        Bill,
-        BillLine,
-        GLAccount,
-        InventoryItem,
         InventoryTxn,
-        JournalEntry,
-        JournalLine,
-        Partner,
-        PurchaseOrder,
-        PurchaseOrderLine,
-        StockLocation,
     )
     from app.modules.syerp.schemas import (
-        AccountRegisterRead,
-        ApAgingReport,
-        BalanceSheetReport,
-        BillLineCreate,
-        BillRead,
-        InventoryItemCreate,
-        InventoryItemUpdate,
         ItemOnHandRead,
-        JournalEntryRead,
-        PartnerCreate,
-        PartnerUpdate,
-        POCreate,
-        POLineCreate,
-        POLineRead,
-        POLineUpdate,
-        PORead,
-        ProfitLossReport,
-        StockLocationCreate,
-        StockLocationUpdate,
         TransactionRead,
-        TrialBalanceReport,
-        UnbilledReceiptRead,
     )
 
 from app.modules.syerp.service._common import _COST_QUANTUM
 from app.modules.syerp.service.items import get_item
 from app.modules.syerp.service.locations import get_location
-
 
 # ---------------------------------------------------------------------------
 # On-hand & valuation reads (Phase 8, Task 4)
@@ -73,9 +39,9 @@ from app.modules.syerp.service.locations import get_location
 
 
 def _derive_onhand(
-    location_rows: "Iterable[tuple[int, str, Decimal]]",
+    location_rows: Iterable[tuple[int, str, Decimal]],
     moving_avg_cost: Decimal,
-) -> "tuple[list[tuple[int, str, Decimal]], Decimal, Decimal]":
+) -> tuple[list[tuple[int, str, Decimal]], Decimal, Decimal]:
     """
     Pure valuation core for on-hand derivation (no DB — unit-testable).
 
@@ -97,7 +63,7 @@ def _derive_onhand(
     return nonzero, total_qty, value
 
 
-async def get_item_onhand(db: AsyncSession, item_id: str) -> "ItemOnHandRead":
+async def get_item_onhand(db: AsyncSession, item_id: str) -> ItemOnHandRead:
     """
     Return the derived on-hand-by-location + valuation for an inventory item.
 
@@ -166,7 +132,7 @@ async def get_item_on_hand(db: AsyncSession, item_id: str) -> Decimal:
     return result.scalar() or Decimal("0")
 
 
-async def list_item_transactions(db: AsyncSession, item_id: str) -> "list[TransactionRead]":
+async def list_item_transactions(db: AsyncSession, item_id: str) -> list[TransactionRead]:
     """
     Return an item's inventory-ledger rows, newest-first (Task 11 read half).
 
@@ -247,18 +213,28 @@ async def post_receipt(
     source_type: str | None = None,
     source_id: str | None = None,
     commit: bool = True,
-) -> "TransactionRead":
+) -> TransactionRead:
     """
     Post a costed receipt: append one ledger row and recompute the moving average.
 
-    In a single transaction (AC10-4,5,7,8):
-      1. Derive `qty_before` = the item's TOTAL on-hand across ALL locations
+    In a single transaction (AC10-4,5,7,8; NFR-7):
+      1. LOCK the item-master row FOR UPDATE *before* the on-hand read (mirrors
+         post_putaway step 3). The append-only InventoryTxn rows cannot be locked
+         to serialize concurrent inserts — the item-master row is the correct
+         single contention point. One item, so the sorted-id ordering is trivial,
+         but the lock must precede the read. The lock also serializes the
+         moving-average read-recompute-write (steps 2-3 + 5): the item row is
+         refreshed once the lock is held, so a concurrent receipt cannot lose an
+         update to item.moving_avg_cost. With commit=False the lock rides the
+         CALLER's transaction (receive_line holds it until its single commit —
+         correct: the receipt + accumulator bump stay serialized end to end).
+      2. Derive `qty_before` = the item's TOTAL on-hand across ALL locations
          (SUM of every InventoryTxn.quantity for the item) — the moving average
          is item-level, not per-location.
-      2. Compute the new item-level moving average via compute_new_moving_avg.
-      3. Append ONE immutable `receipt` InventoryTxn (positive signed quantity,
+      3. Compute the new item-level moving average via compute_new_moving_avg.
+      4. Append ONE immutable `receipt` InventoryTxn (positive signed quantity,
          unit_cost set, actor + optional source link).
-      4. Update item.moving_avg_cost to the recomputed value.
+      5. Update item.moving_avg_cost to the recomputed value.
 
     Rejects qty <= 0 or unit_cost < 0 with 422 (mirrors the ReceiptCreate schema
     guard; defends the service against non-HTTP callers too). Raises 404 if the
@@ -276,7 +252,7 @@ async def post_receipt(
     Returns the created row as a TransactionRead (joined location name), mirroring
     list_item_transactions. The router writes the inventory.receipt audit row.
     """
-    from app.modules.syerp.models import InventoryTxn
+    from app.modules.syerp.models import InventoryItem, InventoryTxn
     from app.modules.syerp.schemas import TransactionRead
 
     if qty <= 0:
@@ -293,6 +269,21 @@ async def post_receipt(
     # 404s if either does not exist (mirrors get_item / get_location).
     item = await get_item(db, item_id)
     location = await get_location(db, location_id)
+
+    # LOCK the item-master row FOR UPDATE *before* the on-hand read (mirror
+    # post_putaway). Locking the append-only ledger rows would not serialize
+    # concurrent inserts; the item-master row is the single contention point.
+    # Held until the single commit — the CALLER's commit when commit=False
+    # (receive_line holds it through its one atomic transaction).
+    await db.execute(
+        select(InventoryItem.id).where(InventoryItem.id == item_id).with_for_update()
+    )
+    # Re-read the item NOW the lock is held: a concurrent receipt may have
+    # committed a new moving_avg_cost between get_item's load and lock
+    # acquisition, and the identity-mapped `item` would still carry that stale
+    # value. The refresh makes the read-recompute-write below race-free (no
+    # lost update on the moving average).
+    await db.refresh(item)
 
     # qty_before = total on-hand across ALL locations (item-level average).
     result = await db.execute(
@@ -374,33 +365,124 @@ async def post_adjustment(
     qty_delta: Decimal,
     reason: str,
     actor_id: str,
-) -> "TransactionRead":
+    bin_id: int | None = None,
+) -> TransactionRead:
     """
     Post a stock adjustment: append one signed `adjustment` ledger row.
 
-    In a single transaction (AC10-4,6; D-P8-7):
-      1. Derive `current_loc_onhand` = the item's on-hand AT `location_id`
+    In a single transaction (AC10-4,6; D-P8-7; D-P4-1; D-P4-6; NFR-7):
+      1. LOCK the item-master row FOR UPDATE *before* the floor reads (mirrors
+         post_putaway step 3). The append-only InventoryTxn rows cannot be
+         locked to serialize concurrent inserts — the item-master row is the
+         correct single contention point, so two concurrent negative
+         adjustments cannot both pass the floor. One item, so the sorted-id
+         ordering is trivial, but the lock must precede the reads. Held until
+         this function's single commit.
+      2. Derive `current_loc_onhand` = the item's on-hand AT `location_id`
          (SUM of that item's InventoryTxn.quantity WHERE location_id matches).
-      2. Reject with 422 if the resulting location on-hand
+      3. Reject with 422 if the resulting location on-hand
          (`current_loc_onhand + qty_delta`) would be < 0 — NO row is appended
-         (per-location negative-stock guard, _adjustment_violates_floor).
-      3. Append ONE immutable `adjustment` InventoryTxn with the SIGNED
-         `qty_delta`, no unit_cost, the `reason`, and the actor.
+         (per-location negative-stock guard, _adjustment_violates_floor). This
+         location-level floor is kept alongside the pool floor (D-P8-7
+         contract): it defends legacy data whose per-bin split has already
+         desynced from the location total.
+      4. For a NEGATIVE delta only, ALSO floor-guard the NAMED pool (D-P4-1
+         explicit-or-unbinned): derive that pool's on-hand via get_bin_on_hand
+         (bin_id=None is the location's UNBINNED pool) and reject with 422 if
+         the delta would drive it below zero — the server never auto-allocates
+         across bins, so a write-off at a fully-binned location must name the
+         bin. Positive deltas take NO pool floor (D-P4-6): they simply land
+         stock in the named bin or the unbinned pool.
+      5. Append ONE immutable `adjustment` InventoryTxn with the SIGNED
+         `qty_delta`, the `bin_id` (or None for the unbinned pool), no
+         unit_cost, the `reason`, and the actor.
 
     The item's moving_avg_cost is deliberately left UNTOUCHED — only costed
     receipts move the average (AC10-5); a positive adjustment adds quantity at
     the current average. Raises 404 if the item or location does not exist (via
-    get_item / get_location). The 422 status mirrors the receipt guard.
+    get_item / get_location).
+
+    THE BIN **IS** VALIDATED (v4.0 Phase 5, SC8 / D-P5-5). A non-null `bin_id`
+    must EXIST, BELONG to `location_id`, and be ACTIVE, or the whole adjustment
+    is rejected 422 with no ledger row — the same three tests GELATO's own
+    execute_putaway applies to a destination bin. Before this check the bin was
+    trusted outright, so a mismatched pair silently booked stock into a bin at
+    another location — the per-bin split at BOTH locations went wrong at once,
+    and the location totals hid it because they were computed from `location_id`
+    alone. The DB FK on bin_id catches only a bin that does not exist at all; it
+    cannot see the membership half. The ACTIVE half is the same failure once
+    more: `list_bins` hides archived bins by default, so stock booked into one
+    is absent from every bin-grain screen while the location total still counts
+    it, and only a hand-crafted negative adjustment naming a bin id the UI will
+    not offer can get it back out. The two rejections carry DIFFERENT 422
+    details ("does not exist at location" vs "is archived", matching
+    execute_putaway's wording) so a tester and an API consumer can tell them
+    apart.
+
+    The check is deliberately ONE raw-SQL existence+membership+active probe
+    against `gelato_bin`, NOT a gelato service call or model import: D-P12a-3
+    forbids SYERP importing GELATO (the hub must not depend on a satellite), and
+    the import would also be circular. That is the whole reason validation was
+    previously deferred to the caller. A raw probe honours the no-imports rule
+    while closing the hole, at the cost of naming one table SYERP does not own —
+    a trade recorded as SC8.
+
+    A NULL `bin_id` is untouched by all of this: it still means "the location's
+    unbinned pool" (D-P4-1) and is always valid, because there is no bin to
+    check. The 422 status mirrors the receipt guard.
 
     Returns the created row as a TransactionRead (joined location name). The
     router writes the inventory.adjustment audit row.
     """
-    from app.modules.syerp.models import InventoryTxn
+    from app.modules.syerp.models import InventoryItem, InventoryTxn
     from app.modules.syerp.schemas import TransactionRead
 
     # 404s if either does not exist (mirrors get_item / get_location).
     item = await get_item(db, item_id)  # noqa: F841 — loaded to 404 on missing item
     location = await get_location(db, location_id)
+
+    # SC8 (D-P5-5): a NON-NULL bin must exist, belong to this location AND be
+    # active — the three tests execute_putaway applies to a destination bin.
+    # Runs BEFORE the lock and before any write, so a rejection costs nothing and
+    # persists nothing. ONE raw-SQL probe rather than a gelato import — SYERP is
+    # the hub and must not depend on a satellite (D-P12a-3); see the docstring.
+    # It selects `active` rather than `1` so the archived case is distinguishable
+    # from the missing/mismatched one without a second round trip.
+    # bin_id is None (the unbinned pool) skips this entirely and stays valid.
+    if bin_id is not None:
+        bin_row = (
+            await db.execute(
+                text(
+                    "SELECT active FROM gelato_bin "
+                    "WHERE id = :bin_id AND location_id = :location_id"
+                ),
+                {"bin_id": bin_id, "location_id": location_id},
+            )
+        ).first()
+        if bin_row is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Bin {bin_id} does not exist at location {location_id}; a "
+                    f"binned adjustment must name a bin belonging to that location."
+                ),
+            )
+        if not bin_row[0]:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Bin {bin_id} is archived; a binned adjustment must name an "
+                    f"active bin."
+                ),
+            )
+
+    # LOCK the item-master row FOR UPDATE *before* the floor read (mirror
+    # post_putaway). Locking the append-only ledger rows would not serialize
+    # concurrent inserts; the item-master row is the single contention point.
+    # Held until this function's single commit.
+    await db.execute(
+        select(InventoryItem.id).where(InventoryItem.id == item_id).with_for_update()
+    )
 
     # Per-location on-hand: signed SUM of this item's txns AT this location.
     result = await db.execute(
@@ -421,6 +503,22 @@ async def post_adjustment(
             ),
         )
 
+    # A NEGATIVE delta draws the NAMED pool only (D-P4-1): bin_id=None is the
+    # location's unbinned pool, a concrete bin_id that single bin. Same floor
+    # predicate as the location guard, applied at pool grain. Positive deltas
+    # take no pool floor (D-P4-6) — they add stock to the named pool.
+    if qty_delta < 0:
+        pool_onhand = await get_bin_on_hand(db, item_id, location_id, bin_id)
+        if _adjustment_violates_floor(pool_onhand, qty_delta):
+            pool_label = "the unbinned pool" if bin_id is None else f"bin {bin_id}"
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Adjustment of {qty_delta} exceeds {pool_label} at location "
+                    f"{location_id} (current {pool_onhand})."
+                ),
+            )
+
     txn = InventoryTxn(
         item_id=item_id,
         location_id=location_id,
@@ -429,6 +527,7 @@ async def post_adjustment(
         unit_cost=None,
         actor_id=actor_id,
         reason=reason,
+        bin_id=bin_id,
     )
     db.add(txn)
     # moving_avg_cost is intentionally NOT touched — only receipts move it (AC10-5).
@@ -476,33 +575,57 @@ async def post_transfer(
     to_location_id: int,
     qty: Decimal,
     actor_id: str,
-) -> "list[TransactionRead]":
+    from_bin_id: int | None = None,
+) -> list[TransactionRead]:
     """
     Post a stock transfer: append the two paired `transfer` ledger legs.
 
-    In a single transaction (AC10-4,6; D-P8-7):
+    In a single transaction (AC10-4,6; D-P8-7; D-P4-1; D-P4-5; NFR-7):
       1. Reject with 422 if from_location_id == to_location_id (a self-transfer is
          a no-op) or qty <= 0 (a transfer is a positive movement) — NO rows.
-      2. Derive `current_from_onhand` = the item's on-hand AT from_location_id
+      2. LOCK the item-master row FOR UPDATE *before* the floor reads (mirrors
+         post_putaway step 3). The append-only InventoryTxn rows cannot be
+         locked to serialize concurrent inserts — the item-master row is the
+         correct single contention point, so two concurrent out-transfers
+         cannot both pass the source floor. One item, so the sorted-id ordering
+         is trivial, but the lock must precede the reads. The item row is
+         refreshed once the lock is held, so both legs are valued at the true
+         (post-serialization) moving average — not a stale identity-mapped
+         read. Held until this function's single commit.
+      3. Derive `current_from_onhand` = the item's on-hand AT from_location_id
          (SUM of that item's InventoryTxn.quantity WHERE location_id matches).
-      3. Reject with 422 if the `-qty` leg would drive the source location on-hand
+      4. Reject with 422 if the `-qty` leg would drive the source location on-hand
          below zero (over-draw, _adjustment_violates_floor(from_onhand, -qty)) —
-         NO rows are appended.
-      4. Append EXACTLY TWO immutable `transfer` InventoryTxn rows sharing a fresh
-         transfer_group_id: `-qty` at from_location_id, `+qty` at to_location_id,
-         both valued at the item's CURRENT moving_avg_cost.
+         NO rows are appended. This location-level floor is kept alongside the
+         pool floor (D-P8-7 contract): it defends legacy data whose per-bin
+         split has already desynced from the location total.
+      5. ALSO floor-guard the SOURCE pool named by `from_bin_id` (D-P4-1
+         explicit-or-unbinned): derive its on-hand via get_bin_on_hand
+         (from_bin_id=None is the source location's UNBINNED pool) and reject
+         with 422 if the `-qty` leg would drive it below zero. The server never
+         auto-allocates across bins — transferring out of a fully-binned
+         location requires naming the bin.
+      6. Append EXACTLY TWO immutable `transfer` InventoryTxn rows sharing a fresh
+         transfer_group_id: `-qty` at from_location_id carrying
+         bin_id=from_bin_id, `+qty` at to_location_id carrying bin_id=None —
+         the in leg always lands in the destination's UNBINNED pool, and
+         putaway directs it into a bin later (D-P4-5). Both legs are valued at
+         the item's CURRENT moving_avg_cost.
 
     The signed pair nets to zero, so total item on-hand is unchanged; the item's
     moving_avg_cost is deliberately left UNTOUCHED (only receipts move it, AC10-5).
     Raises 404 if the item or either location does not exist (via get_item /
-    get_location). The 422 status mirrors the receipt/adjustment guards.
+    get_location). The BIN is NOT validated here: bin existence +
+    location-membership is GELATO's domain and the caller's job (D-P12a-3); the
+    DB FK on bin_id is the backstop. The 422 status mirrors the
+    receipt/adjustment guards.
 
     Returns the two created rows as TransactionRead (joined location names), out
     leg first then in leg. The router writes the inventory.transfer audit row.
     """
     import uuid
 
-    from app.modules.syerp.models import InventoryTxn
+    from app.modules.syerp.models import InventoryItem, InventoryTxn
     from app.modules.syerp.schemas import TransactionRead
 
     if from_location_id == to_location_id:
@@ -520,6 +643,20 @@ async def post_transfer(
     item = await get_item(db, item_id)
     from_location = await get_location(db, from_location_id)
     to_location = await get_location(db, to_location_id)
+
+    # LOCK the item-master row FOR UPDATE *before* the floor read (mirror
+    # post_putaway). Locking the append-only ledger rows would not serialize
+    # concurrent inserts; the item-master row is the single contention point.
+    # Held until this function's single commit.
+    await db.execute(
+        select(InventoryItem.id).where(InventoryItem.id == item_id).with_for_update()
+    )
+    # Re-read the item NOW the lock is held: a concurrent receipt may have
+    # committed a new moving_avg_cost between get_item's load and lock
+    # acquisition, and the identity-mapped `item` would still carry that stale
+    # value. The refresh makes the leg valuation below record the true
+    # post-serialization average (mirrors post_receipt; audit cost provenance).
+    await db.refresh(item)
 
     # Per-location source on-hand: signed SUM of this item's txns AT the source.
     result = await db.execute(
@@ -542,6 +679,20 @@ async def post_transfer(
             ),
         )
 
+    # The `-qty` leg draws the NAMED source pool only (D-P4-1): from_bin_id=None
+    # is the source location's unbinned pool, a concrete from_bin_id that single
+    # bin. Same floor predicate as the location guard, applied at pool grain.
+    source_pool_onhand = await get_bin_on_hand(db, item_id, from_location_id, from_bin_id)
+    if _adjustment_violates_floor(source_pool_onhand, -qty):
+        pool_label = "the unbinned pool" if from_bin_id is None else f"bin {from_bin_id}"
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Transfer of {qty} exceeds {pool_label} at location "
+                f"{from_location_id} (current {source_pool_onhand})."
+            ),
+        )
+
     # Both legs share one freshly-generated group id and the CURRENT average cost.
     transfer_group_id = str(uuid.uuid4())
     unit_cost = item.moving_avg_cost
@@ -553,8 +704,11 @@ async def post_transfer(
         quantity=-qty,
         unit_cost=unit_cost,
         actor_id=actor_id,
+        bin_id=from_bin_id,
         transfer_group_id=transfer_group_id,
     )
+    # The in leg lands UNBINNED at the destination (bin_id=None) — putaway
+    # directs it into a bin later (D-P4-5).
     in_leg = InventoryTxn(
         item_id=item_id,
         location_id=to_location_id,
@@ -562,6 +716,7 @@ async def post_transfer(
         quantity=qty,
         unit_cost=unit_cost,
         actor_id=actor_id,
+        bin_id=None,
         transfer_group_id=transfer_group_id,
     )
     db.add(out_leg)
@@ -644,15 +799,17 @@ async def get_bin_on_hand(
     A pure derivation like get_item_on_hand — it takes NO lock. Callers that must
     serialize a bin draw (post_putaway) lock the item-master row themselves first.
 
-    TRUST BOUNDARY (Phase 12a): the per-bin split is only trustworthy until the
-    first BIN-BLIND movement of the item at this location. As of 12a ONLY putaway
-    is bin-aware; post_transfer / post_adjustment / the MOUSSE issue path all write
-    bin_id=NULL and floor-guard per-LOCATION. After stock is put into a bin, such a
-    draw overstates the bin it left and drives the unbinned pool NEGATIVE, while the
-    per-location total (get_item_onhand) and Σ(bins)+unbinned stay correct. Bin-aware
-    pick/issue that keeps the split consistent lands in Phase 12b (BACKLOG p2). Do
-    not treat a single bin's figure as authoritative for picking across a location
-    that has also seen bin-blind draws until then.
+    TRUST BOUNDARY (closed v4.0 Phase 4, NFR-7): every draw primitive is now
+    bin-aware — post_transfer / post_adjustment / MOUSSE issue_components take an
+    optional bin_id and draw ONLY the named pool (None = the unbinned pool)
+    behind a per-POOL floor guard (D-P4-1 explicit-or-unbinned), matching
+    post_putaway / post_issue. The per-bin split therefore no longer rots: for
+    post-Phase-4 data every pool stays >= 0 and Σ(bins)+unbinned == location
+    total holds at pool grain. Rows written before Phase 4, when draws were
+    still bin-blind (historical), may have left a bin overstated and the
+    unbinned pool negative — those desyncs are legacy data artifacts the
+    current primitives cannot newly create (the location total and roll-up
+    were always exact).
     """
     from app.modules.syerp.models import InventoryTxn
 
@@ -679,7 +836,7 @@ async def post_putaway(
     actor_id: str,
     *,
     commit: bool = True,
-) -> "list[TransactionRead]":
+) -> list[TransactionRead]:
     """
     Post a bin putaway: append the two paired `putaway` ledger legs.
 
@@ -826,11 +983,12 @@ async def post_putaway(
 #
 # An issue draws quantity OUT of a single BIN at a single stock location: one
 # `-qty` `issue` InventoryTxn leg valued at the item's CURRENT moving_avg_cost.
-# It is the bin-aware counterpart of the MOUSSE issue leg (mousse/service.py):
-# same signed `-qty` / txn_type='issue' shape, but with a concrete bin_id and a
-# per-BIN floor guard instead of MOUSSE's per-location one. This is the pick/ship
-# stock-out primitive GELATO composes over (Phase 12b) — receipts still own the
-# moving average (AC10-5); an issue never moves it.
+# It shares the MOUSSE issue leg's shape (mousse/service.py): same signed `-qty`
+# / txn_type='issue', and — since v4.0 Phase 4 made issue_components bin-aware
+# too (D-P4-1) — the same per-POOL floor guard; the differences are the soft
+# source_type/source_id provenance link and the commit=False composition hook.
+# This is the pick/ship stock-out primitive GELATO composes over (Phase 12b) —
+# receipts still own the moving average (AC10-5); an issue never moves it.
 #
 # The per-bin floor + item-master lock mirror post_putaway exactly: bin_id=None
 # draws the location's UNBINNED pool, a concrete bin_id draws that single bin.
@@ -851,7 +1009,7 @@ async def post_issue(
     source_type: str,
     source_id: str,
     commit: bool = True,
-) -> "tuple[InventoryTxn, Decimal]":
+) -> tuple[InventoryTxn, Decimal]:
     """
     Post a bin-aware issue: append ONE `-qty` `issue` ledger leg and value it.
 

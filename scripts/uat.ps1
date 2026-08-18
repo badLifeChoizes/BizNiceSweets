@@ -98,18 +98,38 @@ if ($Down) {
   return
 }
 
-# --- Ensure .env exists ------------------------------------------------------
-if (-not (Test-Path '.env')) {
-  if (Test-Path '.env.example') {
-    Copy-Item '.env.example' '.env'
-    Write-Warning ".env was missing - created from .env.example. Set POSTGRES_PASSWORD before any non-local use."
-  } else {
-    throw ".env and .env.example are both missing - cannot configure the stack."
+# --- Ensure BOTH env files exist (D-P5-10) -----------------------------------
+# The stack reads two: ../.env for app secrets, ../.env.db for the database
+# credentials. A missing .env.db leaves POSTGRES_PASSWORD empty, which an
+# already-initialized volume tolerates but a FRESH one refuses outright
+# ("Database is uninitialized and superuser password is not specified").
+# That was defect U0; -Fresh is exactly the path that trips it.
+$EnvFiles = [ordered]@{ '.env' = '.env.example'; '.env.db' = '.env.db.example' }
+foreach ($target in $EnvFiles.Keys) {
+  $template = $EnvFiles[$target]
+  if (-not (Test-Path $target)) {
+    if (-not (Test-Path $template)) {
+      throw "$target and $template are both missing - cannot configure the stack."
+    }
+    Copy-Item $template $target
+    Write-Warning "$target was missing - created from $template. Set the real secrets in it before any non-local use."
   }
 }
-$pwLine = Select-String -Path '.env' -Pattern '^POSTGRES_PASSWORD=\S+' -ErrorAction SilentlyContinue
+
+# POSTGRES_PASSWORD lives in .env.db and nowhere else (D-P5-10).
+$pwLine = Select-String -Path '.env.db' -Pattern '^POSTGRES_PASSWORD=\S+' -ErrorAction SilentlyContinue
 if (-not $pwLine) {
-  Write-Warning "POSTGRES_PASSWORD looks empty in .env - the db container may fail to start. Edit .env and set it."
+  Write-Warning "POSTGRES_PASSWORD looks empty in .env.db - a fresh db volume will refuse to initialize (defect U0). Edit .env.db and set it."
+}
+
+# A leftover POSTGRES_PASSWORD in .env is the PRE-D-P5-10 layout. podman-compose
+# emits `--env-file ../.env --env-file ../.env.db` and the LATER file wins, so the
+# stale .env value is not the one `api` ends up using - and an already-initialized
+# volume still expects it. Two homes for one credential is exactly the drift
+# D-P5-10 removed. Warn, never fail: it is the operator's file to fix.
+$staleLine = Select-String -Path '.env' -Pattern '^POSTGRES_PASSWORD=' -ErrorAction SilentlyContinue
+if ($staleLine) {
+  Write-Warning ".env still defines POSTGRES_PASSWORD - it now lives ONLY in .env.db (D-P5-10). If your database volume predates the split, MOVE that line's value into .env.db and delete it from .env; see docs/deployment/local-dev.md 1.2."
 }
 
 # --- Fresh: reset DB volume --------------------------------------------------

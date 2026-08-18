@@ -16,8 +16,6 @@ Design notes:
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from sqlalchemy import Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,7 +28,7 @@ class Setting(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     # Dotted key convention: "company.name", "locale.currency", etc.
     key: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Type hint for deserialization: "str", "bool", "int", "json"
     value_type: Mapped[str] = mapped_column(String(20), default="str", nullable=False)
     # Logical grouping for the admin UI: "company", "locale", "feature"
@@ -39,8 +37,8 @@ class Setting(Base):
     scope: Mapped[str] = mapped_column(String(20), default="global", nullable=False)
     # D-13 groundwork: owner_id = None for global; user.id for per-user override later
     # Mirrors AuditLog.actor_id nullable-string pattern
-    owner_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    owner_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         # Partial unique index: unique (key) WHERE owner_id IS NULL.

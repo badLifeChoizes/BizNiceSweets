@@ -81,7 +81,7 @@ import os
 import re
 import sys
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from fastapi import HTTPException
@@ -126,9 +126,15 @@ from app.modules.crumb.service import (
 )
 from app.modules.crumb.service.sales_orders import (
     _next_sales_order_number,
-    add_line as so_add_line,
-    delete_line as so_delete_line,
     generate_sales_order_number,
+)
+from app.modules.crumb.service.sales_orders import (
+    add_line as so_add_line,
+)
+from app.modules.crumb.service.sales_orders import (
+    delete_line as so_delete_line,
+)
+from app.modules.crumb.service.sales_orders import (
     update_line as so_update_line,
 )
 from app.modules.plum.models import PlumPart, PlumPartRevision
@@ -220,7 +226,7 @@ async def _make_part(session_factory, part_number: str) -> str:
             status="released",
             description=f"verify_crumb_so {part_number}",
             unit_of_measure="ea",
-            released_at=datetime.now(timezone.utc),
+            released_at=datetime.now(UTC),
         )
         session.add(rev)
         await session.commit()

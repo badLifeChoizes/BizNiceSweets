@@ -64,9 +64,11 @@ drift-free against autogenerate for these five tables.
 Indexes mirror the models' index=True declarations only: quote_number (unique)
 on crumb_quote; quote_id on crumb_quote_line; partner_id on crumb_interaction.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

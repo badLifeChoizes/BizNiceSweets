@@ -21,8 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import jwt
@@ -76,7 +75,7 @@ def create_access_token(subject: str, permissions: list[str]) -> str:
     Payload: { sub, exp, perms }.
     Secret is read via get_secret_value() — never logged or repr'd (T-02-01).
     """
-    expire = datetime.now(timezone.utc) + timedelta(
+    expire = datetime.now(UTC) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
     payload = {
@@ -131,7 +130,7 @@ def new_refresh_token() -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> "User | None":
+async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     """
     Load a User by email.  Roles + permissions are loaded via selectin (lazy="selectin"
     on the relationship) so no extra await is needed.
@@ -142,7 +141,7 @@ async def get_user_by_email(db: AsyncSession, email: str) -> "User | None":
     return result.scalars().first()
 
 
-async def get_user_by_id(db: AsyncSession, user_id: str) -> "User | None":
+async def get_user_by_id(db: AsyncSession, user_id: str) -> User | None:
     """Load a User by primary-key UUID string. Roles selectin-loaded automatically."""
     from app.modules.auth.models import User
 
@@ -157,7 +156,7 @@ async def get_user_by_id(db: AsyncSession, user_id: str) -> "User | None":
 
 async def authenticate_user(
     db: AsyncSession, email: str, password: str
-) -> "User | None":
+) -> User | None:
     """
     Timing-safe credential verification.
 
@@ -181,7 +180,7 @@ async def authenticate_user(
 # ---------------------------------------------------------------------------
 
 
-def collect_permissions(user: "User") -> list[str]:
+def collect_permissions(user: User) -> list[str]:
     """
     Flatten a user's role permissions into a list of code strings.
 
@@ -225,7 +224,7 @@ async def store_refresh_token(
 
 async def rotate_refresh_token(
     db: AsyncSession, raw_token: str
-) -> tuple[str, "User"]:
+) -> tuple[str, User]:
     """
     Rotate a refresh token:
       1. Look up the token row by SHA-256 hash.
@@ -251,11 +250,11 @@ async def rotate_refresh_token(
             detail="Invalid refresh token",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires = token_row.expires_at
     # Ensure both datetimes are timezone-aware for comparison
     if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
+        expires = expires.replace(tzinfo=UTC)
 
     if expires < now:
         raise HTTPException(
@@ -347,12 +346,32 @@ async def write_audit(
 # ---------------------------------------------------------------------------
 
 
-async def list_users(db: AsyncSession) -> list["User"]:
+async def list_users(db: AsyncSession) -> list[User]:
     """Return all User rows (admin-gated by the router)."""
     from app.modules.auth.models import User
 
     result = await db.execute(select(User))
     return list(result.scalars().all())
+
+
+_EMAIL_UNIQUE_INDEX = "ix_users_email"
+
+
+def _is_duplicate_email_violation(exc: Exception) -> bool:
+    """
+    Is this IntegrityError provably a collision on ``users.email``, and nothing else?
+
+    SQLAlchemy's asyncpg dialect wraps the driver error twice, so the constraint name
+    lives at ``exc.orig.__cause__.constraint_name`` (measured: the outer ``orig`` exposes
+    only ``sqlstate='23505'``). The string fallback covers a dialect that re-wraps
+    differently; both paths require ``ix_users_email`` to be named explicitly, so an
+    unrelated constraint can never be reported as a duplicate email.
+    """
+    orig = getattr(exc, "orig", None)
+    cause = getattr(orig, "__cause__", None)
+    if getattr(cause, "constraint_name", None) == _EMAIL_UNIQUE_INDEX:
+        return True
+    return _EMAIL_UNIQUE_INDEX in str(orig)
 
 
 async def create_user(
@@ -361,22 +380,63 @@ async def create_user(
     password: str,
     full_name: str | None = None,
     role_name: str | None = None,
-) -> "User":
+) -> User:
     """
     Create a new user account.
 
     Hashes the password, optionally attaches a role by name, inserts the user,
     and returns the persisted User instance (roles selectin-loaded).
 
+    A duplicate email is rejected with **409 Conflict** and NOTHING is persisted
+    (defect U1, v4.0 Phase 5). `users.email` is UNIQUE (``ix_users_email``), and
+    before the guard below an existing address raised an unhandled IntegrityError
+    → HTTP 500 on what is a perfectly ordinary operator mistake. 409 + the
+    "'<value>' already exists." message form matches the house convention for a
+    caller-supplied unique key (see partners.create_partner, items.create_item,
+    locations.create_location, plum.create_part).
+
+    Two layers, deliberately:
+      1. A PRE-CHECK, which is the deterministic clean path.
+      2. A NARROWED IntegrityError handler as the concurrency backstop, because the
+         pre-check is read-then-write and two simultaneous creates can both pass it.
+         The handler re-raises 409 ONLY when the violated constraint is provably
+         ``ix_users_email`` and otherwise re-raises the ORIGINAL error untouched.
+         That narrowing is the Phase-13 lesson: create_invoice copied create_bill's
+         broad ``except IntegrityError → retry`` and, carrying an FK the exemplar
+         lacked, misread an FK failure as a number collision and recursed until it
+         500'd. `users` has TWO unique indexes (users_pkey and ix_users_email), so a
+         broad handler here would report a PK collision as a duplicate email.
+
     The admin token that triggered this call is recorded in the audit log by
     the calling router handler.
     """
+    import sqlalchemy.exc
+
     from app.modules.auth.models import Role, User
+
+    # 1. Pre-check: the ordinary duplicate-email path, resolved before any write.
+    if await get_user_by_email(db, email) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"User '{email}' already exists.",
+        )
 
     hashed = hash_password(password)
     user = User(email=email, hashed_password=hashed, full_name=full_name, is_active=True)
     db.add(user)
-    await db.flush()  # assign id before attaching roles
+    try:
+        await db.flush()  # assign id before attaching roles
+    except sqlalchemy.exc.IntegrityError as exc:
+        # 2. Concurrency backstop. Roll back first: a failed flush poisons the
+        # session, so every later statement on it would error too (mirrors
+        # partners.create_partner). Then map ONLY the email constraint to 409.
+        await db.rollback()
+        if _is_duplicate_email_violation(exc):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"User '{email}' already exists.",
+            ) from exc
+        raise  # any other integrity failure is NOT a duplicate email — do not mask it
 
     if role_name:
         result = await db.execute(select(Role).where(Role.name == role_name))
@@ -399,7 +459,7 @@ async def update_user(
     full_name: str | None = None,
     is_active: bool | None = None,
     role_name: str | None = None,
-) -> "User":
+) -> User:
     """
     Patch a user record.  All fields are optional (PATCH semantics).
 

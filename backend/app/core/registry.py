@@ -40,7 +40,7 @@ def register(module: Module) -> None:
     _registry.append(module)
 
 
-def mount_all(app: "FastAPI", prefix: str = "/api/v1") -> None:
+def mount_all(app: FastAPI, prefix: str = "/api/v1") -> None:
     """Mount all registered module routers onto *app* under *prefix*."""
     for mod in _registry:
         app.include_router(mod.router, prefix=prefix, tags=[mod.MODULE_NAME])

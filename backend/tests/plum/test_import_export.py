@@ -24,9 +24,8 @@ Pattern mirrors backend/tests/plum/test_parts.py exactly.
 """
 import io
 import json
-import pytest
-import httpx
 
+import httpx
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/plum/export/json — JSON export (PLUM-10)
@@ -76,8 +75,9 @@ async def test_export_excel_sheets(
     sheet and a BOM sheet (PLUM-10, D-16). openpyxl is used to verify the
     file is a valid workbook.
     """
-    from app.modules.auth.service import create_access_token
     import openpyxl
+
+    from app.modules.auth.service import create_access_token
 
     token = create_access_token(subject="admin-user", permissions=["plum:read"])
 
@@ -161,18 +161,24 @@ async def test_import_preview_unknown_vendor(
 
     token = create_access_token(subject="admin-user", permissions=["plum:write"])
 
-    # Payload referencing a non-existent vendor UUID
+    # Payload with an AVL entry referencing a vendor_code that matches no
+    # SYERP vendor. AVL entries are nested under each part (D-16 schema).
     payload = json.dumps({
         "schema_version": "1.0",
-        "parts": [{"id": "00000000-0000-0000-0000-000000000001", "part_number": "P99999", "active": True}],
-        "revisions": [],
-        "bom_items": [],
-        "avl_links": [
+        "parts": [
             {
-                "id": "00000000-0000-0000-0000-000000000002",
-                "part_id": "00000000-0000-0000-0000-000000000001",
-                "vendor_id": "00000000-dead-beef-0000-000000000000",  # non-existent
-                "preferred": False,
+                "part_number": "P99999",
+                "active": True,
+                "revisions": [],
+                "avl": [
+                    {
+                        "vendor_code": "NO-SUCH-VENDOR-CODE",  # non-existent
+                        "vendor_part_number": "VP-1",
+                        "preferred": False,
+                        "notes": None,
+                        "price_breaks": [],
+                    }
+                ],
             }
         ],
     }).encode()

@@ -69,12 +69,26 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
       component has on-hand enough for exactly ONE cannot both succeed — the FOR
       UPDATE row lock serializes them, on-hand never goes negative, no double-
       consume, and the WO's WIP reflects only the ONE successful issue.
+  (G) BINNED ISSUE (Phase 4 / D-P4-1) + LEGACY-DESYNC LOCATION FLOOR: (G1) at a
+      fully-binned component location (receive 10, putaway ALL into a bin) an
+      issue with bin_id=None draws ONLY the empty UNBINNED pool and is rejected
+      422 with ZERO ledger/issue rows; naming the bin succeeds — the issue txn
+      rows carry the bin_id, the bin pool draws to the exact remainder, and the
+      WIP/JE amounts are IDENTICAL to the unbinned equivalent (bins are a
+      quantity dimension, never a valuation one). (G2) the location floor is
+      kept ALONGSIDE the pool floor: against a legacy pre-Phase-4 desync (bin
+      pool reads 10, unbinned pool -10, location total 0 — simulated by a
+      raw-inserted bin-blind issue row) a bin-named issue of 10 passes the pool
+      guard but MUST be rejected 422 by the location floor with zero rows
+      written — the pool floors imply the location floor only on clean
+      post-Phase-4 data.
 
-The script uses uniquely-suffixed throwaway PLUM parts / SYERP items / work orders
-and CLEANS UP after itself (issues -> mousse JEs -> components -> work orders ->
-inventory txns -> items -> BOM items -> revisions -> parts) in a finally block, so it
-is safe to re-run against the same database. The seeded "Main" stock location and the
-seeded 1130/1140 GL accounts are reused and left in place (real deploy state).
+The script uses uniquely-suffixed throwaway PLUM parts / SYERP items / GELATO bins /
+work orders and CLEANS UP after itself (issues -> mousse JEs -> components -> work
+orders -> inventory txns -> bins -> items -> BOM items -> revisions -> parts) in a
+finally block, so it is safe to re-run against the same database. The seeded "Main"
+stock location and the seeded 1130/1140 GL accounts are reused and left in place
+(real deploy state).
 """
 from __future__ import annotations
 
@@ -82,7 +96,7 @@ import asyncio
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import HTTPException
@@ -98,6 +112,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # (the mousse_* FKs reference plum_* and syerp_* tables that must be registered
 # before the FKs resolve — the Task-8 lesson).
 import app.core.models  # noqa: F401
+from app.modules.gelato.models import Bin
+from app.modules.gelato.schemas import BinCreate, PutawayRequest
+from app.modules.gelato.service import create_bin, execute_putaway, get_bin_on_hand
 from app.modules.mousse.models import WorkOrder, WorkOrderComponent, WorkOrderIssue
 from app.modules.mousse.schemas import (
     IssueComponentLine,
@@ -189,6 +206,15 @@ async def _onhand(session, item_id: str, location_id: int) -> Decimal:
     return Decimal(result.scalar() or 0)
 
 
+async def _txn_rows(session, item_id: str) -> int:
+    """Independent oracle: the count of ledger rows for an item (a rejected issue
+    must write NOTHING — row count unchanged)."""
+    result = await session.execute(
+        select(func.count()).select_from(InventoryTxn).where(InventoryTxn.item_id == item_id)
+    )
+    return result.scalar()
+
+
 async def _wo_account_balance(session, account_id: int, wo_id: str) -> Decimal:
     """
     Derive a WO's balance on a GL account (Σdebit − Σcredit) — the assertion's OWN
@@ -238,7 +264,7 @@ async def _make_part_with_revision(
         status="released" if released else "draft",
         description=f"verify_mousse {part_number}",
         unit_of_measure=uom,
-        released_at=datetime.now(timezone.utc) if released else None,
+        released_at=datetime.now(UTC) if released else None,
     )
     session.add(rev)
     await session.flush()
@@ -274,6 +300,7 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
     part_ids: set[str] = set()
     item_ids: set[str] = set()
     wo_ids: set[str] = set()
+    bin_ids: set[int] = set()
 
     def _pn(*parts: object) -> str:
         # Non-numeric part numbers never disturb PLUM auto-numbering (P##### series).
@@ -923,8 +950,296 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
         await run_concurrency(session_factory, unique, actor_id, main_id, acct_1140,
                               part_ids, item_ids, wo_ids)
 
+        # ===================================================================
+        # (G) BINNED ISSUE (Phase 4 / D-P4-1) + LEGACY-DESYNC LOCATION FLOOR
+        # ===================================================================
+        # Phase 4 made issue_components bin-aware under the explicit-or-unbinned
+        # contract (D-P4-1): bin_id=None draws ONLY the location's UNBINNED pool
+        # (and floor-guards it); a named bin draws that single bin's pool. The
+        # LOCATION floor is kept ALONGSIDE the pool floor (mirrors
+        # post_adjustment / post_transfer): the pool floors imply the location
+        # floor only on clean post-Phase-4 data — the location floor defends
+        # legacy rows whose per-bin split has already desynced from the
+        # location total. Pins the behaviors the Phase-4 verification could
+        # only hand-check.
+        #
+        # (G1) fixture: FG + one child (qty_per 1), child stocked 10 @ 4 and
+        # putaway ENTIRELY into bin G1 — the draw location is fully binned.
+        async with session_factory() as session:
+            g1_fg_id, g1_fg_rev = await _make_part_with_revision(
+                session, _pn("G1", "fg"), released=True
+            )
+            g1_child_id, _ = await _make_part_with_revision(
+                session, _pn("G1", "child"), released=True
+            )
+            part_ids.update({g1_fg_id, g1_child_id})
+            session.add(
+                PlumBomItem(parent_revision_id=g1_fg_rev, child_part_id=g1_child_id,
+                            qty=Decimal("1"), sort_order=0)
+            )
+            await session.commit()
+        g1_fg_item = await _link_item(session_factory, unique, "G1-FG", g1_fg_id)
+        g1_child_item = await _link_item(session_factory, unique, "G1-CH", g1_child_id)
+        item_ids.update({g1_fg_item, g1_child_item})
+        async with session_factory() as session:
+            await post_receipt(
+                session, g1_child_item, main_id, Decimal("10"), Decimal("4"), actor_id
+            )
+        async with session_factory() as session:
+            bin_g1 = (
+                await create_bin(session, BinCreate(location_id=main_id, code=f"G1-{unique}"))
+            ).id
+        bin_ids.add(bin_g1)
+        async with session_factory() as session:
+            await execute_putaway(
+                session,
+                PutawayRequest(
+                    item_id=g1_child_item, location_id=main_id, to_bin_id=bin_g1,
+                    qty=Decimal("10"), from_bin_id=None,
+                ),
+                actor_id,
+            )
+        async with session_factory() as session:
+            wo_g1 = await create_work_order(
+                session,
+                WorkOrderCreate(
+                    plum_part_id=g1_fg_id, planned_qty=Decimal("10"),
+                    target_location_id=main_id,
+                ),
+                actor_id,
+            )
+        wo_ids.add(wo_g1.id)
+        async with session_factory() as session:
+            await release_work_order(session, wo_g1.id, actor_id)
+        async with session_factory() as session:
+            g1_detail = await get_work_order_detail(session, wo_g1.id)
+        g1_comp_id = g1_detail.components[0].id
+
+        # (G1a) bin_id=None at the fully-binned location draws ONLY the empty
+        # unbinned pool -> 422 with ZERO ledger/issue rows. Row-count oracle:
+        # receipt + two putaway legs == 3 rows before and after.
+        async with session_factory() as session:
+            g1_rows_before = await _txn_rows(session, g1_child_item)
+        try:
+            async with session_factory() as session:
+                await issue_components(
+                    session,
+                    wo_g1.id,
+                    IssueComponentsRequest(
+                        lines=[IssueComponentLine(
+                            component_id=g1_comp_id, quantity=Decimal("10"), bin_id=None,
+                        )]
+                    ),
+                    actor_id,
+                )
+            check("(G1/D-P4-1) issuing with bin_id=None at a fully-binned location "
+                  "is rejected", False, "issue succeeded over the unbinned-pool floor")
+        except HTTPException as exc:
+            check(
+                "(G1/D-P4-1) issuing 10 with bin_id=None at a fully-binned location "
+                "draws ONLY the empty unbinned pool and is rejected 422",
+                exc.status_code == 422,
+                f"status={exc.status_code}",
+            )
+        async with session_factory() as session:
+            g1_rows_after = await _txn_rows(session, g1_child_item)
+            g1_issue_rows = (
+                await session.execute(
+                    select(func.count()).select_from(WorkOrderIssue).where(
+                        WorkOrderIssue.work_order_id == wo_g1.id
+                    )
+                )
+            ).scalar()
+        check(
+            "(G1/D-P4-1) the rejected bin-blind issue wrote NO ledger rows and NO "
+            "issue rows (receipt + two putaway legs == 3 before and after)",
+            g1_rows_after == g1_rows_before == 3 and g1_issue_rows == 0,
+            f"before={g1_rows_before!r} after={g1_rows_after!r} issues={g1_issue_rows!r}",
+        )
+
+        # (G1b) naming the bin succeeds: the issue txn carries the bin_id, the
+        # bin pool draws to the exact remainder (10-6==4), and the WIP/JE
+        # amount is IDENTICAL to the unbinned equivalent (6 × moving_avg 4 ==
+        # 24.000000) — bins are a quantity dimension, never a valuation one.
+        async with session_factory() as session:
+            g1_result = await issue_components(
+                session,
+                wo_g1.id,
+                IssueComponentsRequest(
+                    lines=[IssueComponentLine(
+                        component_id=g1_comp_id, quantity=Decimal("6"), bin_id=bin_g1,
+                    )]
+                ),
+                actor_id,
+            )
+        async with session_factory() as session:
+            g1_issue_txns = (
+                await session.execute(
+                    select(InventoryTxn.bin_id, InventoryTxn.quantity).where(
+                        InventoryTxn.item_id == g1_child_item,
+                        InventoryTxn.txn_type == "issue",
+                        InventoryTxn.source_id == wo_g1.id,
+                    )
+                )
+            ).all()
+            g1_pool = await get_bin_on_hand(session, g1_child_item, main_id, bin_g1)
+            g1_unbinned = await get_bin_on_hand(session, g1_child_item, main_id, None)
+            g1_wip = await _wo_account_balance(session, acct_1140, wo_g1.id)
+        check(
+            "(G1/D-P4-1) the bin-named issue succeeds and its issue txn row CARRIES "
+            "the bin_id (one -6 row on bin G1)",
+            g1_result.lines_issued == 1 and len(g1_issue_txns) == 1
+            and g1_issue_txns[0].bin_id == bin_g1
+            and g1_issue_txns[0].quantity == Decimal("-6"),
+            f"lines={g1_result.lines_issued!r} txns={g1_issue_txns!r}",
+        )
+        check(
+            "(G1/D-P4-1) the bin pool draws to the exact remainder (10-6==4), the "
+            "unbinned pool stays 0, and the WIP/JE amount equals the unbinned "
+            "equivalent (6 × 4 == 24.000000)",
+            g1_pool == Decimal("4") and g1_unbinned == Decimal("0")
+            and g1_wip == Decimal("24.000000")
+            and g1_result.total_issued_value == Decimal("24.000000"),
+            f"pool={g1_pool!r} unbinned={g1_unbinned!r} wip={g1_wip!r} "
+            f"value={g1_result.total_issued_value!r}",
+        )
+
+        # (G2) LEGACY-DESYNC LOCATION FLOOR — pins the Phase-4 review fix
+        # (finding 1). Fixture: stock 10 @ 5, putaway ALL into bin G2, then
+        # RAW-INSERT the pre-Phase-4 history the review's concrete scenario
+        # describes: a legacy bin-blind issue (-10, bin_id NULL). The ledger
+        # now reads bin pool 10, unbinned pool -10, location total 0 — the
+        # bin split is desynced from the location total.
+        async with session_factory() as session:
+            g2_fg_id, g2_fg_rev = await _make_part_with_revision(
+                session, _pn("G2", "fg"), released=True
+            )
+            g2_child_id, _ = await _make_part_with_revision(
+                session, _pn("G2", "child"), released=True
+            )
+            part_ids.update({g2_fg_id, g2_child_id})
+            session.add(
+                PlumBomItem(parent_revision_id=g2_fg_rev, child_part_id=g2_child_id,
+                            qty=Decimal("1"), sort_order=0)
+            )
+            await session.commit()
+        g2_fg_item = await _link_item(session_factory, unique, "G2-FG", g2_fg_id)
+        g2_child_item = await _link_item(session_factory, unique, "G2-CH", g2_child_id)
+        item_ids.update({g2_fg_item, g2_child_item})
+        async with session_factory() as session:
+            await post_receipt(
+                session, g2_child_item, main_id, Decimal("10"), Decimal("5"), actor_id
+            )
+        async with session_factory() as session:
+            bin_g2 = (
+                await create_bin(session, BinCreate(location_id=main_id, code=f"G2-{unique}"))
+            ).id
+        bin_ids.add(bin_g2)
+        async with session_factory() as session:
+            await execute_putaway(
+                session,
+                PutawayRequest(
+                    item_id=g2_child_item, location_id=main_id, to_bin_id=bin_g2,
+                    qty=Decimal("10"), from_bin_id=None,
+                ),
+                actor_id,
+            )
+        async with session_factory() as session:
+            session.add(
+                InventoryTxn(
+                    item_id=g2_child_item,
+                    location_id=main_id,
+                    txn_type="issue",
+                    quantity=Decimal("-10"),
+                    unit_cost=Decimal("5"),
+                    actor_id=actor_id,
+                    bin_id=None,
+                )
+            )
+            await session.commit()
+        async with session_factory() as session:
+            g2_pool = await get_bin_on_hand(session, g2_child_item, main_id, bin_g2)
+            g2_unbinned = await get_bin_on_hand(session, g2_child_item, main_id, None)
+            g2_loc = await _onhand(session, g2_child_item, main_id)
+        check(
+            "(G2) fixture: the legacy desync is in place — bin pool 10, unbinned "
+            "pool -10, location total 0",
+            g2_pool == Decimal("10") and g2_unbinned == Decimal("-10")
+            and g2_loc == Decimal("0"),
+            f"pool={g2_pool!r} unbinned={g2_unbinned!r} loc={g2_loc!r}",
+        )
+        async with session_factory() as session:
+            wo_g2 = await create_work_order(
+                session,
+                WorkOrderCreate(
+                    plum_part_id=g2_fg_id, planned_qty=Decimal("10"),
+                    target_location_id=main_id,
+                ),
+                actor_id,
+            )
+        wo_ids.add(wo_g2.id)
+        async with session_factory() as session:
+            await release_work_order(session, wo_g2.id, actor_id)
+        async with session_factory() as session:
+            g2_detail = await get_work_order_detail(session, wo_g2.id)
+        g2_comp_id = g2_detail.components[0].id
+
+        # The bin-named issue of 10 PASSES the pool guard (bin pool 10-10==0)
+        # but MUST be rejected 422 by the LOCATION floor (location total 0-10
+        # < 0) with ZERO rows written. Without the location floor this issue
+        # would succeed and drive the location — and total item — on-hand to
+        # -10 while booking Dr 1140 / Cr 1130 value out of stock that does
+        # not exist.
+        async with session_factory() as session:
+            g2_rows_before = await _txn_rows(session, g2_child_item)
+        try:
+            async with session_factory() as session:
+                await issue_components(
+                    session,
+                    wo_g2.id,
+                    IssueComponentsRequest(
+                        lines=[IssueComponentLine(
+                            component_id=g2_comp_id, quantity=Decimal("10"), bin_id=bin_g2,
+                        )]
+                    ),
+                    actor_id,
+                )
+            check(
+                "(G2/CRUX) a bin-named issue of 10 against the desynced location "
+                "(total 0) is rejected by the LOCATION floor",
+                False,
+                "issue succeeded — the per-location floor beside the pool floor is gone",
+            )
+        except HTTPException as exc:
+            check(
+                "(G2/CRUX) a bin-named issue of 10 against the desynced location "
+                "(bin pool 10, location total 0) passes the pool guard but is "
+                "rejected 422 by the LOCATION floor",
+                exc.status_code == 422,
+                f"status={exc.status_code}",
+            )
+        async with session_factory() as session:
+            g2_rows_after = await _txn_rows(session, g2_child_item)
+            g2_issue_rows = (
+                await session.execute(
+                    select(func.count()).select_from(WorkOrderIssue).where(
+                        WorkOrderIssue.work_order_id == wo_g2.id
+                    )
+                )
+            ).scalar()
+            g2_loc_after = await _onhand(session, g2_child_item, main_id)
+        check(
+            "(G2/CRUX) the rejected issue wrote NOTHING — ledger row count unchanged "
+            "(receipt + two putaway legs + raw legacy issue == 4), zero issue rows, "
+            "location total still 0 (never negative)",
+            g2_rows_after == g2_rows_before == 4 and g2_issue_rows == 0
+            and g2_loc_after == Decimal("0"),
+            f"before={g2_rows_before!r} after={g2_rows_after!r} "
+            f"issues={g2_issue_rows!r} loc={g2_loc_after!r}",
+        )
+
     finally:
-        await _cleanup(session_factory, part_ids, item_ids, wo_ids)
+        await _cleanup(session_factory, part_ids, item_ids, wo_ids, bin_ids)
         await engine.dispose()
 
 
@@ -1063,18 +1378,25 @@ async def run_concurrency(
 # ---------------------------------------------------------------------------
 
 
-async def _cleanup(session_factory, part_ids: set[str], item_ids: set[str], wo_ids: set[str]) -> None:
+async def _cleanup(
+    session_factory,
+    part_ids: set[str],
+    item_ids: set[str],
+    wo_ids: set[str],
+    bin_ids: set[int],
+) -> None:
     """
     Delete the throwaway rows in FK-safe order: work-order issues -> the WOs'
     source-linked journal lines/entries -> components -> work orders -> inventory
-    txns -> inventory items -> BOM items -> revisions -> parts. The seeded "Main"
-    location and 1130/1140 GL accounts are reused and left in place (real deploy
-    state).
+    txns -> inventory items -> bins -> BOM items -> revisions -> parts. The seeded
+    "Main" location and 1130/1140 GL accounts are reused and left in place (real
+    deploy state).
     """
     async with session_factory() as session:
         wo_id_list = list(wo_ids)
         item_id_list = list(item_ids)
         part_id_list = list(part_ids)
+        bin_id_list = list(bin_ids)
 
         if wo_id_list:
             await session.execute(
@@ -1109,6 +1431,10 @@ async def _cleanup(session_factory, part_ids: set[str], item_ids: set[str], wo_i
             await session.execute(
                 delete(InventoryItem).where(InventoryItem.id.in_(item_id_list))
             )
+
+        # Bins after the txns that FK into them (scenario G's bins).
+        if bin_id_list:
+            await session.execute(delete(Bin).where(Bin.id.in_(bin_id_list)))
 
         if part_id_list:
             await session.execute(

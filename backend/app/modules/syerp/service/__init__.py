@@ -8,41 +8,61 @@ and `service.X` keep working unchanged.
 from __future__ import annotations
 
 from app.modules.syerp.service._common import (
-    _COST_QUANTUM,
+    _COST_QUANTUM,  # noqa: F401
 )
 from app.modules.syerp.service.accounts import (
-    _gl_account_id_by_code,
+    _gl_account_id_by_code,  # noqa: F401
     list_gl_accounts,
 )
-from app.modules.syerp.service.partners import (
-    _build_partner_kwargs,
-    archive_partner,
-    create_partner,
-    generate_partner_code,
-    get_partner,
-    list_partners,
-    update_partner,
+from app.modules.syerp.service.ar import (
+    _INVOICE_NUMBER_RE,  # noqa: F401
+    INVOICE_TRANSITIONS,
+    _get_invoice_row,  # noqa: F401
+    _invoice_received_amount,  # noqa: F401
+    _invoice_to_read,  # noqa: F401
+    _invoice_transition_allowed,  # noqa: F401
+    _load_invoice_lines,  # noqa: F401
+    _next_invoice_number,  # noqa: F401
+    _PreparedInvoiceLine,  # noqa: F401
+    _uninvoiced_qty,  # noqa: F401
+    advance_invoice_status,
+    create_invoice,
+    generate_invoice_number,
+    get_invoice,
+    get_receipt,
+    list_invoices,
+    list_receipts,
+    list_uninvoiced_shipments,
+    post_invoice,
+    record_receipt,
 )
-from app.modules.syerp.service.locations import (
-    create_location,
-    get_location,
-    list_locations,
-    update_location,
-)
-from app.modules.syerp.service.items import (
-    _ITEM_CODE_RE,
-    _build_item_kwargs,
-    _next_item_code,
-    _validate_plum_part,
-    create_item,
-    generate_item_code,
-    get_item,
-    list_items,
-    update_item,
+from app.modules.syerp.service.bills import (
+    _BILL_NUMBER_RE,  # noqa: F401
+    BILL_TRANSITIONS,
+    _already_billed_qty,  # noqa: F401
+    _bill_paid_amount,  # noqa: F401
+    _bill_to_read,  # noqa: F401
+    _bill_transition_allowed,  # noqa: F401
+    _get_bill_row,  # noqa: F401
+    _is_exact_match,  # noqa: F401
+    _is_overpayment,  # noqa: F401
+    _load_bill_lines,  # noqa: F401
+    _next_bill_number,  # noqa: F401
+    _PreparedBillLine,  # noqa: F401
+    _unbilled_qty,  # noqa: F401
+    advance_bill_status,
+    create_bill,
+    generate_bill_number,
+    get_bill,
+    list_bills,
+    list_payments,
+    list_unbilled_receipts,
+    post_bill,
+    record_payment,
 )
 from app.modules.syerp.service.inventory import (
-    _adjustment_violates_floor,
-    _derive_onhand,
+    _adjustment_violates_floor,  # noqa: F401
+    _derive_onhand,  # noqa: F401
     compute_new_moving_avg,
     get_bin_on_hand,
     get_item_on_hand,
@@ -54,16 +74,27 @@ from app.modules.syerp.service.inventory import (
     post_receipt,
     post_transfer,
 )
+from app.modules.syerp.service.items import (
+    _ITEM_CODE_RE,  # noqa: F401
+    _build_item_kwargs,  # noqa: F401
+    _next_item_code,  # noqa: F401
+    _validate_plum_part,  # noqa: F401
+    create_item,
+    generate_item_code,
+    get_item,
+    list_items,
+    update_item,
+)
 from app.modules.syerp.service.journal import (
-    _get_journal_entry_row,
-    _je_account_id,
-    _je_is_balanced,
-    _je_side,
-    _je_to_read,
-    _je_totals,
-    _load_journal_lines,
-    _require_gl_account,
-    _reverse_lines,
+    _get_journal_entry_row,  # noqa: F401
+    _je_account_id,  # noqa: F401
+    _je_is_balanced,  # noqa: F401
+    _je_side,  # noqa: F401
+    _je_to_read,  # noqa: F401
+    _je_totals,  # noqa: F401
+    _load_journal_lines,  # noqa: F401
+    _require_gl_account,  # noqa: F401
+    _reverse_lines,  # noqa: F401
     derive_account_balance,
     get_account_register,
     get_journal_entry,
@@ -72,20 +103,35 @@ from app.modules.syerp.service.journal import (
     post_journal_entry,
     reverse_journal_entry,
 )
+from app.modules.syerp.service.locations import (
+    create_location,
+    get_location,
+    list_locations,
+    update_location,
+)
+from app.modules.syerp.service.partners import (
+    _build_partner_kwargs,  # noqa: F401
+    archive_partner,
+    create_partner,
+    generate_partner_code,
+    get_partner,
+    list_partners,
+    update_partner,
+)
 from app.modules.syerp.service.purchasing import (
+    _PO_NUMBER_RE,  # noqa: F401
     PO_TRANSITIONS,
-    _POAggregates,
-    _PO_NUMBER_RE,
-    _get_line_row,
-    _get_po_row,
-    _is_over_receipt,
-    _load_po_lines,
-    _next_line_no,
-    _next_po_number,
-    _po_aggregates,
-    _po_rollup_status,
-    _po_to_read,
-    _require_draft,
+    _get_line_row,  # noqa: F401
+    _get_po_row,  # noqa: F401
+    _is_over_receipt,  # noqa: F401
+    _load_po_lines,  # noqa: F401
+    _next_line_no,  # noqa: F401
+    _next_po_number,  # noqa: F401
+    _po_aggregates,  # noqa: F401
+    _po_rollup_status,  # noqa: F401
+    _po_to_read,  # noqa: F401
+    _POAggregates,  # noqa: F401
+    _require_draft,  # noqa: F401
     add_line,
     advance_po_status,
     create_po,
@@ -95,52 +141,6 @@ from app.modules.syerp.service.purchasing import (
     receive_line,
     remove_line,
     update_line,
-)
-from app.modules.syerp.service.bills import (
-    BILL_TRANSITIONS,
-    _BILL_NUMBER_RE,
-    _PreparedBillLine,
-    _already_billed_qty,
-    _bill_paid_amount,
-    _bill_to_read,
-    _bill_transition_allowed,
-    _get_bill_row,
-    _is_exact_match,
-    _is_overpayment,
-    _load_bill_lines,
-    _next_bill_number,
-    _unbilled_qty,
-    advance_bill_status,
-    create_bill,
-    generate_bill_number,
-    get_bill,
-    list_bills,
-    list_payments,
-    list_unbilled_receipts,
-    post_bill,
-    record_payment,
-)
-from app.modules.syerp.service.ar import (
-    INVOICE_TRANSITIONS,
-    _INVOICE_NUMBER_RE,
-    _PreparedInvoiceLine,
-    _get_invoice_row,
-    _invoice_received_amount,
-    _invoice_to_read,
-    _invoice_transition_allowed,
-    _load_invoice_lines,
-    _next_invoice_number,
-    _uninvoiced_qty,
-    advance_invoice_status,
-    create_invoice,
-    generate_invoice_number,
-    get_invoice,
-    get_receipt,
-    list_invoices,
-    list_receipts,
-    list_uninvoiced_shipments,
-    post_invoice,
-    record_receipt,
 )
 from app.modules.syerp.service.reports import (
     ap_aging_report,

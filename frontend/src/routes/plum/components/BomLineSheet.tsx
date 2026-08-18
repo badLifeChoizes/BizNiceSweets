@@ -178,7 +178,6 @@ export function BomLineSheet({
       setFormQty(String(existingLine.qty))
       setFormRefDes(existingLine.ref_des ?? '')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, existingLine])
 
   // ── Select a part from search results ──

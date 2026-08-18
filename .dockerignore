@@ -12,10 +12,14 @@
 steps.txt
 
 # Secrets must never be baked into the image (T-01-10).
-# Operator supplies .env at runtime via compose env_file. .env.example does not
-# match this pattern (it ends in .example) so the template stays available.
-.env
+# Operator supplies .env / .env.db at runtime via compose env_file. `.env` alone is
+# an EXACT match and `*.env` matches only names ENDING in .env, so neither covered
+# the database-credential file `.env.db` (D-P5-10) — hence the `.env*` prefix form,
+# which also covers whatever the next secret file is called. The negation keeps the
+# tracked templates in the context so they stay copyable.
+.env*
 *.env
+!.env*.example
 
 # Single-file HTML prototype suites — not part of the container image
 plum/
@@ -40,6 +44,13 @@ frontend/dist/
 
 # Backend tests are not needed in the runtime image
 backend/tests/
+
+# backend/scripts/ — including seed_uat_fixtures.py — DELIBERATELY still ships. The
+# QA check C-CORE-08 (prod-stack deploy smoke, .zj/QA.md) seeds the named fixtures
+# INSIDE the prod image on a fresh volume, where no ../backend bind mount exists to
+# supply the script. The seeder is gated instead: it refuses unless the stack sets
+# BNS_ALLOW_UAT_SEED=1 (only compose.dev.yml does) and unless the ledger is empty of
+# entries it did not post itself.
 
 # Editor / OS artifacts
 *.log

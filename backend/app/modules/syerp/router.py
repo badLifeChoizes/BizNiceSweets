@@ -116,11 +116,11 @@ from app.modules.syerp.schemas import (
     BillCreate,
     BillRead,
     GLAccountRead,
-    InvoiceCreate,
-    InvoiceRead,
     InventoryItemCreate,
     InventoryItemRead,
     InventoryItemUpdate,
+    InvoiceCreate,
+    InvoiceRead,
     ItemOnHandRead,
     JournalEntryCreate,
     JournalEntryRead,
@@ -153,7 +153,6 @@ from app.modules.syerp.service import (
     advance_po_status,
     ap_aging_report,
     ar_aging_report,
-    archive_partner,
     balance_sheet,
     create_bill,
     create_invoice,
@@ -170,13 +169,13 @@ from app.modules.syerp.service import (
     get_location,
     get_partner,
     get_po,
+    latest_journal_entry_id_for_source,
     list_bills,
     list_gl_accounts,
     list_invoices,
     list_item_transactions,
     list_items,
     list_journal_entries,
-    latest_journal_entry_id_for_source,
     list_locations,
     list_partners,
     list_pos,
@@ -193,8 +192,8 @@ from app.modules.syerp.service import (
     receive_line,
     record_payment,
     record_receipt,
-    reverse_journal_entry,
     remove_line,
+    reverse_journal_entry,
     trial_balance,
     update_item,
     update_line,
@@ -506,11 +505,14 @@ async def post_adjustment_endpoint(
 
     Appends one immutable signed `adjustment` ledger row with a required `reason`.
     A negative `qty_delta` covers the manual write-off / "issue" case (the `issue`
-    txn_type stays reserved for MOUSSE). Rejects with 422 if the resulting
-    location on-hand would go below zero (per-location negative-stock guard) —
-    no row is written. The item's moving-average is left untouched (only receipts
-    move it, AC10-5). Requires syerp:write. Returns 404 if the item or location
-    does not exist. Writes an inventory.adjustment audit row.
+    txn_type stays reserved for MOUSSE). `bin_id` is explicit-or-unbinned
+    (D-P4-1, D-P4-6): a concrete bin targets that bin's pool, None targets ONLY
+    the location's unbinned pool. Rejects with 422 if the resulting location
+    on-hand would go below zero (per-location negative-stock guard) or, for a
+    negative delta, if the named pool cannot cover the draw — no row is written.
+    The item's moving-average is left untouched (only receipts move it, AC10-5).
+    Requires syerp:write. Returns 404 if the item or location does not exist.
+    Writes an inventory.adjustment audit row.
     """
     txn = await post_adjustment(
         db,
@@ -519,7 +521,9 @@ async def post_adjustment_endpoint(
         qty_delta=data.qty_delta,
         reason=data.reason,
         actor_id=str(current_user.id),
+        bin_id=data.bin_id,
     )
+    bin_note = "unbinned pool" if data.bin_id is None else f"bin {data.bin_id}"
     await write_audit(
         db,
         actor_id=str(current_user.id),
@@ -528,7 +532,7 @@ async def post_adjustment_endpoint(
         target_id=str(txn.id),
         detail=(
             f"Adjustment: {data.qty_delta} of item {item_id} at location "
-            f"{data.location_id} ({data.reason})"
+            f"{data.location_id} ({bin_note}) ({data.reason})"
         ),
     )
     return txn
@@ -552,11 +556,15 @@ async def post_transfer_endpoint(
     transfer_group_id — a `-qty` leg at `from_location_id` and a `+qty` leg at
     `to_location_id`, both valued at the item's current moving-average cost. Total
     item on-hand nets to zero and the moving-average is left untouched (only
-    receipts move it, AC10-5). Rejects with 422 if the source and destination are
-    the same, `qty` <= 0, or the transfer would over-draw the source location
-    (per-location negative-stock guard) — no rows are written. Requires
-    syerp:write. Returns 404 if the item or either location does not exist. Writes
-    an inventory.transfer audit row.
+    receipts move it, AC10-5). `from_bin_id` is explicit-or-unbinned (D-P4-1): a
+    concrete bin draws the out leg from that bin's pool, None draws ONLY the
+    source location's unbinned pool; the in leg always lands UNBINNED at the
+    destination — putaway directs it later (D-P4-5). Rejects with 422 if the
+    source and destination are the same, `qty` <= 0, or the transfer would
+    over-draw the source location (per-location negative-stock guard) or the
+    named source pool — no rows are written. Requires syerp:write. Returns 404
+    if the item or either location does not exist. Writes an inventory.transfer
+    audit row.
     """
     txns = await post_transfer(
         db,
@@ -565,7 +573,9 @@ async def post_transfer_endpoint(
         to_location_id=data.to_location_id,
         qty=data.qty,
         actor_id=str(current_user.id),
+        from_bin_id=data.from_bin_id,
     )
+    bin_note = "unbinned pool" if data.from_bin_id is None else f"bin {data.from_bin_id}"
     await write_audit(
         db,
         actor_id=str(current_user.id),
@@ -574,7 +584,7 @@ async def post_transfer_endpoint(
         target_id=str(txns[0].id),
         detail=(
             f"Transfer: {data.qty} of item {item_id} from location "
-            f"{data.from_location_id} to location {data.to_location_id}"
+            f"{data.from_location_id} ({bin_note}) to location {data.to_location_id}"
         ),
     )
     return txns

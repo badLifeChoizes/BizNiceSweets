@@ -179,7 +179,7 @@ def http(method: str, path: str, token: str | None = None, payload: dict | None 
 
 async def _seed_shipped_line(
     session_factory,
-    reg: "Registry",
+    reg: Registry,
     unique: str,
     actor_id: str,
     location_id: int,

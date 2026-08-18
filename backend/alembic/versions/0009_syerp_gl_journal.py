@@ -46,9 +46,11 @@ Threat mitigations baked into schema:
   prevents lines against a non-existent GL account; self-FK reversal_of_id
   prevents a reversal pointing at a non-existent original entry.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

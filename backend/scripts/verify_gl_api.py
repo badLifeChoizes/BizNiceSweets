@@ -45,7 +45,6 @@ import urllib.error
 import urllib.request
 import uuid
 from datetime import date
-from decimal import Decimal
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine

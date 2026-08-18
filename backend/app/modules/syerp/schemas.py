@@ -18,10 +18,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
-
 
 # ---------------------------------------------------------------------------
 # Partner schemas
@@ -38,32 +36,32 @@ class PartnerCreate(BaseModel):
 
     # Identity
     name: str = Field(..., max_length=255)
-    code: Optional[str] = Field(None, max_length=20)
+    code: str | None = Field(None, max_length=20)
     is_vendor: bool = False
     is_customer: bool = False
 
     # Address block (D-03) — max_length matches models.py column definitions
-    addr_line1: Optional[str] = Field(None, max_length=255)
-    addr_line2: Optional[str] = Field(None, max_length=255)
-    addr_city: Optional[str] = Field(None, max_length=100)
-    addr_state: Optional[str] = Field(None, max_length=100)
-    addr_postal: Optional[str] = Field(None, max_length=20)
-    addr_country: Optional[str] = Field(None, max_length=2)
+    addr_line1: str | None = Field(None, max_length=255)
+    addr_line2: str | None = Field(None, max_length=255)
+    addr_city: str | None = Field(None, max_length=100)
+    addr_state: str | None = Field(None, max_length=100)
+    addr_postal: str | None = Field(None, max_length=20)
+    addr_country: str | None = Field(None, max_length=2)
 
     # Contact block (D-03)
-    contact_name: Optional[str] = Field(None, max_length=255)
-    contact_email: Optional[str] = Field(None, max_length=255)
-    contact_phone: Optional[str] = Field(None, max_length=50)
+    contact_name: str | None = Field(None, max_length=255)
+    contact_email: str | None = Field(None, max_length=255)
+    contact_phone: str | None = Field(None, max_length=50)
 
     # Commerce (D-03)
-    payment_terms: Optional[str] = Field(None, max_length=50)
-    tax_id: Optional[str] = Field(None, max_length=50)
-    currency: Optional[str] = Field(None, max_length=3)
-    country_of_origin: Optional[str] = Field(None, max_length=2)
-    notes: Optional[str] = None
+    payment_terms: str | None = Field(None, max_length=50)
+    tax_id: str | None = Field(None, max_length=50)
+    currency: str | None = Field(None, max_length=3)
+    country_of_origin: str | None = Field(None, max_length=2)
+    notes: str | None = None
 
     @model_validator(mode="after")
-    def require_at_least_one_role(self) -> "PartnerCreate":
+    def require_at_least_one_role(self) -> PartnerCreate:
         """Reject partners with no role flag set (Pitfall 8)."""
         if not self.is_vendor and not self.is_customer:
             raise ValueError(
@@ -83,34 +81,34 @@ class PartnerUpdate(BaseModel):
     rule only when both flags are explicitly provided as False.
     """
 
-    name: Optional[str] = Field(None, max_length=255)
-    code: Optional[str] = Field(None, max_length=20)
-    is_vendor: Optional[bool] = None
-    is_customer: Optional[bool] = None
-    active: Optional[bool] = None
+    name: str | None = Field(None, max_length=255)
+    code: str | None = Field(None, max_length=20)
+    is_vendor: bool | None = None
+    is_customer: bool | None = None
+    active: bool | None = None
 
     # Address block
-    addr_line1: Optional[str] = Field(None, max_length=255)
-    addr_line2: Optional[str] = Field(None, max_length=255)
-    addr_city: Optional[str] = Field(None, max_length=100)
-    addr_state: Optional[str] = Field(None, max_length=100)
-    addr_postal: Optional[str] = Field(None, max_length=20)
-    addr_country: Optional[str] = Field(None, max_length=2)
+    addr_line1: str | None = Field(None, max_length=255)
+    addr_line2: str | None = Field(None, max_length=255)
+    addr_city: str | None = Field(None, max_length=100)
+    addr_state: str | None = Field(None, max_length=100)
+    addr_postal: str | None = Field(None, max_length=20)
+    addr_country: str | None = Field(None, max_length=2)
 
     # Contact block
-    contact_name: Optional[str] = Field(None, max_length=255)
-    contact_email: Optional[str] = Field(None, max_length=255)
-    contact_phone: Optional[str] = Field(None, max_length=50)
+    contact_name: str | None = Field(None, max_length=255)
+    contact_email: str | None = Field(None, max_length=255)
+    contact_phone: str | None = Field(None, max_length=50)
 
     # Commerce
-    payment_terms: Optional[str] = Field(None, max_length=50)
-    tax_id: Optional[str] = Field(None, max_length=50)
-    currency: Optional[str] = Field(None, max_length=3)
-    country_of_origin: Optional[str] = Field(None, max_length=2)
-    notes: Optional[str] = None
+    payment_terms: str | None = Field(None, max_length=50)
+    tax_id: str | None = Field(None, max_length=50)
+    currency: str | None = Field(None, max_length=3)
+    country_of_origin: str | None = Field(None, max_length=2)
+    notes: str | None = None
 
     @model_validator(mode="after")
-    def validate_role_flags(self) -> "PartnerUpdate":
+    def validate_role_flags(self) -> PartnerUpdate:
         """
         Reject a PATCH that would leave the partner with no roles.
 
@@ -142,24 +140,24 @@ class PartnerRead(BaseModel):
     active: bool
 
     # Address
-    addr_line1: Optional[str] = None
-    addr_line2: Optional[str] = None
-    addr_city: Optional[str] = None
-    addr_state: Optional[str] = None
-    addr_postal: Optional[str] = None
-    addr_country: Optional[str] = None
+    addr_line1: str | None = None
+    addr_line2: str | None = None
+    addr_city: str | None = None
+    addr_state: str | None = None
+    addr_postal: str | None = None
+    addr_country: str | None = None
 
     # Contact
-    contact_name: Optional[str] = None
-    contact_email: Optional[str] = None
-    contact_phone: Optional[str] = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
 
     # Commerce
-    payment_terms: Optional[str] = None
-    tax_id: Optional[str] = None
-    currency: Optional[str] = None
-    country_of_origin: Optional[str] = None
-    notes: Optional[str] = None
+    payment_terms: str | None = None
+    tax_id: str | None = None
+    currency: str | None = None
+    country_of_origin: str | None = None
+    notes: str | None = None
 
     # Timestamps
     created_at: datetime
@@ -187,9 +185,9 @@ class InventoryItemCreate(BaseModel):
     """
 
     name: str = Field(..., max_length=255)
-    code: Optional[str] = Field(None, max_length=20)
+    code: str | None = Field(None, max_length=20)
     unit_of_measure: str = Field(..., max_length=50)
-    plum_part_id: Optional[str] = Field(None, max_length=36)
+    plum_part_id: str | None = Field(None, max_length=36)
 
 
 class InventoryItemUpdate(BaseModel):
@@ -202,11 +200,11 @@ class InventoryItemUpdate(BaseModel):
     it is owned by the receipt costing path (Task 5), not the item API (D-11).
     """
 
-    name: Optional[str] = Field(None, max_length=255)
-    code: Optional[str] = Field(None, max_length=20)
-    unit_of_measure: Optional[str] = Field(None, max_length=50)
-    plum_part_id: Optional[str] = Field(None, max_length=36)
-    active: Optional[bool] = None
+    name: str | None = Field(None, max_length=255)
+    code: str | None = Field(None, max_length=20)
+    unit_of_measure: str | None = Field(None, max_length=50)
+    plum_part_id: str | None = Field(None, max_length=36)
+    active: bool | None = None
 
 
 class InventoryItemRead(BaseModel):
@@ -221,7 +219,7 @@ class InventoryItemRead(BaseModel):
     code: str
     name: str
     unit_of_measure: str
-    plum_part_id: Optional[str] = None
+    plum_part_id: str | None = None
     moving_avg_cost: Decimal
     active: bool
 
@@ -257,8 +255,8 @@ class StockLocationUpdate(BaseModel):
     from the default list.
     """
 
-    name: Optional[str] = Field(None, max_length=100)
-    active: Optional[bool] = None
+    name: str | None = Field(None, max_length=100)
+    active: bool | None = None
 
 
 class StockLocationRead(BaseModel):
@@ -337,8 +335,8 @@ class ReceiptCreate(BaseModel):
     location_id: int
     qty: Decimal = Field(..., gt=0)
     unit_cost: Decimal = Field(..., ge=0)
-    source_type: Optional[str] = Field(None, max_length=50)
-    source_id: Optional[str] = Field(None, max_length=36)
+    source_type: str | None = Field(None, max_length=50)
+    source_id: str | None = Field(None, max_length=36)
 
 
 class AdjustmentCreate(BaseModel):
@@ -354,13 +352,22 @@ class AdjustmentCreate(BaseModel):
     carry a unit_cost and never move the item's moving-average — only receipts
     do (AC10-5).
 
-    The negative-stock guard (resulting LOCATION on-hand would be < 0) is
-    enforced in the service, not here, because it depends on live DB state.
+    `bin_id` is EXPLICIT-OR-UNBINNED (D-P4-1, D-P4-6): a concrete bin targets
+    that single bin's pool; None (the default) targets ONLY the location's
+    UNBINNED pool — the server never auto-allocates across bins. A positive
+    delta lands stock directly in the named bin (or the unbinned pool); a
+    negative delta may only draw the named pool, so a write-off at a
+    fully-binned location must name the bin it draws from.
+
+    The negative-stock guards (resulting LOCATION on-hand < 0, and for a
+    negative delta the named POOL on-hand < 0) are enforced in the service, not
+    here, because they depend on live DB state.
     """
 
     location_id: int
     qty_delta: Decimal
     reason: str = Field(..., min_length=1, max_length=255)
+    bin_id: int | None = None
 
 
 class TransferCreate(BaseModel):
@@ -373,18 +380,28 @@ class TransferCreate(BaseModel):
     on-hand nets to zero and the moving-average is left untouched (only receipts
     move it, AC10-5).
 
+    `from_bin_id` is EXPLICIT-OR-UNBINNED (D-P4-1): a concrete bin draws the
+    `-qty` leg from that single bin's pool at the source; None (the default)
+    draws ONLY the source location's UNBINNED pool — the server never
+    auto-allocates across bins, so transferring out of a fully-binned location
+    requires naming the bin. There is deliberately NO `to_bin_id`: the `+qty`
+    in leg always lands UNBINNED at the destination and putaway directs it into
+    a bin later (D-P4-5).
+
     `qty` must be > 0 (a transfer is a positive movement between locations; the
     sign is applied per-leg by the service). The remaining guards depend on live
     DB state and are enforced in the service:
       - `from_location_id == to_location_id` is rejected (422) — a self-transfer
         is a no-op.
       - source-location on-hand < `qty` (over-draw) is rejected (422, AC10-6) so
-        a transfer can never drive the source location negative.
+        a transfer can never drive the source location negative; the source
+        POOL named by `from_bin_id` is floor-guarded the same way (422).
     """
 
     from_location_id: int
     to_location_id: int
     qty: Decimal = Field(..., gt=0)
+    from_bin_id: int | None = None
 
 
 class TransactionRead(BaseModel):
@@ -402,8 +419,8 @@ class TransactionRead(BaseModel):
     location_name: str
     txn_type: str
     quantity: Decimal
-    unit_cost: Optional[Decimal] = None
-    reason: Optional[str] = None
+    unit_cost: Decimal | None = None
+    reason: str | None = None
     created_at: datetime
 
 
@@ -433,7 +450,7 @@ class POLineCreate(BaseModel):
     item_id: str = Field(..., max_length=36)
     qty_ordered: Decimal = Field(..., gt=0)
     unit_cost: Decimal = Field(..., ge=0)
-    need_by_date: Optional[date] = None
+    need_by_date: date | None = None
 
 
 class POLineUpdate(BaseModel):
@@ -447,10 +464,10 @@ class POLineUpdate(BaseModel):
     (enforced in the service, AC11-1).
     """
 
-    item_id: Optional[str] = Field(None, max_length=36)
-    qty_ordered: Optional[Decimal] = Field(None, gt=0)
-    unit_cost: Optional[Decimal] = Field(None, ge=0)
-    need_by_date: Optional[date] = None
+    item_id: str | None = Field(None, max_length=36)
+    qty_ordered: Decimal | None = Field(None, gt=0)
+    unit_cost: Decimal | None = Field(None, ge=0)
+    need_by_date: date | None = None
 
 
 class POLineRead(BaseModel):
@@ -468,7 +485,7 @@ class POLineRead(BaseModel):
     qty_ordered: Decimal
     unit_cost: Decimal
     qty_received: Decimal
-    need_by_date: Optional[date] = None
+    need_by_date: date | None = None
 
     model_config = {"from_attributes": True}
 
@@ -485,7 +502,7 @@ class POCreate(BaseModel):
     """
 
     vendor_id: str = Field(..., max_length=36)
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class PORead(BaseModel):
@@ -508,9 +525,9 @@ class PORead(BaseModel):
     po_number: str
     vendor_id: str
     status: str
-    notes: Optional[str] = None
-    approved_at: Optional[datetime] = None
-    approved_by: Optional[str] = None
+    notes: str | None = None
+    approved_at: datetime | None = None
+    approved_by: str | None = None
     created_at: datetime
     updated_at: datetime
     # Per-PO roll-ups computed in the service from the loaded lines (no N+1):
@@ -557,7 +574,7 @@ class GLAccountRead(BaseModel):
     code: str
     name: str
     account_type: str  # ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
-    parent_id: Optional[int] = None
+    parent_id: int | None = None
     active: bool
 
     model_config = {"from_attributes": True}
@@ -587,11 +604,11 @@ class JournalLineCreate(BaseModel):
     """
 
     account_id: int
-    debit: Optional[Decimal] = None
-    credit: Optional[Decimal] = None
+    debit: Decimal | None = None
+    credit: Decimal | None = None
 
     @model_validator(mode="after")
-    def exactly_one_side_non_negative(self) -> "JournalLineCreate":
+    def exactly_one_side_non_negative(self) -> JournalLineCreate:
         """Reject lines that set both sides, neither side, or a negative amount."""
         if (self.debit is None) == (self.credit is None):
             raise ValueError(
@@ -616,7 +633,7 @@ class JournalEntryCreate(BaseModel):
     """
 
     entry_date: date
-    memo: Optional[str] = None
+    memo: str | None = None
     lines: list[JournalLineCreate]
 
 
@@ -631,8 +648,8 @@ class JournalLineRead(BaseModel):
     id: str  # String(36) uuid PK (models.py) — D-P9a-1
     line_no: int
     account_id: int
-    debit: Optional[Decimal] = None
-    credit: Optional[Decimal] = None
+    debit: Decimal | None = None
+    credit: Decimal | None = None
 
     model_config = {"from_attributes": True}
 
@@ -650,10 +667,10 @@ class JournalEntryRead(BaseModel):
 
     id: str  # String(36) uuid PK (models.py) — D-P9a-1
     entry_date: date
-    memo: Optional[str] = None
-    source_type: Optional[str] = None
-    source_id: Optional[str] = None
-    reversal_of_id: Optional[str] = None  # self-FK String(36) — D-P9a-1
+    memo: str | None = None
+    source_type: str | None = None
+    source_id: str | None = None
+    reversal_of_id: str | None = None  # self-FK String(36) — D-P9a-1
     actor_id: str
     created_at: datetime
     lines: list[JournalLineRead] = Field(default_factory=list)
@@ -670,7 +687,7 @@ class ReverseRequest(BaseModel):
     (the service supplies a default derived from the original when omitted).
     """
 
-    memo: Optional[str] = None
+    memo: str | None = None
 
 
 class AccountRegisterRow(BaseModel):
@@ -681,9 +698,9 @@ class AccountRegisterRow(BaseModel):
 
     entry_date: date
     entry_id: str  # JournalEntry.id String(36) uuid — D-P9a-1
-    memo: Optional[str] = None
-    debit: Optional[Decimal] = None
-    credit: Optional[Decimal] = None
+    memo: str | None = None
+    debit: Decimal | None = None
+    credit: Decimal | None = None
     running_balance: Decimal
 
 
@@ -749,13 +766,13 @@ class BillLineCreate(BaseModel):
     """
 
     line_type: str  # 'matched' | 'expense'
-    po_line_id: Optional[str] = None
-    matched_qty: Optional[Decimal] = None
-    account_id: Optional[int] = None
-    amount: Optional[Decimal] = None
+    po_line_id: str | None = None
+    matched_qty: Decimal | None = None
+    account_id: int | None = None
+    amount: Decimal | None = None
 
     @model_validator(mode="after")
-    def exactly_one_line_shape(self) -> "BillLineCreate":
+    def exactly_one_line_shape(self) -> BillLineCreate:
         """Reject any line that is not a clean 'matched' or 'expense' shape."""
         if self.po_line_id is not None and self.account_id is not None:
             raise ValueError(
@@ -793,10 +810,10 @@ class BillCreate(BaseModel):
     """
 
     vendor_id: str = Field(..., max_length=36)
-    vendor_invoice_ref: Optional[str] = None
+    vendor_invoice_ref: str | None = None
     # bill_date: the vendor's invoice date AP aging buckets from; defaults to
     # today server-side when omitted (D-P9c-1).
-    bill_date: Optional[date] = None
+    bill_date: date | None = None
     lines: list[BillLineCreate] = Field(..., min_length=1)
 
 
@@ -813,10 +830,10 @@ class BillLineRead(BaseModel):
     id: str
     line_no: int
     line_type: str
-    po_line_id: Optional[str] = None
-    matched_qty: Optional[Decimal] = None
-    account_id: Optional[int] = None
-    unit_cost: Optional[Decimal] = None
+    po_line_id: str | None = None
+    matched_qty: Decimal | None = None
+    account_id: int | None = None
+    unit_cost: Decimal | None = None
     amount: Decimal
 
     model_config = {"from_attributes": True}
@@ -837,11 +854,11 @@ class BillRead(BaseModel):
     id: str
     bill_number: str
     vendor_id: str
-    vendor_invoice_ref: Optional[str] = None
+    vendor_invoice_ref: str | None = None
     bill_date: date
     status: str
-    memo: Optional[str] = None
-    posted_at: Optional[datetime] = None
+    memo: str | None = None
+    posted_at: datetime | None = None
     total: Decimal = Decimal("0")
     open_balance: Decimal = Decimal("0")
     lines: list[BillLineRead] = Field(default_factory=list)
@@ -875,7 +892,7 @@ class PaymentCreate(BaseModel):
 
     payment_date: date
     cash_account_id: int
-    reference: Optional[str] = None
+    reference: str | None = None
     allocations: list[PaymentAllocationCreate] = Field(..., min_length=1)
 
 
@@ -906,7 +923,7 @@ class PaymentRead(BaseModel):
     payment_date: date
     cash_account_id: int
     amount: Decimal
-    reference: Optional[str] = None
+    reference: str | None = None
     allocations: list[PaymentAllocationRead] = Field(default_factory=list)
     created_at: datetime
 
@@ -943,9 +960,9 @@ class UninvoicedShipmentRead(BaseModel):
 
     sales_order_line_id: str
     so_number: str
-    item_id: Optional[str] = None
-    item_label: Optional[str] = None
-    description: Optional[str] = None
+    item_id: str | None = None
+    item_label: str | None = None
+    description: str | None = None
     uninvoiced_qty: Decimal
     unit_price: Decimal
 
@@ -976,8 +993,8 @@ class InvoiceCreate(BaseModel):
     """
 
     customer_id: str = Field(..., max_length=36)
-    sales_order_id: Optional[str] = None
-    invoice_date: Optional[date] = None
+    sales_order_id: str | None = None
+    invoice_date: date | None = None
     lines: list[InvoiceLineCreate] = Field(..., min_length=1)
 
 
@@ -1014,11 +1031,11 @@ class InvoiceRead(BaseModel):
     id: str
     invoice_number: str
     customer_id: str
-    sales_order_id: Optional[str] = None
+    sales_order_id: str | None = None
     invoice_date: date
     status: str
-    memo: Optional[str] = None
-    posted_at: Optional[datetime] = None
+    memo: str | None = None
+    posted_at: datetime | None = None
     total: Decimal = Decimal("0")
     open_balance: Decimal = Decimal("0")
     lines: list[InvoiceLineRead] = Field(default_factory=list)
@@ -1056,7 +1073,7 @@ class ArReceiptCreate(BaseModel):
 
     receipt_date: date
     cash_account_id: int
-    reference: Optional[str] = None
+    reference: str | None = None
     allocations: list[ReceiptAllocationCreate] = Field(..., min_length=1)
 
 
@@ -1087,7 +1104,7 @@ class ReceiptRead(BaseModel):
     receipt_date: date
     cash_account_id: int
     amount: Decimal
-    reference: Optional[str] = None
+    reference: str | None = None
     allocations: list[ReceiptAllocationRead] = Field(default_factory=list)
     created_at: datetime
 

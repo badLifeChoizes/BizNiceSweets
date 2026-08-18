@@ -10,11 +10,10 @@ Behaviors tested (CORE-04, D-02, D-09):
   - The seeded admin's hashed_password != plaintext and verifies via verify_password.
 
 Tests require a live PostgreSQL database (skip_if_no_db).
+
+The seeded_db fixture is auto-discovered via tests/auth/conftest.py (re-exported
+from conftest_helpers) — no module-level import is needed here.
 """
-import pytest
-
-from tests.auth.conftest_helpers import seeded_db  # noqa: F401 — fixture re-export
-
 
 # ---------------------------------------------------------------------------
 # Idempotency

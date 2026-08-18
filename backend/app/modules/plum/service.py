@@ -58,7 +58,7 @@ All queries use explicit select(...) calls.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -67,13 +67,15 @@ from sqlalchemy import Numeric, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
-    from app.modules.plum.models import PlumBomItem, PlumPart, PlumPartRevision, PlumPartTag
+    from app.modules.plum.models import PlumBomItem, PlumPart, PlumPartRevision
     from app.modules.plum.schemas import (
         AvlLinkCreate,
         AvlLinkUpdate,
         BomItemCreate,
         BomItemUpdate,
         CostUpdate,
+        ImportCommitResponse,
+        ImportPreviewResponse,
         PartCreate,
         PartUpdate,
         PriceBreakCreate,
@@ -287,7 +289,7 @@ def _semver_major_bump(label: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def create_part(db: AsyncSession, data: "PartCreate") -> "PlumPart":
+async def create_part(db: AsyncSession, data: PartCreate) -> PlumPart:
     """
     Insert a new part + auto-create its first Draft revision (D-03).
 
@@ -387,7 +389,12 @@ async def list_parts(
     Returns a list of dicts shaped for PartRead serialization, including
     current_revision_label, current_revision_status, and tag name list.
     """
-    from app.modules.plum.models import PlumClassificationTag, PlumPart, PlumPartRevision, PlumPartTag
+    from app.modules.plum.models import (
+        PlumClassificationTag,
+        PlumPart,
+        PlumPartRevision,
+        PlumPartTag,
+    )
 
     # Subquery: max revision_number per part_id (latest revision)
     latest_rev_sq = (
@@ -468,7 +475,7 @@ async def list_parts(
     return parts_out
 
 
-async def get_part(db: AsyncSession, part_id: str) -> "PlumPart":
+async def get_part(db: AsyncSession, part_id: str) -> PlumPart:
     """
     Load a part by id.
 
@@ -494,7 +501,11 @@ async def get_part_with_revisions(db: AsyncSession, part_id: str) -> dict:
 
     Shaped for PartDetailRead serialization. Raises 404 if part not found.
     """
-    from app.modules.plum.models import PlumClassificationTag, PlumPart, PlumPartRevision, PlumPartTag
+    from app.modules.plum.models import (
+        PlumClassificationTag,
+        PlumPartRevision,
+        PlumPartTag,
+    )
 
     # Load the part (raises 404 if missing)
     part = await get_part(db, part_id)
@@ -530,7 +541,7 @@ async def get_part_with_revisions(db: AsyncSession, part_id: str) -> dict:
 async def update_part(
     db: AsyncSession,
     part_id: str,
-    data: "PartUpdate",
+    data: PartUpdate,
 ) -> dict:
     """
     Apply a partial update to a part (PATCH semantics).
@@ -545,7 +556,11 @@ async def update_part(
 
     Returns a dict shaped for PartRead (with current_revision_* fields populated).
     """
-    from app.modules.plum.models import PlumClassificationTag, PlumPart, PlumPartRevision, PlumPartTag
+    from app.modules.plum.models import (
+        PlumClassificationTag,
+        PlumPartRevision,
+        PlumPartTag,
+    )
 
     part = await get_part(db, part_id)
     update_data = data.model_dump(exclude_unset=True)
@@ -631,7 +646,7 @@ async def update_part(
 # ---------------------------------------------------------------------------
 
 
-async def get_revision(db: AsyncSession, revision_id: str) -> "PlumPartRevision":
+async def get_revision(db: AsyncSession, revision_id: str) -> PlumPartRevision:
     """
     Load a revision by id.
 
@@ -655,7 +670,7 @@ async def get_revision(db: AsyncSession, revision_id: str) -> "PlumPartRevision"
 
 async def get_released_revision(
     db: AsyncSession, part_id: str
-) -> "PlumPartRevision | None":
+) -> PlumPartRevision | None:
     """
     Return the currently Released revision for a part, or None if none exists.
 
@@ -676,9 +691,9 @@ async def get_released_revision(
 async def create_revision(
     db: AsyncSession,
     part_id: str,
-    data: "RevisionCreate",
+    data: RevisionCreate,
     actor_id: str,
-) -> "PlumPartRevision":
+) -> PlumPartRevision:
     """
     Create a new Draft revision for a part (D-03 copy-forward).
 
@@ -801,7 +816,7 @@ async def advance_revision_status(
     revision_id: str,
     target_status: str,
     actor_id: str,
-) -> "PlumPartRevision":
+) -> PlumPartRevision:
     """
     Advance a revision through the FSM (D-07/D-08).
 
@@ -828,7 +843,6 @@ async def advance_revision_status(
       - "obsolete"  → not exposed via API directly (supersede-only path)
     """
     from app.modules.auth.service import write_audit
-    from app.modules.plum.models import PlumPartRevision
 
     # Verify part exists
     await get_part(db, part_id)
@@ -857,7 +871,7 @@ async def advance_revision_status(
         prior_released = await get_released_revision(db, part_id)
         if prior_released and prior_released.id != revision_id:
             prior_released.status = "obsolete"
-            prior_released.obsoleted_at = datetime.now(timezone.utc)
+            prior_released.obsoleted_at = datetime.now(UTC)
             # Flush before the second update to avoid violating the partial unique
             # index uq_plum_part_one_released (Pitfall 3 from RESEARCH.md)
             await db.flush()
@@ -881,7 +895,7 @@ async def advance_revision_status(
         scheme = await _get_revision_scheme(db)
         new_label = _release_label(scheme, revision.revision_label)
         revision.revision_label = new_label
-        revision.released_at = datetime.now(timezone.utc)
+        revision.released_at = datetime.now(UTC)
 
     # Apply the transition
     revision.status = target_status
@@ -1048,10 +1062,10 @@ async def _copy_bom_forward(
 async def add_bom_line(
     db: AsyncSession,
     part_id: str,
-    data: "BomItemCreate",
+    data: BomItemCreate,
     revision_id: str,
     actor_id: str,
-) -> "PlumBomItem":
+) -> PlumBomItem:
     """
     Add a child part to a Draft revision's BOM (PLUM-04/D-01/D-04).
 
@@ -1139,9 +1153,9 @@ async def update_bom_line(
     db: AsyncSession,
     part_id: str,
     line_id: str,
-    data: "BomItemUpdate",
+    data: BomItemUpdate,
     actor_id: str,
-) -> "PlumBomItem":
+) -> PlumBomItem:
     """
     Update a BOM line's qty / ref_des / sort_order (PLUM-04/D-01).
 
@@ -1638,7 +1652,7 @@ async def list_avl_links(
 async def add_avl_link(
     db: AsyncSession,
     part_id: str,
-    data: "AvlLinkCreate",
+    data: AvlLinkCreate,
     actor_id: str,
 ) -> dict:
     """
@@ -1731,7 +1745,7 @@ async def update_avl_link(
     db: AsyncSession,
     part_id: str,
     link_id: str,
-    data: "AvlLinkUpdate",
+    data: AvlLinkUpdate,
     actor_id: str,
 ) -> dict:
     """
@@ -1835,7 +1849,7 @@ async def add_price_break(
     db: AsyncSession,
     part_id: str,
     link_id: str,
-    data: "PriceBreakCreate",
+    data: PriceBreakCreate,
     actor_id: str,
 ) -> dict:
     """
@@ -1909,7 +1923,7 @@ async def add_price_break(
 
 async def compute_effective_cost(
     db: AsyncSession,
-    revision: "PlumPartRevision",
+    revision: PlumPartRevision,
     bom_rollup: Decimal | None = None,
 ) -> tuple[Decimal | None, str]:
     """
@@ -1984,9 +1998,9 @@ async def update_cost(
     db: AsyncSession,
     part_id: str,
     revision_id: str,
-    data: "CostUpdate",
+    data: CostUpdate,
     actor_id: str,
-) -> "PlumPartRevision":
+) -> PlumPartRevision:
     """
     Update cost fields on a Draft revision (PLUM-08/D-06/D-07).
 
@@ -2100,6 +2114,8 @@ async def build_json_export(db: AsyncSession) -> dict:
     Decimal values are cast to str for lossless JSON round-trip.
     Returns a dict with schema_version=1 and an exported_at timestamp.
     """
+    from sqlalchemy import text as sa_text
+
     from app.modules.plum.models import (
         PlumAvlLink,
         PlumAvlPriceBreak,
@@ -2107,7 +2123,6 @@ async def build_json_export(db: AsyncSession) -> dict:
         PlumPart,
         PlumPartRevision,
     )
-    from sqlalchemy import text as sa_text
 
     # Load all parts
     parts_result = await db.execute(
@@ -2269,7 +2284,7 @@ async def build_json_export(db: AsyncSession) -> dict:
 
     return {
         "schema_version": 1,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_at": datetime.now(UTC).isoformat(),
         "parts": parts_payload,
     }
 
@@ -2289,6 +2304,7 @@ def generate_excel_export(data: dict) -> bytes:
     T-06-12 mitigation: no formula execution — only data written via .append().
     """
     from io import BytesIO
+
     import openpyxl
 
     wb = openpyxl.Workbook()
@@ -2443,6 +2459,7 @@ def parse_excel_import(content: bytes) -> dict:
     Raises HTTPException 422 on malformed workbook or missing required sheets.
     """
     from io import BytesIO as _BytesIO
+
     import openpyxl
 
     try:
@@ -2632,7 +2649,7 @@ def parse_excel_import(content: bytes) -> dict:
 async def validate_import(
     db: AsyncSession,
     data: dict,
-) -> "ImportPreviewResponse":
+) -> ImportPreviewResponse:
     """
     Validate an import payload (two-pass cross-reference check, D-18 step 1).
 
@@ -2757,7 +2774,7 @@ async def commit_import(
     db: AsyncSession,
     data: dict,
     actor_id: str,
-) -> "ImportCommitResponse":
+) -> ImportCommitResponse:
     """
     Apply an import payload to the database in one transaction (PLUM-10, D-17/D-18).
 

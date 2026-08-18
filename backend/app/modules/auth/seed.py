@@ -59,7 +59,7 @@ _USER_ROLE_PERMS: set[str] = {
 }
 
 
-async def seed_admin_user(db: "AsyncSession") -> None:
+async def seed_admin_user(db: AsyncSession) -> None:
     """
     Idempotent first-admin + role/permission bootstrap.
 

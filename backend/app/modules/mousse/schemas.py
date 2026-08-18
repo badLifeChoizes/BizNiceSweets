@@ -25,10 +25,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Work-order create (MOUSSE-01)
@@ -53,7 +51,7 @@ class WorkOrderCreate(BaseModel):
     plum_part_id: str = Field(..., max_length=36)
     planned_qty: Decimal = Field(..., gt=0)
     target_location_id: int
-    wo_date: Optional[date] = None
+    wo_date: date | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +77,7 @@ class WorkOrderComponentRead(BaseModel):
     id: str
     work_order_id: str
     child_part_id: str
-    item_id: Optional[str] = None
+    item_id: str | None = None
     qty_per: Decimal
     qty_required: Decimal
     unit_of_measure: str
@@ -111,15 +109,15 @@ class WorkOrderRead(BaseModel):
     id: str
     wo_number: str
     plum_part_id: str
-    released_revision_id: Optional[str] = None
-    output_item_id: Optional[str] = None
+    released_revision_id: str | None = None
+    output_item_id: str | None = None
     planned_qty: Decimal
     target_location_id: int
     status: str
     wo_date: date
     actor_id: str
     created_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -149,11 +147,17 @@ class IssueComponentLine(BaseModel):
     zero/negative issue is not a consumption, so the > 0 guard is enforced here
     (Field(gt=0)). `location_id` is optional — the service defaults it to the
     work order's `target_location_id` when omitted. Decimal (never float — D-11).
+
+    `bin_id` is EXPLICIT-OR-UNBINNED (D-P4-1): a concrete bin draws that single
+    bin's pool at the location; None (the default) draws ONLY the location's
+    UNBINNED pool — the server never auto-allocates across bins, so issuing at
+    a fully-binned location requires naming the bin per line.
     """
 
     component_id: str
     quantity: Decimal = Field(..., gt=0)
-    location_id: Optional[int] = None
+    location_id: int | None = None
+    bin_id: int | None = None
 
 
 class IssueComponentsRequest(BaseModel):
@@ -161,8 +165,10 @@ class IssueComponentsRequest(BaseModel):
     Issue-components payload (POST /mousse/work-orders/{id}/issue).
 
     Consumes one or more components against the work order in a single atomic
-    posting. Each line names a component, a positive quantity, and optionally the
-    location to draw from (defaulting to the WO's target_location_id).
+    posting. Each line names a component, a positive quantity, optionally the
+    location to draw from (defaulting to the WO's target_location_id), and
+    optionally the bin to draw from (None = the location's unbinned pool only,
+    D-P4-1 explicit-or-unbinned).
     """
 
     lines: list[IssueComponentLine] = Field(..., min_length=1)

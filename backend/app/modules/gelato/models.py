@@ -20,7 +20,7 @@ Alembic's env.py.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -35,7 +35,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.base import Base
-
 
 # ---------------------------------------------------------------------------
 # Bin — storage bin inside a SYERP stock location (GELATO-01)
@@ -73,7 +72,7 @@ class Bin(Base):
 
     # --- Timestamps --------------------------------------------------------
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
 
@@ -122,7 +121,7 @@ class Shipment(Base):
 
     # --- Timestamps --------------------------------------------------------
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
 
@@ -165,5 +164,5 @@ class ShipmentLine(Base):
 
     # --- Timestamps --------------------------------------------------------
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

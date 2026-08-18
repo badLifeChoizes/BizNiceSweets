@@ -58,11 +58,22 @@ Full codebase detail: `.zj/codebase/MAP.md`.
 
 ## Definition of done — current milestone (v4.0 Infra-debt + quality paydown)
 
-> **Confirmed at `/zj:spec` (2026-07-20, D-M4-1; traces PRD-12):** "The full test suite (integration +
-> unit) runs green in a **GitHub Actions CI** pipeline on every push, both lint gates enforce a
-> zero-violation baseline, the inventory ledger is race-safe across every writer, and every shipped UI
-> flow has passed a documented human click-through — so a new deploy is trustworthy without a manual
+> **Confirmed at `/zj:spec` (2026-07-20, D-M4-1; traces PRD-12), C4 clause amended at close
+> (2026-08-18, D-M4-4):** "The full test suite (integration + unit) runs green in a **GitHub Actions
+> CI** pipeline on every push, both lint gates enforce a zero-violation baseline, the inventory ledger
+> is race-safe across every writer, and every shipped UI flow has a **documented, runnable human
+> check** keyed to the requirement it exercises — so a new deploy is trustworthy without a manual
 > `verify_*` run."
+
+> **C4 amendment (D-M4-4, owner at `/zj:milestone`).** The clause originally read "every shipped UI
+> flow **has passed** a documented human click-through". D-P5-11 rewrote NFR-8's Statement and
+> PRD-12's acceptance signal to make the *checklist* the deliverable and the owner's *reading* an
+> ongoing activity — but the DoD sentence was never amended to match, so the milestone audit
+> (`.zj/MILESTONE-v4.0-AUDIT.md`, GAP-1) found C4 NOT MET on its literal wording with `.zj/QA.md` §6
+> holding zero readings. Amended rather than waited on, per the standing `QA docs: non-blocking`
+> preference. **Consciously accepted:** v4.0 ships with **no** human-exercised evidence of any UI
+> flow; the module rows caveated "UI-flow UAT-pending" stay caveated, and BACKLOG p1 "Run the human
+> click-through checklist" stays open by design.
 
 Chosen 2026-07-19 at the v3.0 close (D-M3-3) over the FLAN port and PLUM-advanced: correctness has
 rested entirely on the standalone `verify_*` scripts + Vitest for **three** milestones while the p1

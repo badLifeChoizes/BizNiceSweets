@@ -15,7 +15,7 @@ imported and REUSED from ``bills`` rather than duplicated.
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -38,7 +38,6 @@ from app.modules.syerp.service.accounts import _gl_account_id_by_code
 from app.modules.syerp.service.bills import _is_overpayment
 from app.modules.syerp.service.journal import _require_gl_account, post_journal_entry
 
-
 # ---------------------------------------------------------------------------
 # Accounts-receivable pure helpers (Phase 13, SYERP-13)
 # ---------------------------------------------------------------------------
@@ -55,7 +54,7 @@ from app.modules.syerp.service.journal import _require_gl_account, post_journal_
 _INVOICE_NUMBER_RE = re.compile(r"^INV-[0-9]+$")
 
 
-def _next_invoice_number(existing_numbers: "Iterable[str]") -> str:
+def _next_invoice_number(existing_numbers: Iterable[str]) -> str:
     """
     Compute the next INV-#### number from the set of existing invoice numbers.
 
@@ -145,7 +144,7 @@ async def generate_invoice_number(db: AsyncSession) -> str:
 
 async def list_uninvoiced_shipments(
     db: AsyncSession, customer_id: str
-) -> "list[UninvoicedShipmentRead]":
+) -> list[UninvoicedShipmentRead]:
     """
     List a customer's shipped-but-not-fully-invoiced SO lines (the invoice-line picker).
 
@@ -223,10 +222,10 @@ async def create_invoice(
     customer_id: str,
     sales_order_id: str | None,
     invoice_date: date | None = None,
-    lines: "Iterable[InvoiceLineCreate]",
+    lines: Iterable[InvoiceLineCreate],
     actor_id: str,
     _attempt: int = 0,
-) -> "InvoiceRead":
+) -> InvoiceRead:
     """
     Create a draft customer invoice against uninvoiced SO shipments (Phase 13).
 
@@ -412,7 +411,7 @@ async def create_invoice(
 
 async def _get_invoice_row(
     db: AsyncSession, invoice_id: str, *, for_update: bool = False
-) -> "Invoice":
+) -> Invoice:
     """
     Load an Invoice ORM row by id (internal helper).
 
@@ -436,7 +435,7 @@ async def _get_invoice_row(
     return invoice
 
 
-async def _load_invoice_lines(db: AsyncSession, invoice_id: str) -> "list[InvoiceLine]":
+async def _load_invoice_lines(db: AsyncSession, invoice_id: str) -> list[InvoiceLine]:
     """Return an invoice's lines ordered by line_no (no ORM relationship — Pitfall 2)."""
     from app.modules.syerp.models import InvoiceLine
 
@@ -467,8 +466,8 @@ async def _invoice_received_amount(db: AsyncSession, invoice_id: str) -> Decimal
 
 
 def _invoice_to_read(
-    invoice: "Invoice", lines: "Iterable[InvoiceLine]", received: Decimal
-) -> "InvoiceRead":
+    invoice: Invoice, lines: Iterable[InvoiceLine], received: Decimal
+) -> InvoiceRead:
     """
     Assemble an InvoiceRead from an Invoice ORM row, its lines, and its collected total.
 
@@ -497,7 +496,7 @@ def _invoice_to_read(
     )
 
 
-async def get_invoice(db: AsyncSession, invoice_id: str) -> "InvoiceRead":
+async def get_invoice(db: AsyncSession, invoice_id: str) -> InvoiceRead:
     """
     Load an invoice (header + nested lines + derived roll-ups) by id.
 
@@ -513,7 +512,7 @@ async def list_invoices(
     db: AsyncSession,
     customer_id: str | None = None,
     status: str | None = None,
-) -> "list[InvoiceRead]":
+) -> list[InvoiceRead]:
     """
     List invoices (newest-first), optionally filtered by customer and/or status.
 
@@ -574,7 +573,7 @@ async def list_invoices(
 # ---------------------------------------------------------------------------
 
 
-async def post_invoice(db: AsyncSession, invoice_id: str, actor_id: str) -> "InvoiceRead":
+async def post_invoice(db: AsyncSession, invoice_id: str, actor_id: str) -> InvoiceRead:
     """
     Post a draft AR invoice to the GL, flipping it draft -> posted (Phase 13).
 
@@ -634,7 +633,7 @@ async def post_invoice(db: AsyncSession, invoice_id: str, actor_id: str) -> "Inv
     )
 
     invoice.status = "posted"
-    invoice.posted_at = datetime.now(timezone.utc)
+    invoice.posted_at = datetime.now(UTC)
 
     await db.commit()
     return await get_invoice(db, invoice.id)
@@ -647,7 +646,7 @@ async def post_invoice(db: AsyncSession, invoice_id: str, actor_id: str) -> "Inv
 
 async def advance_invoice_status(
     db: AsyncSession, invoice_id: str, target: str, actor_id: str
-) -> "InvoiceRead":
+) -> InvoiceRead:
     """
     Advance an AR invoice through the FSM (Phase 13).
 
@@ -683,9 +682,9 @@ async def record_receipt(
     receipt_date: date,
     cash_account_id: int,
     reference: str | None,
-    allocations: "Iterable[object]",
+    allocations: Iterable[object],
     actor_id: str,
-) -> "ReceiptRead":
+) -> ReceiptRead:
     """
     Record a cash receipt against one or more posted AR invoices (Phase 13).
 
@@ -771,7 +770,7 @@ async def record_receipt(
     # Guard 3: resolve/validate each invoice and reject overpayment BEFORE any write.
     # open_balance = total invoiced - coalesced prior received (each side coalesced).
     # Same-invoice allocations accumulate so they cannot jointly overpay one balance.
-    invoice_rows: dict[str, "Invoice"] = {}
+    invoice_rows: dict[str, Invoice] = {}
     invoice_total_by_id: dict[str, Decimal] = {}
     open_balance_by_id: dict[str, Decimal] = {}
     claimed_by_id: dict[str, Decimal] = {}
@@ -874,7 +873,7 @@ async def record_receipt(
     )
 
 
-async def get_receipt(db: AsyncSession, receipt_id: str) -> "ReceiptRead":
+async def get_receipt(db: AsyncSession, receipt_id: str) -> ReceiptRead:
     """
     Load a single cash receipt (header + nested allocations) by id.
 
@@ -910,7 +909,7 @@ async def get_receipt(db: AsyncSession, receipt_id: str) -> "ReceiptRead":
     )
 
 
-async def list_receipts(db: AsyncSession) -> "list[ReceiptRead]":
+async def list_receipts(db: AsyncSession) -> list[ReceiptRead]:
     """
     List all recorded cash receipts (Phase 13), each with its allocations nested.
 

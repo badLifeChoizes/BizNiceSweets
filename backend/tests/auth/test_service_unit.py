@@ -11,11 +11,9 @@ These run without a live database using mock/stub objects.
 """
 from __future__ import annotations
 
-from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers — lightweight stand-ins for ORM User/Role/Permission
@@ -28,7 +26,7 @@ def _make_permission(code: str) -> MagicMock:
     return p
 
 
-def _make_role(name: str, perm_codes: List[str]) -> MagicMock:
+def _make_role(name: str, perm_codes: list[str]) -> MagicMock:
     r = MagicMock()
     r.name = name
     r.permissions = [_make_permission(c) for c in perm_codes]
@@ -74,7 +72,7 @@ async def test_authenticate_user_bad_password_returns_none() -> None:
 @pytest.mark.asyncio
 async def test_authenticate_user_unknown_email_returns_none() -> None:
     """Unknown email — verify_password called with DUMMY_HASH for timing safety."""
-    from app.modules.auth.service import authenticate_user, verify_password, DUMMY_HASH
+    from app.modules.auth.service import DUMMY_HASH, authenticate_user, verify_password
 
     db = AsyncMock()
     calls: list[tuple] = []
@@ -165,6 +163,7 @@ def test_collect_permissions_no_roles() -> None:
 async def test_get_current_user_raises_401_on_bad_token() -> None:
     """Invalid token raises HTTPException 401 with WWW-Authenticate header."""
     from fastapi import HTTPException
+
     from app.modules.auth.dependencies import get_current_user
 
     db = AsyncMock()
@@ -180,9 +179,10 @@ async def test_get_current_user_raises_401_on_missing_sub() -> None:
     """Token with no 'sub' claim raises HTTPException 401."""
     import jwt as pyjwt
     from fastapi import HTTPException
+
     from app.core.config import settings
-    from app.modules.auth.service import ALGORITHM
     from app.modules.auth.dependencies import get_current_user
+    from app.modules.auth.service import ALGORITHM
 
     # Mint a token without a 'sub' field
     token = pyjwt.encode(
@@ -201,8 +201,9 @@ async def test_get_current_user_raises_401_on_missing_sub() -> None:
 async def test_get_current_user_raises_401_when_user_not_found() -> None:
     """Token valid but user_id not in DB returns 401."""
     from fastapi import HTTPException
-    from app.modules.auth.service import create_access_token
+
     from app.modules.auth.dependencies import get_current_user
+    from app.modules.auth.service import create_access_token
 
     token = create_access_token(subject="ghost-id", permissions=[])
     db = AsyncMock()
@@ -221,8 +222,9 @@ async def test_get_current_user_raises_401_when_user_not_found() -> None:
 async def test_get_current_user_raises_401_for_inactive_user() -> None:
     """Token valid but user.is_active=False returns 401."""
     from fastapi import HTTPException
-    from app.modules.auth.service import create_access_token
+
     from app.modules.auth.dependencies import get_current_user
+    from app.modules.auth.service import create_access_token
 
     inactive_user = _make_user(is_active=False)
     token = create_access_token(subject="inactive-id", permissions=[])
@@ -241,8 +243,8 @@ async def test_get_current_user_raises_401_for_inactive_user() -> None:
 @pytest.mark.asyncio
 async def test_get_current_user_returns_user_for_valid_token() -> None:
     """Valid token + active user returns the user object."""
-    from app.modules.auth.service import create_access_token
     from app.modules.auth.dependencies import get_current_user
+    from app.modules.auth.service import create_access_token
 
     active_user = _make_user(is_active=True)
     token = create_access_token(subject="active-id", permissions=["syerp:read"])
@@ -290,6 +292,7 @@ async def test_require_permission_grants_for_admin_role() -> None:
 async def test_require_permission_raises_403_when_missing() -> None:
     """User lacking the required permission raises HTTPException 403."""
     from fastapi import HTTPException
+
     from app.modules.auth.dependencies import require_permission
 
     user = _make_user(role_names=[("viewer", ["syerp:read"])])
@@ -306,6 +309,7 @@ async def test_require_permission_raises_403_when_missing() -> None:
 async def test_require_permission_raises_403_for_no_roles() -> None:
     """User with no roles at all raises HTTPException 403."""
     from fastapi import HTTPException
+
     from app.modules.auth.dependencies import require_permission
 
     user = _make_user(role_names=[])

@@ -33,4 +33,5 @@ function Badge({ className, variant, ...props }: BadgeProps) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- cva variants co-located with the shadcn/ui primitive
 export { Badge, badgeVariants }

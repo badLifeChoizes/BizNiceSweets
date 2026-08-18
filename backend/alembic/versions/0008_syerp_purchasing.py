@@ -38,9 +38,11 @@ Threat mitigations baked into schema:
   FK vendor_id prevents POs against a non-existent partner; FK po_id/item_id on
   the line prevent orphan lines and lines against non-existent items.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic

@@ -82,7 +82,7 @@ async def suggest_target_bin(
 async def list_unbinned_stock(
     db: AsyncSession,
     location_id: int,
-) -> list["UnbinnedStockRead"]:
+) -> list[UnbinnedStockRead]:
     """
     Return each item with unbinned on-hand (> 0) at the location, awaiting putaway.
 
@@ -90,6 +90,12 @@ async def list_unbinned_stock(
     pool is get_bin_on_hand(item, location, None) — the on-hand not yet assigned
     to any bin. Only items with a positive unbinned pool are included, each with
     its suggested destination bin (suggest_target_bin).
+
+    The > 0 filter cannot hide a LIVE negative pool: since v4.0 Phase 4 (NFR-7,
+    D-P4-1) every draw primitive is bin-aware and floor-guards the pool it
+    names, so new ledger rows cannot drive the unbinned pool below zero. A
+    negative unbinned pool can only be a desync left by the legacy bin-blind
+    draws (pre-Phase-4); the filter is kept and simply omits such rows.
 
     Reading the SYERP ledger (InventoryTxn) directly is fine — only WRITES are
     forbidden to GELATO (D-P12a-3, D-P10-6). Rows are ordered by item_id.
@@ -129,9 +135,9 @@ async def list_unbinned_stock(
 
 async def execute_putaway(
     db: AsyncSession,
-    data: "PutawayRequest",
+    data: PutawayRequest,
     actor_id: str,
-) -> "PutawayResult":
+) -> PutawayResult:
     """
     Execute a putaway: validate bins, delegate the ledger posting, build the result.
 

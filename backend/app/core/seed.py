@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def run_seeds(db: "AsyncSession") -> None:
+async def run_seeds(db: AsyncSession) -> None:
     """
     Populate the database with initial seed data.
 
@@ -39,12 +39,12 @@ async def run_seeds(db: "AsyncSession") -> None:
     Order matters: admin/permissions must exist before modules and settings
     seeds run (settings:manage is granted to admin role in seed_admin_user).
     """
-    from app.modules.auth.seed import seed_admin_user
     from app.core.modules_seed import seed_modules_table
     from app.core.settings_seed import seed_default_settings
+    from app.modules.auth.seed import seed_admin_user
+    from app.modules.plum.seed import seed_plum_data
     from app.modules.syerp.coa_seed import seed_gl_accounts
     from app.modules.syerp.inventory_seed import seed_default_location
-    from app.modules.plum.seed import seed_plum_data
 
     await seed_admin_user(db)
     await seed_modules_table(db)

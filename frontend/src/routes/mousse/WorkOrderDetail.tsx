@@ -97,6 +97,7 @@ function formatDate(iso: string): string {
 }
 
 // A component line is under-issued when it has issued less than it requires.
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper co-located with the screen; not a component
 export function isUnderIssued(c: WorkOrderComponentRead): boolean {
   const required = Number(c.qty_required)
   const issued = Number(c.issued_so_far)
@@ -363,6 +364,7 @@ export function WorkOrderDetail() {
       <IssueComponentsDialog
         workOrderId={id}
         components={wo.components}
+        targetLocationId={wo.target_location_id}
         partName={partName}
         open={issueOpen}
         onOpenChange={setIssueOpen}

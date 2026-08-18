@@ -12,11 +12,9 @@ Test contract:
 
 Tests require a live PostgreSQL database (skip_if_no_db) and the seeded modules rows.
 """
-import pytest
 import httpx
 
 from tests.auth.conftest_helpers import admin_login_token
-
 
 # ---------------------------------------------------------------------------
 # GET /core/modules — list modules with enabled flag
@@ -62,6 +60,7 @@ async def test_toggle_module(
     """Admin PATCH /api/v1/core/modules/plum {enabled:false} returns 200 and the
     DB shows plum.enabled is False. Restores enabled=True at test end (idempotent)."""
     from sqlalchemy import select
+
     from app.core.modules_model import Module
 
     token = await admin_login_token(client)
@@ -136,7 +135,7 @@ async def test_toggle_requires_admin(
 
     # Get admin token first, then create a non-admin user in the DB
     admin_token = await admin_login_token(client)
-    user_data = await create_regular_user(
+    await create_regular_user(
         client,
         admin_token,
         email="nonadmin_toggle_test@example.com",

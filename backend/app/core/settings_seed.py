@@ -64,7 +64,7 @@ _DEFAULT_SETTINGS: list[tuple[str, str | None, str, str, str]] = [
 ]
 
 
-async def seed_default_settings(db: "AsyncSession") -> None:
+async def seed_default_settings(db: AsyncSession) -> None:
     """
     Idempotent settings seed — insert global row only if key + owner_id=None row
     does not already exist.

@@ -8,6 +8,122 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Only `fe
 `fix:` commits appear here; `docs:`/`chore:`/`test:` are omitted.
 
 
+## [v4.0] — Infra-debt & quality paydown — 2026-08-18
+
+Definition of done — five clauses: *"The full test suite (integration + unit) runs green in a
+GitHub Actions CI pipeline on every push, both lint gates enforce a zero-violation baseline, the
+inventory ledger is race-safe across every writer, and every shipped UI flow has a documented,
+runnable human check — so a new deploy is trustworthy without a manual `verify_*` run."* (The
+fourth clause was amended at close from "has **passed** a documented human click-through" to match
+NFR-8 and PRD-12, which D-P5-11 had already moved — see `.zj/MILESTONE-v4.0-AUDIT.md` GAP-1.
+`.zj/QA.md` §6 holds zero readings: **v4.0 ships with no human-exercised UI evidence, by design.**)
+
+**This release adds no new end-user capability.** It pays down p1 infrastructure debt that had
+ridden unpaid for three milestones and hardens the shared inventory ledger. For v1.0→v3.0
+correctness rested entirely on standalone `verify_*` scripts and Vitest **run by hand**, and the
+class of bug that ships when tests silently skip had already bitten once.
+
+Highlights: CI now runs on every push (six blocking-capable jobs); both lint gates enforce a
+zero-violation baseline; ~100 DB-backed tests that had **never actually run** now run 0-skip; the
+ledger's `FOR UPDATE` discipline covers every writer; and the shipped container image is built —
+and booted — on every push. Three deploy-blocking defects were found and fixed along the way, two
+of which had been invisible for five phases because nothing had ever exercised the artifact a
+self-hoster receives.
+
+Audited goal-backward at close against the running stack (`.zj/MILESTONE-v4.0-AUDIT.md`): pytest
+**245 passed / 0 skipped**, 17/17 non-API + 9/9 API `verify_*` (251 assertions), both lint gates 0,
+Vitest 148/45, build clean. The audit returned **GAPS FOUND** — 1 blocker-to-close, 3 major, 4
+minor — against a milestone whose every phase had already passed verification; **all eight were
+fixed at close.**
+
+### Phase 1 — Lint gates fixed-to-clean (NFR-6)
+
+**Fixed**
+
+- resolve 4 F821 undefined-name annotations (`35b91d0`)
+- resolve F811/E741/F841 lint violations (`5ea6363`)
+
+### Phase 2a — Pytest harness repair (NFR-5)
+
+Zero product-code change; `git diff -- backend/app/` provably empty.
+
+**Fixed**
+
+- repair DSN probe with libpq keyword args (`afa5798`)
+- DB now a hard requirement + zero-skip self-check (`a2bb5a6`)
+
+### Phase 2b — Port the `verify_*` cruxes into pytest (NFR-5)
+
+Test-only, again with `git diff -- backend/app/` empty: 7 service-layer crux files + 5 HTTP
+audit/RBAC files, each headline Decimal asserted against an independent oracle. Suite to 232
+passed / 0 skipped.
+
+### Phase 3 — CI pipeline, GitHub Actions (NFR-4)
+
+Infra-only. `.github/workflows/ci.yml` — `frontend`, `backend-lint`, `backend-tests` (against a
+live `postgres:17` service) and `verify-scripts`, on every push and PR, with required-status branch
+protection on `master`. Red-proven on real Actions runs by deliberately breaking a test and
+planting lint violations, then reverting.
+
+### Phase 4 — Inventory ledger race-safety (NFR-7)
+
+**Added**
+
+- serialize inventory writers on item-master lock (`73e45c2`)
+- serialize receive_line on PO-header lock (`e1dc5c0`)
+- bin-aware post_adjustment — explicit-or-unbinned (`4285202`)
+- bin-aware post_transfer via from_bin_id (`b80cb37`)
+- bin-aware issue_components — per-line bin_id (`455cf5c`)
+- optional bin picker on StockAdjustDialog (`6d55d72`)
+- optional from-bin picker on StockTransferDialog (`b270161`)
+- per-line bin picker on IssueComponentsDialog (`886193a`)
+
+**Fixed**
+
+- restore per-location floor in issue_components (`2a87f6d`)
+- refresh item under lock in post_transfer legs (`5a45a7b`)
+
+### Phase 5 — Human click-through UAT → the standing QA checklist (NFR-8)
+
+Delivered `.zj/QA.md`: 61 requirement-keyed checks over fixtures reproducible on a fresh volume.
+Three defects, all found by engineering before anyone clicked — two of them deploy blockers.
+
+**Added**
+
+- validate bin existence and location membership (`e57c1ff`)
+
+**Fixed**
+
+- **U0** — db never received POSTGRES_PASSWORD on a fresh volume (`4ace2c4`)
+- **U1** — duplicate-email user create returned HTTP 500 (`f508554`)
+- **U2** — the API image could not be built at all (`8d61cca`)
+- reject an archived bin in post_adjustment (`fd7ca87`)
+- refuse to seed a database that is not a UAT stack (`3a6ce35`)
+- port uat.ps1 to the env split and warn on the old layout (`50e14b5`)
+
+### Milestone close — audit remediation
+
+The close audit found the milestone's own subject matter was where its holes were: an unlocked
+ledger writer, and three CI coverage gaps.
+
+**Fixed**
+
+- **GAP-2** — serialize execute_pick on the SO row and sort its item locks (`4dc3154`). The last
+  ledger writer outside the `FOR UPDATE` discipline. Both failure modes were *reproduced* under a
+  barrier: two concurrent first-picks of one sales order produced two open shipments — the second's
+  picked stock unreachable, since GELATO exposes no list-shipments-for-an-SO route — plus a lost
+  `qty_picked` update; and two picks sharing two items in opposite order deadlocked 6/6. Each half
+  of the fix proven load-bearing in isolation.
+- **GAP-7** — QA.md status cells contradicted the SRD, now cross-checked (`5fe324e`)
+
+Also landed as CI configuration (`a962a79`): a `verify-scripts-api` job running the 9
+`verify_*_api.py` scripts, which had run in **no** job at all — leaving ~250 router-level
+assertions outside CI, including the only automated coverage anywhere of the financial-reporting
+HTTP surface and the v2.0 audit's own P&L-422 remediation; the `container-image` job extended to
+**boot** the artifact it builds and probe `/health/ready`; and `eslint.config.js` brought inside
+its own lint coverage.
+
+
 ## [v3.0] — Customer & logistics — 2026-07-19
 
 Definition of done — three clauses: *(1) manage customers and run leads → opportunities →

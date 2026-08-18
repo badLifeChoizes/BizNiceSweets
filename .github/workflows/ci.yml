@@ -1,0 +1,490 @@
+name: CI
+
+# Every push and pull request runs the full blocking pipeline (NFR-4, v4.0 Phase 3).
+# Jobs are independent (no `needs:`) so one failure never masks another and all run
+# in parallel. Secrets here are test-only throwaways — no GitHub repo Secrets required.
+on:
+  push:
+  pull_request:
+
+jobs:
+  # The artifact a self-hoster actually gets (SC7, gap G-4). Defect U2 — the API image
+  # could not be built AT ALL — hid for five phases precisely because no automated
+  # process ever built it; the stale image kept serving and masked the break.
+  # backend/tests/test_containerfile_config.py pins U2's `.npmrc` COPY, i.e. one config
+  # invariant; this job pins the thing itself, so the NEXT unrelated break (a new
+  # dotfile, a base-image bump, a moved COPY path) fails on the day it lands.
+  #
+  # Build only — no push, no compose, no run. Deliberately UNCACHED: U2 was a
+  # cold-build failure, and a warm layer cache is exactly what hid it.
+  #
+  # NOTE — this job is NOT yet one of `master`'s required status contexts. The four
+  # existing job names are wired into branch protection; adding this one there is a
+  # repo-settings change nobody can make from a workflow file. Until someone does, it
+  # reports but does not block.
+  container-image:
+    name: container-image
+    runs-on: ubuntu-latest
+    # GAP-6 (v4.0 milestone audit): the job used to build and stop, so NOTHING in
+    # CI ever ran the stack it ships. This service exists for the boot probe at the
+    # end of the job. postgres:17-alpine (not the plain postgres:17 the test jobs
+    # use) is deliberate: it is the image compose/compose.yml pins, and this job is
+    # about what a self-hoster actually deploys. Credentials must match ../.env.db.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: ci_test_pw
+          POSTGRES_DB: biznice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      # `docker build` on the runner returns a trustworthy exit status, unlike the
+      # `podman-compose build` this project builds with locally, which printed
+      # `exit code: 1` and still RETURNED 0 (Phase-5 defect U2 nearly hid entirely
+      # behind that). pipefail keeps `| tee` from laundering the status back to 0 —
+      # the same trap one layer up — and the log assertion below is the belt to that
+      # brace, so the next build-wrapper change cannot silently re-open it.
+      - name: Build the API image from Containerfile
+        run: |
+          set -o pipefail
+          docker build -f Containerfile -t biznicesweets-api:ci . 2>&1 \
+            | tee "$RUNNER_TEMP/image-build.log"
+
+      - name: Assert the build log records no failed step
+        run: |
+          # `Error: building at STEP` is buildah/podman's failure line (the one U2
+          # printed); `failed to solve` is BuildKit's. Neither may appear in a log
+          # that a `build && next-step` chain would walk straight over.
+          if grep -nE "Error: building at STEP|failed to solve" "$RUNNER_TEMP/image-build.log"; then
+            echo '::error::the image build log records a failed step. Never trust a'
+            echo 'build wrapper exit status alone — U2 shipped for five phases behind a'
+            echo 'podman-compose build that printed "exit code: 1" and returned 0.'
+            exit 1
+          fi
+          # Positive side: the tag must actually exist afterwards.
+          docker image inspect biznicesweets-api:ci > /dev/null
+          echo "image built from Containerfile, log clean"
+
+      # --- Boot the image we just built (GAP-6) --------------------------------
+      # test_compose_config.py and test_containerfile_config.py parse TEXT; they
+      # never boot anything. So a change to backend/entrypoint.sh (the Postgres
+      # wait, `alembic upgrade head`, the seed order) or to the .env/.env.db wiring
+      # passed every static assertion and every green job, and the first person to
+      # find out was a self-hoster on a fresh volume. That is defect U0's story one
+      # layer up. These steps convert the boot path from asserted to exercised.
+      - name: Create .env and .env.db from the templates, as a deploy does
+        # The container must get its config the way a real deploy does (D-P5-10):
+        # app secrets from .env, database credentials from .env.db. Building them
+        # from the tracked *.example templates means a template that stops carrying
+        # a key the app needs fails HERE, on the runbook's own first two commands.
+        run: |
+          sed -e 's|^JWT_SECRET=.*|JWT_SECRET=ci_test_jwt_secret_at_least_32_chars_long|' \
+              -e 's|^BNS_ADMIN_PASSWORD=.*|BNS_ADMIN_PASSWORD=ci_test_pw|' \
+              .env.example > .env
+          sed -e 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=ci_test_pw|' \
+              .env.db.example > .env.db
+          grep -q '^POSTGRES_PASSWORD=ci_test_pw$' .env.db  # the sed actually hit
+
+      - name: Run the built image against Postgres and probe /health/ready
+        # --network host because the service container is published on the runner's
+        # own localhost:5432, and it puts the api on localhost:8000 for curl.
+        # POSTGRES_HOST is overridden on the command line for exactly the reason
+        # compose.yml overrides it in `environment:` — .env ships the compose
+        # service name `db`, which is not this network's name for it.
+        run: |
+          docker run -d --name bns-api-ci --network host \
+            --env-file .env --env-file .env.db \
+            -e POSTGRES_HOST=localhost \
+            biznicesweets-api:ci
+          for _ in $(seq 1 60); do
+            # /health/ready returns 503 when the DB is unreachable, so `curl -f`
+            # here proves migrations ran and the pool connects — not merely that
+            # a process started.
+            if curl -fsS http://localhost:8000/health/ready; then
+              echo
+              echo "the built image booted and reports ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::the image built but never came up. Every static config'
+          echo 'assertion can still pass while entrypoint.sh or the .env/.env.db'
+          echo 'wiring is broken — that is U0. Container log follows.'
+          docker logs bns-api-ci
+          exit 1
+
+      - name: Remove the probe container
+        if: always()
+        run: docker rm -f bns-api-ci 2> /dev/null || true
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # npm ci reads frontend/.npmrc (legacy-peer-deps=true, D-P1-1) automatically — SC7.
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc -b
+      - run: npx vitest run
+      - run: npm run build
+
+  backend-lint:
+    name: backend-lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+
+  backend-tests:
+    name: backend-tests
+    runs-on: ubuntu-latest
+    # conftest.py connects to the default `postgres` maintenance DB, then
+    # CREATE DATABASE "biznice_test" + runs alembic upgrade head itself. So the
+    # service just needs to exist with the default DB and matching creds; do NOT
+    # set POSTGRES_DB here (conftest force-sets biznice_test).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          # The app (and conftest) connect as role `app` (config default). The
+          # image creates this superuser + a default `app` DB; the maintenance
+          # `postgres` DB still exists for conftest to CREATE biznice_test.
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: ci_test_pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_PASSWORD: ci_test_pw
+      JWT_SECRET: ci_test_jwt_secret_at_least_32_chars_long
+      BNS_ADMIN_PASSWORD: ci_test_pw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: pytest -q
+
+  verify-scripts:
+    name: verify-scripts
+    runs-on: ubuntu-latest
+    # The non-API verify_*.py scripts build their own engine against `biznice`
+    # (config default DB) and do NOT self-create or migrate it. So this service
+    # creates `biznice` at init (POSTGRES_DB) and the job migrates it (alembic
+    # upgrade head) before running the scripts. The 9 *_api.py scripts are
+    # excluded (they need a booted uvicorn; ported to the pytest HTTP suite in 2b).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: ci_test_pw
+          POSTGRES_DB: biznice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: biznice
+      POSTGRES_PASSWORD: ci_test_pw
+      JWT_SECRET: ci_test_jwt_secret_at_least_32_chars_long
+      BNS_ADMIN_PASSWORD: ci_test_pw
+      # The scripts do `from app...`; the backend root must be importable
+      # (their docstrings run them with PYTHONPATH=/app inside the container).
+      PYTHONPATH: ${{ github.workspace }}/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Migrate biznice to head
+        run: python -m alembic upgrade head
+      - name: Seed reference data (Chart of Accounts, admin, etc.)
+        # The scripts assume the seeds the app runs at lifespan startup (e.g. the
+        # GL Chart of Accounts) — alembic migrates schema only. Run them here,
+        # idempotently, exactly as app.main's lifespan does.
+        run: |
+          python - <<'PY'
+          import asyncio
+          from app.core.db import AsyncSessionLocal
+          from app.core.seed import run_seeds
+
+          async def main():
+              async with AsyncSessionLocal() as db:
+                  await run_seeds(db)
+
+          asyncio.run(main())
+          print("seeds applied")
+          PY
+      - name: Run non-API verify_* scripts
+        run: |
+          set -e
+          for s in scripts/verify_*.py; do
+            case "$s" in
+              *_api.py) continue ;;
+            esac
+            echo "== $s =="
+            python "$s"
+          done
+
+      # --- UAT fixture seed idempotency (SC2, gap G-2) -------------------------
+      # backend/scripts/seed_uat_fixtures.py is the single point of failure for the
+      # 275 derived literals `.zj/QA.md` quotes throughout its checks, and it is
+      # deliberately NOT named verify_* so the glob above skips it. Nothing else
+      # re-proves that a second run changes nothing; if idempotency breaks, the first
+      # symptom is a tester chasing a phantom defect against a drifted number.
+      #
+      # IT GETS ITS OWN DATABASE, not `biznice`. The scripts above post journal
+      # entries under random actor ids, which the seed's require_no_foreign_ledger
+      # guard correctly reads as somebody's real books, and they drift the GL
+      # aggregates the manifest quotes. A second database on the same postgres
+      # service is cheaper than a second service or a second job — and, unlike a new
+      # job, `verify-scripts` is already a required status context on master, so this
+      # pin gates from the moment it lands.
+      - name: Create an isolated `uatseed` database
+        run: |
+          python - <<'PY'
+          import asyncio
+          import os
+
+          import asyncpg
+
+          async def main():
+              conn = await asyncpg.connect(
+                  host=os.environ["POSTGRES_HOST"],
+                  port=int(os.environ["POSTGRES_PORT"]),
+                  user=os.environ.get("POSTGRES_USER", "app"),
+                  password=os.environ["POSTGRES_PASSWORD"],
+                  database="postgres",   # the maintenance DB — never `biznice`
+              )
+              await conn.execute("DROP DATABASE IF EXISTS uatseed")
+              await conn.execute("CREATE DATABASE uatseed")
+              await conn.close()
+
+          asyncio.run(main())
+          print("created database uatseed")
+          PY
+
+      - name: Seed the UAT fixtures twice and prove the second run changed nothing
+        env:
+          POSTGRES_DB: uatseed
+          # The seed refuses to run unless the stack opts in (a guard so the runbook
+          # command cannot seed a self-hoster's live books). CI's throwaway database,
+          # fresh on every run, is exactly the case the opt-in exists for.
+          BNS_ALLOW_UAT_SEED: "1"
+        run: |
+          set -e
+          python -m alembic upgrade head
+          python - <<'PY'
+          import asyncio
+          from app.core.db import AsyncSessionLocal
+          from app.core.seed import run_seeds
+
+          async def main():
+              async with AsyncSessionLocal() as db:
+                  await run_seeds(db)
+
+          asyncio.run(main())
+          print("seeds applied")
+          PY
+
+          # A whole-database row census. The manifest is the checklist's contract, but
+          # it counts only UAT- rows, so an audit row per run would slip past it — the
+          # exact regression `_ensure_cost` had to be made conditional to avoid.
+          cat > "$RUNNER_TEMP/census.py" <<'PY'
+          import asyncio
+          import os
+
+          import asyncpg
+
+          TABLES = (
+              "SELECT table_name FROM information_schema.tables "
+              "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
+              "ORDER BY table_name"
+          )
+
+          async def main():
+              conn = await asyncpg.connect(
+                  host=os.environ["POSTGRES_HOST"],
+                  port=int(os.environ["POSTGRES_PORT"]),
+                  user=os.environ.get("POSTGRES_USER", "app"),
+                  password=os.environ["POSTGRES_PASSWORD"],
+                  database=os.environ["POSTGRES_DB"],
+              )
+              for row in await conn.fetch(TABLES):
+                  table = row["table_name"]
+                  print(table, await conn.fetchval('SELECT count(*) FROM "' + table + '"'))
+              await conn.close()
+
+          asyncio.run(main())
+          PY
+
+          # Default mode seeds and then prints the manifest, so each file is the state
+          # of the database after that run. The banner goes to stderr; stdout is a pure,
+          # diffable artifact.
+          python scripts/seed_uat_fixtures.py > "$RUNNER_TEMP/manifest-1.txt"
+          python "$RUNNER_TEMP/census.py"     > "$RUNNER_TEMP/census-1.txt"
+          python scripts/seed_uat_fixtures.py > "$RUNNER_TEMP/manifest-2.txt"
+          python "$RUNNER_TEMP/census.py"     > "$RUNNER_TEMP/census-2.txt"
+
+          if ! diff -u "$RUNNER_TEMP/manifest-1.txt" "$RUNNER_TEMP/manifest-2.txt"; then
+            echo "::error::seed_uat_fixtures.py is NOT idempotent — the manifest changed"
+            echo "between two runs on a fresh database. Every literal .zj/QA.md quotes"
+            echo "comes from this manifest, so a tester would now be checking numbers"
+            echo "the seed no longer produces. Fix the get-or-create that re-wrote."
+            exit 1
+          fi
+          if ! diff -u "$RUNNER_TEMP/census-1.txt" "$RUNNER_TEMP/census-2.txt"; then
+            echo "::error::the second seed run WROTE ROWS. The manifest is unchanged, so"
+            echo "the drift is in a table it does not count (an audit row per run is the"
+            echo "known shape — see _ensure_cost). Make the offending write conditional."
+            exit 1
+          fi
+          echo "manifest byte-identical across two runs on a fresh database"
+          wc -l "$RUNNER_TEMP/manifest-1.txt" "$RUNNER_TEMP/census-1.txt"
+
+  # GAP-3 (v4.0 milestone audit): the 9 `verify_*_api.py` scripts ran in NO job.
+  # `verify-scripts` deliberately `continue`s past them because they need a SERVING
+  # api, so ~250 router-level assertions — RBAC status codes, audit rows, FSM
+  # rejections — sat outside CI entirely. Worst of it: verify_reports_api.py is the
+  # ONLY automated coverage anywhere of /reports/trial-balance, /reports/profit-loss,
+  # /reports/balance-sheet and /ap/aging (`grep -rn "profit-loss" backend/tests/` → 0),
+  # including the P&L missing-bound 422 that was the v2.0 milestone audit's own
+  # remediation. Drop the syerp:read gate off a report and every other job stays green.
+  #
+  # Glob-driven exactly like `verify-scripts` (`for s in scripts/verify_*_api.py`,
+  # `set -e`), so a future API script enrols in CI for free — no workflow edit.
+  #
+  # NOTE — like `container-image`, this job is NOT yet one of `master`'s required
+  # status contexts; that is a repo-settings change no workflow file can make.
+  # Until someone adds it, it reports but does not block.
+  verify-scripts-api:
+    name: verify-scripts-api
+    runs-on: ubuntu-latest
+    # Same shape as `verify-scripts`: the scripts build their own engine against
+    # `biznice` (config default DB) and do NOT self-create or migrate it, so the
+    # service creates it at init (POSTGRES_DB) and the job migrates it below.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: ci_test_pw
+          POSTGRES_DB: biznice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: biznice
+      POSTGRES_PASSWORD: ci_test_pw
+      JWT_SECRET: ci_test_jwt_secret_at_least_32_chars_long
+      BNS_ADMIN_PASSWORD: ci_test_pw
+      PYTHONPATH: ${{ github.workspace }}/backend
+      # Every *_api.py reads this (default http://localhost:8000). 8099 keeps the
+      # job off the port a self-hoster's stack uses, matching how the audit ran it.
+      BNS_API_BASE_URL: http://127.0.0.1:8099
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Migrate biznice to head
+        # Only the migration is done by hand here. Unlike `verify-scripts`, the
+        # seeds are NOT run as a separate step: app.main's lifespan runs them when
+        # uvicorn starts below, which is the real startup path — so booting the app
+        # is itself the proof that the seeds apply to a freshly migrated database.
+        run: python -m alembic upgrade head
+      - name: Boot the api and wait for /health/ready
+        run: |
+          set -e
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8099 \
+            > "$RUNNER_TEMP/uvicorn.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -fsS "$BNS_API_BASE_URL/health/ready"; then
+              echo
+              echo "api is serving on 8099"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the api never became ready on 8099 — the *_api.py scripts"
+          echo "drive it over real HTTP and cannot run without it."
+          cat "$RUNNER_TEMP/uvicorn.log"
+          exit 1
+      - name: Run the *_api.py verify scripts against the running api
+        run: |
+          set -e
+          for s in scripts/verify_*_api.py; do
+            echo "== $s =="
+            python "$s"
+          done
+      - name: Dump the api log on failure
+        if: failure()
+        run: cat "$RUNNER_TEMP/uvicorn.log"

@@ -3,6 +3,565 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Milestone v4.0 — Infra-debt + quality paydown (closed 2026-08-18)
+
+Roll-up of Phases 1, 2a, 2b, 3, 4, 5 — lint gates, pytest harness repair, ported cruxes, GitHub
+Actions CI, inventory race-safety, and the standing QA checklist. **No new end-user capability
+shipped.** Distilled from the six phase retros plus the milestone audit
+(`.zj/MILESTONE-v4.0-AUDIT.md`), which returned **GAPS FOUND** against a milestone whose every
+phase had already passed verification.
+
+The milestone's dominant lesson is about **what a green gate is actually evidence of**. v3.0's
+roll-up concluded that the adversarial review, not the verify suite, caught the defect that
+mattered on all five phases. v4.0 sharpens that: a gate is evidence about **the exact artifact it
+ran against, in the exact state it ran in** — and for five phases running, nothing had ever run
+against the artifact a self-hoster receives.
+
+### Repeat these
+
+- **Make the deployable artifact its own deliverable with its own standing gate.** `U2` (the API
+  image could not be built *at all* — `COPY frontend/package*.json` never matched the dotfile
+  `.npmrc`) and `U0` (a fresh-volume deploy could not start — `db` took its password by
+  interpolation from a `compose/.env` that does not exist) are **the same blind spot at two
+  layers**, and both hid for five phases behind a long-lived stale image and a dev overlay that
+  bind-mounts over `frontend/dist`. A suite that runs from a checkout says nothing about the image;
+  a stack that has been up for months says nothing about `up` on a fresh volume. Both are now
+  CI-resident — and the close audit found the third layer of the same class: the `container-image`
+  job **built** the artifact but never **booted** it, so `entrypoint.sh` and the `.env`/`.env.db`
+  wiring were still asserted-not-exercised. Fixed at close (GAP-6). Expect a fourth layer.
+- **A verification is only as good as the state it ran against — say what that state was.** Phase
+  3's harness "self-provisions its test database" was true, and had only ever been proven on a
+  *dirty* local DB where `biznice_test` already existed from an earlier session; on the ephemeral
+  CI Postgres it aborted the whole run (D-P3-4). Phase 4's race-safety was "empirically true" but
+  proven by the verifier's own throwaway script — hand-checked, not pinned. Phase 5's prod smoke
+  ran against an image built *before* the fix loop's last commit. Same shape three times in one
+  milestone: **name the substrate in the claim** ("green on a fresh `postgres:17`", "green at tip
+  X"), because "it passed" without a substrate is not a falsifiable statement.
+- **A mutation proof must go red for the *intended* reason, and some cruxes cannot prove
+  themselves.** Phase 2b's MOUSSE WIP crux passes under its own advertised mutation because the
+  arithmetic divides evenly — the wrong formula yields the right number — so its residual sibling
+  is the real guard. Phase 4 learned the converse: a fixture guard hijacks red as easily as green.
+  Keeper: when you write the mutation table, assert **which named test goes red and why**, then
+  execute it. The SC2 mutation table is the highest-signal artifact a phase produces; read its
+  claims against the arithmetic rather than trusting its exit codes.
+- **A fix for "X silently passes" must ship a test that goes RED when X silently passes again.**
+  Phase 2a did not stop at greening ~100 tests: it made a database a *hard* requirement (no-DB now
+  fails loud) and added `test_harness_selfcheck.py` to pin the zero-silent-skip invariant. That is
+  the difference between fixing an instance and closing a class — the D-P7-4 silent skip is the
+  bug that let a 500 ship through four plans, and it can no longer return quietly.
+- **Glob-driven CI keeps paying, milestone after milestone.** `for s in scripts/verify_*.py`
+  enrolled `verify_qa_doc.py`, `verify_qa_citations.py`, `verify_inventory_race.py` and scenario
+  `(G5)` into standing protection with **zero** workflow edits, and it is why the close audit's
+  GAP-3 fix was cheap. Design the gate so new guards enrol themselves.
+- **An owner-attributed rescope survives adversarial review when it keeps both halves stated.**
+  D-P5-11 is exactly the shape of a criterion quietly redefined to match what got built, and it was
+  attacked as such — twice, once by the phase reviewer and once by the milestone audit. It held
+  because it is owner-attributed, names what it supersedes, preserves every struck criterion's
+  original wording inline with its reason, states the accepted cost out loud, and repeats "NOT
+  evidenced, by design" everywhere the claim appears. **That checklist is the test for any future
+  rescope.**
+
+### Never again
+
+- **Never write a plan task whose `Done when` is "the owner ran X".** Twelve such tasks stalled
+  Phase 5 at 22/41 for **three weeks** and held the entire milestone behind one ~3 h sitting. This
+  was the single largest cost in v4.0 and it was structural, not circumstantial. Produce the
+  runbook, build everything that does not strictly depend on the reading, record the reading as
+  pending, and surface the owner action as a **parallel to-do**. Now a standing owner preference
+  (`QA docs: non-blocking`).
+- **Never let a rescope amend the requirement and leave the milestone's own definition of done
+  saying something else.** D-P5-11 rewrote NFR-8's Statement *and* PRD-12's acceptance signal, but
+  the DoD sentence in PROJECT.md/ROADMAP.md was the last unamended copy — and the close audit
+  caught it as the blocker-to-close (GAP-1). One clause survived in four places and was corrected
+  in three. Keeper: **when you amend a criterion, grep for its wording across every artifact and
+  fix them in the same commit.**
+- **Never assume a refactor that touches N sibling call sites preserved each one's local guard.**
+  Phase 4's bin-awareness transform silently dropped MOUSSE's per-location floor. The control that
+  catches this is the **cross-sibling guard diff** — read the N call sites against each other, not
+  each against its own before/after.
+- **Never state both an aggregate estimate and per-unit targets in a plan without reconciling
+  them.** D-P5-1 said "~40–50 checks, est. 2–3 h" while the plan's own per-suite maxima summed to
+  exactly 59. One of the two is always wrong, and finding out at task 15 costs a decision the owner
+  should have made at task 0.
+- **Never quote a whole-ledger aggregate as a fixture literal**, and never trust "it balances" as a
+  fixture invariant. Phase 5 found a seeded Balance Sheet reporting **total assets −258.25** while
+  the books were perfectly `in_balance`, and a trial-balance line that was pure `verify_*` litter
+  accumulating at +50.00 per sweep. Fixture layers need domain invariants (`total_assets > 0`, both
+  aging tie-outs) asserted on **every** seed run — the cost of a false defect is owner trust.
+- **Never rely on "don't point it at prod" when the tooling cannot tell prod from dev.**
+  podman-compose names both stacks `compose`, so a destructive seed command targets whichever is
+  up. Gate destructive scripts with an explicit env opt-in a copy-pasted command cannot satisfy.
+- **Never carry master-merge debt across a milestone close.** v4.0 is the **fourth consecutive**
+  milestone to reach its close with the work unmerged; `origin/master` still had no `.github/` at
+  all, so every hardening this milestone paid for was invisible on the branch a new deploy comes
+  from. D-M3-4 cleared this once and it came straight back. Merge before tagging, always.
+
+### Structural observations
+
+- **The `feat:`/`fix:` ratio inverts for an infra milestone** — 9 feat / 12 fix out of 187 commits,
+  against 67 feat / 8 fix for v3.0. Two phases (2a, 2b) shipped with `git diff -- backend/app/`
+  provably empty. Plan infra phases in tests, config and docs; a phase that "changes no product
+  code" is a *feature* of the plan, and worth asserting as an acceptance criterion.
+- **Adversarial close audits have now found real defects in four of four milestones** (v1.0 G1
+  Where-Used, v2.0 G1, v3.0 GAP-1/2, v4.0 GAP-1..8). This is no longer a run of bad luck; it is the
+  measured yield of the step. Budget it as non-optional, and budget *fix time after it*, not just
+  the audit.
+- **The milestone's own subject matter is where its audit found the holes.** v4.0 hardened the
+  inventory ledger and CI; the audit found an unlocked ledger writer and three CI coverage holes.
+  A milestone is least skeptical about the thing it believes it just fixed — point the close audit
+  at the headline claim first, not last.
+
+## Phase 05 — Human click-through UAT (v4.0, NFR-8, verified 2026-08-17)
+
+Rescoped mid-flight (D-P5-11): the deliverable became `.zj/QA.md` — 61 requirement-keyed residue
+checks over a reproducible fixture seed (275 derived literals, byte-identical across re-seeds) —
+and explicitly **not** the owner's reading of it. Shipped anyway, before anyone clicked: two
+**blockers** (`U0` fresh-volume deploy, `U2` the API image could not be built at all), one major
+(`U1` 500 on duplicate email), and SC8's bin existence+membership+active probe. Verifier's first
+pass was **GAPS** (5 major / 5 minor; reviewer 4 major / 3 minor); the owner ran the full fix loop
+and re-verification at `d3e68e2` returned **PASS — 0 blocker, 0 major, 6 minor**.
+
+### Surprises (assumption → corrected truth)
+
+- **Five phases of green gates never once proved the artifact a self-hoster actually gets.** `U2`:
+  `COPY frontend/package*.json` never matched the dotfile `frontend/.npmrc`, so `npm ci` ran without
+  `legacy-peer-deps=true` and the image **could not be built at all** — masked for five phases
+  because everyone worked against a long-lived stale image and the dev overlay, which bind-mounts
+  over `frontend/dist` anyway. `U0` is the same shape one layer down: `db` got `POSTGRES_PASSWORD`
+  by interpolation only from a `compose/.env` that does not exist, which is **invisible for the life
+  of a volume** (an initialized `PGDATA` never re-reads it) and therefore blocks only a *first-ever*
+  deploy. Keeper: **the deployable artifact is its own deliverable and needs its own standing gate.**
+  A suite that runs from a checkout says nothing about the image, and a stack that has been up for
+  months says nothing about `up` on a fresh volume. Both are now CI-resident (`container-image` job;
+  `test_compose_config.py`), and the fix-loop's own new pin caught the class again — see the cost
+  sinks.
+- **A config-pinning test can go green against the exact broken config it was written to catch.**
+  The pre-fix `compose.yml` carried a comment stating the *intent* — "POSTGRES_PASSWORD comes from
+  ../.env (env_file)" — that was never implemented, so a naive substring search would have passed on
+  the broken file. `test_compose_config.py` strips comments before matching, and its RED-on-revert
+  was driven with the corrected prose left in place so the red could not come from a comment.
+  Keeper: **pin config on parsed, comment-stripped structure, and RED-drive with the documentation
+  left intact** — otherwise you are asserting the file's good intentions.
+- **A runbook nobody has executed verbatim is prose, not a runbook.** Executing the plan's own
+  bring-up block (T16) produced three doc bugs in one sitting: a prose *"wait a few seconds"*
+  followed by a bare `curl` that returns `curl: (56) Recv failure: Connection reset` (a wait is not
+  a command; the owner concludes the stack is broken), a *"~40 s"* seed that is actually **~5 s**
+  (the engineer's own earlier claim, wrong, and already copied into the plan), and undocumented
+  `alembic` INFO lines. The few-second race is what makes it insidious — it bites some readers and
+  not others. Keeper: **"run your own documentation verbatim on a clean machine" is a task with its
+  own findings.** Plan it; don't fold it into authoring.
+- **The fixture can manufacture a false defect that no balance assertion can see.** Two caught at
+  build time: a manual JE aimed at a control account would have broken the AR/AP tie-out with no
+  offsetting subledger document; and the seed paid a bill and an expense out of a **never-funded**
+  cash account, so the Balance Sheet reported **total assets −258.25** while the books were still
+  perfectly `in_balance` — masked on the dev DB by unrelated litter. An owner reading that would
+  have reported a real-looking defect that isn't one. Keeper: **fixture layers need domain
+  invariants beyond "it balances"** — `total_assets > 0`, both aging tie-outs, net-zero — asserted
+  on **every** seed run, because the cost of a false defect is owner trust, not just time.
+- **"Just don't point it at prod" is not a safeguard when the tooling cannot tell prod from dev.**
+  podman-compose derives its project name from the *directory of the first compose file*, which is
+  `compose/` for both the prod invocation and the dev overlay — same container `compose_api_1`,
+  same volume `compose_pgdata`. The documented seed command therefore targets whichever stack is
+  up, and the seed posts **append-only, irreversible** JEs (opening capital, a bill, a payment, an
+  AR invoice, a receipt) plus a login whose password is committed to the repo. Keeper: **a
+  destructive script must be gated by an explicit env opt-in a copy-pasted command cannot satisfy**
+  (`BNS_ALLOW_UAT_SEED=1`, set by the dev overlay and never by prod) — never by a naming convention
+  or a reader's care.
+- **Aggregate ledger figures on a shared dev DB are litter, not data.** The dominant trial-balance
+  line (4950.00 GR/IR) was orphaned `po_receipt` JEs that `verify_purchasing.py`'s cleanup never
+  removed — measured at exactly **+50.00 per twelve-script sweep**, accumulated over many phases.
+  Keeper: **never quote a whole-ledger aggregate as a fixture literal.** Document-scoped literals
+  (numbers, aging buckets, control-account balances) are stable; TB/BS totals drift under any
+  `verify_*` run and read as a regression that isn't one.
+
+### What worked (repeat)
+
+- **Design each fixture against the failure modes, not for realism.** The PLUM cost tree got a
+  **second** costed leaf on purpose: with one leaf the roll-up total is structurally identical to
+  that leaf's extended cost, so a footer printing a single flat row looks correct — with two, no
+  flat row equals `99.15` and the v1.0 triple-count bug reads an unmistakable `239.40`. Same
+  discipline in MOUSSE: one `IssueComponentsDialog` shows two lines with **opposite** bin
+  requirements (fully-binned → pool 0 → must name a bin; entirely unbinned → issues with none), and
+  both pool states are asserted every seed so drift fails the seed instead of quietly voiding the
+  check. Keeper: for every check, ask *what number would a wrong implementation print* — if it is
+  the same number, the fixture proves nothing.
+- **Suite-local, `C-`-prefixed check IDs.** `C-CORE-05` can never be mistaken for SRD `CORE-05`,
+  and a late 59th check appends as `C-SYERP-20` without renumbering anything the owner may already
+  have reported against. Corollary learned the hard way: the scheme does not save a sloppy checker —
+  `grep -qF "CORE-05"` matches `C-CORE-05`, so the requirement-coverage greps had to be delimited on
+  **both** sides (`[(,] ?ID[,)]`) to match mid-list occurrences without matching check IDs.
+- **Re-keying the checklist from phase success criteria onto SRD requirement IDs** is what turned a
+  one-shot UAT script into a standing asset: it survives its own phase's closure, expresses coverage
+  (31 of 47 requirements), and can be extended by future phases instead of superseded. Three
+  per-milestone UAT docs collapsed into one with pointer lines.
+- **The verifier re-driving every claimed fix instead of reading the engineers' reports**, and
+  proving each new pin non-vacuous by mutation rather than by exit code. That is what surfaced the
+  citation checker's silent-erosion edge (a reformatted citation drops out of the pinned set and the
+  script still prints "All assertions PASSED"), a wrong tertiary claim in a freshly-filed backlog
+  item (MOUSSE never calls `post_issue`), and the stale prod artifact. It runs both ways: the
+  verifier's own two first-pass errors were caught by the engineers and folded in. **A fix loop
+  converges on bidirectional honesty, not on deference in either direction.**
+- **An owner-attributed rescope survives adversarial review when it keeps both halves stated.**
+  D-P5-11 is the exact shape of a criterion quietly redefined to match what got built, and it was
+  explicitly attacked as such. It held because it is owner-attributed, names the decisions it
+  supersedes (D-P5-6, D-P5-7), preserves every struck SC's original wording inline with its reason,
+  states the accepted cost out loud, and repeats "NOT evidenced, by design" across SRD / ROADMAP /
+  BACKLOG / requirements-progress. Keeper: **that checklist is the test for any future rescope.**
+- **Phase 3's CI glob keeps paying.** Four new guards (`verify_qa_doc.py`, `verify_qa_citations.py`,
+  the seed-idempotency step, scenario `(G5)`) entered standing protection with zero wiring. Nth
+  consecutive dividend from the maintenance-proof glob.
+
+### Cost sinks (time planning didn't predict)
+
+- **Twelve tasks whose `Done when` only the owner could satisfy stalled the phase at 22/41 for
+  three weeks and held the whole milestone behind one ~3 h sitting.** This is the single largest
+  cost in the phase and it was structural, not circumstantial. It is now an owner preference
+  (`QA docs: non-blocking`) and it is the rule: **never write a plan task whose Done-when is "the
+  owner ran X".** Produce the runbook, build everything that does not strictly depend on the
+  reading, record the reading as pending, and surface the owner action as a **parallel to-do**.
+- **The plan disagreed with itself about size from day one.** D-P5-1 set "~40–50 checks, est.
+  2–3 h" while the plan's own per-suite maxima summed to **exactly 59** — the estimate had been
+  copied into the summary instead of derived from the rows. The overage was never padding, and the
+  owner rightly kept full coverage. Keeper: **when a plan states both an aggregate estimate and
+  per-unit targets, reconcile them at plan time** — one of the two is wrong, and finding out at
+  task 15 costs a decision the owner should have made at task 0.
+- **The prod artifact went stale for the second time in the project's history, inside the phase
+  whose own risk register names that exact failure** ("any commit touching `backend/app/` or
+  `frontend/src/` after Task 34 → re-run 34–36 … exactly the v1.0 G2 failure"). The fix loop landed
+  `fd7ca87` after the image was built; the running container demonstrably lacked the fix. A written
+  risk is not a control. Now a warning banner on the SC7 check in `.zj/QA.md`; worth making
+  mechanical (compare image build time to the last product commit) the next time it bites.
+- **The fresh volume was destroyed and re-seeded three times at Task 8** (once for `U0`, once for
+  the negative-assets fixture bug, once to clear the `verify_*` litter so the live stack matched the
+  recorded manifest byte-for-byte). Each cycle is cheap; three of them were not budgeted. Any phase
+  whose deliverable quotes literals should budget **N** fresh-volume cycles, not one.
+
+### Deferred (homed)
+
+- Filed at the verify close (`fa5b21f`, `bf0bb0b`): **N-1** the two QA-doc guard scripts cannot run
+  the documented in-container way (p3), **N-2** `verify_qa_citations.py` erodes silently when a
+  citation loses its shape (p3), **N-3** three `verify_gl.py` citations only weakly pinned — the
+  letterless `verify_*` scripts still need scenario letters (p3), and the **p2 bin-validation item**
+  for `post_transfer` / MOUSSE `issue_components`, whose docstrings still assert a guarantee nobody
+  provides. **N-4/N-5** were corrections applied in place; **N-6** (stale artifact) is now the SC7
+  precondition banner in `.zj/QA.md`.
+- Homed at retro, all previously unhomed PLAN `## Noticed` / reviewer questions: **module
+  enable/disable is UI-only — no server-side gate** (p2; `/api/v1/<module>/*` still serves a
+  disabled module, and the three Phase-4 dialogs' docstrings are wrong about why they hide);
+  **the commented module-service templates in `compose.yml` still carry `env_file: ../.env` alone**
+  (p3 — D-P5-10's drift pre-seeded into the file); **`POSTGRES_PASSWORD` is interpolated into the
+  DSN unencoded** (p3 — a `@` or `/` in a first-time self-hoster's new password yields an opaque
+  asyncpg parse error on first boot); **operator-facing error copy names entities by numeric id**
+  and `update_cost` reports the wrong noun (p3); **Receipts and Payments have no human document
+  number** (p3 — every sibling document has one).
+- Not deferred, deliberately: the **p1 human-UAT backlog item stays open**. `.zj/QA.md` §6 holds
+  zero readings and per D-P5-11 it ticks only when a person clicks. Whether v4.0 ships on an unrun
+  checklist is the owner's call at `/zj:milestone`.
+
+## Phase 04 — Inventory ledger race-safety (v4.0, NFR-7, verified 2026-07-25)
+
+Shared `SELECT … FOR UPDATE` item-master/PO-header lock across `post_receipt`/`post_adjustment`/
+`post_transfer`/`receive_line`, plus bin-aware draws in the three remaining bin-blind writers
+(adjust, transfer, MOUSSE issue) — closing the *inbound* half of 12a's bin-desync boundary. New
+`verify_inventory_race.py` (4 barrier scenarios × 5 iterations, mutations M1–M4 executed
+RED→GREEN) + three FE bin pickers. The reviewer found the locking work correct on the first pass;
+**every finding landed on the bin-aware half**. Verifier returned GAPS despite all six SCs being
+empirically true — which is the phase's most portable lesson.
+
+### Surprises (assumption → corrected truth)
+
+- **Applying one transform to N sibling writers silently drops invariants that a per-file read
+  cannot see — the review artifact is the cross-sibling guard diff, not N independent file
+  reviews.** The same phase deliberately kept the per-location floor *beside* the new pool floor
+  in `post_adjustment` and `post_transfer` ("defends legacy data whose per-bin split already
+  desynced"), while MOUSSE `issue_components` **replaced** its location floor with the pool floor
+  — and MOUSSE-issue is precisely the writer whose pre-Phase-4 bin-blind draws *created* those
+  desyncs. No test could see it: on clean post-Phase-4 data every pool ≥ 0 implies location ≥ 0,
+  so the pool guard is sufficient and only a legacy-desynced fixture exposes the gap (a bin-named
+  issue drives location on-hand −10 and books a Dr 1140 / Cr 1130 JE for stock that doesn't
+  exist). The reviewer found it by noticing the *asymmetry between siblings*, not by auditing
+  MOUSSE alone. Keeper: when a phase applies the same change to a set of sibling functions,
+  explicitly tabulate which invariants each one holds before vs. after — a dropped guard in one
+  of three parallel edits reads as normal code in isolation.
+- **"All success criteria empirically true" is not a PASS when the proof was the verifier's own
+  throwaway script — hand-checked ≠ pinned.** The verifier hand-confirmed the transfer / MOUSSE /
+  positive-adjust bin behaviors live, then correctly returned **GAPS**: nothing in CI would go red
+  if any of them silently regressed. This is Phase 2a's keeper ("when the failure mode is *the
+  safety net disappears*, the deliverable is a standing test") turned on the verifier's own
+  evidence. Keeper, now standing practice: **verify must classify each criterion's proof as
+  *pinned* (a CI-run assertion) or *observed* (a hand check at verify time), and treat
+  observed-only proof of a behavior this phase created as a gap.** The fix loop converted both
+  into CI-resident scenarios (`verify_gelato.py` F, `verify_mousse.py` G).
+- **A mutation-proof only proves the guard if the RED run fails for the *intended* reason — the
+  fixture's incidental guards can hijack the mutation just as they can hijack the green test.**
+  G2's legacy-desync fixture receives its component at a real moving-avg cost (10 @ 5), not 0: with
+  a zero-cost item the guard-disabled run would have been rejected by MOUSSE's zero-total-value JE
+  guard (the standing p3 backlog item) instead of driving location on-hand to −10.000000, and
+  "it went RED" would have proven nothing about the location floor. Same shape on the other side:
+  M3's RED did **not** manifest as the predicted `qty_received > qty_ordered` — the ORM
+  read-modify-write overwrote the accumulator, so the real signature was two receipts landing +
+  a double GL post with `qty_received` stuck at 7. Keeper: the predicted failure signature is a
+  hypothesis; record *what actually rejected/failed* in the RED run and re-check the assertion is
+  non-vacuous against that, rather than accepting red as self-evident. (This is the v3.0
+  "only the guard under test may reject" rule applied to the mutation axis.)
+
+### What worked (repeat)
+
+- **Pinning a known-wrong boundary makes its durable fix a planned task instead of a
+  re-discovery.** 12a's keeper — make every writer of a new ledger dimension dimension-aware in
+  the same phase, *or* pin the boundary with a test — paid out exactly as designed two phases
+  later: `verify_gelato.py` scenario E had *pinned* the bin-blind desync, so closing the inbound
+  half here meant Task 8 "revise scenario E to assert the fix" was written into the plan up front,
+  and the pin language had to be visibly deleted for the phase to go green. A deferred boundary
+  that is pinned is cheap to close; one that is only documented gets rediscovered by a reviewer.
+- **The lock + forced-interleave discipline scaled from one mutation to a whole phase of
+  writers.** One script covering four writers (mixed-path MOUSSE × SYERP, adjust/transfer floors,
+  PO over-receipt, moving-average lost-update) with mutation-proofs per scenario left the
+  reviewer's verdict on the locking half: *correct*. Nth consecutive confirmation that pre-empting
+  concurrency at plan time turns the recurring post-hoc concurrency major into a non-event.
+- **Phase 3's CI paid its first dividend immediately.** Both fix-loop scenarios entered standing
+  protection with zero wiring — the `verify-scripts` job globs `verify_*.py` minus `*_api.py`, so
+  adding scenarios F and G to existing scripts made them CI-enforced on push (confirmed green on
+  run 30185233894, headSha `3253917`). The maintenance-proof glob (Phase 3 keeper) is what made
+  the pins free.
+
+### Deferred (homed)
+
+- Homed at verify close: **positive-adjust accepts an unvalidated `bin_id`** → can strand stock in
+  a foreign-location bin pool (**BACKLOG p2 — owner decision pending**: membership check vs.
+  explicitly accept); **GELATO `pick_for_shipment` unsorted incremental item locks** → deadlock-500
+  risk (BACKLOG p2, same lock family); **`TransactionRead` omits `bin_id`** + MOUSSE issue audit
+  records no per-line bins (BACKLOG p3) — flagged because Phase 4 made `bin_id` load-bearing.
+- Homed at retro: **pre-lock `moving_avg_cost` staleness remains in `post_issue`/`post_putaway`**
+  (leg valuation provenance only — `post_receipt` and `post_transfer` were fixed) and
+  **`verify_purchasing.py` leaves orphan `po_receipt`-sourced JEs on every run** → both BACKLOG p3.
+- Both p2 items this phase existed to close — **inventory-ledger cross-path races** and the
+  **inbound half of the bin-split desync** — are RESOLVED and checked off.
+
+## Phase 03 — CI pipeline (GitHub Actions) (v4.0, NFR-4, verified 2026-07-25)
+
+Shipped `.github/workflows/ci.yml`: four independent blocking jobs (`frontend`, `backend-lint`,
+`backend-tests` vs a live `postgres:17` service, `verify-scripts` over the 14 non-API scripts),
+proven green AND red on real Actions runs, gated behind required-status branch protection on a
+real PR (#4). Infra-only — product boundary clean (`git diff -- backend/app/ frontend/src/`
+empty; only the authorized D-P3-4 conftest fix). Reviewer: 0 findings.
+
+### Surprises (assumption → corrected truth)
+
+- **"X self-provisions from a bare server" is unproven until it has run against a genuinely
+  empty environment — persistent local state can satisfy a precondition the code never
+  establishes.** The plan's core assumption ("pytest self-provisions; the Postgres service just
+  needs to exist") was wrong on a *fresh* server: conftest's reachability probe connected to
+  `biznice_test` — the very DB that provisioning was about to create — so on CI's always-empty
+  service the probe returned False and aborted the session before provisioning ever ran. The
+  2a/2b "232 passed" runs never exercised this path; they worked only because `biznice_test`
+  persisted from earlier local sessions (D-P3-4). Two keepers: (1) a reachability probe must
+  target a resource that exists *before* bootstrap (the maintenance `postgres` DB), never the
+  thing being bootstrapped; (2) CI's fresh-per-run service is itself the standing regression
+  protection for the bootstrap path — a protection class local dev structurally cannot provide,
+  and a genuine argument for CI beyond "runs the tests automatically."
+- **A recipe derived by *reading* code confirms what the code doesn't do — not what the
+  environment must already have. Execute the plan's verify command before trusting it.** The
+  plan grepped the `verify_*` scripts and correctly concluded they don't self-create/migrate the
+  DB, then wrote a "migrate `biznice`, run the loop" recipe whose own local-verify was evidently
+  never run: execution immediately surfaced two missing preconditions the scripts' docstrings
+  state — `PYTHONPATH` so `from app…` resolves, and the app-lifespan reference seeds ("GL
+  account 5100 not seeded"; alembic migrates schema only). Cheap discipline: for any
+  "run-existing-things-in-a-new-environment" task, actually run the plan's Verify line once at
+  plan time (or first thing at build); static analysis cannot enumerate runtime preconditions.
+
+### What worked (repeat)
+
+- **Engineer out the check-name ↔ branch-protection footgun instead of hoping.** Every job got
+  an explicit `name:` equal to its key, and Task 7 read the exact context names from a completed
+  run's `gh pr checks` *before* PUTting protection — never guessing. The classic silent failure
+  (protection PUT accepted, PR still mergeable on a name mismatch) was designed out; verify
+  confirmed `required_status_checks.contexts` matches the four reported names exactly.
+- **A CI phase's deliverable is proven red, not just green.** SC3/SC4 mandated deliberate
+  breakage (failing assert; ruff + eslint violations) pushed to real Actions runs, shown red,
+  then reverted and shown green again. A pipeline demonstrated only green is unproven *as a
+  gate* — the red demos are what showed `backend-tests` red doesn't mask the others (no
+  `needs:`) and that both lint jobs actually block.
+- **Job isolation dissolved the DB-contract collision.** pytest wants a maintenance `postgres`
+  DB and self-creates `biznice_test`; the `verify_*` scripts want a pre-migrated, pre-seeded
+  `biznice` and self-create nothing. Rather than sequencing one service through both contracts,
+  each job got its own `postgres:17` service configured for its contract (one bare; one
+  `POSTGRES_DB: biznice` + migrate + `run_seeds`). No shared state, no ordering, and a glob
+  (`verify_*.py` minus `*_api.py`) keeps the script list maintenance-proof.
+- **Verify-the-verifier discipline paid again:** the verifier re-confirmed every claimed run ID,
+  PR #4, and the protection contexts live via authed `gh` (not on trust) AND reproduced every
+  check locally on a fresh container — querying `pg_database` before/after to prove the D-P3-4
+  provisioning genuinely happened, not merely that pytest passed.
+
+### Deferred (homed)
+
+- **CI-hardening niceties → BACKLOG p3 (new item):** standing enforce-smoke (SC3/SC4 red demos
+  are one-time; standing protection = the jobs run every push), a "0 skipped" guard on the
+  pytest job (a future silent skip stays green today; 2a's `test_harness_selfcheck.py` pins the
+  DSN-class regression but not arbitrary new skips), a meta-test on workflow shape (deleting a
+  job silently drops its check), the Node-20 action-major bump (cosmetic warning), and
+  duplicate push+PR runs on same-repo branches. Owner chose close-as-is; all p3.
+- **BACKLOG p1 "CI pipeline" item → RESOLVED** by this phase (its folded Phase-1/2a sub-notes
+  carried into the new p3 item, including the standing `.npmrc legacy-peer-deps` peer-masking
+  caveat). The p1 "Port Phase-8 verify-script assertions" item was retroactively closed too —
+  Phase 2b delivered exactly it (true-up recorded there).
+
+## Phase 02b — Port the verify_* cruxes into the pytest suite (v4.0, NFR-5, verified 2026-07-24)
+
+Ported the 7 DoD-named crux behaviors (inventory moving-avg, GL/AP/AR ties, MOUSSE WIP-clears,
+CRUMB reservation, GELATO ship-COGS) from the live-DB `verify_*` scripts into the repaired
+pytest suite, plus 5 HTTP audit/RBAC tests — so reverting a crux now turns a *pytest* test red,
+not only a script. TEST-ONLY: `git diff -- backend/app/` empty; 232 passed / 0 skipped ×2. Two
+keepers about how a passing test can still fail to guard what it advertises.
+
+### Surprises (assumption → corrected truth)
+
+- **A crux whose arithmetic divides evenly cannot guard its own advertised mutation — the wrong
+  formula produces the right number.** MOUSSE `test_wip_clears_to_zero_crux` runs planned_qty 10
+  against accumulated WIP 210; the documented regression (credit 1140 by `planned_qty×fg_unit_cost`
+  instead of the exact accumulated WIP) leaves it **green**, because `210/10 == 21.000000` divides
+  evenly so the rounded-FG credit *coincides* with the exact credit. The real red-on-revert guard is
+  the sibling **residual** case `test_under_issue_override_clears_wip_and_ties_subledger` (100/3),
+  where the remainder strands `Decimal('0.000001')` in 1140 and the assert flips. General rule: a
+  non-vacuity scenario only distinguishes right-formula from wrong-formula when the numbers *don't*
+  divide cleanly. Pick crux fixtures with an indivisible remainder (or a residual sibling), or the
+  happy-path test is decorative on the exact logic it names. "It passes red-on-revert" must be
+  proven per test, never assumed from the headline number matching.
+- **The SC2 mutation table is the highest-signal audit artifact in a test-porting phase — read its
+  claims against the arithmetic, don't just trust the RED/green column.** The one real defect (the
+  vacuous MOUSSE happy-path) surfaced *not* from re-running tests but from the reviewer reading the
+  documented "this mutation turns this test RED" claim and noticing the even division made it false.
+  A green suite hides a vacuous test completely; the mutation table is where vacuity becomes
+  visible — so a critical read of that table catches what the suite cannot. (Verifier re-drove only
+  a 3/7 sample independently and would have trusted the MOUSSE row; the *reviewer's* read of the
+  claim caught it. Both lenses earned their keep.)
+
+### What worked (repeat)
+
+- **Lift the `verify_*` scripts' own fixture builders and oracles verbatim.** The plan flagged the
+  heavy multi-step setups (AR/GELATO/MOUSSE each need receipts → bins → SO → ship) as the top cost
+  risk and pre-authorized copying the scripts' proven builders (`_seed_shipped_line`,
+  `_wo_account_balance`, `_subledger_valuation`) near-verbatim. Payoff: the ports landed without the
+  predicted >1h blowups, and reusing each script's *independent oracle* (aging from Invoice rows vs
+  control from JournalLine rows; `_subledger_valuation` vs `derive_account_balance`) kept every
+  headline assert from being self-fulfilling — the invariant is checked against a value computed a
+  different way, anchored to a literal.
+- **Drive the REAL flow, never hand-stamp the shape (D-P2b-5) — now applied prophylactically at
+  plan time, not learned from a bug.** The AR crux seeds its shipped SO lines by running the actual
+  `execute_pick/pack/ship` + `create/confirm_sales_order`, not by stamping `qty_shipped`/hand-posting
+  COGS. This is the 11a/11b keeper (hand-fed shapes twice certified dead features green); here it was
+  a *plan decision* before any code, and the ports match genuinely-shipped qty against a
+  genuinely-posted COGS JE. When a keeper is known, spend it in the plan.
+
+### Deferred (homed)
+
+- **CRUMB FK-cycle latent TRUNCATE gap** → BACKLOG p2. `_isolate` builds its truncate order from
+  `Base.metadata.sorted_tables`, which silently drops `crumb_lead`/`crumb_opportunity` (unresolvable
+  FK cycle) — those two tables may not be truncated between tests. Mitigated *this* phase (the CRUMB
+  ports create no leads/opportunities), but it *will* pollute any future test that does. Homed rather
+  than re-discovered per phase.
+
+## Phase 02a — Pytest harness repair (v4.0, NFR-5, verified 2026-07-22)
+
+Fixed the four D-P7-4 root causes (psycopg2 DSN, event-loop-bound engine, missing `admin-user`
+DB identity, no per-test isolation) so the ~100 DB-backed tests that had **never run** across 13
+phases now execute 0-silent-skip green. `git diff -- backend/app/` empty — a pure test-harness
+phase. Five keepers, all about the difference between "works now" and "stays working."
+
+### What worked (repeat)
+
+- **Pre-decide the mechanism, not just the diagnosis, when repairing already-diagnosed infra.**
+  The plan pinned all four root causes to `file:line` AND locked the isolation mechanism (D-P2a-1:
+  dedicated `biznice_test` DB + NullPool engine + per-test truncate-reseed) *with the "why over
+  savepoint/rollback" reasoned out* before a line was written. Payoff: Wave A landed the four fixes
+  with the product diff empty and zero build-time surprises; every surprise was in Wave B (drifted
+  tests), exactly where the plan's risk section predicted. When the failure was already diagnosed
+  once (Phase 7, D-P7-4), the planning budget goes to locking the mechanism, not re-exploring.
+- **Parallel empirical verifier + reviewer converged on the same seam.** The no-DB-behavior
+  contradiction was found *independently* by the reviewer (finding #2) and the verifier (gap #1's
+  design fork). Two independent lenses hitting the same seam is high-signal — that's a design
+  contradiction, not a nitpick, and it's worth acting on before anything else.
+
+### Surprises (assumption → corrected truth)
+
+- **"All 6 SCs PASS" is not "the phase is done."** First-pass verify passed every success criterion
+  empirically — yet 1 verifier major + 2 minors + 2 reviewer majors still had to be fixed in the
+  loop. The SCs measured *does the harness work now*; the gaps were *will it keep working / is it
+  self-consistent* — regression protection and design contradiction, both orthogonal to any SC. A
+  green SC sweep is never the finish line; the verify+review fix loop is where durability and
+  internal consistency get caught.
+- **A phase that fixes "X silently passes" MUST ship a test that goes RED when X regresses — or the
+  exact bug recurs invisibly.** The whole phase existed because a DSN bug silently skipped ~100 DB
+  tests while CI stayed green. At first pass *nothing re-caught that*: reverting the DSN fix would
+  still show green, because the autouse provisioning fixtures connect independently of the broken
+  probe. The fix — `tests/test_harness_selfcheck.py` asserting `db_available() is True` — makes the
+  regression fail loud. General rule: when the failure mode is "the safety net silently disappears,"
+  the deliverable is not the repair, it's a standing test that fails when the net disappears again.
+  A one-time manual mutation-proof (non-vacuity by hand) is not that test.
+- **An autouse fixture that needs a resource silently makes that resource mandatory — and turns any
+  graceful-degrade path into a contradiction.** The plan carried `skip_if_no_db` (skip DB tests, run
+  unit tests) forward while adding a *session-autouse* fixture that unconditionally provisions the
+  DB. Those cannot coexist: with no Postgres the autouse fixture errors *every* test, including the
+  pure-unit ones that used to pass, so the graceful-skip promise became dead code the moment
+  provisioning went autouse. Owner resolved it by making DB a hard requirement (fail loud via
+  `pytest.exit`) and retiring `skip_if_no_db` to a no-op alias. Decide required-vs-optional
+  explicitly and delete the losing machinery — don't let an autouse fixture decide it by accident.
+- **`"python"` is not on PATH on standard Debian/CI images (only `python3`) — use `sys.executable`
+  for any "same interpreter as the test" subprocess.** The alembic-migrate subprocess shelled out to
+  a bare `python`; on the exact CI image the phase targets that `FileNotFoundError`s the whole
+  session, defeating the phase's own portability SC (SC6). Any subprocess meant to run the running
+  interpreter takes `sys.executable`, never a bare name.
+
+## Phase 01 — Lint gates fixed-to-clean (v4.0, verified 2026-07-21)
+
+A mechanical NFR-6 chore — no capability shipped — but three keepers, because the two things
+that could have turned it into a behavior-changing phase (a plugin redefining its own ruleset,
+and an autofix stripping a load-bearing import) both surfaced and were contained by the plan's
+sequencing rather than by luck.
+
+### Repeat these
+
+- **A lint plugin's `recommended` preset is a moving target across major versions — pin the
+  major before you scope the phase.** `eslint-plugin-react-hooks` was installed at **v7.1.1**,
+  whose `recommended` silently bundles the React-Compiler ruleset: **54 errors across 41 files,
+  42 of them behavior-sensitive** — far outside a mechanical lint chore. Pinning to `^5`
+  (D-P1-1) made `recommended` mean the classic 2-rule set (11 residual errors, 9 files, all
+  hand-resolvable). The lesson generalizes past this plugin: when a phase's scope is "turn on
+  the recommended rules," the plugin *version* is part of that scope — an unpinned bump can
+  redefine "recommended" and smuggle in work you explicitly deferred. Verify what `recommended`
+  resolves to (`--print-config`) before estimating the phase.
+- **Autofix on a self-registering modular monolith needs guard-first, then a cold-boot gate.**
+  The app self-registers modules at import time (`registry.register` in each
+  `app/modules/*/__init__.py`) and `app/main.py` force-imports `app.core.models` so FK metadata
+  resolves at boot. A blind `ruff --fix` that strips a "unused" F401 there re-introduces a
+  cold-boot 500. The working sequence: **(1)** audit and `# noqa: F401`-guard every side-effect
+  import *before* `--fix`; **(2)** review every deleted-import line in the diff; **(3)** gate
+  empirically with `import app.main` cold-boot + the full `verify_*` run. The review confirmed
+  the autofix only *reordered* imports (I001) and removed nothing load-bearing — but that was a
+  *result* of the guard-first sequencing, not a property of the tool. Trust the boot, not the
+  linter's judgment of "unused," whenever an import's purpose is a side effect.
+- **Re-derive the exact post-autofix residual from `--statistics`; never trust the
+  hand-inspected list.** Planning hand-enumerated 18 manual items; safe-`--fix` actually left
+  **~71** (UP035 ×23, 2 unsafe fixes, ~28 remainder). The plan's rule — *every remaining rule
+  category must map to a named owning task before proceeding, no category riding the final
+  backstop* — is what stopped UP035 and the unsafe fixes from slipping through unowned. The
+  cheap discipline: after `--fix`, run `--statistics` and reconcile the real breakdown against
+  your task ownership map; the delta between "what I inspected" and "what actually remains" is
+  where a mechanical phase silently grows.
+
+### Process notes
+
+- **A build report's compressed counts can read as a partial pass — expand them at verify.**
+  The build reported Vitest "44/131"; a reader could take that as "44 of 131 passed." Verify
+  established it meant **44 test files / 131 tests, 0 failed, 0 skipped**. When a headline
+  number could be read as a failure ratio, the verifier must expand it before trusting the
+  verdict — a green run mis-typed as amber costs a re-investigation either way.
+- **`.npmrc legacy-peer-deps=true` is global, not scoped to the conflict that motivated it.**
+  Added for the react-hooks-v5 / eslint-10 peer pair (D-P1-1), it silences peer-dep conflicts
+  for *every* future `npm install`/`ci`, so a genuinely incompatible dep bump won't surface at
+  install time. Homed to the Phase 3 CI item (BACKLOG) — a CI runner must both honor the tracked
+  `.npmrc` and carry a note that it's masking peer resolution.
+
 ## Milestone v3.0 — Customer & logistics (closed 2026-07-19)
 
 Roll-up of Phases 11a, 11b, 12a, 12b, 13 (CRUMB CRM → sales orders; GELATO bins → pick/pack/

@@ -12,11 +12,9 @@ Behaviors tested (CORE-04, D-05):
 
 Tests require a live PostgreSQL database (skip_if_no_db) and the seeded admin user.
 """
-import pytest
 import httpx
 
 from tests.auth.conftest_helpers import admin_login_token, create_regular_user
-
 
 # ---------------------------------------------------------------------------
 # POST /auth/users — create user
@@ -32,12 +30,12 @@ async def test_admin_create_user(
 
     response = await client.post(
         "/api/v1/auth/users",
-        json={"email": "newuser@test.local", "password": "securepass123"},
+        json={"email": "newuser@test.example", "password": "securepass123"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["email"] == "newuser@test.local"
+    assert body["email"] == "newuser@test.example"
     assert "id" in body
     assert body["is_active"] is True
 
@@ -54,7 +52,7 @@ async def test_non_admin_create_user_forbidden(
 
     response = await client.post(
         "/api/v1/auth/users",
-        json={"email": "blocked@test.local", "password": "pass123"},
+        json={"email": "blocked@test.example", "password": "pass123"},
         headers={"Authorization": f"Bearer {user_token}"},
     )
     assert response.status_code == 403
@@ -66,7 +64,7 @@ async def test_unauthenticated_create_user_rejected(
     """No token on POST /auth/users returns 401."""
     response = await client.post(
         "/api/v1/auth/users",
-        json={"email": "anon@test.local", "password": "pass123"},
+        json={"email": "anon@test.example", "password": "pass123"},
     )
     assert response.status_code == 401
 
@@ -103,12 +101,12 @@ async def test_non_admin_list_users_forbidden(
     Requires DB: uses a real user's id so get_current_user can validate them,
     but mints a token without users:manage so require_permission returns 403.
     """
-    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
     from app.modules.auth.service import create_access_token
+    from tests.auth.conftest_helpers import admin_login_token, create_regular_user
 
     admin_token = await admin_login_token(client)
     user = await create_regular_user(
-        client, admin_token, "listforbidden@test.local", "pass123"
+        client, admin_token, "listforbidden@test.example", "pass123"
     )
     user_token = create_access_token(subject=user["id"], permissions=["syerp:read"])
 
@@ -130,7 +128,7 @@ async def test_admin_update_user_full_name(
 ) -> None:
     """Admin can PATCH full_name on a user."""
     token = await admin_login_token(client)
-    user = await create_regular_user(client, token, "patchme@test.local", "pass123")
+    user = await create_regular_user(client, token, "patchme@test.example", "pass123")
     user_id = user["id"]
 
     response = await client.patch(
@@ -151,7 +149,7 @@ async def test_non_admin_update_user_forbidden(
 
     # First create target user as admin
     token = await admin_login_token(client)
-    user = await create_regular_user(client, token, "target@test.local", "pass123")
+    user = await create_regular_user(client, token, "target@test.example", "pass123")
     user_id = user["id"]
 
     # Attempt update as non-admin
@@ -184,13 +182,13 @@ async def test_user_deactivation(
     admin_token = await admin_login_token(client)
 
     # Create a target user
-    user = await create_regular_user(client, admin_token, "todeactivate@test.local", "pass123")
+    user = await create_regular_user(client, admin_token, "todeactivate@test.example", "pass123")
     user_id = user["id"]
 
     # Log in as the target user to get a live session
     user_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "todeactivate@test.local", "password": "pass123"},
+        data={"username": "todeactivate@test.example", "password": "pass123"},
     )
     assert user_login.status_code == 200
     user_token = user_login.json()["access_token"]
@@ -231,13 +229,13 @@ async def test_deactivation_revokes_refresh_tokens(
 
     # Create a target user and log in
     user = await create_regular_user(
-        client, admin_token, "revoketest@test.local", "pass123"
+        client, admin_token, "revoketest@test.example", "pass123"
     )
     user_id = user["id"]
 
     user_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "revoketest@test.local", "password": "pass123"},
+        data={"username": "revoketest@test.example", "password": "pass123"},
     )
     refresh_cookie = user_login.cookies.get("refresh_token")
     assert refresh_cookie, "Expected refresh_token cookie after login"
@@ -269,7 +267,7 @@ async def test_admin_assign_role(
     """Admin can PATCH a user's role via the 'role' field."""
     admin_token = await admin_login_token(client)
     user = await create_regular_user(
-        client, admin_token, "roleassign@test.local", "pass123"
+        client, admin_token, "roleassign@test.example", "pass123"
     )
     user_id = user["id"]
 
@@ -300,7 +298,7 @@ async def test_create_user_writes_audit_log(
 
     admin_token = await admin_login_token(client)
     user = await create_regular_user(
-        client, admin_token, "auditcreate@test.local", "pass123"
+        client, admin_token, "auditcreate@test.example", "pass123"
     )
     user_id = user["id"]
 
@@ -327,7 +325,7 @@ async def test_deactivate_user_writes_audit_log(
 
     admin_token = await admin_login_token(client)
     user = await create_regular_user(
-        client, admin_token, "auditdeact@test.local", "pass123"
+        client, admin_token, "auditdeact@test.example", "pass123"
     )
     user_id = user["id"]
 

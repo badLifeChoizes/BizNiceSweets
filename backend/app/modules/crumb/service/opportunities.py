@@ -44,8 +44,8 @@ _PIPELINE_STAGES = ["qualify", "proposal", "won", "lost"]
 
 
 async def create_opportunity(
-    db: AsyncSession, data: "OpportunityCreate", actor_id: str
-) -> "Opportunity":
+    db: AsyncSession, data: OpportunityCreate, actor_id: str
+) -> Opportunity:
     """
     Create an opportunity against a SYERP customer (CRUMB-01).
 
@@ -71,7 +71,7 @@ async def create_opportunity(
     return opp
 
 
-async def list_opportunities(db: AsyncSession) -> list["Opportunity"]:
+async def list_opportunities(db: AsyncSession) -> list[Opportunity]:
     """Return all opportunities ordered newest-first."""
     from app.modules.crumb.models import Opportunity
 
@@ -81,7 +81,7 @@ async def list_opportunities(db: AsyncSession) -> list["Opportunity"]:
     return list(result.scalars().all())
 
 
-async def list_pipeline(db: AsyncSession) -> dict[str, list["Opportunity"]]:
+async def list_pipeline(db: AsyncSession) -> dict[str, list[Opportunity]]:
     """
     Return opportunities grouped by stage for the per-stage pipeline board.
 
@@ -89,13 +89,13 @@ async def list_pipeline(db: AsyncSession) -> dict[str, list["Opportunity"]]:
     to a possibly-empty list; within each stage rows are newest-first.
     """
     opportunities = await list_opportunities(db)
-    board: dict[str, list["Opportunity"]] = {stage: [] for stage in _PIPELINE_STAGES}
+    board: dict[str, list[Opportunity]] = {stage: [] for stage in _PIPELINE_STAGES}
     for opp in opportunities:
         board.setdefault(opp.stage, []).append(opp)
     return board
 
 
-async def get_opportunity(db: AsyncSession, opp_id: str) -> "Opportunity":
+async def get_opportunity(db: AsyncSession, opp_id: str) -> Opportunity:
     """Load an opportunity by id. Raises 404 if it does not exist."""
     from app.modules.crumb.models import Opportunity
 
@@ -106,8 +106,8 @@ async def get_opportunity(db: AsyncSession, opp_id: str) -> "Opportunity":
 
 
 async def update_opportunity(
-    db: AsyncSession, opp_id: str, patch: "OpportunityUpdate", actor_id: str
-) -> "Opportunity":
+    db: AsyncSession, opp_id: str, patch: OpportunityUpdate, actor_id: str
+) -> Opportunity:
     """
     PATCH an opportunity's descriptive/value fields (only non-None fields applied).
 
@@ -130,7 +130,7 @@ async def update_opportunity(
 
 async def advance_stage(
     db: AsyncSession, opp_id: str, target_stage: str, actor_id: str
-) -> "Opportunity":
+) -> Opportunity:
     """
     Advance an opportunity through the stage FSM (CRUMB-01).
 
@@ -162,8 +162,8 @@ async def advance_stage(
 
 
 async def spawn_quote(
-    db: AsyncSession, opp_id: str, data: "OpportunityToQuoteRequest", actor_id: str
-) -> "Quote":
+    db: AsyncSession, opp_id: str, data: OpportunityToQuoteRequest, actor_id: str
+) -> Quote:
     """
     Create a draft quote from a WON opportunity (D-V3-15).
 

@@ -69,7 +69,7 @@ The vanilla-JS / CDN / localStorage details in the "Legacy prototypes" subsectio
 - **Styling:** Tailwind CSS 4.3.1 via `@tailwindcss/vite` (no `tailwind.config` file); shadcn/ui-style primitives (Radix + cva) generated into `src/components/ui/`
 - **Server state:** TanStack Query 5.101.1; single axios 1.18.1 client (`src/api/client.ts`) handles tokens
 - **UX:** sonner for toasts
-- **Dev/test:** Vitest 4.1.9 + Testing Library + jsdom; Prettier 3.8.4. **Both lint gates are currently non-functional** (BACKLOG p1): ESLint 10 is flat-config-only but the repo still ships `.eslintrc.cjs`, the `lint` script passes the removed `--ext` flag, and the `@typescript-eslint` parser/plugin packages are absent from `devDependencies`; `ruff` is pinned in `requirements-dev.txt` but not installed in `backend/.venv`. Correctness rests on the test suites and `backend/scripts/verify_*.py`, not on lint.
+- **Dev/test:** Vitest 4.1.9 + Testing Library + jsdom; Prettier 3.8.4. **Both lint gates are fixed to a zero-violation baseline and enforcing** (v4.0 Phase 1, NFR-6): the frontend runs on a flat `frontend/eslint.config.js` (`.eslintrc.cjs` deleted, `lint` script de-`--ext`'d, `@typescript-eslint`/react-hooks@5/react-refresh devDeps present) — `npm run lint` exits 0; the backend runs `ruff` (installed at `backend/.venv/bin/ruff`, convention: `ruff check .` from `backend/`) — exit 0. CI auto-run of both gates is pending Phase 3 (NFR-4); until then they are run manually alongside the test suites and `backend/scripts/verify_*.py`.
 
 ## Database & Deployment
 - **Database:** PostgreSQL 17 (`postgres:17-alpine`) — one shared database for all modules, never port-mapped to the host
@@ -77,7 +77,7 @@ The vanilla-JS / CDN / localStorage details in the "Legacy prototypes" subsectio
 - **Boot sequence:** `backend/entrypoint.sh` waits for Postgres, runs `alembic upgrade head`, then startup seeds run idempotently; the built React app is served from `frontend/dist` by a catch-all mounted last so it never swallows `/api/*`
 
 ## Configuration
-- Environment-driven (12-factor); required secrets have **no defaults** — the app refuses to start without them: `POSTGRES_PASSWORD`, `JWT_SECRET`, `BNS_ADMIN_PASSWORD` (see `.env.example`; `.env` is not git-tracked)
+- Environment-driven (12-factor); required secrets have **no defaults** — the app refuses to start without them: `JWT_SECRET` and `BNS_ADMIN_PASSWORD` in **`.env`** (from `.env.example`), and `POSTGRES_PASSWORD` in **`.env.db`** (from `.env.db.example`). The stack reads **both** files — the split (D-P5-10) gives the database credentials exactly one home, read by `db` and `api` alike; skipping `.env.db` is defect `U0` (a fresh volume refuses to initialize). Neither `.env` nor `.env.db` is git-tracked; only the two `*.example` templates are
 - Backend config surface in `backend/app/core/config.py`; module toggles/settings via `modules_router.py` / `settings_router.py`
 
 ## Legacy prototypes (frozen reference — `plum/app/`, `flan/app/` only)
@@ -187,8 +187,8 @@ and applies **only** to `plum/app/` and `flan/app/`.
 - **Split PLUM's service layer before it metastasizes** — `plum/service.py` is ~3,000 lines; keep new suites thin.
 
 ## Entry Points
-- **Full dev stack:** `./scripts/uat.ps1` (requires `pwsh`), or `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up`.
-- **Prod stack:** `podman-compose -f compose/compose.yml up -d` (needs `.env` from `.env.example`).
+- **Full dev stack:** `./scripts/uat.sh` (bash; `--fresh/--detach/--down/--no-browser`) or `./scripts/uat.ps1` (requires `pwsh`; `-Fresh/-Detach/-Down/-NoBrowser`) — both create `.env` / `.env.db` from their templates if either is missing; or `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up`.
+- **Prod stack:** `podman-compose -f compose/compose.yml up -d` (needs **both** `.env` from `.env.example` **and** `.env.db` from `.env.db.example` — D-P5-10; without `.env.db` a fresh volume refuses to initialize, defect `U0`).
 - **Backend:** `pytest` / `ruff check .` / `alembic upgrade head` from `backend/`.
 - **Frontend:** `npm run dev` / `npm run build` / `npm run lint` / `npm run test` from `frontend/`.
 

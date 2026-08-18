@@ -1,5 +1,11 @@
 # UAT — v1.0 milestone (PLUM)
 
+> **Superseded for execution by [`.zj/QA.md`](QA.md)** (D-P5-11; previously by
+> `.zj/UAT-v4.0.md` per D-P5-6, itself now history). Retained as **history** — its defect
+> record (G1, G2, D1, D2, D3) is cited throughout. The **10 of 12** checks still open here
+> were carried into v4.0's PLUM block and from there into `.zj/QA.md` under **PLUM-01..10**;
+> do not run this file.
+
 Per **D-P7-5**, human click-through UAT is a milestone-close activity, run once at
 `/zj:milestone` against the Vite dev server (**http://localhost:5173**, D-P7-1) with the
 Podman stack up (`podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`;

@@ -87,6 +87,17 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
       drawing the same staging bin seeded so only ONE can succeed, synchronized on
       asyncio.Barrier(2) + asyncio.gather. Exactly one succeeds and one is rejected;
       the staging bin never goes negative. Repeated several iterations.
+  (h) SAME-SHIPMENT DOUBLE-SHIP: one packed shipment fired at execute_ship TWICE
+      concurrently against an AMPLE staging bin posts COGS exactly once (1 JE,
+      qty_shipped stamped once, staging drawn once); the duplicate is rejected 409.
+  (i) CONCURRENT FIRST PICK (GAP-2): two concurrent FIRST execute_pick of ONE sales
+      order, barrier-synced on INDEPENDENT sessions. Both succeed and share EXACTLY
+      ONE open 'picking' shipment (qty_picked 10, staging 10) — no second, unreachable
+      shipment holding stranded stock.
+  (j) OPPOSITE-ORDER PICK (GAP-2): two concurrent execute_pick of DIFFERENT sales
+      orders over the SAME two items, with the request lines in opposite order.
+      Neither deadlocks — both succeed, every SO line stamps qty_picked and staging
+      holds both items.
 
 LOAD-BEARING PROOF (concurrency, scenario g) — HOW TO REPRODUCE THE FAIL:
   The serialization point under test is the item-master FOR UPDATE lock. The ship
@@ -99,6 +110,16 @@ LOAD-BEARING PROOF (concurrency, scenario g) — HOW TO REPRODUCE THE FAIL:
   rerun this script, and scenario (g) FAILS (both ships succeed and the staging bin
   goes negative). Restore both and it PASSES. This was exercised once during
   development; the code is left in the LOCKED (passing) state.
+
+LOAD-BEARING PROOF (GAP-2 pins, scenarios i and j) — HOW TO REPRODUCE THE FAIL:
+  Both pins were mutation-proven in isolation against live Postgres when they were
+  added. Delete the `.with_for_update()` on execute_pick's step-(a) sales-order load
+  (app/modules/gelato/service/shipments.py) and scenario (i) FAILS with two shipment
+  ids for one SO (observed `shipments_for_so=[101, 102]`) while (j) still PASSES.
+  Delete execute_pick's `prepared.sort(...)` so the pick lines move in request order
+  and scenario (j) FAILS with `asyncpg.exceptions.DeadlockDetectedError` while (i)
+  still PASSES. Restore both and all four concurrency scenarios PASS. The code is
+  left in the LOCKED + SORTED (passing) state.
 
 The script uses uniquely-suffixed throwaway partners / SYERP items / GELATO bins /
 sales orders / shipments and CLEANS UP after itself (shipment lines -> shipments ->
@@ -138,6 +159,7 @@ from app.modules.gelato.schemas import (
     PackRequest,
     PickLineRequest,
     PickRequest,
+    PutawayRequest,
 )
 from app.modules.gelato.service import (
     build_pick_list,
@@ -148,7 +170,6 @@ from app.modules.gelato.service import (
     execute_ship,
     get_bin_on_hand,
 )
-from app.modules.gelato.schemas import PutawayRequest
 from app.modules.syerp.inventory_seed import DEFAULT_LOCATION_NAME, seed_default_location
 from app.modules.syerp.models import (
     GLAccount,
@@ -332,6 +353,35 @@ async def _so_line_shipped(session_factory, line_id: str) -> Decimal:
                 select(SalesOrderLine.qty_shipped).where(SalesOrderLine.id == line_id)
             )
         ).scalar()
+
+
+async def _so_line_picked(session_factory, line_id: str) -> Decimal:
+    """The live qty_picked on one SO line (oracle for pick accumulation)."""
+    async with session_factory() as session:
+        return (
+            await session.execute(
+                select(SalesOrderLine.qty_picked).where(SalesOrderLine.id == line_id)
+            )
+        ).scalar()
+
+
+async def _shipments_for_so(session_factory, so_id: str) -> list[int]:
+    """
+    EVERY shipment id of one sales order, id-ordered (oracle for duplicate-shipment
+    detection — a sales order must never carry two OPEN 'picking' shipments).
+    """
+    async with session_factory() as session:
+        return list(
+            (
+                await session.execute(
+                    select(Shipment.id)
+                    .where(Shipment.sales_order_id == so_id)
+                    .order_by(Shipment.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
 
 
 async def _shipment_je_count(session_factory, shipment_id: int) -> int:
@@ -954,6 +1004,22 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             session_factory, reg, unique, actor_id, main_id, cust_id
         )
 
+        # ===================================================================
+        # (i) CONCURRENT FIRST PICK (GAP-2) — one SO must never end up with two
+        #     open 'picking' shipments (the stranded-stock defect)
+        # ===================================================================
+        await run_concurrent_first_pick(
+            session_factory, reg, unique, actor_id, main_id, cust_id
+        )
+
+        # ===================================================================
+        # (j) OPPOSITE-ORDER PICK (GAP-2) — two picks sharing two items in
+        #     opposite request order must not deadlock (the 500-on-pick defect)
+        # ===================================================================
+        await run_opposite_order_pick_deadlock(
+            session_factory, reg, unique, actor_id, main_id, cust_id
+        )
+
     finally:
         await _cleanup(session_factory, reg)
         await engine.dispose()
@@ -1237,6 +1303,292 @@ async def run_same_shipment_double_ship(
         f"successes={len(successes)} conflicts={len(conflicts)} je_count={je_count} "
         f"qty_shipped={shipped!r} staging {staging_before!r}->{staging_after!r} "
         f"results={[type(r).__name__ for r in results]}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# (i) Concurrent FIRST pick of one SO — the sales-order FOR UPDATE lock holds it
+# ---------------------------------------------------------------------------
+#
+# execute_pick step (c) is a GET-OR-CREATE of the SO's open 'picking' shipment.
+# Without a lock it is the classic read-then-insert race: two operators starting the
+# same sales order in the same second both read "no open shipment" under READ
+# COMMITTED and both INSERT one, so the SO ends up with TWO open picking shipments.
+# That is not a cosmetic duplicate — _get_open_shipment orders by id and .limit(1),
+# so every later pick and every pick-list bin suggestion binds to the LOWER id
+# forever, and GELATO exposes no "list shipments for an SO" route (router.py has only
+# GET /gelato/shipments/{id}). The higher shipment's picked stock is STRANDED in the
+# staging bin: never packable, never shippable, its reservation never relieved, and
+# the SO can never reach fully-shipped without DB surgery. execute_pick loading the
+# SO `select(SalesOrder).with_for_update()` at step (a) — BEFORE _get_open_shipment
+# is consulted — serializes the get-or-create: the loser blocks, and after the lock
+# is granted its next statement sees the winner's committed shipment and APPENDS to
+# it. Delete that `.with_for_update()` and this scenario FAILS (two shipment ids).
+
+
+async def run_concurrent_first_pick(
+    session_factory, reg: Registry, unique: str, actor_id: str, main_id: int, cust_id: str
+) -> None:
+    """
+    One confirmed SO (order 10) with an ample pick bin (20) and no shipment yet, hit
+    by TWO concurrent FIRST picks of 5 on INDEPENDENT sessions, barrier-synced. Both
+    picks are legitimate (the bin covers both, the order covers both), so the correct
+    outcome is that BOTH succeed and share ONE shipment. Proves the SO carries EXACTLY
+    ONE shipment, both calls returned that same id (nothing stranded), qty_picked
+    accumulated once per pick (== 10), and the staging bin holds all 10. Without the
+    SO row lock this regresses to two shipment ids, the second one unreachable.
+    """
+    iterations = 5
+    all_ok = True
+    detail = ""
+
+    for i in range(iterations):
+        item_id = await _make_item(session_factory, unique, f"I{i}")
+        reg.item_ids.add(item_id)
+        async with session_factory() as session:
+            await post_receipt(session, item_id, main_id, Decimal("20"), Decimal("4"), actor_id)
+        pick_bin = await _make_bin(session_factory, main_id, f"I{i}-PICK-{unique}")
+        staging_bin = await _make_bin(session_factory, main_id, f"I{i}-STAGE-{unique}")
+        reg.bin_ids.update({pick_bin, staging_bin})
+        async with session_factory() as session:
+            await execute_putaway(
+                session,
+                PutawayRequest(
+                    item_id=item_id, location_id=main_id, to_bin_id=pick_bin,
+                    qty=Decimal("20"), from_bin_id=None,
+                ),
+                actor_id,
+            )
+
+        async with session_factory() as session:
+            so = await create_sales_order(
+                session,
+                SalesOrderCreate(
+                    partner_id=cust_id,
+                    lines=[SalesOrderLineCreate(
+                        item_id=item_id, qty_ordered=Decimal("10"), unit_price=Decimal("20")
+                    )],
+                ),
+                actor_id,
+            )
+        reg.so_ids.add(so.id)
+        async with session_factory() as session:
+            conf = await confirm_sales_order(session, so.id, actor_id)
+        so_line_id = conf.lines[0].id
+
+        # Barrier makes the race deterministic: each worker owns an INDEPENDENT
+        # session, pre-warms its connection, then both enter execute_pick together —
+        # both therefore reach the get-or-create with NO shipment yet on the SO.
+        barrier = asyncio.Barrier(2)
+
+        async def _pick_once():
+            from sqlalchemy import text
+
+            async with session_factory() as session:
+                await session.execute(text("SELECT 1"))  # pre-warm the connection
+                await barrier.wait()
+                return await execute_pick(
+                    session,
+                    PickRequest(
+                        sales_order_id=so.id, staging_bin_id=staging_bin,
+                        lines=[PickLineRequest(
+                            sales_order_line_id=so_line_id, from_bin_id=pick_bin,
+                            qty=Decimal("5"),
+                        )],
+                    ),
+                    actor_id,
+                )
+
+        results = await asyncio.gather(_pick_once(), _pick_once(), return_exceptions=True)
+        successes = [r for r in results if not isinstance(r, Exception)]
+
+        # Sweep EVERY shipment the SO ended up with (not just the returned ones) so a
+        # duplicate is both detected AND cleaned up on a red run.
+        shipment_ids = await _shipments_for_so(session_factory, so.id)
+        reg.shipment_ids.update(shipment_ids)
+
+        picked = await _so_line_picked(session_factory, so_line_id)
+        async with session_factory() as session:
+            staging_final = await get_bin_on_hand(session, item_id, main_id, staging_bin)
+        returned_ids = sorted({r.id for r in successes})
+
+        if not (
+            len(successes) == 2
+            and len(shipment_ids) == 1
+            and returned_ids == shipment_ids
+            and picked == Decimal("10")
+            and staging_final == Decimal("10")
+        ):
+            all_ok = False
+            detail = (
+                f"iter {i}: so={so.id} shipments_for_so={shipment_ids} "
+                f"returned_ids={returned_ids} successes={len(successes)} "
+                f"errors={[repr(r) for r in results if isinstance(r, Exception)]} "
+                f"qty_picked={picked!r} staging={staging_final!r} "
+                "(expected exactly ONE shipment shared by both picks, qty_picked 10, "
+                "staging 10)"
+            )
+            break
+
+    check(
+        "(i/GAP-2) two concurrent FIRST picks of ONE sales order share EXACTLY ONE open "
+        "'picking' shipment — both picks succeed against the same shipment id, qty_picked "
+        "accumulates to 10 and staging holds 10, so no picked stock is stranded on an "
+        "unreachable second shipment. Removing execute_pick's sales-order FOR UPDATE lock "
+        f"regresses this to TWO shipment ids. Across {iterations} iterations.",
+        all_ok,
+        detail,
+    )
+
+
+# ---------------------------------------------------------------------------
+# (j) Two picks sharing two items in OPPOSITE order — the sorted item-id loop
+# ---------------------------------------------------------------------------
+#
+# Every pick line's physical move is delegated to SYERP post_putaway, which LOCKS the
+# item-master row FOR UPDATE. Walking req.lines in REQUEST order therefore lets two
+# concurrent picks that share two items take those two locks in opposite orders — a
+# textbook ABBA deadlock. Postgres breaks it by killing one transaction with
+# DeadlockDetectedError, which surfaces to the picker as a red 500 on a routine pick
+# (not even a 4xx). Resolving the SO lines up front and walking them in sorted item-id
+# order gives EVERY pick one global lock order (the create_bill / execute_ship
+# sorted-id discipline), so the two queue instead of deadlocking. The two picks target
+# DIFFERENT sales orders on purpose: the SO row lock from scenario (i) cannot mask the
+# defect, so this pins the SORT specifically. Restore the request-order loop and this
+# scenario FAILS with a DeadlockDetectedError.
+
+
+async def run_opposite_order_pick_deadlock(
+    session_factory, reg: Registry, unique: str, actor_id: str, main_id: int, cust_id: str
+) -> None:
+    """
+    Two DIFFERENT confirmed SOs, each with two lines over the SAME two items, picked
+    concurrently on INDEPENDENT sessions with their request lines in OPPOSITE order
+    (SO1: [X, Y], SO2: [Y, X]), barrier-synced. Both picks are legitimate — the pick
+    bin covers both — so the correct outcome is BOTH succeed with no exception at all.
+    Proves neither pick raises (in particular no DeadlockDetectedError / 500), each SO
+    line stamps qty_picked == 5, and the staging bin holds 10 of each item.
+    """
+    iterations = 5
+    all_ok = True
+    detail = ""
+
+    for i in range(iterations):
+        # Two items; the request orders below are exact reverses of each other, so
+        # whichever id sorts lower, the two picks contend in OPPOSITE order.
+        item_x = await _make_item(session_factory, unique, f"J{i}X")
+        item_y = await _make_item(session_factory, unique, f"J{i}Y")
+        reg.item_ids.update({item_x, item_y})
+        pick_bin = await _make_bin(session_factory, main_id, f"J{i}-PICK-{unique}")
+        staging_bin = await _make_bin(session_factory, main_id, f"J{i}-STAGE-{unique}")
+        reg.bin_ids.update({pick_bin, staging_bin})
+        for iid in (item_x, item_y):
+            async with session_factory() as session:
+                await post_receipt(session, iid, main_id, Decimal("20"), Decimal("4"), actor_id)
+            async with session_factory() as session:
+                await execute_putaway(
+                    session,
+                    PutawayRequest(
+                        item_id=iid, location_id=main_id, to_bin_id=pick_bin,
+                        qty=Decimal("20"), from_bin_id=None,
+                    ),
+                    actor_id,
+                )
+
+        # Two SOs, each ordering 5 of X and 5 of Y.
+        so_ids: list[str] = []
+        line_ids: list[dict[str, str]] = []
+        for _k in range(2):
+            async with session_factory() as session:
+                so = await create_sales_order(
+                    session,
+                    SalesOrderCreate(
+                        partner_id=cust_id,
+                        lines=[
+                            SalesOrderLineCreate(
+                                item_id=item_x, qty_ordered=Decimal("5"),
+                                unit_price=Decimal("20"),
+                            ),
+                            SalesOrderLineCreate(
+                                item_id=item_y, qty_ordered=Decimal("5"),
+                                unit_price=Decimal("20"),
+                            ),
+                        ],
+                    ),
+                    actor_id,
+                )
+            reg.so_ids.add(so.id)
+            async with session_factory() as session:
+                conf = await confirm_sales_order(session, so.id, actor_id)
+            so_ids.append(so.id)
+            line_ids.append({ln.item_id: ln.id for ln in conf.lines})
+
+        # SO1 asks for X then Y; SO2 asks for Y then X — the ABBA lock order.
+        requests = []
+        for k, order in enumerate(((item_x, item_y), (item_y, item_x))):
+            requests.append(
+                PickRequest(
+                    sales_order_id=so_ids[k], staging_bin_id=staging_bin,
+                    lines=[
+                        PickLineRequest(
+                            sales_order_line_id=line_ids[k][iid], from_bin_id=pick_bin,
+                            qty=Decimal("5"),
+                        )
+                        for iid in order
+                    ],
+                )
+            )
+
+        barrier = asyncio.Barrier(2)
+
+        async def _pick(req):
+            from sqlalchemy import text
+
+            async with session_factory() as session:
+                await session.execute(text("SELECT 1"))  # pre-warm the connection
+                await barrier.wait()
+                return await execute_pick(session, req, actor_id)
+
+        results = await asyncio.gather(
+            _pick(requests[0]), _pick(requests[1]), return_exceptions=True
+        )
+        errors = [r for r in results if isinstance(r, Exception)]
+        for so_id in so_ids:
+            reg.shipment_ids.update(await _shipments_for_so(session_factory, so_id))
+
+        picked = [
+            await _so_line_picked(session_factory, line_ids[k][iid])
+            for k in range(2)
+            for iid in (item_x, item_y)
+        ]
+        async with session_factory() as session:
+            staging_x = await get_bin_on_hand(session, item_x, main_id, staging_bin)
+            staging_y = await get_bin_on_hand(session, item_y, main_id, staging_bin)
+
+        if not (
+            not errors
+            and all(p == Decimal("5") for p in picked)
+            and staging_x == Decimal("10")
+            and staging_y == Decimal("10")
+        ):
+            all_ok = False
+            detail = (
+                f"iter {i}: errors={[type(e).__name__ + ': ' + str(e)[:160] for e in errors]} "
+                f"qty_picked={[repr(p) for p in picked]} "
+                f"staging x={staging_x!r} y={staging_y!r} "
+                "(expected BOTH picks to succeed — a DeadlockDetectedError here is the "
+                "request-order lock defect)"
+            )
+            break
+
+    check(
+        "(j/GAP-2) two concurrent picks of DIFFERENT sales orders sharing the SAME two items "
+        "in OPPOSITE request order never deadlock — both succeed (no DeadlockDetectedError / "
+        "500), every SO line stamps qty_picked == 5 and staging holds 10 of each item. "
+        "Reverting execute_pick's sorted item-id loop to request order regresses this to a "
+        f"DeadlockDetectedError. Across {iterations} iterations.",
+        all_ok,
+        detail,
     )
 
 

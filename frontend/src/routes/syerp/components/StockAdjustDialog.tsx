@@ -1,6 +1,6 @@
 // ABOUTME: Adjust-Stock dialog for a SYERP inventory item (Phase 8, Task 12) —
-// ABOUTME: location Select + signed qty_delta + required reason → POST …/adjustments.
-// ABOUTME: A 422 negative-stock rejection surfaces a toast and keeps the dialog open.
+// ABOUTME: location Select + optional bin Select (D-P4-1) + signed qty_delta + required
+// ABOUTME: reason → POST …/adjustments. A 422 rejection toasts and keeps the dialog open.
 
 /**
  * StockAdjustDialog — posts a signed stock adjustment for an inventory item.
@@ -15,15 +15,20 @@
  * Fields:
  *   1. Location  — required. Populated from GET /api/v1/syerp/inventory/locations
  *                  (active only); the first active location is selected by default.
- *   2. Quantity  — required, SIGNED. A negative delta is how manual write-offs /
+ *   2. Bin       — optional (D-P4-1). Populated from useBins(location) once a
+ *                  location is chosen; defaults to "Unbinned pool" → bin_id: null
+ *                  (draw from unbinned stock only). Hidden — and null sent — when
+ *                  the bins query errors (GELATO off) or the location has no bins.
+ *   3. Quantity  — required, SIGNED. A negative delta is how manual write-offs /
  *                  issues are recorded. Kept as a raw string and sent verbatim so
  *                  the backend parses it as a Decimal (no JS float mangling).
- *   3. Reason    — required, non-empty. Blocks submit while blank.
+ *   4. Reason    — required, non-empty. Blocks submit while blank.
  *
  * Mutation: POST /api/v1/syerp/inventory/items/{itemId}/adjustments
  *   Success: onSuccess() (host invalidates onhand+transactions), close, toast.
- *   Error (esp. 422 per-location negative-stock): toast.error with the server
- *          `detail` and DO NOT close — let the user fix the input (AC10-6).
+ *   Error (esp. 422 per-location negative-stock or insufficient unbinned pool):
+ *          toast.error with the server `detail` and DO NOT close — let the user
+ *          fix the input (AC10-6).
  */
 
 import { useState, useEffect } from 'react'
@@ -50,8 +55,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { apiClient } from '@/api/client'
+import { useBins } from '@/routes/gelato/hooks'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+// Sentinel Select value for the "no bin — unbinned pool" default (Radix Select
+// forbids an empty-string item value).
+const UNBINNED_POOL = 'unbinned'
 
 interface LocationOption {
   id: number
@@ -128,13 +138,23 @@ export function StockAdjustDialog({
 
   // ── Form state ──
   const [locationId, setLocationId] = useState('')
+  const [binId, setBinId] = useState(UNBINNED_POOL)
   const [qtyDelta, setQtyDelta] = useState('')
   const [reason, setReason] = useState('')
+
+  // ── Bins at the chosen location (optional picker, D-P4-1) ──
+  // NULL bin_id = draw from the unbinned pool only; at a binned location the
+  // operator should name a bin. When the bins query errors (GELATO off) or the
+  // location has no bins, the picker hides and the adjustment stays unbinned.
+  const { data: bins = [], isError: binsUnavailable } = useBins(Number(locationId))
+  const activeBins = bins.filter((b) => b.active)
+  const showBinSelect = !!locationId && !binsUnavailable && activeBins.length > 0
 
   // ── Reset the form each time the dialog opens ──
   useEffect(() => {
     if (!open) return
     setLocationId('')
+    setBinId(UNBINNED_POOL)
     setQtyDelta('')
     setReason('')
   }, [open])
@@ -158,6 +178,7 @@ export function StockAdjustDialog({
   // ── Mutation ──
   interface AdjustmentPayload {
     location_id: number
+    bin_id: number | null
     qty_delta: string
     reason: string
   }
@@ -188,6 +209,7 @@ export function StockAdjustDialog({
     if (formInvalid) return
     adjustMutation.mutate({
       location_id: Number(locationId),
+      bin_id: showBinSelect && binId !== UNBINNED_POOL ? Number(binId) : null,
       qty_delta: qtyDelta.trim(),
       reason: reason.trim(),
     })
@@ -209,7 +231,13 @@ export function StockAdjustDialog({
           {/* Location */}
           <div className="space-y-2">
             <Label htmlFor="adjust-location">Location</Label>
-            <Select value={locationId} onValueChange={setLocationId}>
+            <Select
+              value={locationId}
+              onValueChange={(v) => {
+                setLocationId(v)
+                setBinId(UNBINNED_POOL) // a bin belongs to one location — never carry it over
+              }}
+            >
               <SelectTrigger id="adjust-location">
                 <SelectValue placeholder="Select a location" />
               </SelectTrigger>
@@ -225,6 +253,29 @@ export function StockAdjustDialog({
               <p className="text-sm text-destructive">Select a location.</p>
             )}
           </div>
+
+          {/* Bin (optional — shown only when the location has active bins) */}
+          {showBinSelect && (
+            <div className="space-y-2">
+              <Label htmlFor="adjust-bin">Bin</Label>
+              <Select value={binId} onValueChange={setBinId}>
+                <SelectTrigger id="adjust-bin">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNBINNED_POOL}>Unbinned pool</SelectItem>
+                  {activeBins.map((bin) => (
+                    <SelectItem key={bin.id} value={String(bin.id)}>
+                      {bin.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Optional — "Unbinned pool" draws from stock not yet put away.
+              </p>
+            </div>
+          )}
 
           {/* Signed quantity */}
           <div className="space-y-2">

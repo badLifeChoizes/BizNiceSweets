@@ -207,7 +207,6 @@ export function AvlLinkSheet({
       setFormNotes(existingLink.notes ?? '')
       setPriceBreaks(toPriceBreakRows(existingLink.price_breaks))
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, existingLink])
 
   // ── Select a vendor from search results ──

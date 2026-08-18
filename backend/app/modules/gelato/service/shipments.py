@@ -95,7 +95,6 @@ async def _resolve_fulfilling_location(
     (D-P12a-3, D-P10-6). SYERP imports are lazy to avoid pulling in the hub at
     module import time.
     """
-    from app.modules.gelato.models import Shipment
     from app.modules.syerp.service import get_item_onhand
 
     # (a) An in-progress pick has already committed the SO to one location.
@@ -120,7 +119,7 @@ async def _resolve_fulfilling_location(
     return best_location_id
 
 
-async def build_pick_list(db: AsyncSession, sales_order_id: str) -> "PickListRead":
+async def build_pick_list(db: AsyncSession, sales_order_id: str) -> PickListRead:
     """
     Build the pick list for a sales order — the pick suggestion screen (SC2).
 
@@ -212,7 +211,7 @@ async def build_pick_list(db: AsyncSession, sales_order_id: str) -> "PickListRea
 
 
 def _suggest_pick_bin(
-    available_bins: "list", remaining_to_pick: Decimal
+    available_bins: list, remaining_to_pick: Decimal
 ) -> int | None:
     """
     Choose a suggested source bin from a line's candidate bins (pure, no DB).
@@ -239,7 +238,7 @@ def _suggest_pick_bin(
 
 async def _get_open_shipment(
     db: AsyncSession, sales_order_id: str
-) -> "Shipment | None":
+) -> Shipment | None:
     """
     Return the SO's OPEN (status "picking") shipment, or None if there is none.
 
@@ -259,15 +258,17 @@ async def _get_open_shipment(
 
 
 async def execute_pick(
-    db: AsyncSession, req: "PickRequest", actor_id: str
-) -> "ShipmentRead":
+    db: AsyncSession, req: PickRequest, actor_id: str
+) -> ShipmentRead:
     """
     Pick a sales order into its staging bin — bin-aware, net-zero (SC2).
 
     In ONE atomic transaction (all post_putaway legs commit=False; a single
     db.commit() at the end):
 
-      (a) Load the SO (404); assert status in {confirmed, fulfilling} (422).
+      (a) Load the SO **FOR UPDATE** (404); assert status in {confirmed,
+          fulfilling} (422). The lock is taken BEFORE step (c) is consulted and is
+          what serializes the get-or-create (see the comment at the call site).
       (b) Resolve the fulfilling location from the staging bin: the staging bin
           must exist (404) and be ACTIVE (422); its location_id is the fulfilling
           location. Every pick line's from_bin must belong to that SAME location
@@ -276,16 +277,19 @@ async def execute_pick(
       (c) Get-or-create the SO's OPEN "picking" shipment for this staging bin. If
           an open picking shipment already exists it is reused; a different
           staging bin than the one it opened with is rejected (422).
-      (d) Per pick line: resolve the SO line (404 if not a line of THIS SO);
-          reject 422 if the line is non-stock (item_id None — a free-text line
-          cannot be bin-picked, SC2); guard qty > 0 (422); delegate the physical
+      (d) Resolve and validate EVERY pick line first (no writes): the pick bin
+          must belong to the fulfilling location (422); the SO line must exist and
+          belong to THIS SO (404); a non-stock line (item_id None — a free-text
+          line cannot be bin-picked, SC2) is rejected 422; qty > 0 (422).
+      (e) Move the validated lines in sorted ITEM-ID order: delegate the physical
           move to SYERP post_putaway (from the pick bin into the staging bin, same
           location — a net-zero move whose per-bin floor guard rejects over-pick
-          4xx); append a ShipmentLine; increment the SO line's qty_picked.
-      (e) The FIRST pick advances the SO confirmed → fulfilling (D-P12b-10) — a
+          4xx); append a ShipmentLine; increment the SO line's qty_picked. The
+          sort is load-bearing (see the comment at the loop).
+      (f) The FIRST pick advances the SO confirmed → fulfilling (D-P12b-10) — a
           plain status write validated against SO_TRANSITIONS.
-      (f) Single db.commit().
-      (g) Return the shipment (with its lines) as a ShipmentRead.
+      (g) Single db.commit().
+      (h) Return the shipment (with its lines) as a ShipmentRead.
 
     GELATO never writes InventoryTxn — the ledger legs are SYERP's post_putaway.
     """
@@ -294,8 +298,22 @@ async def execute_pick(
     from app.modules.gelato.models import Shipment, ShipmentLine
     from app.modules.syerp.service import post_putaway
 
-    # (a) Load the SO and gate on its status.
-    so = await db.get(SalesOrder, req.sales_order_id)
+    # (a) Load the SO **FOR UPDATE** and gate on its status. Locking the sales-order
+    #     row here — before step (c) reads the SO's shipments — is what serializes
+    #     the get-or-create below. Without it two operators starting the SAME order in
+    #     the same second both read "no open shipment" under READ COMMITTED and both
+    #     INSERT one; _get_open_shipment then orders by id and .limit(1), so every
+    #     later pick binds to the lower id forever and the higher shipment's picked
+    #     stock is stranded (GELATO exposes no "shipments for an SO" route). With the
+    #     lock the loser blocks here, Postgres re-reads the row once the lock is
+    #     granted, and its next statement sees the winner's committed shipment and
+    #     APPENDS to it — the same sorted-single-row discipline as execute_ship's
+    #     shipment lock and create_bill's PO-line locks.
+    so = (
+        await db.execute(
+            select(SalesOrder).where(SalesOrder.id == req.sales_order_id).with_for_update()
+        )
+    ).scalar_one_or_none()
     if so is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -343,7 +361,9 @@ async def execute_pick(
             ),
         )
 
-    # (d) Per pick line: validate, delegate the net-zero move, accumulate.
+    # (d) Resolve and validate EVERY pick line FIRST (pure reads, no writes), so the
+    #     item id each line moves is known before any lock is taken.
+    prepared = []  # (item_id, req_line, SalesOrderLine) — sorted by item id below
     for req_line in req.lines:
         # Pick bin must belong to the fulfilling location (the staging bin's).
         from_bin = await get_bin(db, req_line.from_bin_id)
@@ -381,6 +401,19 @@ async def execute_pick(
                 detail="Pick quantity must be greater than zero.",
             )
 
+        prepared.append((line.item_id, req_line, line))
+
+    # (e) Move the lines in sorted ITEM-ID order (Python's sort is stable, so lines
+    #     of the SAME item keep their request order and the per-bin floor guard stays
+    #     cumulative). The sort is load-bearing: post_putaway LOCKS the item-master
+    #     row FOR UPDATE, so walking req.lines in REQUEST order lets two concurrent
+    #     picks sharing two items take those two locks in opposite orders — an ABBA
+    #     deadlock Postgres breaks with DeadlockDetectedError, i.e. a red 500 on a
+    #     routine pick. One global lock order makes them queue instead (the sorted-id
+    #     discipline of create_bill / execute_ship).
+    prepared.sort(key=lambda entry: entry[0])
+
+    for _item_id, req_line, line in prepared:
         # Delegate the physical move to SYERP: a bin-aware net-zero putaway from
         # the pick bin into the staging bin (both at location_id). Its per-bin
         # floor guard rejects over-pick (4xx); commit=False folds it into this
@@ -407,15 +440,15 @@ async def execute_pick(
         )
         line.qty_picked = line.qty_picked + req_line.qty
 
-    # (e) FIRST pick advances the SO confirmed → fulfilling (D-P12b-10) — a plain
+    # (f) FIRST pick advances the SO confirmed → fulfilling (D-P12b-10) — a plain
     #     status write validated against the SO FSM (the reservation is untouched).
     if so.status == "confirmed" and "fulfilling" in SO_TRANSITIONS.get(so.status, set()):
         so.status = "fulfilling"
 
-    # (f) Single atomic commit (every post_putaway used commit=False).
+    # (g) Single atomic commit (every post_putaway used commit=False).
     await db.commit()
 
-    # (g) Return the shipment with its lines.
+    # (h) Return the shipment with its lines.
     return await _load_shipment_read(db, shipment.id)
 
 
@@ -425,8 +458,8 @@ async def execute_pick(
 
 
 async def execute_pack(
-    db: AsyncSession, shipment_id: int, req: "PackRequest", actor_id: str
-) -> "ShipmentRead":
+    db: AsyncSession, shipment_id: int, req: PackRequest, actor_id: str
+) -> ShipmentRead:
     """
     Pack a picked shipment — advance picking → packed and record the staged qty.
 
@@ -516,7 +549,7 @@ async def execute_pack(
 
 async def execute_ship(
     db: AsyncSession, shipment_id: int, actor_id: str
-) -> "ShipmentRead":
+) -> ShipmentRead:
     """
     Ship a packed shipment — the accounting crux (GELATO-02, SC4; SYERP-13 AC1).
 
@@ -701,7 +734,7 @@ async def execute_ship(
     return await _load_shipment_read(db, shipment.id)
 
 
-async def get_shipment(db: AsyncSession, shipment_id: int) -> "ShipmentRead":
+async def get_shipment(db: AsyncSession, shipment_id: int) -> ShipmentRead:
     """
     Read one shipment with its lines as a ShipmentRead (404 if it does not exist).
 
@@ -712,7 +745,7 @@ async def get_shipment(db: AsyncSession, shipment_id: int) -> "ShipmentRead":
     return await _load_shipment_read(db, shipment_id)
 
 
-async def _load_shipment_read(db: AsyncSession, shipment_id: int) -> "ShipmentRead":
+async def _load_shipment_read(db: AsyncSession, shipment_id: int) -> ShipmentRead:
     """
     Load a shipment with its lines and serialize it as a ShipmentRead.
 

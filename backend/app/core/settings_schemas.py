@@ -13,8 +13,6 @@ Notes:
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import BaseModel
 
 
@@ -22,11 +20,11 @@ class SettingRead(BaseModel):
     """Setting data returned to API callers."""
 
     key: str
-    value: Optional[str] = None
+    value: str | None = None
     value_type: str
     category: str
     scope: str
-    description: Optional[str] = None
+    description: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -38,4 +36,4 @@ class SettingUpdate(BaseModel):
     Set value to None explicitly to clear a setting's value.
     """
 
-    value: Optional[str] = None
+    value: str | None = None

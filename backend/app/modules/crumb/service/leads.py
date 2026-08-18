@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-async def create_lead(db: AsyncSession, data: "LeadCreate", actor_id: str) -> "Lead":
+async def create_lead(db: AsyncSession, data: LeadCreate, actor_id: str) -> Lead:
     """Create a new pipeline lead (status defaults to new, active). Returns the lead."""
     from app.modules.crumb.models import Lead
 
@@ -58,7 +58,7 @@ async def create_lead(db: AsyncSession, data: "LeadCreate", actor_id: str) -> "L
     return lead
 
 
-async def list_leads(db: AsyncSession, include_archived: bool = False) -> list["Lead"]:
+async def list_leads(db: AsyncSession, include_archived: bool = False) -> list[Lead]:
     """
     Return leads ordered newest-first.
 
@@ -74,7 +74,7 @@ async def list_leads(db: AsyncSession, include_archived: bool = False) -> list["
     return list(result.scalars().all())
 
 
-async def get_lead(db: AsyncSession, lead_id: str) -> "Lead":
+async def get_lead(db: AsyncSession, lead_id: str) -> Lead:
     """Load a lead by id. Raises 404 if it does not exist."""
     from app.modules.crumb.models import Lead
 
@@ -85,8 +85,8 @@ async def get_lead(db: AsyncSession, lead_id: str) -> "Lead":
 
 
 async def update_lead(
-    db: AsyncSession, lead_id: str, patch: "LeadUpdate", actor_id: str
-) -> "Lead":
+    db: AsyncSession, lead_id: str, patch: LeadUpdate, actor_id: str
+) -> Lead:
     """
     PATCH a lead's descriptive fields (only non-None fields are applied).
 
@@ -101,7 +101,7 @@ async def update_lead(
     return lead
 
 
-async def archive_lead(db: AsyncSession, lead_id: str, actor_id: str) -> "Lead":
+async def archive_lead(db: AsyncSession, lead_id: str, actor_id: str) -> Lead:
     """Soft-archive a lead by clearing its active flag. Returns the lead."""
     lead = await get_lead(db, lead_id)
     lead.active = False
@@ -118,9 +118,9 @@ async def archive_lead(db: AsyncSession, lead_id: str, actor_id: str) -> "Lead":
 async def link_or_create_customer(
     db: AsyncSession,
     lead_id: str,
-    data: "LeadLinkCustomerRequest",
+    data: LeadLinkCustomerRequest,
     actor_id: str,
-) -> "Lead":
+) -> Lead:
     """
     Link a lead to a SYERP customer and mark it qualified (CRUMB-01).
 
@@ -163,9 +163,9 @@ async def link_or_create_customer(
 async def convert_to_opportunity(
     db: AsyncSession,
     lead_id: str,
-    data: "LeadToOpportunityRequest",
+    data: LeadToOpportunityRequest,
     actor_id: str,
-) -> "Opportunity":
+) -> Opportunity:
     """
     Convert a qualified lead into an opportunity (CRUMB-01).
 

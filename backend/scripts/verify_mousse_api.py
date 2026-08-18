@@ -56,7 +56,7 @@ import sys
 import urllib.error
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import delete, select
@@ -162,7 +162,7 @@ async def _make_part_with_revision(
         status="released" if released else "draft",
         description=f"verify_mousse_api {part_number}",
         unit_of_measure=uom,
-        released_at=datetime.now(timezone.utc) if released else None,
+        released_at=datetime.now(UTC) if released else None,
     )
     session.add(rev)
     await session.flush()

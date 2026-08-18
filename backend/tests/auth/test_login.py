@@ -11,7 +11,6 @@ Behaviors tested (CORE-02, D-14):
 Tests require a live database (skip_if_no_db).  The admin user is seeded by
 conftest via BNS_ADMIN_EMAIL / BNS_ADMIN_PASSWORD env vars.
 """
-import pytest
 import httpx
 
 

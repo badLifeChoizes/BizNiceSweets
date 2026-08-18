@@ -108,10 +108,17 @@ future scope (expanded via `/zj:spec` when their milestones near).
 ## PLUM (PLM Port — v1 Core)
 
 ## PLUM-01: Part CRUD  [traces: PRD-5]  **Status: implemented**
-- **Verified:** a88431c (re-stamped 2026-07-11 — `service.py` changed again for the AVL D2 fix,
-  which does not touch the part-CRUD or numbering paths; part CRUD re-proven live after that commit,
-  201 on create and numeric successor still correct past the 5→6-digit boundary; guarded by
-  `backend/scripts/verify_part_numbering.py` + `backend/tests/plum/test_part_number.py`)
+- **Verified:** ad05c7a (**re-stamped 2026-08-18 at the v4.0 milestone close** — `zj doctor` flagged
+  PLUM-01 stale-verified because `0005_plum_tables.py`, `models.py` and `router.py` all changed after
+  the `a88431c` stamp. The milestone audit re-verified it at `ad05c7a`: the only post-stamp change to
+  those files is ruff autofix `d2b9b9c` (`Optional[X]`→`X|None`, `datetime.UTC`), semantically inert.
+  Re-driven live through the real HTTP router — create returned `P00001`, the numeric successor past
+  `P9999999999` returned `P10000000000` with **no int4 overflow 500** (the v1.0 Phase-7 blocker
+  `7562a02` stays fixed), duplicate part number 409s, archive OK; `backend/tests/plum/test_part_number.py`
+  14 passed. See `.zj/MILESTONE-v4.0-AUDIT.md` § PLUM-01 re-verification.
+  Prior stamp a88431c, re-stamped 2026-07-11 — `service.py` changed for the AVL D2 fix, which does not
+  touch the part-CRUD or numbering paths; guarded by `backend/scripts/verify_part_numbering.py` +
+  `backend/tests/plum/test_part_number.py`)
 - **Statement:** User can create, view, edit, and delete parts.
 - **Evidence:** `backend/app/modules/plum/models.py`, `backend/app/modules/plum/service.py`, `backend/app/modules/plum/router.py`, migration `backend/alembic/versions/0005_plum_tables.py`; `frontend/src/routes/plum/PartsList.tsx`, `frontend/src/routes/plum/components/PartSheet.tsx`; `backend/tests/plum/test_parts.py`; human UAT 10 of 10 in Phase 5.
 - **Defect (resolved, Phase 7 `1b8bfa1`):** `generate_part_number()` used lexicographic `MAX`
@@ -691,7 +698,9 @@ future scope (expanded via `/zj:spec` when their milestones near).
 > Non-functional, no new end-user capability. Scope confirmed by the owner at the v4.0 spec
 > (D-M4-1: CI + lint + harness + ledger race-safety + human UAT; CRISP/offline deferred).
 
-## NFR-4: Continuous integration on every push  [traces: PRD-12]  **Status: planned**
+## NFR-4: Continuous integration on every push  [traces: PRD-12]  **Status: verified (v4.0 Phase 3 — `/zj:verify 3` PASS; `.github/workflows/ci.yml` live; four blocking jobs green + red-demos on real Actions runs; branch protection on `master` requires all four; PR #4 gated — all re-confirmed live via authed `gh` AND reproduced locally on a fresh `postgres:17`)**
+- **Verified:** cf2a805 (Phase 03 verify, 2026-07-25 — `/zj:verify 3`: all 7 SCs PASS empirically. Verifier's authed `gh` re-confirmed live every claimed run ID (all-green 30140504003; broken-test 30140642516→revert 30140733237; lint 30140870255→revert 30140959653), PR #4 (base `master`, CLEAN, four checks pass), and branch-protection contexts `[frontend, backend-lint, backend-tests, verify-scripts]` — **not taken on trust** — AND reproduced every CI check locally against a **fresh** `postgres:17`: pytest **232 passed / 0 skipped** with `biznice_test` self-provisioning confirmed via `pg_database` before/after (proves the D-P3-4 probe fix), 14/14 `verify_*` exit 0, FE lint/tsc/vitest(131)/build exit 0. `git diff 4960d32..cf2a805 -- backend/app/ frontend/src/` **empty** (infra-only; only `conftest.py` changed, authorized D-P3-4). Reviewer **0 blocker / 0 major / 0 minor** — no gate-masking vector holds (job names match branch-protection contexts; `set -e` verify loop; `pg_isready` health checks). 4 minor items all p3 niceties already homed in PLAN `## Noticed`. Tag `zj/good-03-ci-pipeline`.)
+- **Delivered (v4.0 Phase 3, `chore-ci-pipeline`):** `.github/workflows/ci.yml` on `push` + `pull_request`, four independent jobs (no `needs:` — a failure never masks another): **`frontend`** (`npm ci` → `npm run lint` → `tsc -b` → `vitest run` → `npm run build`, Node 22), **`backend-lint`** (`ruff check .`, Python 3.13), **`backend-tests`** (`pytest -q` against a live `postgres:17` service — **232 passed / 0 skipped**; conftest self-provisions `biznice_test`), **`verify-scripts`** (migrate + seed `biznice`, then the 14 non-API `verify_*.py` service-layer scripts, D-P2a-2 — **14/14 exit 0**). Evidence on real runs: all-green **run 30140504003** (SC1/SC2/SC5); broken backend test → **run 30140642516** red (only `backend-tests`) → revert **run 30140733237** green (SC3); lint violation (ruff F401 + eslint no-unused-vars) → **run 30140870255** red (`backend-lint` + `frontend`) → revert **run 30140959653** green (SC4). **Demonstrated on real PR #4 → `master`** (SC6): all four required checks green, PR went **BLOCKED → CLEAN**; branch protection `required_status_checks.contexts` = `[frontend, backend-lint, backend-tests, verify-scripts]`. One test-infra fix D-P3-4 (conftest probe → maintenance `postgres` DB so a fresh CI Postgres self-provisions); no product-code (`backend/app/`) change. Secrets are test-only throwaway `env:` values.
 - **Statement:** On every push and pull request to the GitHub repository, an automated pipeline
   (**GitHub Actions**, D-M4-2) shall run, and report a pass/fail status on the commit/PR, all of:
   backend lint (`ruff check .`), frontend lint (`npm run lint`), type-check (`tsc -b`), frontend
@@ -704,7 +713,10 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Source:** BACKLOG p1 (no CI anywhere — no `.github/`); D-M3-3. The `SyerpPartner` 500 shipped
   through four plans precisely because these checks never ran automatically.
 
-## NFR-5: Runnable integration coverage — pytest harness repair  [traces: PRD-12, PRD-7, PRD-8]  **Status: planned**
+## NFR-5: Runnable integration coverage — pytest harness repair + ported cruxes  [traces: PRD-12, PRD-7, PRD-8]  **Status: done (v4.0 Phase 2 — 2a harness repaired + 2b DoD-named cruxes (formerly proven only by standalone `verify_*` scripts) ported into the pytest suite; full suite 232 passed / 0 skipped twice back-to-back, 23/23 `verify_*` scripts still exit 0)**
+- **Verified (2a portion):** a2bb5a6 (Phase 02a verify, 2026-07-22 — `/zj:verify 2a`: all 6 SCs PASS empirically; full suite 219 passed / 0 skipped twice back-to-back, `git diff -- backend/app/` empty (zero product-code changes), non-vacuity re-driven, 23/23 verify_* exit 0, cold boot ok; tag `zj/good-02a-pytest-harness-repair`. The four D-P7-4 root causes (DSN, event loop, admin-user seed, isolation) are fixed.)
+- **Verified (2b portion):** 0cb625f (Phase 02b verify, 2026-07-24 — `/zj:verify 2b`: all 6 SCs PASS empirically; verifier ran the full suite twice in-container (**232 passed / 0 skipped** both runs), read all 7 crux tests (each headline Decimal asserted via the real service path against an independent oracle), independently re-drove 3/7 SC2 mutations (each flips a NAMED pytest test RED, all reverted), 23/23 verify_* exit 0, ruff + cold boot green, `git diff -- backend/app/` empty. Reviewer 0 blocker / 0 major / 1 minor (MOUSSE happy-path crux does not independently catch its mutation — the (D) residual test is its guard; docstring corrected `0cb625f`, logged `## Noticed`). Tag `zj/good-02b-port-verify-cruxes`.)
+- **Delivered (2b portion, `chore-port-verify-cruxes`):** the DoD-named crux behaviors now run inside the ordinary `pytest` suite as NEW service-layer tests — inventory moving-avg via the SERVICE path (`test_inventory_service.py::test_moving_average_service_crux`), GL posting ties (`test_gl_posting.py::test_gl_posting_ties_crux`), AP GR/IR-clears + control↔subledger equality (`test_ap_posting.py::test_ap_posting_ties_crux`), AR aging↔1120 tie via the REAL ship flow (`test_ar.py::test_ar_posting_ties_crux`), MOUSSE WIP-clears + 5190 residual tie (`tests/mousse/test_work_orders.py`), CRUMB reservation cap (`tests/crumb/test_sales_orders.py::test_reservation_math_crux`), GELATO ship-COGS (`tests/gelato/test_shipments.py::test_gelato_ship_cogs_crux`) — plus one HTTP audit/RBAC test per new module surface (MOUSSE/CRUMB/GELATO/AR) + inventory (401/403/2xx + attributable `AuditLog`). **Non-vacuity proven per crux:** a documented product mutation flips each NAMED pytest test RED, revert restores green (SC2 table in `docs/tasks/chore-port-verify-cruxes.md`). Concurrency mutation-proofs stay in `verify_*` (D-P2a-2/D-P2b-1). Evidence: full suite **232 passed / 0 skipped** ×2, 23/23 verify_* exit 0, ruff exit 0, cold boot ok, `git diff -- backend/app/` empty (TEST-ONLY phase).
 - **Statement:** The backend `pytest` suite shall execute its DB-backed tests against a live
   PostgreSQL database with **zero silent skips**, and the crux behaviors currently proven only by
   standalone `backend/scripts/verify_*.py` shall be covered by tests that run inside the ordinary
@@ -715,11 +727,13 @@ future scope (expanded via `/zj:spec` when their milestones near).
   silently-skipped now run — auth/plum/syerp/core); the ported crux assertions (inventory
   moving-average + audit + RBAC, GL/AP/AR posting ties, MOUSSE WIP-clears, CRUMB reservation,
   GELATO ship COGS) are present and pass; reverting a crux turns a **pytest** test red (not only a
-  `verify_*` script). Then drop the "script-only / UI-flow-UAT-pending" caveats those SRD rows carry.
+  `verify_*` script). The module SRD rows' remaining "UI-flow UAT-pending" caveats are **NFR-8**
+  scope (human UAT), not this requirement, and stay.
 - **Source:** D-P7-4 (BACKLOG p1); "port Phase-8 verify-script assertions into runnable integration
   tests" (BACKLOG p1). Enables NFR-4's live-DB CI job to be meaningful.
 
-## NFR-6: Enforced static-analysis (lint) gates  [traces: PRD-12]  **Status: planned**
+## NFR-6: Enforced static-analysis (lint) gates  [traces: PRD-12]  **Status: verified (v4.0 Phase 1 — both gates fixed-to-clean + enforcing; CI-wiring clause pending NFR-4/Phase 3)**
+- **Verified:** ee11674 (Phase 01 verify, 2026-07-21 — `/zj:verify 1`: verifier re-ran both red→green enforce proofs independently, 23/23 `verify_*` + Vitest 131/131 + `tsc -b && vite build` + cold-boot all green, reviewer 0 findings; tag `zj/good-01-lint-gates-clean`. CI-wiring clause remains deferred to Phase 3/NFR-4.)
 - **Statement:** Both lint gates shall run and pass clean and be enforced in CI (NFR-4): the
   frontend on an ESLint **flat config** (`frontend/eslint.config.js`) with the
   `@typescript-eslint` parser/plugin installed as dev dependencies, and the backend on `ruff`
@@ -730,10 +744,27 @@ future scope (expanded via `/zj:spec` when their milestones near).
   red on violation.
 - **Source:** BACKLOG p1 (recurring Phases 6/7/8 — ESLint 10 flat-config gap; `ruff` absent). Folds
   into NFR-4 once both commands work.
+- **Evidence (v4.0 Phase 1, `chore-lint-gates-clean`):** FE — flat `frontend/eslint.config.js`
+  (js+typescript-eslint+react-hooks@5 [D-P1-1]+react-refresh recommended, `no-unused-vars ^_`),
+  `.eslintrc.cjs` deleted, `lint` script de-`--ext`'d; `npm run lint` **exit 0**. BE — `ruff` dev-venv
+  `0.15.18`, ~1159 violations fixed-to-clean (1139 safe-autofix + F821×4 via TYPE_CHECKING, F811 seeded_db
+  → `tests/auth/conftest.py`, E741/F841 hand-fixed, 51 load-bearing syerp re-exports `# noqa: F401`);
+  `ruff check .` from `backend/` **exit 0**. Enforce-proof: each gate exits **non-zero** on a planted
+  violation, **0** after revert. No regression: **23/23 `verify_*` exit 0** in-container + cold boot
+  (`/health/ready` 200 + `import app.main` BOOT_OK) + Vitest **131/131 tests pass** (44 files, 0 fail/skip) + `tsc -b && vite build` exit 0.
+  **Pending for NFR-4/Phase 3:** wiring both as CI jobs + ruff into the container image + `.npmrc`
+  `legacy-peer-deps=true` for reproducible `npm ci`.
 
-## NFR-7: Concurrency-safe inventory ledger  [traces: PRD-12, PRD-7, PRD-8]  **Status: planned**
-- **Statement:** Every floor-guarded write to the inventory ledger — issue, adjust, receive,
-  transfer, ship — shall serialize on the contended row(s) under one shared `SELECT … FOR UPDATE`
+## NFR-7: Concurrency-safe inventory ledger  [traces: PRD-12, PRD-7, PRD-8]  **Status: implemented**
+- **Evidence:** `backend/app/modules/syerp/service/` (`post_receipt`, `post_adjustment`,
+  `post_transfer`, `receive_line`, `post_putaway`, `post_issue`), `backend/app/modules/mousse/`
+  (`issue_components`), `backend/app/modules/gelato/service/shipments.py` (`execute_pick`,
+  `execute_ship`); pinned by `backend/scripts/verify_inventory_race.py` (4 barrier races, mutations
+  M1–M4 executed RED→GREEN) and `backend/scripts/verify_gelato_ship.py` scenarios (h), (i), (j) —
+  all CI-resident via the `verify-scripts` glob.
+- **Statement** *(amended 2026-08-18 at the v4.0 close, D-M4-5 — `pick` added)*: Every floor-guarded
+  write to the inventory ledger — issue, adjust, receive, **pick**, transfer, ship — shall serialize
+  on the contended row(s) under one shared `SELECT … FOR UPDATE`
   lock discipline (sorted-id order, the `create_bill`/`record_payment` template) so the hard
   invariants hold under concurrent writers: per-location on-hand `≥ 0`, `qty_received ≤ qty_ordered`.
   The remaining **bin-blind** draw primitives (`post_transfer`, `post_adjustment`, MOUSSE
@@ -748,15 +779,96 @@ future scope (expanded via `/zj:spec` when their milestones near).
 - **Source:** BACKLOG p2 (inventory-ledger read-check-write race, trigger now live with 3+ writers;
   bin-blind-desync inbound half). Accepted-risk single-shop until now; hardened as the multi-writer
   DoD clause.
+- **Delivery (v4.0 Phase 4 build, 2026-07-25, branch `chore-inventory-race-safety`):**
+  `post_receipt`/`post_adjustment`/`post_transfer` take the item-master `SELECT … FOR UPDATE`
+  before any floor/aggregate read (`73e45c2`; post_receipt also re-reads the row under the lock so
+  the moving-average recompute can't lose an update); `receive_line` locks the PO header
+  (`_get_po_row(for_update=True)`, PO→item lock order documented, `e1dc5c0`). Bin-aware draws per
+  D-P4-1/5/6: `post_adjustment` `bin_id` (`4285202`), `post_transfer` `from_bin_id` out-leg /
+  unbinned in-leg (`b80cb37`), MOUSSE `issue_components` per-line `bin_id` with the floor key
+  widened to `(item, location, bin)` (`455cf5c`); trust-boundary docs trued up (`4ae2b2c`). NEW
+  `backend/scripts/verify_inventory_race.py` (`f394408`) — 4 barrier races incl. the SRD-named
+  MOUSSE-issue × SYERP-adjust pair, **all 4 mutations executed RED→GREEN** (M1 on-hand −4 both
+  writers landed; M2 source pool −4; M3 both receives landed / double GL post; M4 moving-avg
+  10.000000 vs correct 9.583333) — table in `docs/tasks/` checklist. `verify_gelato.py` scenario E
+  flipped to assert the fix (`ad6a35d`). Regression sweep (`2692b47`): 15/15 non-API + 9/9 API
+  `verify_*` exit 0, pytest 232 passed / 0 skipped, TB nets zero, **zero D-P4-1 fixture
+  reconciliations needed**. FE bin pickers wired end-to-end with real-payload Vitests
+  (`6d55d72`/`b270161`/`886193a`); full FE gate 44 files / 139 tests + lint + `tsc -b` + build
+  exit 0. No GL/JE change, no migration (both tripwires unfired).
+- **Verified:** 4dc3154 (**re-stamped 2026-08-18 at the v4.0 close** — the milestone audit re-read
+  every `with_for_update()` call site in `backend/app/` (24 sites) at `ad05c7a`, confirmed the lock
+  precedes the first aggregate/guard read in every ledger writer, and found the single omission
+  (`execute_pick`) now closed by `4dc3154` with its two barrier pins. Prior stamp 3253917, Phase 04
+  verify, 2026-07-25 — `/zj:verify 4`: initial verdict GAPS →
+  fix loop → re-verified PASS on tip `3253917`. Verifier read every lock in code (lock precedes
+  first aggregate/guard read in all 7 writers; post_receipt re-reads under lock), ran
+  `verify_inventory_race.py` live (exit 0, scenarios A–D pin exact remainders/moving-avg
+  9.583333), corroborated the executed M1–M4 RED→GREEN mutation table, and re-ran the full gates
+  (15/15 non-API sweep, in-container pytest 232/0-skipped, FE 139 tests + lint + build, CI 4/4
+  green run 30185233894). Fix loop closed the reviewer's major — MOUSSE `issue_components` had
+  dropped its per-location floor going pool-aware (`2a87f6d` restores it beside the pool floor,
+  mutation-proven RED→GREEN by `verify_mousse.py` scenario G2's legacy-desync fixture) — plus
+  `post_transfer` leg-cost refresh under lock (`5a45a7b`), and added durable CI pins for the
+  binned-transfer/D-P4-5/D-P4-6/binned-MOUSSE-issue behaviors (`verify_gelato.py` scenario F
+  `c692498`, `verify_mousse.py` scenario G `3f45685`). Deferred to BACKLOG: positive-adjust
+  unvalidated bin_id (p2, owner decision), `pick_for_shipment` unsorted item locks (p2),
+  `TransactionRead` bin_id omission (p3). Tag `zj/good-04-inventory-race-safety`.)
+- **Amended + closed at the v4.0 milestone close (2026-08-18, D-M4-5).** The milestone audit found
+  the Statement above had never listed **`pick`** among the writers, while the DoD clause said
+  *every* writer — so `execute_pick` passed Phase 4 verification by simply not being in scope. It
+  was the last ledger writer outside the discipline, and **both** its failure modes reproduced under
+  a barrier: two concurrent first-picks of one SO produced **two open `picking` shipments** (the
+  second's stock unreachable — GELATO has no shipments-for-an-SO route) plus a lost `qty_picked`
+  update; two picks sharing two items in opposite request order **deadlocked 6/6**. Fixed `4dc3154`
+  — the SO row is locked `FOR UPDATE` before the shipment get-or-create, and the move loop runs in
+  sorted item-id order after a pure-read validation pass. Each half proven load-bearing **in
+  isolation** (drop only the lock → scenario (i) RED `shipments_for_so=[101, 102]`, (j) green; drop
+  only the sort → (j) RED with `DeadlockDetectedError`, (i) green; both restored → 23/23 PASS).
+  Lock order SO → items introduces no inversion against `execute_ship` (shipment → items) or
+  `confirm_sales_order` (items only). **Resolves the BACKLOG p2 `pick_for_shipment` unsorted item
+  locks item** deferred at Phase 4.
 
-## NFR-8: Human-verified release readiness  [traces: PRD-12, PRD-5, PRD-7, PRD-8]  **Status: planned**
-- **Statement:** Before the milestone closes, every shipped user-facing flow — v1.0 PLUM
+## NFR-8: Human-verified release readiness  [traces: PRD-12, PRD-5, PRD-7, PRD-8]  **Status: verified (v4.0 Phase 5 — checklist delivered; readings pending, deliberately non-blocking per D-P5-11).**
+- **Verified:** d3e68e2
+- **Evidence:** `.zj/QA.md` (`493e185`, extended `fbac89b`) — **61 checks**, all judgeable, keyed to
+  requirement IDs; **31 of 47** requirements carry a human check and §5 names **zero real gaps**
+  (9 not-built, 6 machine-only, NFR-8 itself). Fixtures are reproducible on a fresh volume
+  (`backend/scripts/seed_uat_fixtures.py`, all **275** derived literals — the full 361-line
+  manifest — byte-identical across four independent re-seeds). Defect ledger §7: **U0** blocker fixed `4ace2c4` + pin `d870233`; **U1** major fixed
+  `f508554` + pin `f67f085`; **U2** blocker fixed `8d61cca` + pin `f82ec38`. SC8 landed `e57c1ff`
+  + pin `0a7a89f`, extended by the verify fix loop to reject an **archived** bin (`fd7ca87` + pin
+  `947e5d6`, scenario (G5)). **Verified at `d3e68e2`** — pytest **245 passed / 0 skipped**,
+  **17/17** non-API + **9/9** API `verify_*`, both lint gates 0, vitest 148/45; CI run
+  **32072598536** **5/5 success**, including the new `container-image` job that builds the shipped
+  artifact on every push. Prod stack re-driven on a fresh volume at `:8000` against an image
+  rebuilt from the verified tip. The verify fix loop also closed the four criteria that had no
+  automated pin: coverage arithmetic (`verify_qa_doc.py`), citation resolution
+  (`verify_qa_citations.py`), seed idempotency (a `verify-scripts` step on its own database), and
+  the image build itself — each proven non-vacuous by mutation.
+- **NOT evidenced:** that any human has run the checklist. Zero readings are recorded in `.zj/QA.md`
+  §6. Under D-P5-11 that does not block this requirement, the phase, or the milestone — but it does
+  mean NFR-8 no longer carries the assurance its original wording implied. The module rows caveated
+  "UI-flow UAT-pending" therefore stay caveated.
+- **Statement** *(rewritten 2026-08-17, D-P5-11)*: every shipped user-facing flow — v1.0 PLUM
   (parts/BOM/costing/AVL/import-export), v2.0 SYERP operations + MOUSSE, v3.0 CRUMB + GELATO + AR —
-  shall be exercised by a **documented human click-through** against the running stack, with a
-  pass/defect result recorded per flow.
-- **Verification:** the consolidated UAT checklist (`.zj/UAT-v1.0.md` round-2 + `.zj/UAT-v2.0.md`
-  extended with GL/AP/reports/MOUSSE + new CRUMB/GELATO/AR checks) is complete; each defect found is
-  fixed or homed to BACKLOG with an ID.
+  shall have a **documented, runnable human check** against the running stack, keyed to the
+  requirement it exercises, with a place to record a pass/defect result. Requirements with **no**
+  human check shall be named rather than left implicit. The *reading* of those checks is an
+  ongoing owner activity that accrues over time; it is explicitly **not** a precondition for a
+  phase or milestone to close.
+- **Verification:** `.zj/QA.md` exists as the single standing regression checklist — keyed to SRD
+  requirement IDs, carrying for each check the named fixture, the machine assertion that already
+  proves its backend (with citation), the human-only residue, and the failure to watch for; plus a
+  coverage map (§3), an explicit gap list (§5), and a result log (§6). Each defect found when it is
+  run is fixed or homed to BACKLOG with an ID.
+- **Deliberately not required:** a completed run. *(Was: "Before the milestone closes … shall be
+  exercised by a documented human click-through", verified by the UAT docs being "complete". That
+  made v4.0 block on a ~3 h sitting and stalled Phase 5 at 22/41 for three weeks. The owner
+  preference `QA docs: non-blocking` forbids gating on an owner run — so the checklist is the
+  deliverable and the reading is a parallel to-do. **This requirement is therefore satisfied by an
+  unrun checklist, and that is intentional** — it does not assert that anyone has clicked anything.
+  Whether v4.0 should ship on an unrun checklist is a separate owner call at `/zj:milestone`.)*
 - **Source:** D-M2-2 (deferred at the v2.0 close; owed v1.0 round-2 is 2/12) + owner include-decision
   at the v4.0 spec (D-M4-1). The long-standing pre-public-release gate.
 

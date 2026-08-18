@@ -32,7 +32,7 @@ import { getApiErrorMessage } from './components/apiError'
 import { useSalesOrder, useAdvanceSalesOrderStatus } from './hooks'
 import { useAuth } from '@/hooks/useAuth'
 import { useModules } from '@/hooks/useModules'
-import { useVisibleModules } from '@/components/AppShell'
+import { getVisibleModules } from '@/components/AppShell'
 
 // SO statuses that can be handed off to GELATO fulfillment (stock reserved / picking).
 const FULFILLABLE_STATUSES = new Set(['confirmed', 'fulfilling'])
@@ -65,7 +65,7 @@ export function SalesOrderDetail() {
   // (module enabled ∩ gelato:read) — the same intersection AppShell/Sidebar nav uses.
   const { user } = useAuth()
   const { data: modules = [] } = useModules()
-  const gelatoVisible = useVisibleModules(user, modules).some((m) => m.key === 'gelato')
+  const gelatoVisible = getVisibleModules(user, modules).some((m) => m.key === 'gelato')
 
   const advanceMutation = useAdvanceSalesOrderStatus()
 

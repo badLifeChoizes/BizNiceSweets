@@ -31,15 +31,56 @@ bundled with Docker Desktop) is functionally equivalent for development. Replace
 
 ### 1.2 Configure the environment
 
+The stack reads **two** env files (D-P5-10). Copy both:
+
 ```bash
-cp .env.example .env
+cp .env.example    .env
+cp .env.db.example .env.db
 ```
 
-Open `.env` and set a real value for `POSTGRES_PASSWORD`. The placeholder
-`changeme_in_production` will NOT work for a secure deployment.
+| File | Contents | Read by |
+|------|----------|---------|
+| `.env` | app config + app secrets (`JWT_SECRET`, `BNS_ADMIN_*`) | `api` only |
+| `.env.db` | database credentials (`POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD`) | `db` **and** `api` |
 
-> `.env` is listed in `.gitignore` — it will never be committed to the repo.
-> Only `.env.example` (with placeholder values) is tracked.
+Open `.env.db` and set a real `POSTGRES_PASSWORD`, and `.env` and set a real
+`JWT_SECRET` and `BNS_ADMIN_PASSWORD`. The `changeme_*` placeholders will NOT work
+for a secure deployment.
+
+> **Why two files.** The Postgres container needs the database credentials and
+> nothing else, so splitting them keeps `JWT_SECRET` out of a container that has no
+> use for it. `POSTGRES_PASSWORD` therefore has exactly one home — `.env.db` — read
+> by both containers rather than duplicated into two files that can drift.
+>
+> **Do not skip `.env.db`.** Without it the `db` container starts with an empty
+> password. An *already-initialized* volume does not care, so the stack appears
+> healthy — but a **fresh** volume refuses to initialize with
+> `Database is uninitialized and superuser password is not specified`. That was
+> defect U0 (v4.0 Phase 5); it is pinned by
+> `backend/tests/test_compose_config.py`.
+
+> Both `.env` and `.env.db` are listed in `.gitignore` — neither will ever be
+> committed. Only the `.env.example` / `.env.db.example` templates are tracked.
+
+> **⚠ Upgrading an existing deployment.** If you already have a running stack, your
+> untracked `.env` still carries `POSTGRES_PASSWORD=<your real password>` and your
+> volume was initialized with it — this change cannot rewrite a file git does not
+> track. **Move that line into `.env.db` and delete it from `.env`:**
+>
+> ```bash
+> grep '^POSTGRES_PASSWORD=' .env >> .env.db      # carry the OLD value across
+> sed -i '/^POSTGRES_PASSWORD=/d' .env            # remove its second home
+> # then delete the template's `POSTGRES_PASSWORD=changeme_in_production` line
+> # from .env.db, so exactly one definition is left
+> ```
+>
+> **The *old* value is the one that must end up in `.env.db`.** An initialized PGDATA
+> ignores `POSTGRES_PASSWORD`, so `db` starts fine either way — but podman-compose
+> passes `--env-file ../.env --env-file ../.env.db` in that order and **the later file
+> wins**, so a fresh `cp .env.db.example .env.db` alone leaves `api` authenticating with
+> `changeme_in_production` and dying on
+> `password authentication failed for user "app"`. `scripts/uat.sh` and `scripts/uat.ps1`
+> warn if `.env` still defines `POSTGRES_PASSWORD`.
 
 ### 1.3 Production-like stack (API + DB, built SPA served from backend)
 
@@ -95,6 +136,52 @@ podman-compose -f compose/compose.yml down -v
 After `down -v` + `up`, Alembic migrations run automatically on the fresh
 database — no manual migration step. This confirms the repeatability
 requirement (CORE-01).
+
+### 1.6 One-command launcher
+
+Two wrapper scripts do the whole of §1.2–§1.5 in a single command. They are
+equivalent; pick the one your shell supports:
+
+| Script | Requires |
+|---|---|
+| `scripts/uat.sh` | bash (Linux / macOS / WSL / Git Bash) |
+| `scripts/uat.ps1` | PowerShell (`pwsh`) |
+
+```bash
+./scripts/uat.sh --fresh --detach   # reset the volume, start, wait for health, open the app
+./scripts/uat.sh                    # foreground; logs stream, Ctrl+C stops
+./scripts/uat.sh --down             # stop the stack
+./scripts/uat.sh --down --fresh     # stop and delete the volume
+./scripts/uat.sh --help             # all flags
+```
+
+Both resolve a compose runner automatically (`podman-compose` →
+`podman compose` → `docker compose` → `docker-compose`) and create `.env` /
+`.env.db` from their templates if either is missing.
+
+> **The launchers do not seed the named UAT fixtures.** `--fresh` leaves the
+> database holding only the automatic startup seeds (chart of accounts, admin
+> user). The UAT fixtures are a separate explicit step — see
+> [`.zj/QA.md`](../../.zj/QA.md) §1:
+>
+> ```bash
+> podman exec -e PYTHONPATH=/app compose_api_1 python scripts/seed_uat_fixtures.py
+> ```
+
+> **That seed command only works against a UAT stack.** podman-compose derives its
+> project name from the directory of the *first* compose file — `compose/` for the
+> prod stack and for the dev overlay alike — so both produce the container
+> `compose_api_1` and the volume `compose_pgdata`, and the command above cannot tell
+> them apart. What it writes is append-only (an opening-capital journal entry, a
+> manual JE, a received PO, a posted bill, a payment, an AR invoice, a receipt) plus
+> an active login whose password is committed to this repository. So the **stack**
+> opts in: `compose/compose.dev.yml` sets `BNS_ALLOW_UAT_SEED=1` on the `api`
+> service and `compose/compose.yml` never does. Against a prod stack the same command
+> refuses with exit 3 and writes nothing; to load fixtures into a prod artifact
+> deliberately (the `C-CORE-08` smoke, on a fresh volume) pass the opt-in for that one
+> run: `podman exec -e PYTHONPATH=/app -e BNS_ALLOW_UAT_SEED=1 compose_api_1 …`.
+> Independently, the seed refuses if the ledger already holds journal entries it did
+> not post itself. `--manifest` is read-only and runs under both guards.
 
 ---
 
@@ -190,5 +277,6 @@ podman-compose -f compose/compose.yml --profile plum up -d
 |---|---|---|
 | `api` exits immediately with DB error | Postgres not ready yet | Check `podman-compose logs db`; ensure healthcheck passes |
 | File changes don't trigger reload | inotify not working on Windows | Add `compose.dev.yml` overlay; `WATCHFILES_FORCE_POLLING=true` is set automatically |
-| `alembic upgrade head` fails | Schema mismatch or bad URL | Verify `POSTGRES_*` env vars in `.env`; check migration logs in `podman-compose logs api` |
+| `alembic upgrade head` fails | Schema mismatch or bad URL | Verify `POSTGRES_HOST`/`POSTGRES_PORT` in `.env` and the credentials in `.env.db`; check migration logs in `podman-compose logs api` |
+| `db` container restart-loops with `Database is uninitialized and superuser password is not specified` | `.env.db` is missing, so `POSTGRES_PASSWORD` is empty. Only ever shows up on a **fresh** volume | `cp .env.db.example .env.db`, set a real password, then `podman-compose -f compose/compose.yml up -d` again (defect U0) |
 | Port 8000 already in use | Another process on the port | Stop the conflicting process or change the host port in `compose.yml` |

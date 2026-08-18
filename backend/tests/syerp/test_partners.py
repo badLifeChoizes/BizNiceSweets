@@ -21,11 +21,7 @@ These are Wave 0 stubs: the API routes do not exist yet. Tests will fail/skip un
 Plan 02 (SYERP Partner API) implements the routes — they are written as real
 behavior assertions to be greened by Plan 02.
 """
-import pytest
 import httpx
-
-from tests.auth.conftest_helpers import admin_login_token
-
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/syerp/partners — create partner
@@ -111,6 +107,7 @@ async def test_update_partner_writes_audit(
 
     # Verify AuditLog row was written
     from sqlalchemy import select
+
     from app.core.db import AsyncSessionLocal
     from app.modules.auth.models import AuditLog
 
@@ -194,8 +191,11 @@ async def test_create_requires_syerp_write(
     """Token with only syerp:read (no syerp:write) → 403 on partner create."""
     from app.modules.auth.service import create_access_token
 
+    # The roster's syerp-reader holds ONLY syerp:read (lacks syerp:write), so a
+    # token minted for it hits a genuine 403 on the write-gated create endpoint.
+    # Shipped RBAC authorizes from the DB user's roles, not the JWT perms claim.
     read_only_token = create_access_token(
-        subject="readonly-user-id", permissions=["syerp:read"]
+        subject="syerp-reader", permissions=["syerp:read"]
     )
 
     response = await client.post(

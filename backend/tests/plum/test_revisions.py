@@ -18,9 +18,7 @@ importable and collectable by pytest so the test map is ready for 05-02.
 Pattern mirrors backend/tests/syerp/test_partners.py (structure) with
 revision FSM assertions that are net-new domain behavior.
 """
-import pytest
 import httpx
-
 
 # ---------------------------------------------------------------------------
 # Helpers

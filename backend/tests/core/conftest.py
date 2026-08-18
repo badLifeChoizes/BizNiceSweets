@@ -1,3 +1,5 @@
+# ABOUTME: Core-package pytest fixtures — seeded_core_db runs the modules + settings seeds.
+# ABOUTME: Builds on the root conftest's DB provisioning and per-test truncate/reseed isolation.
 """
 Shared test helpers for core (modules + settings) integration tests.
 
@@ -9,7 +11,7 @@ All fixtures depend on skip_if_no_db so they skip cleanly without a live DB.
 """
 from __future__ import annotations
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
 
@@ -27,9 +29,9 @@ async def seeded_core_db(skip_if_no_db: None) -> AsyncGenerator:
     (admin/permissions must exist before modules/settings are seeded).
     """
     from app.core.db import AsyncSessionLocal
-    from app.modules.auth.seed import seed_admin_user
     from app.core.modules_seed import seed_modules_table
     from app.core.settings_seed import seed_default_settings
+    from app.modules.auth.seed import seed_admin_user
 
     async with AsyncSessionLocal() as session:
         await seed_admin_user(session)

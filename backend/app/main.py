@@ -13,8 +13,8 @@ See Pattern 4 in RESEARCH.md.
 """
 import importlib
 import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -24,7 +24,6 @@ from app.api.health import router as health_router
 from app.core.config import settings
 from app.core.db import AsyncSessionLocal
 from app.core.registry import mount_all
-
 
 # --- SPA static-file fallback (D-08) ----------------------------------------
 # Subclass catches 404 from StaticFiles and serves index.html so React Router
@@ -50,7 +49,7 @@ class SPAStaticFiles(StaticFiles):
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     # Startup — run seed data (idempotent; no-op if already seeded)
     from app.core.seed import run_seeds
 

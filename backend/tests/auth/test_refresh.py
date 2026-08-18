@@ -8,7 +8,6 @@ Behaviors tested (CORE-03):
 
 Tests requiring a live DB use skip_if_no_db.
 """
-import pytest
 import httpx
 
 

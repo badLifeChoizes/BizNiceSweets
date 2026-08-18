@@ -71,7 +71,7 @@ DEFAULT_MARKUP_PCT = Decimal("30")
 # ---------------------------------------------------------------------------
 
 
-async def _resolve_customer(db: "AsyncSession", partner_id: str) -> "Partner":
+async def _resolve_customer(db: AsyncSession, partner_id: str) -> Partner:
     """Load the SYERP partner `partner_id` and assert it is a customer.
 
     Raises HTTPException(404) if the partner does not exist or is not flagged

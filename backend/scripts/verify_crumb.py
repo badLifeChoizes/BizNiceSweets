@@ -66,7 +66,7 @@ import os
 import re
 import sys
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from fastapi import HTTPException
@@ -204,7 +204,7 @@ async def _make_part(
             status="released" if released else "draft",
             description=f"verify_crumb {part_number}",
             unit_of_measure="ea",
-            released_at=datetime.now(timezone.utc) if released else None,
+            released_at=datetime.now(UTC) if released else None,
             released_cost_snapshot=snapshot,
         )
         session.add(rev)
@@ -587,7 +587,7 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             and ft_detail.lines[0].description == "Custom tooling charge"
             and ft_detail.lines[0].unit_price == Decimal("75")
             and ft_detail.lines[0].plum_part_id is None,
-            f"lines={[(l.description, l.unit_price) for l in ft_detail.lines]!r}",
+            f"lines={[(line.description, line.unit_price) for line in ft_detail.lines]!r}",
         )
 
         # (G) line integrity: Σ(qty × unit_price) == total_value, Decimal-exact.
@@ -666,7 +666,7 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
         # ===================================================================
         # (H) INTERACTION TIMELINE — append + newest-first ordering (SC5)
         # ===================================================================
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Insert out of chronological order to prove ordering is by occurred_at, not
         # by insert order: middle, oldest, newest.
         touches = [
