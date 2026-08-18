@@ -224,7 +224,7 @@ UI or service list that orders by key must sort on the **numeric suffix**, not t
 
 ## Wave A — schema
 
-### [ ] 2. Define the Project, Phase and Task ORM models
+### [x] 2. Define the Project, Phase and Task ORM models
 - **Serves:** FLAN-01.1, FLAN-01.2, FLAN-01.3
 - **Files:** `backend/app/modules/flan/models.py` (new), `backend/app/modules/flan/__init__.py`
   (new, empty placeholder for now — registration is Task 5), `backend/app/core/models.py` (uncomment
@@ -940,6 +940,16 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   and last in `_USER_ROLE_PERMS`, matching the file's suite-by-suite ordering with `settings:manage`
   kept as the trailing non-suite entry.
 
+- **Task 2 — the uncommented aggregator import had to move.** `ruff` raised `I001` (un-sorted
+  import block) where the commented placeholder sat, so `app/core/models.py` now carries the flan
+  import in alphabetical position between `crumb` and `gelato`. Same import, different line;
+  required to hold the zero-violation baseline.
+- **Task 2 — `flan_task.project_id` carries no `ondelete`.** The plan specified `CASCADE` only for
+  `flan_task.phase_id`. Project deletion is not a supported operation (archive is a soft delete), so
+  the plain FK is as written, not an omission.
+- **Task 2 — `description` columns are bare `String`** (unbounded) on both `flan_project` and
+  `flan_phase`, matching the CRUMB exemplar; the plan said "nullable" without naming a length.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -948,3 +958,10 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   step-1 enumeration runs only through `plum:*` — it omits `mousse:*`, `crumb:*`, `gelato:*` and
   `settings:manage`. Task 4 appended `flan:read`/`flan:write` as instructed but deliberately did not
   back-fill the other four suites' codes. A one-line doc fix; no behaviour depends on it.
+
+- **No `flan_*` `project_id` FK carries an `ondelete`**, so a future *hard* delete of a project
+  would be refused by FK RESTRICT. Consistent with the archive-not-delete posture this phase
+  builds, but any later phase wanting a real project delete needs a migration for it.
+- **Alembic will emit `ix_flan_project_tag_tag` / `ix_flan_task_tag_tag` as separate
+  `CREATE INDEX` statements** — they come from `index=True` on a column that is also part of a
+  composite PK. Worth confirming in Task 6's hand-review of `0018` rather than assuming.
