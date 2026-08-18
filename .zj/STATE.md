@@ -37,28 +37,39 @@ merge to `master` → tag there. Checklist: `docs/tasks/chore-human-uat.md`.
   a shipment a concurrent pack flipped to `packed`; the SO lock does not close it); new p3 filed
   for GELATO's missing list-shipments-for-an-SO route.
 
-### In flight — one engineer running, work UNCOMMITTED in the tree
-- **GAP-3/6/8** — CI job for the 9 `verify_*_api.py` scripts (161 assertions, currently zero
-  coverage incl. the whole financial-reporting HTTP surface); `container-image` job must **boot**
-  the artifact it builds and curl `/health/ready`; `eslint.config.js` lints itself.
-  *Uncommitted: `.github/workflows/ci.yml`, `frontend/eslint.config.js` — left in the tree
-  deliberately because the agent has not yet proven them; do not commit them blind.*
+### All eight audit gaps CLOSED
+- **GAP-3/6/8** (`a962a79`) — new glob-driven `verify-scripts-api` job (locally **9/9 exit 0,
+  251 PASS assertions**); `container-image` now **boots** the image it builds against
+  `postgres:17-alpine` and probes `/health/ready`; `eslint.config.js` lints itself.
+  **Negative controls executed for all three** — the `syerp:reed` red-demo on
+  `/reports/balance-sheet` (the one thing the audit itself could not run) turns
+  `verify_reports_api.py` RED; dropping `.env.db` reproduces `U0` on demand; the old ESLint
+  config scores 0 problems on a violation the new one catches.
+- **GAP-7** (`5fe324e`) — **two** rows were drifted, not the one the audit named: NFR-8
+  (`planned` vs SRD `verified`) and NFR-7 (`verified` vs SRD `implemented` — drifted by this
+  close's *own* SRD edit, which is exactly the recurrence the check now stops).
+  `verify_qa_doc.py` gained scenario 5 cross-checking all **47** status cells, first-word-only so
+  MOUSSE-01/GELATO-01's faithful prose does not false-positive. Mutation-proven RED→GREEN.
+- **CHANGELOG** v4.0 section generated from commits (`9b4ebc5`).
 
-### Remaining after that lands
-1. `CHANGELOG.md` v4.0 section (generated from commits — 25 feat/fix/ci since `v3.0`, plus the
-   close fixes).
-2. **GAP-4** — push `chore-human-uat`, confirm CI green, fresh PR → merge to `master`. PR #4 is
-   stale (180+ commits behind). `origin/master` = `9903f1f` and has **no `.github/` at all`**;
-   4th consecutive milestone of master-merge debt.
-3. **GAP-5** — branch protection: add `container-image` + `verify-scripts-api` to required
-   contexts, `enforce_admins: true`. **MUST come after the merge** — requiring a context that has
-   never reported on `master` would block the v4.0 PR itself.
-4. Tag `v4.0` on `master`; archive `.zj/phases/` → `.zj/history/v4.0/phases/`; roll ROADMAP +
+### GAP-4 in progress — the merge
+Branch **pushed** (`67edf3e..9b4ebc5`); the audited tip had never been pushed, so CI had never
+seen it. **CI run `32155100303` is in flight** on `9b4ebc5` — the first real exercise of the two
+new jobs. Local gates before push: `verify_qa_doc` + `verify_qa_citations` + `ruff` + `npm run
+lint` all exit 0.
+
+### Remaining
+1. CI green on `9b4ebc5` → fresh PR `chore-human-uat` → `master` (PR #4 is stale, 180+ commits
+   behind) → merge. `origin/master` = `9903f1f`, still with **no `.github/` at all**.
+2. **GAP-5** — branch protection: add `container-image` + `verify-scripts-api` to required
+   contexts, `enforce_admins: true`. **AFTER the merge** — a required context that has never
+   reported on `master` would block the v4.0 PR itself.
+3. Tag `v4.0` on `master`; archive `.zj/phases/` → `.zj/history/v4.0/phases/`; roll ROADMAP +
    PROJECT (new DoD, owner-approved) forward; reset this file.
 
 ## Next action
 
-Resume `/zj:milestone` — the GAP-3/6/8 engineer's result is pending; nothing to run by hand yet.
+Resume `/zj:milestone` — waiting on CI run `32155100303`; then merge, harden protection, tag.
 
 ---
 ## Prior state (v4.0 Phase 5 retro, 2026-08-18)
