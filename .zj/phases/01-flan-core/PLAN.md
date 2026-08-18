@@ -523,7 +523,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
   `cd $BNS/backend && .venv/bin/ruff check . && .venv/bin/python -c "from app.modules.flan.service import remove_member, create_member; print('ok')"`
 - **Parallel-ok:** yes (independent of Tasks 13/14)
 
-### [ ] 16. Implement phase and task assignment set/clear
+### [x] 16. Implement phase and task assignment set/clear
 - **Serves:** FLAN-01.5
 - **Files:** `backend/app/modules/flan/service/assignments.py` (new),
   `backend/app/modules/flan/service/__init__.py`
@@ -735,7 +735,13 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 ### [ ] 27. Write `verify_flan.py` scenario (A) — the phase-rollup crux including the empty phase
 - **Serves:** FLAN-01.2 (the SRD's named verification)
 - **Files:** `backend/scripts/verify_flan.py` (new)
-- **Do:** Mirror `backend/scripts/verify_gelato.py`'s structure: ABOUTME header, a WHY-THIS-EXISTS
+- **Do:** ⚠ **ADDED AT BUILD:** the script MUST `import app.modules.auth.models` (or
+  `app.core.models`) **before** touching `flan_team_member`, or SQLAlchemy raises
+  `NoReferencedTableError` resolving `flan_team_member.user_id → users.id`. Found by Task 16's
+  engineer. Note also that `backend/scripts/verify_gelato.py`'s own header documents the wrong
+  container and psql role (`compose_api_1`, `-U postgres`) — the working values are `compose_api`
+  and `-U app`; do not copy that header verbatim.
+  Mirror `backend/scripts/verify_gelato.py`'s structure: ABOUTME header, a WHY-THIS-EXISTS
   docstring, its **own** async engine + sessionmaker from `POSTGRES_*` env (never the test conftest),
   `PASS:`/`FAIL:` prints, a `_FAILURES` counter, `main()` returning non-zero, and a `finally` cleanup
   making it re-runnable. **Drive the REAL service through the REAL schemas the router sends**
@@ -1245,6 +1251,22 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   mirroring `delete_phase`'s cascaded-task count. The FE hook types the result `void`, so both are
   satisfied.
 
+- **Task 16 — the membership rule is genuinely ONE implementation.** `assignments.py` imports
+  `require_project_members` from `tasks.py`; a grep proved exactly one `def` and one copy of each of
+  the two 422 messages across the whole FLAN package. Two divergent copies of "assignees are drawn
+  from the project roster" is how that rule quietly stops being enforced on one of the two paths.
+  Left in `tasks.py` per its own docstring — this is the second caller, not the third.
+- **Task 16 — `set_*_assignees` returns the ids read back from the DB after commit**, ordered by
+  `member_id`, matching `tasks.py::_load_assignees` so the response equals a subsequent `GET`. The
+  plan named no return type; this is what makes its "setting `[]` … returns an empty list" literal.
+- **Task 16 — `tasks.py::_replace_assignees` was deliberately NOT reused.** It is module-private and
+  task-only; `assignments.py` has one generic `_replace_assignee_rows(model, target_field, …)`
+  serving both join tables. Only the *validation rule* is shared, as instructed — the row write
+  carries no business rule.
+- **Task 16 — both paths verified independently, not assumed symmetric.** Phases and tasks each got
+  their own cross-project-422, clear-to-empty and idempotency checks. A bug in one is invisible from
+  the other.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1355,3 +1377,8 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   built *before* the call from `PhaseRead.task_count`, and `useDeletePhase` types the result `void`.
   The returned count is used only by the router's audit detail (Task 17). Not a defect — a redundancy
   worth knowing before someone "simplifies" the return away.
+
+- **⚠ Any script touching `flan_team_member` outside the app must import `app.modules.auth.models`
+  first**, or SQLAlchemy raises `NoReferencedTableError` resolving `flan_team_member.user_id →
+  users.id`. Task 27/28's `verify_flan.py` text has been amended in place to require it. This is the
+  cross-module FK-resolution trap the LEARNINGS keeper warns about, arriving exactly where predicted.
