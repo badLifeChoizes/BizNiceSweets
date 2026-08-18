@@ -12,9 +12,13 @@ before tagging.
 
 - [x] **GAP-1** (blocker-to-close) — amend DoD clause C4 in `PROJECT.md` + `ROADMAP.md` to match
       D-P5-11; record the accepted cost as D-M4-4
-- [ ] **GAP-2** (major) — `execute_pick` outside the lock discipline: sort lines by `item_id`
+- [x] **GAP-2** (major) — `execute_pick` outside the lock discipline: sort lines by `item_id`
       (kills the reproduced deadlock) + lock the SO row (kills the duplicate open shipment);
-      both mutation-pinned as `verify_gelato_ship.py` barrier scenarios
+      both mutation-pinned as `verify_gelato_ship.py` barrier scenarios (i) and (j). Isolation
+      mutation proof on live PG: drop only the SO `FOR UPDATE` → (i) RED `shipments_for_so=[101,
+      102]`, (j) green; drop only `prepared.sort(...)` → (j) RED
+      `asyncpg.exceptions.DeadlockDetectedError`, (i) green; both restored → 23/23 PASS.
+      Gate: 17/17 non-API `verify_*` exit 0, `pytest -q` 245 passed, `ruff check .` exit 0
 - [ ] **GAP-3** (major) — CI job running the 9 `verify_*_api.py` scripts (161 assertions,
       currently zero coverage anywhere, incl. the financial-reporting HTTP surface)
 - [ ] **GAP-4** (major) — push the audited tip, get CI green, merge the v4.0 stack to `master`
