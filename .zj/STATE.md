@@ -10,8 +10,11 @@ flight** — the last Wave A task. Next after it: Wave B (service + router), tas
 with 7 and 8 (Pydantic schemas) as a parallel pair.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
-`### [ ]`** — re-run any in-flight task from scratch rather than trusting a partial edit. An
-uncommitted `backend/alembic/versions/0018*.py` in the tree is Task 6 mid-write.
+`### [ ]`** — re-run any in-flight task from scratch rather than trusting a partial edit. Any
+uncommitted file under `backend/alembic/versions/` is Task 6 mid-write — note that **autogenerate
+names it by hash first** (e.g. `6708ad70a037_flan_core.py`), and renaming it to `0018_flan_core.py`
+with plain `"0018"` / `"0017"` revision strings is part of the task, so do not go looking for a
+`0018*.py` that does not exist yet. Delete the stray hash-named file and re-run Task 6.
 
 **Verified live at Wave A close (manager, not taken on report):** all eight `flan_*` tables in
 `Base.metadata`; `registry` lists `flan` among seven modules; a full `down`/`up` cold boot is clean
