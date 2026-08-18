@@ -5,66 +5,66 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** Wave A complete (1-6). **14 of 35 tasks done** — Wave B at 7/12 (7, 8, 9, 10, 11,
-12) plus Wave C's 19 and 20. In flight: **13** (numeric-safe key generator) and **21** (FLAN nav +
-project switcher).
+**Current task:** **21 of 36 tasks done** (the plan is now 36 — Task **22a** was added at build by
+owner decision, see below). Wave A complete (1-6). **Wave B's SERVICE LAYER IS COMPLETE** (7-16);
+only the two router tasks remain in that wave. Wave C has 19, 20, 21, 22, 23 done.
 
-**⚠ Wave C screens 22-25 are HELD until Tasks 17-18 land** (manager decision). Their Done-when
-asserts the create dialogs POST "the exact payload shape the router accepts", and `router.py` is
-still the Task 5 stub — there is no router to be exact against, and a screen test written to a
-guessed shape is the 11a/11b defect with a green test on top. Tasks 19-21 were safe to pull forward
-because their contract is `schemas.py`, which exists. **Finish Wave B (13→18) before resuming 22-25.**
+**In flight:** **17** (project + phase endpoints, `router.py`) and **24** (Tasks screen).
 
-**Next:** 12 → 13 → 14 → 15 → 16 → 17 → 18, then the rest of Wave C. **Scheduling constraint:**
-tasks 10, 12, 13, 14, 15, 16 **all touch `service/__init__.py`**, so they cannot run concurrently
-with one another — pair each with a frontend task instead. Tasks 19 and 20 share `hooks.ts` and also
-serialize against each other; 22-25 are four genuinely independent screen files and are the real
-parallel opportunity in Wave C.
+**Next:** **18** (the remaining twelve routes — same `router.py`, so it SERIALIZES behind 17), then
+**22a** and **25** on the frontend, then **26**, then Wave D (27-33) and Wave E (34-35).
 
-**Task 20 carries the plan's top-listed risk.** Every one of `useCreateTask`, `useUpdateTask`,
-`useDeleteTask` and `useSetTaskAssignees` must invalidate **`phasesKey(projectId)`**, because a task
-write changes its phase's derived dates and %. Miss one and the Phases screen serves stale derived
-values while the backend is correct — the 11a/11b "green backend, dead through the UI" class. Note
-the plan's own Verify for that task (`grep -c "phasesKey"`) is a **count**, which cannot show *which*
-hooks invalidate; the brief requires a per-hook listing instead.
+**Wave C screens are released per-screen as their SERVICE layer is verified**, not as a block — a
+screen's payload shape is settled by `schemas.py` plus its service contract, since the router is thin
+and adds paths, not shapes. All four services are now verified, so **22, 23, 24, 25 and 22a are all
+released**. Each released screen's brief requires checking its POST/PATCH body against the real
+`model_fields`, so a key the schema lacks is caught at build rather than as a production 422 a mocked
+test would never see.
 
-**⚠ THE CRUX IS BUILT AND ITS VERIFICATION WAS FIXED.** Task 11 (`service/rollup.py`, `ffdbc01`) is
-done: one grouped query proven by a cursor tap counting statements (1, not N+1), `MIN`/`MAX` not
-first/last inserted, NULL dates skipped, and `flan_phase` stores none of the three derived columns.
-All three of Task 29's mutations were pre-run and each turned RED, file restored.
+**⚠ OWNER DECISIONS taken mid-build (both binding):**
+1. **Task 22a added — FLAN-01.1's "edit" verb was covered by NO task.** The criterion reads
+   "Create/view/**edit**/archive a project"; Tasks 22-26 built create, view and archive only. Phases,
+   Tasks and Team each got an edit dialog; Project was the sole omission, while `update_project` and
+   `useUpdateProject` sat verified and uncalled. The owner chose to close it in-phase rather than
+   narrow the SRD. **Without 22a, verify could not honestly mark FLAN-01 complete.**
+2. **No reactivation path for a soft-removed roster member, deliberately.** FLAN-01.4 does not ask
+   for one; the row and its history survive, so a later phase can add it additively. Recorded in
+   `roster.py`'s module docstring so the omission reads as a decision.
 
-**But Task 27's scenario A0 was amended in place, and this is the single most important carry-forward
-of the phase.** As the plan originally wrote it, A0 asserts the empty phase via a **solo**
-`phase_rollups(db, [empty_phase_id])` — which is **immune to Task 29's mutation 3**: with a
-one-element batch, `phase_ids[0]` *is* the empty phase, so the mutated fall-through returns the empty
-shape and the assertion stays GREEN while the code is broken. Task 11's engineer hit it on their
-first run. A0 now **requires the empty phase be asserted inside a batch where a non-empty phase comes
-first**. The amendment is written into Task 27's own text in `PLAN.md`, not only into Deviations.
+**⚠ DEFECT FOUND AND FIXED IN-BUILD (`5b3d09f`).** `useDeletePhase` invalidated only `phasesKey`, but
+`flan_task.phase_id` is `ondelete="CASCADE"` — deleting a phase destroys its tasks, so the Tasks
+screen would have gone on listing rows that no longer exist. Same stale-cache class as the plan's
+top-listed risk but on the **delete** path, which that risk row covers only for writes. **Carry into
+LEARNINGS as a widening: _a cascade is a write to a table you did not name._**
 
-**Engineers no longer touch `docs/tasks/feature-flan-core.md` — the manager owns it** (two parallel
-engineers collided on it; one swept the other's tick into commit `cde26d9`).
+**⚠ FOUR PLAN DEFECTS CAUGHT IN-BUILD, all amended in place in `PLAN.md`** — each found by an
+engineer *running* the thing rather than reading it, which is the argument for demanding pasted
+output over "DONE":
+1. **Task 27's A0 was vacuous** — asserting the empty phase via a solo `phase_rollups([id])` is
+   immune to Task 29's mutation 3, because `phase_ids[0]` *is* the empty phase. The phase's headline
+   crux had a check that would pass while broken. A0 now requires a batch with a non-empty phase first.
+2. **Task 14's Done-when contradicted D-V5P1-7** — it required `^<PREFIX>-\d{4,}$`, the pre-decision
+   *padded* form, so `PRJ-1` would have failed its own acceptance check. Now `\d+`.
+3. **Task 14 would have silently dropped `assignee_ids` and `tags`** — the schemas accept both; the
+   task text described only the insert. Amended to require consumption **and** a
+   `TaskRead.model_validate` round-trip.
+4. **Task 15's `user_id` conflict rule would have 500'd** — `uq_flan_member_project_user` has no
+   `active` predicate, so the plan's "refuse only if an *active* member links it" passes the service
+   check and then raises `IntegrityError` at flush. Widened to refuse both cases.
 
-**⚠ The plan's Verify lines have now been weaker than the property twice — check the rest.**
-(1) Task 27's A0 asserted the empty phase in a way Task 29's mutation 3 could not detect (amended in
-place). (2) Task 20's Verify is `grep -c "phasesKey"` — a *count*, which cannot show *which* hooks
-invalidate; four need it, and a file with four mentions passes regardless. Treat the remaining Verify
-commands in Waves C and D as drafts to check, not gates to trust.
+**⚠ A VERIFICATION-INTEGRITY HAZARD.** `podman run --rm` **without `-i`** leaves stdin unattached, so
+a `python -` heredoc reads an empty program, prints nothing and **exits 0** — indistinguishable from
+a real pass in a transcript. Every task using that idiom must pass `-i`.
 
-**⚠ Open trap for Task 14.** `TaskCreate` accepts `assignee_ids` and `tags`, but the plan's Task 14
-spec never says `create_task` consumes them. If it does not, the API accepts both and silently drops
-the data — the "green backend, dead through the UI" class that shipped in 11a and 11b. Task 14's
-brief must require both applied and asserted. Same trap handled for Task 10's project tags.
-
-**Owner decision pending (not blocking):** there is **no reactivation path for a soft-removed roster
-member**. Task 8 correctly omitted `active` from the roster write schemas — a PATCH flipping
-`active=False` alone would orphan the assignment rows D-V5P1-6 requires be deleted in the same
-transaction. FLAN-01.4 does not ask for reactivation, so it is out of scope as built, but the roster
-UI (Task 25) will set an expectation either way.
+**⚠ Wave D input:** `verify_flan.py` must `import app.modules.auth.models` before touching
+`flan_team_member`, or SQLAlchemy raises `NoReferencedTableError` on the `user_id → users.id` FK.
+Amended into Task 27's text. Do **not** copy `verify_gelato.py`'s header — it documents the wrong
+container and psql role.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
 `### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An
-uncommitted `service/keys.py` + `service/__init__.py` is Task 13 mid-write; untracked files under
-`frontend/src/routes/flan/components/` are Task 21.
+uncommitted `router.py` is Task 17 mid-write; untracked `frontend/src/routes/flan/Tasks.tsx` or
+`components/TaskSheet.tsx` is Task 24.
 
 **Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
 `flan_*` tables; all five load-bearing constraint shapes in the database (`flan_task.phase_id`,
