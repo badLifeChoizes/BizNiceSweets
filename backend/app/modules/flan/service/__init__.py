@@ -46,6 +46,12 @@ from app.modules.flan.service.rollup import (
     PhaseRollup,
     phase_rollups,
 )
+from app.modules.flan.service.roster import (
+    create_member,
+    list_members,
+    remove_member,
+    update_member,
+)
 from app.modules.flan.service.tasks import (
     create_task,
     delete_task,
@@ -78,6 +84,12 @@ __all__ = [
     # rollup — phase-derived dates and % complete (D-V5-1)
     "PhaseRollup",
     "phase_rollups",
+    # roster — team-member CRUD and the soft-remove that clears assignments
+    # (FLAN-01.4, D-V5P1-6)
+    "create_member",
+    "list_members",
+    "remove_member",
+    "update_member",
     # tasks — task CRUD (FLAN-01.3) + the shared roster-membership guard
     # every assignee write validates against (FLAN-01.5)
     "create_task",
