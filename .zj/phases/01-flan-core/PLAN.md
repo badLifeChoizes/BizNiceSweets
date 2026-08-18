@@ -426,7 +426,7 @@ assert str(_percent(0,3))=='0.00' and str(_percent(1,3))=='33.33' and str(_perce
 print('ok')" && .venv/bin/ruff check .`
 - **Parallel-ok:** no
 
-### [ ] 12. Implement phase CRUD with delete-cascades-to-tasks
+### [x] 12. Implement phase CRUD with delete-cascades-to-tasks
 - **Serves:** FLAN-01.2
 - **Files:** `backend/app/modules/flan/service/phases.py` (new),
   `backend/app/modules/flan/service/__init__.py`
@@ -1120,6 +1120,16 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   11a/11b defect with a green test on top. Tasks 19, 20 and 21 were safe to pull forward because
   their contract is `schemas.py`, which exists.
 
+- **Task 12 — `list_phases` does NOT 404 on an unknown project id**, returning `[]` instead. This
+  matches the house idiom for parent-scoped list functions (`crumb/service/interactions.py::
+  list_customer_timeline`, `crumb/service/quotes.py::list_quotes`) and a 404 was not in the task
+  text. **Task 17's router may want the 404 at its own layer** — flagged there rather than decided
+  here.
+- **Task 12 — `delete_phase` uses a Core `delete(Phase).where(...)`** rather than
+  `db.delete(orm_obj)`, matching the plan's literal `DELETE FROM flan_phase WHERE id = :id`.
+  Behaviourally identical (`Phase` declares no ORM relationships), but it keeps the cascade
+  unambiguously the **database's**, which is the property the live check proves.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1200,3 +1210,8 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   *default* listing, which implies a non-default exists; the service signature
   (`list_members(db, project_id, include_removed=False)`) already supports it. If the roster UI needs
   to show removed members, the param must be added to the endpoint **and** to `teamKey`.
+
+- **`backend/scripts/verify_gelato.py` documents the wrong container and psql role** — it names
+  `compose_api_1` and `psql -U postgres`, but the role `postgres` does not exist on this database
+  (the compose user is `app`). A pre-existing doc defect in a shipped script, same family as the
+  plan's Context errors. Anyone following that script's header verbatim gets an auth failure.
