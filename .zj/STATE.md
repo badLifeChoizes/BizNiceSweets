@@ -49,9 +49,15 @@ concurrent pack just flipped to `packed`); module enable/disable has no server-s
 ```
 Sharpen the v5.0 DoD into clauses and expand FLAN-01 into numbered requirements, then `/zj:plan 1`.
 
-*(One open item first if you want it clean: the roll-forward branch `chore-v4-close-rollforward`
-needs its PR merged to master — the branch protection applied at close means even docs go through
-CI now.)*
+*(One open item first if you want it clean: **PR #6** from `chore-v4-close-rollforward` carries
+this roll-forward plus the archived milestone-close checklist and needs merging to master — the
+branch protection applied at close means even a docs-only change now goes through all six checks,
+admins included. Nothing in `.zj/` depends on it landing; `/zj:spec` can start either way.)*
+
+*Noticed at close, not acted on (out of scope, owner's call): three v4.0 phase task files were
+never archived and still sit in `docs/tasks/` as if active — `chore-ci-pipeline.md`,
+`chore-port-verify-cruxes.md`, `chore-pytest-harness-repair.md`. All three phases are closed and
+tagged.*
 
 ---
 ## Prior state (v4.0 Phase 5 retro, 2026-08-18)
