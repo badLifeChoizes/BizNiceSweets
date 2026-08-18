@@ -324,7 +324,7 @@ UI or service list that orders by key must sort on the **numeric suffix**, not t
 
 ## Wave B — service + router
 
-### [ ] 7. Write the project and phase Pydantic schemas
+### [x] 7. Write the project and phase Pydantic schemas
 - **Serves:** FLAN-01.1, FLAN-01.2
 - **Files:** `backend/app/modules/flan/schemas.py` (new)
 - **Do:** Mirror `backend/app/modules/gelato/schemas.py` (ConfigDict `from_attributes=True`, field
@@ -363,7 +363,7 @@ except ValidationError: pass
 TaskCreate(phase_id='p', summary='x', start_date=date(2026,1,10), due_date=date(2026,1,10)); print('ok')"`
 - **Parallel-ok:** yes (with Task 7)
 
-### [ ] 9. Build the flan service package skeleton with the archived-project guard
+### [x] 9. Build the flan service package skeleton with the archived-project guard
 - **Serves:** FLAN-01.1
 - **Files:** `backend/app/modules/flan/service/__init__.py` (new),
   `backend/app/modules/flan/service/_common.py` (new)
@@ -992,6 +992,29 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   container-root to the host UID under rootless podman and writes host-owned files. Confirmed: the
   generated file landed `zack:zack`, and `find . ! -user zack` came back empty.
 
+- **Tasks 7/9 — the shared checklist file is a contention point, so the MANAGER now owns it.**
+  Task 9's engineer ticked item 9, then Task 7's engineer staged
+  `docs/tasks/feature-flan-core.md` wholesale and swept that tick into commit `cde26d9` alongside
+  their own. Net repo state stayed correct and nobody's edit was destroyed, but the attribution is
+  wrong and a future collision could silently revert a tick. **From Task 8 onward, engineers are
+  instructed not to touch the checklist at all**; the manager ticks it after verifying.
+- **Task 7 — `ProjectUpdate` carries `tags` too.** The plan names tags only on `ProjectCreate` and
+  `ProjectRead`, but FLAN-01.1 says a user can *edit* a project, and AC1 lists tags among its
+  fields. `tags: list[str] | None = None` — `None` means "not supplied", a list replaces.
+- **Task 7 — `PhaseRead.percent_complete` has a `mode="before"` validator** formatting a `Decimal`
+  to `f"{v:.2f}"`. Task 11's rollup returns a `Decimal`; without this every call site would have to
+  stringify. A `float` is still refused by the `str` annotation, so D-11 is enforced rather than
+  weakened.
+- **Task 7 — `PhaseCreate` deliberately has no `project_id`.** Task 17's route is
+  `POST /flan/projects/{project_id}/phases`, so the service takes it from the path and never from
+  the client. Task 12's `create_phase` therefore takes `project_id` as an argument.
+- **Task 9 — `get_project_or_404` does NOT check the archive flag**, by design and documented:
+  reads of an archived project must keep working. Only `require_writable_project` guards, and the
+  live probe proved all three arms (live → passes, archived → 422, missing → 404).
+- **Task 9 — `resolve_phase`/`resolve_task` return a 2-tuple** `(row, project_id)`; the plan said
+  "the row and its owning project id" without fixing a shape. `resolve_task` reads the denormalized
+  `Task.project_id` directly rather than joining through `flan_phase`.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1034,3 +1057,9 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
 - **`backend/tests/conftest.py:290` emits a `SAWarning`** about an unresolvable FK cycle between
   `crumb_lead` and `crumb_opportunity`, which SQLAlchemy says "may raise an error in a future
   release." Benign today; a version-bump tripwire.
+
+- **`status.HTTP_422_UNPROCESSABLE_ENTITY` is deprecated in the pinned Starlette.** `backend/app/`
+  has **99** uses of the old name and **0** of the replacement `HTTP_422_UNPROCESSABLE_CONTENT`.
+  Task 9 matched the existing 99 for consistency rather than starting a split convention. A
+  repo-wide rename wants its own chore commit — and it will become forced, not optional, on the next
+  Starlette major.
