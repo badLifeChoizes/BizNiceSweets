@@ -1,5 +1,20 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-07-20 (**v3.0 SHIPPED to master** via PR #3 (FF `3b762ba..87fb79d`, SHAs preserved) —
+Updated: 2026-08-18 (**Milestone v4.0 "Infra-debt + quality paydown" CLOSED + tagged `v4.0`** at
+`6549142` on **master** — and this time the tag is on master, not a branch: the whole v4.0 stack
+merged via PR #5 (CI 6/6 green), clearing **four consecutive milestones** of master-merge debt.
+Until that merge `origin/master` carried **no `.github/` at all**, so a fresh clone got none of
+v1.0→v4.0's hardening (audit GAP-4). DoD audited goal-backward (`.zj/MILESTONE-v4.0-AUDIT.md`):
+**GAPS FOUND — 1 blocker-to-close, 3 major, 4 minor** against a milestone whose every phase had
+already passed verification. **All eight fixed at close.** C2 MET; C1/C3/C5 PARTIAL→closed; **C4
+was NOT MET on its literal wording and the clause was amended** (D-M4-4) to match NFR-8 and
+PRD-12, which D-P5-11 had already moved — `.zj/QA.md` §6 holds zero readings, so **v4.0 ships with
+no human-exercised UI evidence, on the record**. Headline gap: `execute_pick`, the last ledger
+writer outside the NFR-7 lock discipline, with **both** failure modes reproduced under a barrier
+(two open shipments + a lost `qty_picked` update; deadlock 6/6) — fixed `4dc3154`, each half
+mutation-proven in isolation. Branch protection now requires **all six** jobs with
+`enforce_admins: true`. Phases 1/2a/2b/3/4/5 archived to `.zj/history/v4.0/`.
+**Next milestone = v5.0 FLAN port (D-M5-1).** Next action: `/zj:spec` then `/zj:plan 1`.)
+Prior: 2026-07-20 (**v3.0 SHIPPED to master** via PR #3 (FF `3b762ba..87fb79d`, SHAs preserved) —
 `/zj:ship`; the standing master-merge debt is cleared. **v4.0 "Infra-debt + quality paydown" spec'd** —
 DoD confirmed into 5 clauses, NFR-4..8 written under new PRD-12, phase→FR mapping proposed (D-M4-1..3).
 Next: `/zj:plan 1`.)
@@ -395,7 +410,7 @@ floor-guarded path (issue/adjust/receive/transfer/**ship**) rather than a per-mo
 
 ---
 
-## v4.0 — Infra-debt + quality paydown  [pending — chosen 2026-07-19 (D-M3-3); spec'd 2026-07-20 (D-M4-1..3)]
+## v4.0 — Infra-debt + quality paydown  [done — closed 2026-08-18, tag `v4.0` at `6549142` on master]
 
 Owner chose this as the milestone after v3.0 (over the FLAN port and PLUM-advanced): correctness has
 rested entirely on the standalone `verify_*` scripts + Vitest for **three** milestones while the p1
@@ -435,10 +450,41 @@ the human UAT (5) runs last against the fully-hardened stack.
 
 ---
 
-## Later milestones (unordered candidates — sequence at v4.0 close)
+## v5.0 — FLAN port  [pending — chosen 2026-08-18 (D-M5-1)]
 
-- **FLAN port** (FLAN-01) — retire the second frozen prototype.
+Owner chose this at the v4.0 close over Quality & release, PLUM-advanced and a consolidation
+milestone. FLAN is the **last frozen prototype**: `flan/app/prj-mgmt-v24.html` (~11.5k lines) still
+holds proven domain logic that exists nowhere on the platform. Porting it closes the chapter the
+re-platform opened in v1.0 and leaves no suite running outside the stack.
+
+**Definition of done (owner-approved 2026-08-18, D-M5-2 — traces PRD-6):** *"Can create a project
+with phases and tasks, assign team members, track a timeline and a budget, and see project cost
+roll up from SYERP actuals — with `flan/app/prj-mgmt-v24.html` retired as a reference."*
+
+**Why the hub clause is in scope (D-M5-2):** a straight parity port was offered and declined. One
+real foreign key to SYERP is what made CRUMB and GELATO land as suite *members* rather than
+islands; a FLAN that only talks to itself would be the eighth thing to integrate later. Cost
+roll-up from SYERP actuals is the smallest clause that forces it.
+
+**Deliberately OUT:** labor/time capture against tasks and its costing (it couples FLAN's and
+PLUM's costing models in one milestone, and unblocking PLUM-13 is not a v5.0 goal). CRISP-01 and
+NFR-3 offline stay deferred — they remain PRD-9/PRD-10.
+
+**Phase mapping:** to be proposed at `/zj:spec`. Expect a sub-split in the 9a/b/c and 11a/b shape:
+the domain port (projects → phases → tasks → team) is separable from the timeline/budget surface
+and from the SYERP cost roll-up, and the third depends on the first two.
+
+**Standing debt carried in, not scheduled:** the human QA checklist stays unrun by design
+(BACKLOG p1, `.zj/QA.md` §6); pick-path race **Q2** is still open (p2 — a pick can append to a
+shipment a concurrent pack just flipped to `packed`); module enable/disable has no server-side
+gate (p2); `plum/service.py` is ~3,000 lines and wants splitting before FLAN adds a suite;
+`.zj/codebase/MAP.md` is stale (generated 2026-07-04, pre-v2.0).
+
+---
+
+## Later milestones (unordered candidates — sequence at v5.0 close)
+
+- **Quality & release** (CRISP-01, NFR-3 offline, license audit, public open-source release prep)
+  — turns the hardened foundation outward toward the outside contributors PRD-12 was written for.
 - **PLUM advanced** (PLUM-11..16) — documents, ECO workflow, labor costing, cost ranges,
   distributor pricing.
-- **Quality & release** (CRISP-01, NFR-3 offline, license audit, public open-source release
-  prep) — partially pulled forward into v4.0 if scoped there at `/zj:spec`.

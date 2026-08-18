@@ -1,75 +1,63 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-18 (**`/zj:milestone` IN PROGRESS — v4.0 close, mid-flight. Not yet tagged.**)
+Updated: 2026-08-18 (**Milestone v4.0 CLOSED + tagged `v4.0` at `6549142` on master.**
+Milestone v5.0 "FLAN port" chosen and its DoD owner-approved. `.zj/phases/` is empty.)
 
-## Position: milestone v4.0 close, step 3 of 5
+## Position: between milestones — v5.0 not yet spec'd
 
-All six phases (1, 2a, 2b, 3, 4, 5) are `[verified]`. The close audit ran and returned
-**GAPS FOUND — 1 blocker-to-close, 3 major, 4 minor** (`.zj/MILESTONE-v4.0-AUDIT.md`).
-Clause verdicts: **C2 MET · C1/C3/C5 PARTIAL · C4 NOT MET**.
+**v4.0 "Infra-debt + quality paydown" is closed.** Six phases (1, 2a, 2b, 3, 4, 5), 187 commits,
+~31.0 h across 15 sessions, 2026-07-20 → 2026-08-18. No new end-user capability — CI on every push,
+both lint gates at a zero-violation baseline, the inventory ledger race-safe across every writer,
+and a standing requirement-keyed QA checklist.
 
-**Owner triage (this session):** amend the C4 DoD clause; fix **all** gaps; push → CI green →
-merge to `master` → tag there. Checklist: `docs/tasks/chore-human-uat.md`.
+**The close audit returned GAPS** (`.zj/MILESTONE-v4.0-AUDIT.md`) against a milestone whose every
+phase had already passed verification: 1 blocker-to-close, 3 major, 4 minor. **All eight fixed.**
 
-### Done
-- **GAP-1** (blocker-to-close) — DoD clause C4 amended in PROJECT.md + ROADMAP.md to "has a
-  **documented, runnable** human check", matching D-P5-11 (which had already moved NFR-8's
-  Statement and PRD-12's acceptance signal but left the DoD sentence as the last unamended copy).
-  Accepted cost stated out loud: v4.0 ships with **no** human-exercised UI evidence. `e28d720`
-- **PLUM-01** re-stamped `a88431c` → `ad05c7a` (stale-verified flag cleared; only post-stamp change
-  was semantically-inert ruff autofix `d2b9b9c`). `e28d720`
-- **DECISIONS.md index** regenerated 148 → 167 entries, verified to match the body exactly. `e28d720`
-- **Doc truth-up** — README.md (8 months stale: four shipped suites listed "Planned", "no build
-  tools or dependencies required", no mention of Podman/`.env`/`.env.db`) and
-  requirements-progress.md (still claimed the PLUM tests "have never actually run"). `e28d720`
-- **Work log** `.zj/logs/milestone-v4.0.md` + **LEARNINGS "Milestone v4.0"** roll-up. `e9ffccb`
+- **C4 was amended, not met** (D-M4-4). `.zj/QA.md` §6 holds **zero readings** — v4.0 ships with
+  **no human-exercised UI evidence**, deliberately and on the record. The p1 backlog item stays open.
+- **GAP-2** — `execute_pick` was the last ledger writer outside the NFR-7 lock discipline, because
+  NFR-7's Statement never listed `pick` (D-M4-5). Both modes reproduced under a barrier; fixed
+  `4dc3154` with each half mutation-proven in isolation.
+- **GAP-4** — the merge cleared **four consecutive milestones** of master-merge debt. Until PR #5,
+  `origin/master` carried **no `.github/` at all**.
+- Branch protection now requires **all six** jobs (`frontend`, `backend-lint`, `backend-tests`,
+  `verify-scripts`, `verify-scripts-api`, `container-image`) with `enforce_admins: true`.
 
-- **GAP-2** (major) — **FIXED `4dc3154`.** `execute_pick` was the last ledger writer outside the
-  NFR-7 discipline. Both modes had been reproduced under a barrier; the fix locks the SO row
-  `FOR UPDATE` before the shipment get-or-create and moves lines in sorted item-id order after a
-  pure-read validation pass. **Each half proven load-bearing in isolation** (drop only the lock →
-  scenario (i) RED `shipments_for_so=[101, 102]`; drop only the sort → (j) RED
-  `DeadlockDetectedError`; both restored → 23/23 PASS). Also fixed an unnamed lost `qty_picked`
-  update. Gate: 17/17 non-API `verify_*`, pytest 245/0-skipped, ruff clean.
-- **NFR-7 trued up + `zj doctor` now 0 errors** (`233ef70`) — the Statement had never listed
-  `pick`, which is exactly how `execute_pick` passed Phase 4 verification. Amended (D-M4-5),
-  Evidence added, status → `implemented`, re-stamped to `4dc3154`. BACKLOG: the unsorted-locks item
-  CLOSED; the Q1/Q2 item **half**-closed (Q1 fixed, **Q2 still open** — a pick can still append to
-  a shipment a concurrent pack flipped to `packed`; the SO lock does not close it); new p3 filed
-  for GELATO's missing list-shipments-for-an-SO route.
+**Records:** `CHANGELOG.md` v4.0 section · `.zj/logs/milestone-v4.0.md` · `.zj/LEARNINGS.md`
+"Milestone v4.0" · `.zj/DECISIONS.md` index regenerated (171, matches body exactly) ·
+phases archived to `.zj/history/v4.0/phases/`. `zj doctor`: **0 errors**.
 
-### All eight audit gaps CLOSED
-- **GAP-3/6/8** (`a962a79`) — new glob-driven `verify-scripts-api` job (locally **9/9 exit 0,
-  251 PASS assertions**); `container-image` now **boots** the image it builds against
-  `postgres:17-alpine` and probes `/health/ready`; `eslint.config.js` lints itself.
-  **Negative controls executed for all three** — the `syerp:reed` red-demo on
-  `/reports/balance-sheet` (the one thing the audit itself could not run) turns
-  `verify_reports_api.py` RED; dropping `.env.db` reproduces `U0` on demand; the old ESLint
-  config scores 0 problems on a violation the new one catches.
-- **GAP-7** (`5fe324e`) — **two** rows were drifted, not the one the audit named: NFR-8
-  (`planned` vs SRD `verified`) and NFR-7 (`verified` vs SRD `implemented` — drifted by this
-  close's *own* SRD edit, which is exactly the recurrence the check now stops).
-  `verify_qa_doc.py` gained scenario 5 cross-checking all **47** status cells, first-word-only so
-  MOUSSE-01/GELATO-01's faithful prose does not false-positive. Mutation-proven RED→GREEN.
-- **CHANGELOG** v4.0 section generated from commits (`9b4ebc5`).
+## Next milestone: v5.0 — FLAN port (D-M5-1)
 
-### GAP-4 in progress — the merge
-Branch **pushed** (`67edf3e..9b4ebc5`); the audited tip had never been pushed, so CI had never
-seen it. **CI run `32155100303` is in flight** on `9b4ebc5` — the first real exercise of the two
-new jobs. Local gates before push: `verify_qa_doc` + `verify_qa_citations` + `ruff` + `npm run
-lint` all exit 0.
+**DoD (owner-approved, D-M5-2 — traces PRD-6):** *"Can create a project with phases and tasks,
+assign team members, track a timeline and a budget, and see project cost roll up from SYERP
+actuals — with `flan/app/prj-mgmt-v24.html` retired as a reference."*
 
-### Remaining
-1. CI green on `9b4ebc5` → fresh PR `chore-human-uat` → `master` (PR #4 is stale, 180+ commits
-   behind) → merge. `origin/master` = `9903f1f`, still with **no `.github/` at all**.
-2. **GAP-5** — branch protection: add `container-image` + `verify-scripts-api` to required
-   contexts, `enforce_admins: true`. **AFTER the merge** — a required context that has never
-   reported on `master` would block the v4.0 PR itself.
-3. Tag `v4.0` on `master`; archive `.zj/phases/` → `.zj/history/v4.0/phases/`; roll ROADMAP +
-   PROJECT (new DoD, owner-approved) forward; reset this file.
+A straight parity port was offered and declined — the SYERP cost roll-up clause is what makes FLAN
+land as a suite member rather than an island. Labor/time capture is **out**; CRISP-01 and NFR-3
+offline stay deferred (PRD-9/PRD-10). A 9a/b/c-shaped sub-split is expected at plan.
+
+**Carried in as standing debt, not scheduled:** the human QA checklist is unrun by design
+(BACKLOG p1); pick-path race **Q2** is still open (p2 — a pick can append to a shipment a
+concurrent pack just flipped to `packed`); module enable/disable has no server-side gate (p2);
+`plum/service.py` is ~3,000 lines and wants splitting **before** FLAN adds a suite;
+`.zj/codebase/MAP.md` is stale (generated 2026-07-04, pre-v2.0).
 
 ## Next action
 
-Resume `/zj:milestone` — waiting on CI run `32155100303`; then merge, harden protection, tag.
+```
+/zj:spec
+```
+Sharpen the v5.0 DoD into clauses and expand FLAN-01 into numbered requirements, then `/zj:plan 1`.
+
+*(One open item first if you want it clean: **PR #6** from `chore-v4-close-rollforward` carries
+this roll-forward plus the archived milestone-close checklist and needs merging to master — the
+branch protection applied at close means even a docs-only change now goes through all six checks,
+admins included. Nothing in `.zj/` depends on it landing; `/zj:spec` can start either way.)*
+
+*Noticed at close, not acted on (out of scope, owner's call): three v4.0 phase task files were
+never archived and still sit in `docs/tasks/` as if active — `chore-ci-pipeline.md`,
+`chore-port-verify-cruxes.md`, `chore-pytest-harness-repair.md`. All three phases are closed and
+tagged.*
 
 ---
 ## Prior state (v4.0 Phase 5 retro, 2026-08-18)

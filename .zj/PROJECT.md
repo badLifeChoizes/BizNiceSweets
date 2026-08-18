@@ -17,15 +17,15 @@ one shop can actually deploy and operate on its own.
 
 ## The Seven Suites
 
-| Suite | Domain | Status (2026-07-19, post-v3.0) |
+| Suite | Domain | Status (2026-08-18, post-v4.0) |
 |-------|--------|--------------------------------|
 | SYERP | ERP — partners, inventory, POs, GL, AP, **AR**, reporting — **the hub** | Core (Phase 4) + operations (Phases 8/9: inventory, purchasing, double-entry GL, AP, statements) + **accounts receivable shipped (SYERP-13, Phase 13, v3.0: invoice-from-shipment, receipts, AR aging tie-out)** |
 | PLUM | Product Lifecycle Management | Ported + shipped v1.0 (Phases 5–7: parts, revisions, BOM, costing, AVL, import/export). Advanced features (PLUM-11..16) = later milestone |
 | MOUSSE | Manufacturing Execution | Materials-only work-order core shipped (Phase 10, v2.0). Routing/work-centers, labor/overhead, shop-floor view deferred (D-P10-1) |
 | CRUMB | CRM | **Shipped v3.0 (Phases 11a/11b, CRUMB-01 complete):** leads → opportunities → quotes → sales orders with PLUM-derived pricing, communication log, soft-reservation |
 | GELATO | Warehouse Management | **Shipped v3.0 (Phases 12a/12b, GELATO-01):** bins, directed putaway, pick → pack → ship, reservation relief + COGS JE. Lot/serial deferred (D-V3-4) |
-| FLAN | Project Management | HTML prototype only; port deferred to a later milestone |
-| CRISP | Quality Management | Planned (candidate for v4.0 groundwork) |
+| FLAN | Project Management | HTML prototype only — **the last frozen prototype; the v5.0 milestone (D-M5-1)** |
+| CRISP | Quality Management | Planned (deferred out of v4.0, D-M4-1; a Quality & release candidate) |
 
 ## Users
 
@@ -56,36 +56,36 @@ The re-platform is **substantially built** — this is no longer a prototypes-pl
 
 Full codebase detail: `.zj/codebase/MAP.md`.
 
-## Definition of done — current milestone (v4.0 Infra-debt + quality paydown)
+## Definition of done — current milestone (v5.0 FLAN port)
 
-> **Confirmed at `/zj:spec` (2026-07-20, D-M4-1; traces PRD-12), C4 clause amended at close
-> (2026-08-18, D-M4-4):** "The full test suite (integration + unit) runs green in a **GitHub Actions
-> CI** pipeline on every push, both lint gates enforce a zero-violation baseline, the inventory ledger
-> is race-safe across every writer, and every shipped UI flow has a **documented, runnable human
-> check** keyed to the requirement it exercises — so a new deploy is trustworthy without a manual
-> `verify_*` run."
+> **Owner-approved 2026-08-18 at the v4.0 close (D-M5-2; traces PRD-6):** "Can create a project
+> with phases and tasks, assign team members, track a timeline and a budget, and see project cost
+> roll up from SYERP actuals — with `flan/app/prj-mgmt-v24.html` retired as a reference."
 
-> **C4 amendment (D-M4-4, owner at `/zj:milestone`).** The clause originally read "every shipped UI
-> flow **has passed** a documented human click-through". D-P5-11 rewrote NFR-8's Statement and
-> PRD-12's acceptance signal to make the *checklist* the deliverable and the owner's *reading* an
-> ongoing activity — but the DoD sentence was never amended to match, so the milestone audit
-> (`.zj/MILESTONE-v4.0-AUDIT.md`, GAP-1) found C4 NOT MET on its literal wording with `.zj/QA.md` §6
-> holding zero readings. Amended rather than waited on, per the standing `QA docs: non-blocking`
-> preference. **Consciously accepted:** v4.0 ships with **no** human-exercised evidence of any UI
-> flow; the module rows caveated "UI-flow UAT-pending" stay caveated, and BACKLOG p1 "Run the human
-> click-through checklist" stays open by design.
+Chosen at the v4.0 close (D-M5-1) over Quality & release, PLUM-advanced, and a consolidation
+milestone. FLAN is the **last frozen prototype** — ~11.5k lines of proven domain logic that exists
+nowhere on the platform — so porting it leaves no suite running outside the stack and closes the
+chapter the re-platform opened at v1.0.
 
-Chosen 2026-07-19 at the v3.0 close (D-M3-3) over the FLAN port and PLUM-advanced: correctness has
-rested entirely on the standalone `verify_*` scripts + Vitest for **three** milestones while the p1
-infra debt (no CI, broken live-DB pytest harness D-P7-4, both non-functional lint gates) rode unpaid,
-and the shared inventory-ledger row-lock now has multiple writers (BACKLOG p2). Harden the foundation
-before adding more features — **this milestone ships no new end-user capability.** Scope confirmed at
-`/zj:spec`: **NFR-4** (CI), **NFR-5** (pytest harness repair + `verify_*` ported into the suite),
-**NFR-6** (both lint gates fixed-to-clean, D-M4-3), **NFR-7** (shared inventory FOR-UPDATE lock +
-inbound bin-blind fix), **NFR-8** (human UAT). CRISP-01 / offline groundwork deferred (D-M4-1).
-Proposed 5-phase mapping in ROADMAP. **Next: `/zj:plan 1`.**
+A straight parity port was offered and declined: the **SYERP cost roll-up clause is deliberate**.
+One real foreign key to the hub is what made CRUMB and GELATO land as suite members rather than
+islands, and cost roll-up from SYERP actuals is the smallest clause that forces it. **Out of
+scope:** labor/time capture and its costing (couples FLAN's and PLUM's costing models in one
+milestone); CRISP-01 and NFR-3 offline stay deferred as PRD-9/PRD-10. Phase mapping at `/zj:spec`.
+**Next: `/zj:spec`, then `/zj:plan 1`.**
 
 **Shipped milestones:**
+- **v4.0 — Infra-debt & quality paydown.** *"CI green on every push, both lint gates at a
+  zero-violation baseline, the inventory ledger race-safe across every writer, and every shipped UI
+  flow carrying a documented, runnable human check."* **No new end-user capability.** Closed
+  2026-08-18 (tag `v4.0` at `6549142` **on master** — the merge also cleared four milestones of
+  master-merge debt; until then `origin/master` had no `.github/` at all). Audit
+  `.zj/MILESTONE-v4.0-AUDIT.md`: **GAPS FOUND** against a milestone whose every phase had passed
+  verification — 1 blocker-to-close, 3 major, 4 minor, **all eight fixed at close**. Clause C4 was
+  amended (D-M4-4) rather than met: **`.zj/QA.md` §6 holds zero readings, so v4.0 ships with no
+  human-exercised UI evidence, deliberately and on the record.** Headline gap: `execute_pick`, the
+  last ledger writer outside the NFR-7 lock discipline, both failure modes reproduced under a
+  barrier.
 - **v3.0 — Customer & logistics.** *"Can manage customers and a sales pipeline through to orders, fulfil
   those orders from warehouse inventory (bins → pick/pack/ship), and invoice customers with AR posting to
   the GL and AR aging that ties to its 1120 control account."* Two new suites (CRUMB CRM + GELATO WMS) and
