@@ -635,7 +635,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS/frontend && npx vitest run src/routes/flan/Projects.test.tsx`
 - **Parallel-ok:** yes (with Tasks 23-25)
 
-### [ ] 22a. Build the project edit dialog  ⟵ **ADDED AT BUILD (owner decision)**
+### [x] 22a. Build the project edit dialog  ⟵ **ADDED AT BUILD (owner decision)**
 - **Serves:** FLAN-01.1 (the "**edit**" verb, which no planned task covered)
 - **Files:** `frontend/src/routes/flan/components/ProjectEditDialog.tsx` (new),
   `frontend/src/routes/flan/Projects.tsx`, `frontend/src/routes/flan/Projects.test.tsx`
@@ -1289,6 +1289,22 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   *does* have delete, so this is an asymmetry. **Not an acceptance-criteria gap** — FLAN-01.3 lists a
   task's fields and lifecycle, never a delete verb (unlike FLAN-01.1's explicit "archive"). Left as
   built; flagged so it is a known asymmetry rather than an oversight.
+
+- **Task 22a — edit is offered on ACTIVE projects only.** The plan said "a row action" without
+  qualifying it, but `require_writable_project` 422s every write inside an archived project, so an
+  Edit item there could only ever produce an error toast. It sits inside the same `project.active`
+  guard as Archive.
+- **Task 22a — submit is disabled while name, key prefix or currency is blank.** Task 10's
+  `update_project` *skips* an explicit null aimed at those NOT NULL columns, so a "clear this field"
+  click would look saved while nothing changed. Optional fields still clear to `null` — asserted via
+  `category: null` in the PATCH test.
+- **Task 22a — `tags` is deliberately absent from the PATCH body** though it is a `ProjectUpdate`
+  field: the dialog has no tag editor, and supplying `tags` would replace the project's whole tag
+  set. Omitting the key leaves it alone.
+- **Task 22a — the pre-fill mutation check was meaningfully strong.** Blanking the seeding effect
+  turned **three** tests RED, and the pre-fill test asserts two different rows in one test
+  (CRIS/USD/dated/Client vs MANI/EUR/undated/None), so hardcoded defaults cannot satisfy it. Tests
+  went 6 → 9 with all six pre-existing Task 22 tests still passing.
 
 ## Noticed
 

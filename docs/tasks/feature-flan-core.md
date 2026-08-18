@@ -39,7 +39,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 - [x] 20. Add the FLAN task, roster and assignment query hooks — _FLAN-01.3, FLAN-01.4, FLAN-01.5_
 - [x] 21. Build the FLAN nav with the project switcher — _FLAN-01.6 (D-V5P1-3)_
 - [x] 22. Build the FLAN Projects list screen — _FLAN-01.1, FLAN-01.6_
-- [ ] 22a. Build the project edit dialog (ADDED AT BUILD, owner decision) — _FLAN-01.1_
+- [x] 22a. Build the project edit dialog (ADDED AT BUILD, owner decision) — _FLAN-01.1_
 - [x] 23. Build the project Phases screen showing the derived dates and % — _FLAN-01.2_
 - [x] 24. Build the project Tasks screen — _FLAN-01.3, FLAN-01.5_
 - [ ] 25. Build the project Team roster screen — _FLAN-01.4_
