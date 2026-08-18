@@ -342,7 +342,7 @@ UI or service list that orders by key must sort on the **numeric suffix**, not t
 - **Verify:** `cd $BNS/backend && .venv/bin/python -c "from app.modules.flan.schemas import PhaseUpdate, PhaseRead; assert not {'start_date','due_date','percent_complete'} & set(PhaseUpdate.model_fields), PhaseUpdate.model_fields; print('ok')" && .venv/bin/ruff check .`
 - **Parallel-ok:** yes (with Task 8, if the two authors split the file cleanly)
 
-### [ ] 8. Write the task, roster and assignment Pydantic schemas
+### [x] 8. Write the task, roster and assignment Pydantic schemas
 - **Serves:** FLAN-01.3, FLAN-01.4, FLAN-01.5
 - **Files:** `backend/app/modules/flan/schemas.py`
 - **Do:** `TaskCreate` (phase_id, summary required; `key` is **never** client-supplied — the service
@@ -1015,6 +1015,26 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   "the row and its owning project id" without fixing a shape. `resolve_task` reads the denormalized
   `Task.project_id` directly rather than joining through `flan_phase`.
 
+- **Task 8 — `active` is on `TeamMemberRead` only**, not on `TeamMemberCreate`/`TeamMemberUpdate`,
+  though the plan's parenthetical field list names it for all three. Rationale: soft-removal is
+  `DELETE /flan/team/{member_id}`, which must *also* delete the member's assignment rows in the same
+  transaction (D-V5P1-6). A PATCH able to flip `active=False` on its own would leave those rows
+  orphaned — the exact invariant D-V5P1-6 exists to hold. Mirrors Task 7's `ProjectUpdate`, which
+  omits `active` because archiving is its own endpoint. **Consequence: there is no reactivation path
+  for a removed member.** FLAN-01.4 does not ask for one, so this is in scope as built; if one is
+  ever wanted it should be an explicit endpoint, not a PATCH field. Flagged to the owner.
+- **Task 8 — added `_normalize_member_ids`** (strip, order-preserving dedupe, reject blank) on
+  `TaskCreate.assignee_ids`, `TaskUpdate.assignee_ids` and `AssigneeSet.member_ids`. Not in the task
+  text; 12 lines that stop a duplicated id reaching the `(task_id, member_id)` composite PK as a 500
+  during Task 16's full-replacement insert.
+- **Task 8 — `tags` added to `TaskCreate`/`TaskUpdate`/`TaskRead`**, not in the task's field list but
+  required by its binding design points and by `flan_task_tag` existing (D-V5P1-5).
+- **Task 8 — `phase_id` IS on `TaskUpdate`**, since Task 14 allows moving a task between phases of
+  the same project. Only `key` and `project_id` are absent, per the task text.
+- **Manager — extended `schemas.py`'s ABOUTME header** (`9cfbf66`) to name FLAN-01.3/.4/.5. It
+  described the module as project+phase schemas only, stale once Task 8 landed, and sat above Task
+  8's insertion banner so that engineer correctly left it alone.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1063,3 +1083,12 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   Task 9 matched the existing 99 for consistency rather than starting a split convention. A
   repo-wide rename wants its own chore commit — and it will become forced, not optional, on the next
   Starlette major.
+
+- **⚠ `TaskCreate.assignee_ids` and `TaskCreate.tags` can silently no-op.** The schemas accept both
+  at create time, but Task 14's `create_task` spec describes only the insert and the key retry — it
+  never says it consumes them. If the service ignores them the API accepts the fields and quietly
+  drops the data, which is precisely the "green backend, dead through the UI" class that shipped
+  twice in 11a/11b. **Task 14's brief must require both to be applied and asserted.**
+- **No reactivation path exists for a soft-removed roster member** (see the Task 8 deviation above).
+  Out of scope for FLAN-01.4 as written, but a real product gap the owner should decide on before
+  the roster UI (Task 25) sets an expectation.
