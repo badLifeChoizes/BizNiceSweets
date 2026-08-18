@@ -400,7 +400,7 @@ TaskCreate(phase_id='p', summary='x', start_date=date(2026,1,10), due_date=date(
   `cd $BNS/backend && .venv/bin/ruff check . && .venv/bin/python -c "from app.modules.flan.service import create_project, archive_project, list_projects; print('ok')"`
 - **Parallel-ok:** no
 
-### [ ] 11. Implement the phase-derived dates and % rollup  ⟵ **THE CRUX**
+### [x] 11. Implement the phase-derived dates and % rollup  ⟵ **THE CRUX**
 - **Serves:** FLAN-01.2 (D-V5-1)
 - **Files:** `backend/app/modules/flan/service/rollup.py` (new),
   `backend/app/modules/flan/service/__init__.py`
@@ -713,6 +713,13 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
   - **A0 — the empty phase, built FIRST:** a phase with zero tasks →
     `derived_start_date is None`, `derived_due_date is None`, `percent_complete == Decimal("0.00")`,
     `task_count == 0`.
+    **⚠ AMENDED AT BUILD (see `## Deviations`) — A0 MUST assert the empty phase inside a BATCH in
+    which a NON-empty phase comes first**, e.g. `phase_rollups(db, [dated_phase, empty_phase, ...])`.
+    A solo `phase_rollups(db, [empty_phase_id])` is **vacuous against Task 29's mutation 3**: when
+    the batch holds only the empty phase, `phase_ids[0]` *is* that phase, so the mutated
+    fall-through returns the empty shape anyway and the assertion stays GREEN. Task 11's engineer
+    hit exactly this. Assert the solo call too if you like, but the batch-with-a-non-empty-phase-
+    first call is the one that carries the proof.
   - **A1 — dates:** 3 tasks with starts 2026-03-05 / 2026-03-01 / 2026-03-09 and dues 2026-03-20 /
     2026-03-11 / 2026-03-14 → derived start `2026-03-01`, derived due `2026-03-20` (proves MIN/MAX,
     not first/last inserted).
@@ -1035,6 +1042,25 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   described the module as project+phase schemas only, stale once Task 8 landed, and sat above Task
   8's insertion banner so that engineer correctly left it alone.
 
+- **⚠ Task 27 A0 AMENDED — the plan's own non-vacuity check was itself vacuous.** Task 11's engineer
+  found that asserting the empty phase via a **solo** `phase_rollups(db, [empty_phase_id])` is immune
+  to Task 29's mutation 3: with a one-element batch, `phase_ids[0]` *is* the empty phase, so the
+  mutated fall-through returns the empty shape and the assertion stays GREEN. They hit it on their
+  first run. Task 27's A0 text is amended in place to require the empty phase be asserted inside a
+  **batch where a non-empty phase comes first**. This is the single most valuable finding of Wave B:
+  the phase's headline crux had a verification that would have passed while broken — the exact
+  failure mode the SRD called out the empty-phase case to prevent.
+- **Task 11 — `PhaseRollup` defined in `rollup.py`** as a frozen `@dataclass(slots=True)`; it was
+  undefined anywhere and the plan assigns it to no task. Plus a module constant `NO_TASKS` holding
+  the empty-phase shape, so the case is named once and shared safely rather than constructed inline.
+  `NO_TASKS` is intentionally not re-exported from the package.
+- **Task 11 — `phase_rollups` de-duplicates `phase_ids`** (`dict.fromkeys`) and returns `{}` for
+  empty input rather than issuing an `IN ()`. Not in the plan text; no behavioural change for any
+  non-degenerate call.
+- **Task 11 — all three of Task 29's mutations were pre-run and each turned RED**, with the file
+  restored and `git diff --stat` empty afterwards. Task 29 still runs formally to record the FAIL
+  lines in the checklist, but the risk is retired: the assertions are known non-vacuous.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1092,3 +1118,7 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
 - **No reactivation path exists for a soft-removed roster member** (see the Task 8 deviation above).
   Out of scope for FLAN-01.4 as written, but a real product gap the owner should decide on before
   the roster UI (Task 25) sets an expectation.
+
+- **`func.count().filter(...)` is the codebase's first aggregate `FILTER`** — it renders as real
+  Postgres `count(*) FILTER (WHERE ...)`. No compatibility concern on PG 17, noted only because it
+  is a new idiom here.
