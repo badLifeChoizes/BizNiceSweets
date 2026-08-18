@@ -5,29 +5,40 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** **Wave A COMPLETE** (tasks 1-6). Wave B (service + router, tasks 7-18) under
-way: tasks **7** (project/phase schemas) and **9** (service skeleton + archived-project guard) are
-in flight as concurrent engineers on disjoint files.
+**Current task:** Wave A complete (1-6). **Wave B at 3/12** — tasks **7** and **9** done and
+verified; tasks **8** (task/roster/assignment schemas, appending to `flan/schemas.py`) and **11**
+(the phase-rollup CRUX, `service/rollup.py` + `service/__init__.py`) are in flight on disjoint files.
 
-**Task 8 is deliberately SERIALIZED behind Task 7** even though `PLAN.md` marks it `Parallel-ok:
-yes` — the two tasks' `Files:` lists are the *same file* (`flan/schemas.py`). The plan's caveat
-("if the two authors split the file cleanly") is not worth a lost update for the ~2 minutes it
-saves. Run 8 after 7 lands.
+**Next after those land:** Task 10 (project CRUD + archive), then 12 → 13 → 14 → 15 → 16 → 17 → 18.
+Note tasks 10, 11, 12, 13, 14, 15 and 16 **all touch `service/__init__.py`** for their re-exports,
+so they cannot run concurrently with each other; pair each with a non-`service/` task instead.
+
+**Two manager overrides of the plan, both deliberate:**
+1. **Task 8 serialized behind Task 7** despite `Parallel-ok: yes` — identical `Files:` lists (the
+   same `schemas.py`). Not worth a lost update for ~2 minutes.
+2. **Task 11 pulled ahead of Task 10.** 11 is the crux and is on the critical path (Task 12's
+   `list_phases` consumes `phase_rollups`); 10 is on nobody's. Plan order is otherwise preserved.
+
+**Engineers no longer touch `docs/tasks/feature-flan-core.md` — the manager owns it.** Two parallel
+engineers collided on it: one ticked item 9, the other staged the file wholesale and swept that tick
+into commit `cde26d9`. Nothing was lost, but attribution went wrong and the next collision could
+silently revert a tick. Ticking now happens only after the manager verifies.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
-`### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit.
+`### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An
+uncommitted `flan/schemas.py` is Task 8 mid-write; an uncommitted `service/rollup.py` is Task 11.
 
 **Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
-`flan_*` tables exist; all five load-bearing constraint shapes are in the database (`flan_task
-.phase_id`, `flan_task_assignee.task_id`, `flan_phase_assignee.phase_id` → `CASCADE`;
-`flan_team_member.user_id` → `SET NULL`; **both** `member_id` FKs → `NO ACTION`, which is what
-D-V5P1-6's soft-remove depends on); both named unique constraints present; `registry` lists `flan`
-among seven modules; cold `down`/`up` boot clean; `ruff` 0.
+`flan_*` tables; all five load-bearing constraint shapes in the database (`flan_task.phase_id`,
+`flan_task_assignee.task_id`, `flan_phase_assignee.phase_id` → `CASCADE`;
+`flan_team_member.user_id` → `SET NULL`; **both** `member_id` FKs → `NO ACTION`, which D-V5P1-6's
+soft-remove depends on); both named unique constraints; `registry` lists `flan` among seven modules;
+cold `down`/`up` boot clean; `ruff` 0.
 
-**⚠ Carry this into every later autogenerate.** Task 6's draft also proposed **seven destructive
+**⚠ Standing warning for every later autogenerate.** Task 6's draft proposed **seven destructive
 drops** against PLUM and SYERP unique constraints — pre-existing metadata-vs-DB drift, not FLAN's
-doing. The engineer removed them, but the drift is still there and every future
-`alembic revision --autogenerate` will propose them again. See PLAN `## Noticed`.
+doing. Removed from `0018`, but the drift remains and every future `--autogenerate` proposes them
+again. See PLAN `## Noticed`; worth a BACKLOG entry.
 
 **Corrected commands** (the plan's Context block is wrong on all four; table in
 `docs/tasks/feature-flan-core.md` → "Build notes"):
@@ -36,10 +47,12 @@ doing. The engineer removed them, but the drift is still there and every future
 - `/api/v1/core/modules`, auth-gated via OAuth2 **form** login — not `/api/v1/modules`
 - alembic and pytest run from a **throwaway container, repo root at `/repo`, `--user root`, on
   `--network compose_default`** — not the host venv (compose `db` is unpublished) and not
-  `compose_api_1` (non-root, cannot write the bind mount)
+  `compose_api_1` (non-root, cannot write the bind mount). For DB-free import checks, mount
+  `backend/` at `/app` instead. **Mounting the scratchpad into a container hits `Permission
+  denied`** for the container user — pipe probe scripts in on stdin via `python -`.
 
 Commits: `74e4b30` (T1), `fdf556c` (T2), `ae13509` (T3), `dadbf58` (T4), `9dfd406` (T5),
-`67e191d` (T6), plus the `docs(zj):` commits recording ticks, deviations and Noticed.
+`67e191d` (T6), `cde26d9` (T7), `f0be8f1` (T9), plus the `docs(zj):` bookkeeping commits.
 
 ## Position (as planned): v5.0 Phase 1 planned — build not started
 
