@@ -289,7 +289,7 @@ UI or service list that orders by key must sort on the **numeric suffix**, not t
 - **Verify:** `cd $BNS && podman-compose -f compose/compose.yml -f compose/compose.dev.yml restart api && sleep 15 && podman exec compose_db_1 psql -U postgres -d biznice -c "SELECT p.code FROM permissions p JOIN role_permissions rp ON rp.permission_id=p.id JOIN roles r ON r.id=rp.role_id WHERE p.code LIKE 'flan:%' AND r.name='user' ORDER BY 1;"`
 - **Parallel-ok:** yes (independent of Tasks 2/3)
 
-### [ ] 5. Register the flan module with the app registry
+### [x] 5. Register the flan module with the app registry
 - **Serves:** FLAN-01.7 (CORE-07)
 - **Files:** `backend/app/modules/flan/__init__.py`, `backend/app/modules/flan/router.py` (new —
   stub carrying `router = APIRouter()` and the endpoint-surface docstring; routes land in Tasks 17-18),
@@ -958,6 +958,22 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   defaults for the three secrets). Real import path, no stub. Deviation is in the runner, not the
   check.
 
+- **Task 5 — two wrong paths in the plan's Verify, corrected.** `/api/v1/health` does not exist
+  (health routes are unprefixed `/health/live` and `/health/ready`), and `/api/v1/modules` does not
+  exist either — `modules_router` carries `prefix="/core/modules"`, so the real path is
+  **`/api/v1/core/modules`**, and it is auth-gated. Logging in to read it uses an OAuth2 **form**
+  body (`username=`/`password=`); a JSON POST to `/api/v1/auth/login` 422s. Later tasks reusing
+  these commands should take the corrected forms.
+- **Task 5 — `backend/app/core/registry.py` exposes no `registered()` accessor**, only `register()`
+  and `mount_all()`. Verification read the module-level `_registry` list directly. No accessor was
+  added (out of scope for this task).
+- **Task 5 — the `flan` import sits between `gelato` and `auth`** in `main.py`, not at the end of
+  the block: `auth` is deliberately last there and that ordering was preserved.
+- **Task 5 — `/api/v1/flan` OpenAPI route count is legitimately 0.** The router is a stub this task;
+  routes land in Tasks 17-18. Mounting was proven by identity (`r.original_router is flan.router`)
+  instead, since this FastAPI version wraps includes in `_IncludedRouter` whose `.path`/`.tags` are
+  `None`.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -982,3 +998,7 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
 - **`podman exec … compose_api_1` is a fragile default for DB-free checks** given the stack gets
   cycled several times across a phase (Task 5 and Task 33 both require a full `down`/`up`). For any
   check that needs no database, the throwaway-container form is the more robust idiom.
+
+- **`crisp` is seeded in `modules` with `enabled=true` despite having no code at all.** Harmless
+  today because nothing registers it, but it is a nav/gating surprise waiting for whoever builds
+  CRISP — or for anyone reading the modules list as ground truth.
