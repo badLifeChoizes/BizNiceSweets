@@ -21,10 +21,10 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 ### Wave B — service + router
 
 - [x] 7. Write the project and phase Pydantic schemas — _FLAN-01.1, FLAN-01.2_
-- [ ] 8. Write the task, roster and assignment Pydantic schemas — _FLAN-01.3, FLAN-01.4, FLAN-01.5_
+- [x] 8. Write the task, roster and assignment Pydantic schemas — _FLAN-01.3, FLAN-01.4, FLAN-01.5_
 - [x] 9. Build the flan service package skeleton with the archived-project guard — _FLAN-01.1_
 - [ ] 10. Implement project CRUD and archive in the service — _FLAN-01.1, FLAN-01.6_
-- [ ] 11. Implement the phase-derived dates and % rollup  ⟵ **THE CRUX** — _FLAN-01.2 (D-V5-1)_
+- [x] 11. Implement the phase-derived dates and % rollup  ⟵ **THE CRUX** — _FLAN-01.2 (D-V5-1)_
 - [ ] 12. Implement phase CRUD with delete-cascades-to-tasks — _FLAN-01.2_
 - [ ] 13. Implement the numeric-safe task key generator — _FLAN-01.3 (D-P8-6)_
 - [ ] 14. Implement task CRUD with server-side date validation — _FLAN-01.3_
@@ -35,7 +35,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 
 ### Wave C — UI
 
-- [ ] 19. Add the FLAN project and phase query hooks — _FLAN-01.1, FLAN-01.2, FLAN-01.6_
+- [x] 19. Add the FLAN project and phase query hooks — _FLAN-01.1, FLAN-01.2, FLAN-01.6_
 - [ ] 20. Add the FLAN task, roster and assignment query hooks — _FLAN-01.3, FLAN-01.4, FLAN-01.5_
 - [ ] 21. Build the FLAN nav with the project switcher — _FLAN-01.6 (D-V5P1-3)_
 - [ ] 22. Build the FLAN Projects list screen — _FLAN-01.1, FLAN-01.6_

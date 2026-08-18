@@ -567,7 +567,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 
 ## Wave C — UI
 
-### [ ] 19. Add the FLAN project and phase query hooks
+### [x] 19. Add the FLAN project and phase query hooks
 - **Serves:** FLAN-01.1, FLAN-01.2, FLAN-01.6
 - **Files:** `frontend/src/routes/flan/hooks.ts` (new)
 - **Do:** Mirror `frontend/src/routes/gelato/hooks.ts` — ABOUTME header, exported query-key
@@ -1061,6 +1061,20 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   restored and `git diff --stat` empty afterwards. Task 29 still runs formally to record the FAIL
   lines in the checklist, but the risk is retired: the assertions are known non-vacuous.
 
+- **Task 19 — `useProjects` takes an `includeArchived = false` argument** sending
+  `params: { include_archived: … }`, with the flag in the query key. The task text did not spell the
+  signature; it was taken from the service contract (`list_projects(db, include_archived=False)`)
+  and Task 22's "Show archived" switch. `projectsKey()` itself stays `['flan','projects']` so a
+  mutation invalidates every archived-variant at once.
+- **Task 19 — `useDeletePhase` takes `{ id, projectId }`.** A deleted phase cannot supply its own
+  `project_id` in the response, so the id is passed in to invalidate `phasesKey(projectId)`. Mirrors
+  `useDeleteQuoteLine` in `routes/crumb/hooks.ts`. Task 20 inherits this precedent for task deletes.
+- **Task 19 — one doc line reworded** from "never parseFloat it" to "never float math, never
+  reformat it", because the literal token `parseFloat` inside a comment tripped the task's own
+  regression grep for float coercion. The prohibition still stands in the type docstring and ABOUTME.
+- **Manager — synced `docs/tasks/feature-flan-core.md` to `PLAN.md`'s ticks.** It had fallen behind
+  once engineers stopped touching it; the manager now ticks both together after verifying.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1122,3 +1136,11 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
 - **`func.count().filter(...)` is the codebase's first aggregate `FILTER`** — it renders as real
   Postgres `count(*) FILTER (WHERE ...)`. No compatibility concern on PG 17, noted only because it
   is a new idiom here.
+
+- **`frontend/src/routes/gelato/hooks.ts` and `routes/crumb/hooks.ts` are not Prettier-clean**
+  (`npx prettier --check` exits 1 on both). Prettier is a devDependency but nothing runs it, so the
+  repo has a formatter it does not enforce. A formatting gate alongside the lint baseline would be a
+  standalone chore — flagged, not started.
+- **`PhaseRead.status` is a plain `str` in the backend schema** while `PhaseCreate`/`PhaseUpdate`
+  use the `PhaseStatus` Literal. The frontend mirrors that asymmetry, as CRUMB does for
+  `Lead.status`. Harmless, but any screen wanting an exhaustive status switch needs a narrow first.
