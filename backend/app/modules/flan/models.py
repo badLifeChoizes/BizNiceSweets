@@ -1,5 +1,6 @@
-# ABOUTME: FLAN (Project Management) ORM models — projects, phases, tasks and
-# ABOUTME: their tag join tables (FLAN-01). Tables are prefixed `flan_`.
+# ABOUTME: FLAN (Project Management) ORM models — projects, phases, tasks,
+# ABOUTME: the per-project team roster and the tag/assignment join tables
+# ABOUTME: (FLAN-01). Tables are prefixed `flan_`.
 # ABOUTME: A phase stores NO dates or % complete: those are derived from its
 # ABOUTME: tasks on every read (D-V5-1), so "never hand-set" is structural.
 """
@@ -14,6 +15,10 @@ Tables defined here (all prefixed `flan_`, FLAN-01):
                      keyed `<PREFIX>-<n>` unique within its project (FLAN-01.3).
   flan_project_tag — Opaque tag applied to a project (D-V5P1-5).
   flan_task_tag    — Opaque tag applied to a task (D-V5P1-5).
+  flan_team_member — A member of exactly one project's roster, optionally
+                     linked to a platform user (FLAN-01.4).
+  flan_task_assignee  — Assignment of a roster member to a task (FLAN-01.5).
+  flan_phase_assignee — Assignment of a roster member to a phase (FLAN-01.5).
 
 All models inherit from the shared declarative Base so that Base.metadata is
 populated when app.core.models (the central aggregator) is imported by
@@ -28,6 +33,10 @@ Two structural choices are load-bearing and deliberate:
   * **Tags live in join tables, not an array column** (D-V5P1-5). The later
     group-by-facet and in-plan-basis filters are plain SQL aggregations over
     these tables, and no ARRAY/JSON column exists anywhere in the codebase.
+  * **The assignment join tables do NOT cascade on member_id** (D-V5P1-6).
+    Removing a roster member is a soft-remove whose assignment rows the service
+    deletes explicitly, so the removal is auditable; a DB cascade would erase
+    them silently. Only the task/phase side cascades.
 
 PK style mirrors the hub: String(36) uuid strings, defaulted in Python.
 """
@@ -35,6 +44,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -42,6 +52,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
 )
@@ -309,3 +320,143 @@ class TaskTag(Base):
     )
     # tag: opaque normalized string in Phase 1; indexed for later group-by-facet
     tag: Mapped[str] = mapped_column(String(60), primary_key=True, nullable=False, index=True)
+
+
+# ---------------------------------------------------------------------------
+# TeamMember — a project's roster row (FLAN-01.4)
+# ---------------------------------------------------------------------------
+
+
+class TeamMember(Base):
+    """
+    Team member — one person on exactly one project's roster.
+
+    Uses a String(36) uuid PK because it is referenced by FKs from both
+    assignment join tables.
+
+    project_id is the owning project (required, indexed — the roster is always
+    read project-scoped). A person working on two projects is two rows: the
+    roster is per-project by design (FLAN-01.4), not a global directory.
+
+    name is the only required identity field, so a member can be rostered
+    before an email or a platform account exists. role, email and color are
+    display metadata; color is String(7) for a `#rrggbb` hex swatch.
+
+    hourly_rate is a fixed-point Numeric(18,6) (never float — D-11) and is
+    **stored, read by nothing in v5.0** (D-V5-2 / D-M5-2). The column exists so
+    the rate a shop already knows is captured now, but no rollup, report or
+    endpoint in this release computes cost from it. Do not add one here.
+
+    user_id optionally links the member to a platform user (FLAN-01.4) with
+    ondelete="SET NULL": deleting a user must NOT delete project history, so
+    the row survives as an unlinked roster entry. It is nullable because most
+    members never have an account.
+
+    uq_flan_member_project_user stops the same platform user being rostered
+    twice on one project. Postgres permits many NULLs in a unique constraint,
+    so unlinked members are unconstrained — a project can hold any number of
+    them.
+
+    active is the soft-remove flag (FLAN-01.4): removing a member clears their
+    assignments and flips this to False, retaining the row so historical
+    references still resolve.
+    """
+
+    __tablename__ = "flan_team_member"
+    __table_args__ = (
+        UniqueConstraint("project_id", "user_id", name="uq_flan_member_project_user"),
+    )
+
+    # --- Primary key — UUID string -----------------------------------------
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+
+    # --- Links -------------------------------------------------------------
+    # project_id: owning project (required); the roster is always read scoped by it
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("flan_project.id"), nullable=False, index=True
+    )
+
+    # --- Identity ----------------------------------------------------------
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    role: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # color: `#rrggbb` display swatch
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+
+    # --- Rate — stored, read by nothing in v5.0 (D-V5-2 / D-M5-2) ----------
+    hourly_rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+
+    # --- Platform-user link (FLAN-01.4) — optional, SET NULL on user delete -
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # active: soft-remove flag (False = removed, assignments cleared, row kept)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # --- Timestamps --------------------------------------------------------
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
+# ---------------------------------------------------------------------------
+# TaskAssignee / PhaseAssignee — assignment join tables (FLAN-01.5)
+# ---------------------------------------------------------------------------
+
+
+class TaskAssignee(Base):
+    """
+    Task assignment — one roster member assigned to one task.
+
+    Composite PK (task_id, member_id) makes an assignment idempotent without a
+    surrogate id: assigning the same member twice is the same row.
+
+    task_id FKs with ondelete="CASCADE" so deleting a task (or cascading a
+    phase delete through to it) leaves no orphan assignments.
+
+    member_id deliberately has **no cascade** (D-V5P1-6). Clearing a member's
+    assignments is an explicit, audited service action on soft-remove; a DB
+    cascade would delete these rows silently and unauditably.
+    """
+
+    __tablename__ = "flan_task_assignee"
+
+    task_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("flan_task.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # member_id: no cascade — the service deletes assignments explicitly (D-V5P1-6)
+    member_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("flan_team_member.id"),
+        primary_key=True,
+    )
+
+
+class PhaseAssignee(Base):
+    """
+    Phase assignment — one roster member assigned to one phase.
+
+    Same shape and same reasoning as TaskAssignee: composite PK
+    (phase_id, member_id), phase_id cascades on phase delete, and member_id has
+    **no cascade** because removal clears assignments explicitly in the service
+    so the change is audited (D-V5P1-6).
+    """
+
+    __tablename__ = "flan_phase_assignee"
+
+    phase_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("flan_phase.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # member_id: no cascade — the service deletes assignments explicitly (D-V5P1-6)
+    member_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("flan_team_member.id"),
+        primary_key=True,
+    )
