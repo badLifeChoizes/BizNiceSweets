@@ -263,24 +263,39 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   contract. While there, check `post_issue`'s identical "checked by the caller" docstring
   (`inventory.py:1019-1022`) against its sole caller, `gelato/service/shipments.py:630` — the
   claim may hold there, but nobody has verified it.
-- [ ] **GELATO `pick_for_shipment` acquires item locks incrementally in request-line order**
-  (Phase 4 verify review question, 2026-07-25 — pre-existing from 12b, the one remaining writer
-  outside the Phase-4 lock discipline). `shipments.py:387` calls `post_putaway` per line
-  UNSORTED, unlike every other multi-item path (MOUSSE issue, create_bill, confirm-SO — all
-  sorted-id). Two concurrent picks whose lines order shared items oppositely (or a pick racing
-  a MOUSSE issue over the same two items) can deadlock; Postgres aborts one with a 500 instead
-  of a clean 409/422. Fix: sort the lines by item id before the loop. Same lock family as the
-  Q1/Q2 item below; accepted-risk single-shop.
-- [ ] **GELATO pick-path shipment-header races** (Phase 12b review Q1/Q2, 2026-07-19) — the
-  *ship* path is now hardened (shipment row `SELECT … FOR UPDATE` before the FSM gate — no double
-  COGS post; `verify_gelato_ship.py` scenario h), but the *pick* path takes no shipment/SO lock:
-  (Q1) two concurrent first-picks of one SO each get-or-create a shipment → two open `picking`
-  shipments for the SO (breaks the "≤1 open pick per SO" assumption `_resolve_fulfilling_location`
-  relies on); (Q2) a pick can append a line to a shipment that a concurrent pack has just flipped
-  to `packed`, so the line skips pack's staged-qty review. Neither corrupts the ledger (the per-item
-  `post_putaway` lock holds). Fix = lock the SO row (or a unique partial index: one open shipment per
-  SO) + re-assert shipment status on pick-append. Same lock family as the cross-path ledger item.
-  Accepted-risk single-shop (needs two operators on the same SO in the same instant).
+- [x] **GELATO `pick_for_shipment` acquires item locks incrementally in request-line order** —
+  **RESOLVED at the v4.0 milestone close (2026-08-18, `4dc3154`, audit GAP-2).** No longer
+  accepted-risk-theoretical: the milestone audit **reproduced the deadlock 6/6 iterations** under
+  an `asyncio.Barrier`. `execute_pick` now validates every line in a pure-read pass and then moves
+  them in **sorted item-id order**, giving one global lock order (the sort had to follow a
+  validation pass because `PickLineRequest` carries only `sales_order_line_id`, so `item_id` is not
+  knowable without a DB read). Pinned by `verify_gelato_ship.py` scenario **(j)** — two picks of
+  *different* SOs over the same two items in opposite order, so the SO lock cannot mask the sort —
+  and proven load-bearing in isolation (remove only the sort → (j) RED with
+  `asyncpg.exceptions.DeadlockDetectedError`). Original text below for the record.
+  *(Was: `shipments.py:387` calls `post_putaway` per line UNSORTED, unlike every other multi-item
+  path — MOUSSE issue, create_bill, confirm-SO, all sorted-id. Fix: sort the lines by item id
+  before the loop.)*
+- [ ] **[bug] [p2] GELATO pick-path shipment-header races — Q1 RESOLVED, Q2 STILL OPEN**
+  (Phase 12b review Q1/Q2, 2026-07-19; half-closed at the v4.0 close 2026-08-18).
+  **(Q1) — FIXED (`4dc3154`, audit GAP-2).** Two concurrent first-picks of one SO each
+  get-or-created a shipment → **two open `picking` shipments**, which the milestone audit
+  reproduced (`ids=[42, 43]`) along with an unnamed bonus symptom: a **lost `qty_picked` update**
+  (both sessions read 0, both wrote 5). `execute_pick` now takes the sales-order row
+  `SELECT … FOR UPDATE` *before* the get-or-create, so the loser blocks and then appends to the
+  winner's shipment. Pinned by `verify_gelato_ship.py` scenario **(i)**, load-bearing in isolation
+  (remove only the lock → RED `shipments_for_so=[101, 102]`). This mattered more than "accepted
+  risk" implied: GELATO exposes **no list-shipments-for-an-SO route**, so the second shipment's
+  picked stock was unreachable without DB surgery.
+  **(Q2) — STILL OPEN.** A pick can still append a line to a shipment a concurrent pack has just
+  flipped to `packed`, so the line skips pack's staged-qty review. The SO lock does **not** close
+  this: the fix is to re-assert shipment status on pick-append (a shipment-row lock, the
+  `execute_ship` shape). Does not corrupt the ledger — the per-item `post_putaway` lock holds.
+- [ ] **[bug] [p3] GELATO has no "list shipments for a sales order" route** (surfaced at the v4.0
+  close, audit GAP-2). `gelato/router.py` exposes only `GET /gelato/shipments/{id}`. `4dc3154`
+  removes the way stock *becomes* stranded, but any shipment stranded by a pre-fix deploy is still
+  unreachable through the API — recovery needs DB access. A list-by-SO route makes it recoverable
+  and is a reasonable operator feature regardless.
 - [ ] **Alembic autogenerate never exits clean** (Phase 9a verify, 2026-07-11) — `alembic check`
   reports spurious drift on **7 pre-existing unnamed `unique=True` constraints** (plum_part.part_number,
   uq_plum_part_one_released, syerp_gl_account/inventory_item/partner.code, purchase_order.po_number,

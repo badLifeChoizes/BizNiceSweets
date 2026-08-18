@@ -755,9 +755,16 @@ future scope (expanded via `/zj:spec` when their milestones near).
   **Pending for NFR-4/Phase 3:** wiring both as CI jobs + ruff into the container image + `.npmrc`
   `legacy-peer-deps=true` for reproducible `npm ci`.
 
-## NFR-7: Concurrency-safe inventory ledger  [traces: PRD-12, PRD-7, PRD-8]  **Status: verified**
-- **Statement:** Every floor-guarded write to the inventory ledger — issue, adjust, receive,
-  transfer, ship — shall serialize on the contended row(s) under one shared `SELECT … FOR UPDATE`
+## NFR-7: Concurrency-safe inventory ledger  [traces: PRD-12, PRD-7, PRD-8]  **Status: implemented**
+- **Evidence:** `backend/app/modules/syerp/service/` (`post_receipt`, `post_adjustment`,
+  `post_transfer`, `receive_line`, `post_putaway`, `post_issue`), `backend/app/modules/mousse/`
+  (`issue_components`), `backend/app/modules/gelato/service/shipments.py` (`execute_pick`,
+  `execute_ship`); pinned by `backend/scripts/verify_inventory_race.py` (4 barrier races, mutations
+  M1–M4 executed RED→GREEN) and `backend/scripts/verify_gelato_ship.py` scenarios (h), (i), (j) —
+  all CI-resident via the `verify-scripts` glob.
+- **Statement** *(amended 2026-08-18 at the v4.0 close, D-M4-5 — `pick` added)*: Every floor-guarded
+  write to the inventory ledger — issue, adjust, receive, **pick**, transfer, ship — shall serialize
+  on the contended row(s) under one shared `SELECT … FOR UPDATE`
   lock discipline (sorted-id order, the `create_bill`/`record_payment` template) so the hard
   invariants hold under concurrent writers: per-location on-hand `≥ 0`, `qty_received ≤ qty_ordered`.
   The remaining **bin-blind** draw primitives (`post_transfer`, `post_adjustment`, MOUSSE
@@ -789,7 +796,11 @@ future scope (expanded via `/zj:spec` when their milestones near).
   reconciliations needed**. FE bin pickers wired end-to-end with real-payload Vitests
   (`6d55d72`/`b270161`/`886193a`); full FE gate 44 files / 139 tests + lint + `tsc -b` + build
   exit 0. No GL/JE change, no migration (both tripwires unfired).
-- **Verified:** 3253917 (Phase 04 verify, 2026-07-25 — `/zj:verify 4`: initial verdict GAPS →
+- **Verified:** 4dc3154 (**re-stamped 2026-08-18 at the v4.0 close** — the milestone audit re-read
+  every `with_for_update()` call site in `backend/app/` (24 sites) at `ad05c7a`, confirmed the lock
+  precedes the first aggregate/guard read in every ledger writer, and found the single omission
+  (`execute_pick`) now closed by `4dc3154` with its two barrier pins. Prior stamp 3253917, Phase 04
+  verify, 2026-07-25 — `/zj:verify 4`: initial verdict GAPS →
   fix loop → re-verified PASS on tip `3253917`. Verifier read every lock in code (lock precedes
   first aggregate/guard read in all 7 writers; post_receipt re-reads under lock), ran
   `verify_inventory_race.py` live (exit 0, scenarios A–D pin exact remainders/moving-avg
@@ -803,6 +814,20 @@ future scope (expanded via `/zj:spec` when their milestones near).
   `c692498`, `verify_mousse.py` scenario G `3f45685`). Deferred to BACKLOG: positive-adjust
   unvalidated bin_id (p2, owner decision), `pick_for_shipment` unsorted item locks (p2),
   `TransactionRead` bin_id omission (p3). Tag `zj/good-04-inventory-race-safety`.)
+- **Amended + closed at the v4.0 milestone close (2026-08-18, D-M4-5).** The milestone audit found
+  the Statement above had never listed **`pick`** among the writers, while the DoD clause said
+  *every* writer — so `execute_pick` passed Phase 4 verification by simply not being in scope. It
+  was the last ledger writer outside the discipline, and **both** its failure modes reproduced under
+  a barrier: two concurrent first-picks of one SO produced **two open `picking` shipments** (the
+  second's stock unreachable — GELATO has no shipments-for-an-SO route) plus a lost `qty_picked`
+  update; two picks sharing two items in opposite request order **deadlocked 6/6**. Fixed `4dc3154`
+  — the SO row is locked `FOR UPDATE` before the shipment get-or-create, and the move loop runs in
+  sorted item-id order after a pure-read validation pass. Each half proven load-bearing **in
+  isolation** (drop only the lock → scenario (i) RED `shipments_for_so=[101, 102]`, (j) green; drop
+  only the sort → (j) RED with `DeadlockDetectedError`, (i) green; both restored → 23/23 PASS).
+  Lock order SO → items introduces no inversion against `execute_ship` (shipment → items) or
+  `confirm_sales_order` (items only). **Resolves the BACKLOG p2 `pick_for_shipment` unsorted item
+  locks item** deferred at Phase 4.
 
 ## NFR-8: Human-verified release readiness  [traces: PRD-12, PRD-5, PRD-7, PRD-8]  **Status: verified (v4.0 Phase 5 — checklist delivered; readings pending, deliberately non-blocking per D-P5-11).**
 - **Verified:** d3e68e2
