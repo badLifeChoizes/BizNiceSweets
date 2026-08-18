@@ -25,10 +25,12 @@ before tagging.
       the audit's own scenario (`require_permission("syerp:reed")` on `/reports/balance-sheet`)
       → `verify_reports_api.py` exit 1, `FAIL: … status=403`; router restored byte-identical.
       This closes the one claim the audit itself could not prove.
-- [ ] **GAP-4** (major) — push the audited tip, get CI green, merge the v4.0 stack to `master`
-      (4th consecutive milestone of master-merge debt)
-- [ ] **GAP-5** (minor) — branch protection: add `container-image` (+ the new API job) to the
-      required contexts, set `enforce_admins: true` — **after** the merge
+- [x] **GAP-4** (major) — pushed, CI run `32155100303` **6/6 green**, PR #5 merged to `master`
+      at `6549142`. PR #4 closed as superseded (180+ commits behind). `origin/master` now
+      carries `.github/` for the first time.
+- [x] **GAP-5** (minor) — all **six** jobs now required contexts, `enforce_admins: true`.
+      Applied **after** the merge on purpose: a required context that has never reported on
+      `master` would have blocked PR #5 itself.
 - [x] **GAP-6** (minor) — `container-image` now runs the image it builds against a
       `postgres:17-alpine` service (the image `compose.yml` pins), with `.env`/`.env.db` built
       from the tracked templates. Locally: entrypoint wait → `alembic 0001→0017` → startup
@@ -50,8 +52,8 @@ before tagging.
 ## Doctor / spec hygiene
 
 - [x] `SRD.md` PLUM-01 re-stamped at `ad05c7a` (was stale-verified since `a88431c`)
-- [ ] `SRD.md` NFR-7 status `verified` → vocabulary word + `Evidence:` line; Statement extended
-      to name `pick` as a writer once GAP-2 lands
+- [x] `SRD.md` NFR-7 → `implemented` + `Evidence:` line; Statement names `pick` (D-M4-5);
+      re-stamped to `4dc3154`. **`zj doctor` 0 errors** (was 1).
 - [x] `DECISIONS.md` index regenerated — 148 → 167 entries, verified to match the body exactly
 
 ## Documentation truth (`/zj:milestone` step 1 spot check)
@@ -64,15 +66,15 @@ before tagging.
 
 ## Records
 
-- [ ] `CHANGELOG.md` — v4.0 section generated from commits (never hand-edit beyond generation)
-- [ ] `.zj/logs/milestone-v4.0.md` — work log
-- [ ] `.zj/LEARNINGS.md` — `## Milestone v4.0` roll-up distilled from the six phase retros
-- [ ] `.zj/DECISIONS.md` — close decisions D-M4-4..n
+- [x] `CHANGELOG.md` — v4.0 section generated from commits (`9b4ebc5`)
+- [x] `.zj/logs/milestone-v4.0.md` — work log (`e9ffccb`)
+- [x] `.zj/LEARNINGS.md` — `## Milestone v4.0` roll-up (`e9ffccb`)
+- [x] `.zj/DECISIONS.md` — D-M4-4, D-M4-5, D-M5-1, D-M5-2; index regenerated to 171, matches body
 
 ## Close
 
-- [ ] Tag `v4.0` on `master` (semver against `v3.0`), owner-approved
-- [ ] Archive `.zj/phases/` → `.zj/history/v4.0/phases/`
-- [ ] `ROADMAP.md` — milestone closed at top, next milestone seeded
-- [ ] `PROJECT.md` — new Definition of done, owner-approved
-- [ ] `STATE.md` — next action
+- [x] Tag `v4.0` on `master` at `6549142`, owner-approved, pushed
+- [x] Archive `.zj/phases/` → `.zj/history/v4.0/phases/` (all six; `.zj/phases/` empty)
+- [x] `ROADMAP.md` — v4.0 closed at top, v5.0 FLAN port seeded (D-M5-1/2)
+- [x] `PROJECT.md` — v5.0 DoD owner-approved, suite table + shipped milestones updated
+- [x] `STATE.md` — reset to between-milestones; next action `/zj:spec`

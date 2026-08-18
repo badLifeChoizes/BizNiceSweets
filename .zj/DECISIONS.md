@@ -1,5 +1,6 @@
 # DECISIONS — BizNiceSweets
-Updated: 2026-08-17 (v4.0 Phase 5 close — D-P5-1..11 appended, incl. D-P5-10 the dedicated `.env.db` that fixed blocker U0, and D-P5-11 the rescope making the QA checklist the deliverable rather than the owner's reading; 148 decisions)
+Updated: 2026-08-18 (**v4.0 milestone close** — D-M4-4 (C4 amended, not met), D-M4-5 (NFR-7 names `pick`), D-M5-1/2 (v5.0 = FLAN port, port + one hub integration). Index regenerated to match the body exactly; 171 decisions)
+Prior: 2026-08-17 (v4.0 Phase 5 close — D-P5-1..11 appended, incl. D-P5-10 the dedicated `.env.db` that fixed blocker U0, and D-P5-11 the rescope making the QA checklist the deliverable rather than the owner's reading; 148 decisions)
 Prior: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — D-M4-1..3 scope/CI-platform/lint-baseline; v3.0 shipped to master via PR #3, D-M3-4 updated; 137 decisions)
 
 Recovered decisions are marked `(recovered)` with their original source (now archived).
@@ -9,7 +10,7 @@ Numbering is append-only.
 ## Index
 
 One line per decision, newest last. Entries below are append-only — regenerate this index
-at milestone close, never hand-edit it. 167 decisions (regenerated at the v4.0 close, 2026-08-18).
+at milestone close, never hand-edit it. 171 decisions (regenerated at the v4.0 close, 2026-08-18).
 
 - **D-1:** Business domain = hybrid open-source business suite of 7 integrated suites (SYERP, PLUM, FLAN, MOUSSE, CRUMB, GELATO, CRISP), each usable standalone…
 - **D-2:** Manufacturing (facilities, work centers, routings) lives in MOUSSE, not PLUM — PLUM is product *development*; released products hand off to MOUSSE
@@ -179,6 +180,11 @@ at milestone close, never hand-edit it. 167 decisions (regenerated at the v4.0 c
 - **D-P5-9:** Branch `chore-human-uat` off the Phase-4 tip, continuing the unmerged v4.0 stack…
 - **D-P5-10:** `U0` fix = a dedicated `.env.db` holding `POSTGRES_*` only — the db container never sees `JWT_SECRET`/`BNS_ADMIN_PASSWORD` it doesn't need, and the documented deploy command stays unchanged (which is the thing U0 broke)…
 - **D-P5-11:** Rescope — the QA checklist is the deliverable, the owner's reading is not; twelve tasks gated on the owner stalled the phase at 22/41 for three weeks. Consciously accepted: NFR-8 no longer evidences that a human exercised the flows. Supersedes D-P5-6/D-P5-7…
+
+- **D-M4-4:** DoD clause C4 amended, not met — the checklist is the deliverable (D-P5-11 had moved NFR-8 and PRD-12 but not the DoD sentence); v4.0 ships with no human-exercised UI evidence, on the record…
+- **D-M4-5:** NFR-7's Statement extended to name `pick` — an omission in a requirement's enumeration is a scope boundary verification honours literally, which is how execute_pick stayed unlocked through Phase 4…
+- **D-M5-1:** Next milestone = v5.0 FLAN port — the last frozen prototype; chosen over Quality & release, PLUM-advanced and a consolidation milestone…
+- **D-M5-2:** v5.0 DoD = port + ONE hub integration (project cost rolls up from SYERP actuals); a straight parity port was declined so FLAN lands as a suite member, not an island; labor/time capture out…
 
 ## Product & Architecture
 
@@ -1232,3 +1238,45 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   that a human exercised the flows. The module SRD rows carrying "UI-flow UAT-pending" therefore
   **stay** caveated (Task 37), and whether v4.0 ships on an unrun checklist is a separate owner call
   at `/zj:milestone`.
+
+## v4.0 "Infra-debt + quality paydown" milestone close (2026-08-18)
+
+- **D-M4-4 (owner, `/zj:milestone`):** **DoD clause C4 amended, not met** — "every shipped UI flow
+  **has passed** a documented human click-through" → "**has a documented, runnable human check**
+  keyed to the requirement it exercises." *Why:* D-P5-11 had already rewritten NFR-8's Statement and
+  PRD-12's acceptance signal to make the checklist the deliverable and the owner's reading an
+  ongoing activity, but the DoD sentence in PROJECT.md/ROADMAP.md was the **last unamended copy** —
+  so the close audit found C4 NOT MET on its literal wording (GAP-1) while every downstream artifact
+  said the opposite. Amended rather than waited on, per the standing `QA docs: non-blocking`
+  preference; holding the milestone for a ~3 h sitting is exactly the stall D-P5-11 was written to
+  end. **Consciously accepted, and repeated wherever the claim appears:** v4.0 ships with **no**
+  human-exercised evidence of any UI flow. The module rows caveated "UI-flow UAT-pending" stay
+  caveated and BACKLOG p1 "Run the human click-through checklist" stays open by design. Rejected:
+  closing as-is (leaves a false claim in the milestone record) and running the checklist first.
+  *Generalised keeper (LEARNINGS):* when you amend a criterion, grep its wording across every
+  artifact and fix them in the same commit.
+- **D-M4-5 (`/zj:milestone`, audit GAP-2):** **NFR-7's Statement extended to name `pick` as a
+  ledger writer.** The Statement listed "issue, adjust, receive, transfer, ship" and never listed
+  `pick`, while the DoD clause said **every** writer — so `execute_pick` passed Phase 4 verification
+  by simply not being in scope, and stayed the one writer outside the `FOR UPDATE` discipline. Both
+  its failure modes were reproduced under a barrier at the audit (two open `picking` shipments per
+  SO with the second's stock unreachable, plus a lost `qty_picked` update; and an ABBA deadlock
+  6/6). Fixed `4dc3154`. *Why it matters beyond the fix:* a requirement's enumeration is a scope
+  boundary that verification honours literally — an omission in the list is invisible to every
+  phase gate downstream of it.
+- **D-M5-1 (owner, `/zj:milestone`):** **Next milestone = v5.0 FLAN port** (FLAN-01, PRD-6). Chosen
+  over **Quality & release** (CRISP-01 + NFR-3 offline + license audit + public-release prep),
+  **PLUM advanced** (PLUM-11..16), and a **consolidation/debt** milestone. *Why:* FLAN is the last
+  frozen prototype — ~11.5k lines of proven domain logic living nowhere on the platform — so the
+  port closes the chapter the re-platform opened at v1.0 and leaves no suite running outside the
+  stack. Quality & release and PLUM-advanced remain the sequenced candidates at the v5.0 close.
+- **D-M5-2 (owner, `/zj:milestone`):** **v5.0 DoD = port + ONE hub integration.** *"Can create a
+  project with phases and tasks, assign team members, track a timeline and a budget, and see project
+  cost roll up from SYERP actuals — with `flan/app/prj-mgmt-v24.html` retired as a reference."* A
+  **straight parity port was offered and declined**: one real FK to the hub is what made CRUMB and
+  GELATO land as suite members rather than islands, and cost roll-up from SYERP actuals is the
+  smallest clause that forces it — without it FLAN would be the eighth thing to integrate later.
+  **Out:** labor/time capture against tasks and its costing (rejected as the largest option — it
+  couples FLAN's and PLUM's costing models in one milestone; unblocking PLUM-13 is not a v5.0 goal);
+  CRISP-01 and NFR-3 stay PRD-9/PRD-10. Phase mapping deferred to `/zj:spec`, with a 9a/b/c-shaped
+  sub-split expected.
