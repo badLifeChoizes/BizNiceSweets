@@ -242,8 +242,15 @@ export function useUpdatePhase() {
 }
 
 /**
- * Delete a phase, cascading to its tasks. Invalidates that project's phases —
- * `projectId` is passed in because the deleted row can no longer supply it.
+ * Delete a phase, cascading to its tasks. Invalidates that project's phases AND
+ * its tasks — `projectId` is passed in because the deleted row can no longer
+ * supply it.
+ *
+ * The `tasksKey` invalidation is load-bearing, not defensive: `flan_task.phase_id`
+ * carries `ondelete="CASCADE"`, so deleting a phase destroys its tasks in the
+ * database. Invalidating only `phasesKey` leaves the Tasks screen listing rows
+ * that no longer exist. `tasksKey(projectId)` is a strict prefix of every
+ * filtered task key, so this one call sweeps the filtered boards too.
  */
 export function useDeletePhase() {
   const qc = useQueryClient()
@@ -251,6 +258,7 @@ export function useDeletePhase() {
     mutationFn: ({ id }) => apiClient.delete<void>(`/api/v1/flan/phases/${id}`).then((r) => r.data),
     onSuccess: (_res, { projectId }) => {
       qc.invalidateQueries({ queryKey: phasesKey(projectId) })
+      qc.invalidateQueries({ queryKey: tasksKey(projectId) })
     },
   })
 }
