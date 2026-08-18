@@ -41,7 +41,7 @@ offline stay deferred (PRD-9/PRD-10).
 ### Spec complete — 2026-08-18 (`/zj:spec`, D-V5-1..8)
 
 PRD-6 rewritten from "port the prototype" into project planning whose estimates become SYERP spend.
-SRD **FLAN-01** expanded from one line into **FLAN-01..11 + NFR-9** — 11 requirements, ~70
+SRD **FLAN-01** expanded from one line into **FLAN-01..11 + NFR-9** — 11 requirements, 75
 acceptance criteria, every one with a named verification. No ID renumbered (append-only).
 
 **Two things changed the shape of the milestone at this spec, both owner calls:**

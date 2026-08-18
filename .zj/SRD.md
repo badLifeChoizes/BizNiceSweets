@@ -1263,7 +1263,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-12 | NFR-4, NFR-5, NFR-6, NFR-7, NFR-8 | **v4.0 spec (2026-07-20, D-M4-1..3)** — all `planned`. Infra/quality, no new end-user capability: CI on every push (GitHub Actions), pytest harness repair so the ~100 DB-backed tests run + verify_* ported into the suite, both lint gates fixed-to-clean, shared FOR-UPDATE lock across every inventory writer + inbound bin-blind fix, human UAT of all shipped flows. CRISP-01 + NFR-3 groundwork deferred (D-M4-1). |
 
 **v5.0 spec update (2026-08-18, D-V5-1..8):** **FLAN-01** moved from a *one-line placeholder* to
-**eleven fully-specified `planned` requirements (FLAN-01..11) plus NFR-9** — ~70 acceptance
+**eleven fully-specified `planned` requirements (FLAN-01..11) plus NFR-9** — 75 acceptance
 criteria, each with a named verification. No ID renumbered (append-only); FLAN-01 kept its ID and
 its scope narrowed to the work-breakdown/team core, with the rest of the port appended as new IDs.
 Two source prototypes now, not one (`schedule_gate-v45.html` added, D-V5-3). **CRISP-01 and NFR-3
