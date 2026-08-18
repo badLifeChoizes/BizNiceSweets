@@ -1,8 +1,10 @@
 # STATE — BizNiceSweets
 Updated: 2026-08-18 (**Milestone v4.0 CLOSED + tagged `v4.0` at `6549142` on master.**
-Milestone v5.0 "FLAN port" chosen and its DoD owner-approved. `.zj/phases/` is empty.)
+Milestone v5.0 "FLAN port" chosen, DoD owner-approved, and **now spec'd** — PRD-6 rewritten,
+SRD **FLAN-01..11 + NFR-9**, phase→FR mapping in ROADMAP (7 phases / 9 units), D-V5-1..8.
+`.zj/phases/` is empty. **Next: `/zj:plan 1`.**)
 
-## Position: between milestones — v5.0 not yet spec'd
+## Position: v5.0 spec'd — Phase 1 not yet planned
 
 **v4.0 "Infra-debt + quality paydown" is closed.** Six phases (1, 2a, 2b, 3, 4, 5), 187 commits,
 ~31.0 h across 15 sessions, 2026-07-20 → 2026-08-18. No new end-user capability — CI on every push,
@@ -34,7 +36,50 @@ actuals — with `flan/app/prj-mgmt-v24.html` retired as a reference."*
 
 A straight parity port was offered and declined — the SYERP cost roll-up clause is what makes FLAN
 land as a suite member rather than an island. Labor/time capture is **out**; CRISP-01 and NFR-3
-offline stay deferred (PRD-9/PRD-10). A 9a/b/c-shaped sub-split is expected at plan.
+offline stay deferred (PRD-9/PRD-10).
+
+### Spec complete — 2026-08-18 (`/zj:spec`, D-V5-1..8)
+
+PRD-6 rewritten from "port the prototype" into project planning whose estimates become SYERP spend.
+SRD **FLAN-01** expanded from one line into **FLAN-01..11 + NFR-9** — 11 requirements, ~70
+acceptance criteria, every one with a named verification. No ID renumbered (append-only).
+
+**Two things changed the shape of the milestone at this spec, both owner calls:**
+
+1. **A second source prototype (D-V5-3).** `flan/app/schedule_gate-v45.html` (~3.8k lines) — a
+   dependency-scheduling and deadline-gate engine written *after* BizNiceSweets was first planned:
+   `blocks`/`blockedBy` links, topological auto-move, pins, snap/sweep, projected finish, a
+   **gate verdict** (`ON TRACK` / `MISSES GATE` / `NO BASIS`), a named calculation basis
+   (`in-plan` | `all` | `visible` | `marked`), a `Facet:Value` tag taxonomy with exclusive facets,
+   and baselines. Its capabilities are in scope alongside **all four** `prj-mgmt-v24.html` groups.
+   **v5.0 is materially larger than a parity port** — managed by phase order, not by trimming.
+   ⚠ The file is **untracked in git today**; FLAN-11.2 commits it.
+2. **No prototype data migration (D-V5-4).** A `Crisis.json` importer was offered as objective
+   retirement evidence and declined — that data belongs to the first prototype the owner used, not
+   to FLAN. **FLAN-11's capability-coverage matrix replaces it**: every capability of both
+   prototypes mapped to the requirement that delivers it or to a dated deferral.
+
+**The hub clause resolved (D-V5-5) — this is the crux, FLAN-08.** SYERP keeps sole ownership of
+spend. A FLAN project holds **estimate lines**; an approved line is **promoted** into a real SYERP
+purchase order carrying an optional `flan_project_id` (also on `syerp_bill` and
+`mousse_work_order`); the project then reports **Estimated / Committed / Actual** with **Actual
+GL-posted**. FLAN never writes a SYERP table directly. The hard verification: **Committed must
+retire exactly as Actual appears**, no double count, trial balance still nets zero.
+
+**Other decisions:** unified task model — a phase *derives* dates and % from its tasks, v24's
+progress slider not ported (D-V5-1); team roster with an **optional** platform-user link, since real
+teams include people who never hold a login (D-V5-2); server-native sharing/undo — deep links that
+enforce `flan:read`, server baselines, one-step undo, and **no public share tokens** (D-V5-6);
+NFR-9's deliberately generous 1 s / 500-task schedule bound (D-V5-7).
+
+**Phase → FR mapping (D-V5-8) — 7 phases, 9 units** (table in `ROADMAP.md`):
+1 (FLAN-01 core) → 2a (FLAN-02 engine + FLAN-04 taxonomy) → 2b (FLAN-03 board) → 3 (FLAN-05/06) →
+4a (FLAN-07 budget) → **4b (FLAN-08 — the DoD crux)** → 5 (FLAN-09) → 6 (FLAN-10) → 7 (FLAN-11).
+Analytics and exports sit **after** the crux on purpose: a long milestone then risks the tail, not
+the definition of done.
+
+**Open, owner-facing:** nothing blocks planning. Two items to be aware of — the milestone is large
+by the owner's own scoping, and `schedule_gate-v45.html` needs committing before FLAN-11 can verify.
 
 **Carried in as standing debt, not scheduled:** the human QA checklist is unrun by design
 (BACKLOG p1); pick-path race **Q2** is still open (p2 — a pick can append to a shipment a

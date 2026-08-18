@@ -1,5 +1,11 @@
 # SRD — BizNiceSweets
-Updated: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — NFR-4 (CI), NFR-5 (runnable
+Updated: 2026-08-18 (v5.0 "FLAN port" spec — **FLAN-01 expanded from one line into FLAN-01..11**
+(work-breakdown/team, scheduling & gate, board/views, tag taxonomy, governance, deliveries/notes,
+budget & estimates, **SYERP cost roll-up + estimate promotion — the DoD crux**, analytics,
+exports/record, prototype supersession) plus **NFR-9** (deterministic, bounded schedule
+computation). Two source prototypes: `prj-mgmt-v24.html` **and** `schedule_gate-v45.html`
+(D-V5-1..8). Append-only — no ID renumbered.)
+Prior: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — NFR-4 (CI), NFR-5 (runnable
 integration tests / harness repair), NFR-6 (enforced lint gates), NFR-7 (concurrency-safe
 inventory ledger), NFR-8 (human UAT) added under new PRD-12; D-M4-1..3)
 Prior: 2026-07-16 (v3.0 "Customer & logistics" spec — SYERP-13 (AR), CRUMB-01, GELATO-01
@@ -228,9 +234,351 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ---
 
-## FLAN (v2 — planned)
+## FLAN — Project Management (v5.0 — Phases 1–7)
 
-## FLAN-01: FLAN port  [traces: PRD-6]  **Status: planned**
+> **Expanded from a one-line placeholder 2026-08-18 (`/zj:spec`) for the v5.0 "FLAN port" milestone
+> (D-V5-1..8).** Unlike PLUM's port, FLAN has **two** source prototypes:
+> `flan/app/prj-mgmt-v24.html` (~11.6k lines — projects/phases/subtasks/team/budget/governance/
+> analytics/exports) and `flan/app/schedule_gate-v45.html` (~3.8k lines — a dependency-scheduling
+> and deadline-gate engine written after BizNiceSweets was first planned; it carries its own
+> `REQ-001..054` identifiers **internal to that file**, unrelated to this document's IDs).
+>
+> **FLAN on the platform is a new module, not a data migration** (D-V5-4): no prototype dataset is
+> imported, and `flan/data/Crisis.json` is *not* a source of requirements. The bar is that the
+> module can do what both apps do.
+>
+> **Scope decisions (owner, this spec):** unified task model — a phase groups scheduled tasks and
+> derives from them (D-V5-1); team roster with an *optional* platform-user link (D-V5-2); all four
+> prototype capability groups in scope, plus `schedule_gate-v45` (D-V5-3); SYERP owns spend and FLAN
+> estimates are *promoted* into it (D-V5-5); server-native equivalents for sharing/undo/snapshots,
+> no public tokens (D-V5-6).
+>
+> **Out of scope, unchanged from D-M5-2:** labor/time capture against tasks and its costing. The
+> prototype's `timeEntries` are **not** ported — a task carries a duration in days, and every
+> capacity/utilisation figure derives from durations, never from logged hours.
+
+## FLAN-01: Project, work-breakdown & team core  [traces: PRD-6]  **Status: planned**
+- **Statement:** The system shall provide FLAN projects on the platform — a **project** containing
+  **phases**, each phase containing **tasks**, with a **project team roster** whose members can be
+  assigned to phases and tasks — as a registered module with its own RBAC and audit trail.
+- **Acceptance criteria:**
+  1. **Project CRUD** — user can create/view/edit/**archive** a project (name, category,
+     description, currency, start date, gate/target date, tags). Archive is a soft delete: an
+     archived project retains all data and rejects writes (4xx). The project id is immutable;
+     duplicate project names are allowed.
+  2. **Phases** — a phase belongs to exactly one project (name, order, status
+     `pending|in-progress|complete`, description). Deleting a phase **cascades to its tasks**. A
+     phase's **start date, due date and % complete are derived from its tasks** (D-V5-1) — earliest
+     task start, latest task due, and the share of its tasks in status `Done` — and are **never
+     hand-set**; a phase with no tasks reports no dates and 0%.
+  3. **Tasks** — a task belongs to exactly one phase (hence one project) and carries: a **key**
+     unique within the project (auto-numbered `<PREFIX>-####`, **numeric-safe** per D-P8-6),
+     summary, status **`To Do | In Progress | Done`**, start date, due date, assignees, risk level
+     **`none|low|medium|high`**, a **pinned** flag, and tags (FLAN-04). `due == start` is a valid
+     zero-duration **milestone task**; `due < start` is rejected server-side (4xx).
+  4. **Team roster** — a team member carries name, role, email, colour and an hourly rate, and
+     **may optionally reference a platform user account** (D-V5-2); a member with no user link is a
+     valid collaborator. Deleting or deactivating a user account **does not** delete the roster row
+     or any of its history; removing a roster member clears their assignments but leaves the tasks
+     intact. **No cost is derived from the hourly rate in v5.0** (labor costing out, D-M5-2) — the
+     field is stored for a later milestone and nothing reads it.
+  5. **Assignment** — a phase or task carries zero or more assignees drawn from the project roster;
+     the board can be filtered by assignee.
+  6. **Multi-project** — the module lists every project the user may see and makes one active; no
+     view mixes two projects' data.
+  7. **Audit + RBAC** — every mutation emits an attributable audit event (NFR-1); all endpoints are
+     gated by **`flan:read` / `flan:write`** (mirroring `crumb`/`gelato`, D-P10-6) and refused
+     server-side regardless of UI (CORE-05); navigation is gated on FLAN enabled ∩ `flan:read`
+     (CORE-07/08).
+- **Verification:** live-Postgres `backend/scripts/verify_flan.py` — phase-derived dates and %
+  against hand-built task sets **including the empty-phase case**; key uniqueness and numeric-safe
+  increment across `PRJ-9 → PRJ-10`; `due < start` 4xx; roster removal leaves tasks; archived
+  project rejects writes — plus `verify_flan_api.py` (HTTP RBAC + audit). Ported into the ordinary
+  pytest suite (NFR-5). FE Vitest + `npm run build`.
+
+## FLAN-02: Dependency scheduling & deadline gate  [traces: PRD-6]  **Status: planned**
+- **Statement:** The system shall schedule a project's tasks against their dependencies and judge
+  the plan against a project deadline — porting the `schedule_gate-v45` engine: blocker links,
+  topological auto-move, pins, snap/sweep, projected finish, breach counting, calculation basis and
+  baselines.
+- **Acceptance criteria:**
+  1. **Dependency links** — a task can declare `blocks` / `blockedBy` links to other tasks in the
+     same project, and the pair is kept mutually consistent (adding one direction implies the
+     other). A link that would create a **cycle is rejected server-side (4xx)** and the response
+     names the cycle. (`docs/features/flan/INVARIANTS.md`: dependencies cannot be circular.)
+  2. **Auto-move** — with auto-schedule on, tasks are walked in topological order and each
+     non-`Done`, non-pinned task's start is pushed to the latest due among its **counted** blockers,
+     preserving its duration; the **stored** dates move, not just the display. With auto-schedule
+     off, no date changes.
+  3. **Pins** — a pinned task is exempt from auto-move and from sweeps ("pinned means ignore
+     blockers"); hand-editing a task's dates pins it automatically when auto-pin is on.
+  4. **Snap & sweep** — user can **snap one named task** to its earliest legal start (unpinning it
+     if needed) or **sweep** every stale unpinned task — or just a marked subset — to its earliest
+     legal start. A task is *stale* when its start ≠ the latest due among its counted blockers.
+     Both report how many tasks moved; both are undoable in **one** step (FLAN-10.8).
+  5. **Gate verdict** — a project carries a **gate date**; the system computes **projected finish**
+     (latest due among counted, non-`Done` tasks), **slack or overrun in days**, a **breach count**
+     (counted open tasks due after the gate), status counts, % complete, and a verdict of
+     **`ON TRACK` / `MISSES GATE` / `NO BASIS`**.
+  6. **Calculation basis** — every rollup is computed on one **named basis**: `in-plan` (default) |
+     `all` | `visible` | `marked`, and every surface showing a number states which. In a plan that
+     uses the `Timeline` facet, `in-plan` counts **only** tasks explicitly tagged
+     `Timeline:In plan`; untagged tasks are surfaced separately rather than silently driving the
+     projected finish. A plan using no `Timeline` tag counts every task. An **empty `marked` basis
+     yields `NO BASIS`**, never a silent fallback to everything.
+  7. **Parked work** — a task is either **parked** (`Timeline:Parked`) or **in plan**
+     (`Timeline:In plan`), mutually exclusive by construction (one call flips the pair, so both can
+     never be set). A parked blocker does not move an in-plan task's dates unless the user opts in.
+  8. **Scenarios** — a whole-plan **shift** (± N days on open tasks) and a **duration scale** show a
+     what-if projected finish **without** those overlays being written to the stored dates.
+  9. **Baselines** — the current schedule can be saved as a named **server-side baseline**, a later
+     plan compared against it per task (start/due delta), and the plan reverted to it. This replaces
+     the prototype's client-side `BASELINE` / "Reset all" (D-V5-6).
+- **Verification:** `backend/scripts/verify_flan_schedule.py` — cycle rejection (3-task cycle and a
+  self-link), auto-move producing an **identical** result from shuffled input orderings, pin
+  exemption, **sweep idempotence** (a second sweep moves 0), basis arithmetic on a fixture where
+  `in-plan` and `all` give *different* verdicts, parked-blocker isolation, and scenario overlays
+  leaving stored dates unchanged. Ported into pytest (NFR-5); FE Vitest for board interactions.
+
+## FLAN-03: Timeline, board & views  [traces: PRD-6]  **Status: planned**
+- **Statement:** The system shall present a project's plan through the prototypes' views — a dated
+  **gantt/timeline board**, a **list view** and a **calendar** — with grouping, filtering, search,
+  direct manipulation and dated markers.
+- **Acceptance criteria:**
+  1. **Timeline board** — tasks as dated bars on a date axis with month/day gridlines, a **today**
+     line and a **gate** line; bars coloured by status and marked when breaching; zoom
+     (pixels-per-day) adjustable; dependency links drawn between bars.
+  2. **Direct manipulation** — a bar can be dragged to move and resized to re-duration, with a
+     **work-day (Mon–Fri)** duration control; edits persist and pin the task per FLAN-02.3.
+  3. **Task card** — clicking a task opens a detail card offering status, risk level, assignees,
+     dates/duration, pin, tags, blocked-by/blocks links and delete; the card can be moved, docked
+     and collapsed, and its position is remembered across opens.
+  4. **Grouping** — the board groups by **any facet** (e.g. `Component`), by assignee, by status or
+     not at all; group headers roll up count, % done and worst risk; groups collapse.
+  5. **List view** — a sortable, searchable table of tasks with a scope selector
+     (all / in-plan / parked), inline editing and bulk selection.
+  6. **Calendar** — a month calendar showing task starts/dues, milestones and deliveries, navigable
+     by month with a "today" jump.
+  7. **Search & filters** — free-text search across key, summary, assignee and tags with **hit
+     highlighting and a live hit count**, plus a date-range filter and status filters. When a filter
+     is active the verdict says so and its totals still cover the whole basis, not the filtered view.
+  8. **Flags** — user-defined dated, coloured **markers** (a conference, a review) rendered on the
+     timeline and the calendar.
+  9. **Presentation** — a view-density toggle and a presenting mode that hides editing chrome.
+- **Verification:** FE Vitest over the grouping / filter / search / basis-label logic and the
+  **date↔pixel mapping** (a fixture asserting a known date lands on a known offset at a known zoom);
+  `npm run build`; the live board exercised in the v5.0 QA checklist (NFR-8 — recorded, **not** a
+  gate, per D-P5-11).
+
+## FLAN-04: Tags & facet taxonomy  [traces: PRD-6]  **Status: planned**
+- **Statement:** The system shall classify tasks through a **namespaced tag taxonomy** — a tag is
+  either a bare label or a `Facet:Value` pair — with declared facets, exclusive facets, a tag
+  registry and include/exclude filtering.
+- **Acceptance criteria:**
+  1. **Tag grammar** — a tag parses into `{facet, value}` on the **first** `:`; a bare tag belongs
+     to the default facet `Label`. Parsing and serialisation live in exactly one place — no other
+     code splits a tag string by hand.
+  2. **Exclusive facets** — a facet can be declared **exclusive**, meaning a task holds at most one
+     value in it; adding a second value **replaces** the first atomically. A facet's mode may be set
+     by hand or inferred, and a **hand-set mode is never overwritten by inference**.
+  3. **Registry** — a tag can be **declared without any task carrying it**, so a taxonomy can be set
+     up before use. The manager lists declared-but-unused alongside in-use tags, and can rename or
+     delete a tag across every task carrying it.
+  4. **Filtering** — tags can be included or excluded, **OR within a facet, AND across facets**; an
+     excluded tag hides any task carrying it. The active filter is visible and clearable in one act.
+  5. **Bulk tagging** — a marked set of tasks can be tagged/untagged in one operation, undoable in
+     one step (FLAN-10.8).
+  6. **Reserved facet** — `Timeline` (`In plan` / `Parked`) is reserved and exclusive; it is the
+     facet FLAN-02.6/02.7 read.
+- **Verification:** `verify_flan_tags.py` — parse/serialise round-trip **including a value that
+  itself contains a colon**, exclusive-facet replacement, registry behaviour when a tagging
+  operation is undone (no orphan registrations), and the OR-within/AND-across filter truth table;
+  pytest; FE Vitest.
+
+## FLAN-05: Risks, milestones & decision log  [traces: PRD-6, PRD-9]  **Status: planned**
+- **Statement:** The system shall record project governance artefacts — a **risk register** with a
+  likelihood × impact matrix, dated **milestones**, and a **decision log**.
+- **Acceptance criteria:**
+  1. **Risks** — create/edit/delete a risk (name, description, likelihood 1–5, impact 1–5,
+     mitigation, owner from the roster, status `open|mitigating|closed|accepted`). Score =
+     likelihood × impact, banded into a level; a **5×5 matrix view** plots them and a summary counts
+     each band. Out-of-range likelihood/impact is rejected 4xx.
+  2. **Milestones** — create/edit/delete a milestone (name, **date required** — 4xx otherwise,
+     description, optional phase link, status `pending|reached|missed`); a milestone can be **marked
+     reached**; milestones render on the timeline and calendar (FLAN-03) and count on the dashboard.
+  3. **Decision log** — create/edit/delete a decision (title, date, rationale, decided-by from the
+     roster, optional phase link), ordered by date and readable as the project's decision history.
+  4. **Recurring templates** — a named template (description, frequency, duration) from which a
+     phase can be instantiated, so repeating work is not re-typed.
+  5. **Referential integrity** — deleting a phase does not orphan a risk/milestone/decision that
+     referenced it (the link clears; the record survives).
+  6. **Audit + RBAC** — as FLAN-01.7.
+- **Verification:** `verify_flan_governance.py` — score/band arithmetic **at the band edges**,
+  dateless milestone 4xx, out-of-range 4xx, `reached` transition, and phase-delete link clearing;
+  pytest; FE Vitest for the matrix.
+
+## FLAN-06: Deliveries & project notes  [traces: PRD-6]  **Status: planned**
+- **Statement:** The system shall track dated project **deliveries** and hold per-project markdown
+  **notes**.
+- **Acceptance criteria:**
+  1. **Deliveries** — create/edit/delete a dated delivery (date, title, destination, status,
+     assignees) belonging to exactly one project. Past dates are valid (they record completed
+     deliveries); status follows a state machine **enforced server-side** (4xx invalid). Deliveries
+     render on the timeline and calendar.
+  2. **Notes** — three per-project markdown panes (focus / milestones / future) with an
+     edit/preview toggle. Markdown renders **safely**: the prototype's raw-`innerHTML` pattern is
+     **not** ported (see `archive/planning-gsd/codebase/CONCERNS.md`).
+  3. **Audit + RBAC** — as FLAN-01.7.
+- **Verification:** `verify_flan_deliveries.py` (FSM 4xx on invalid transitions; behaviour on
+  project archive); FE Vitest **including an XSS fixture** asserting `<script>` / `onerror=` in note
+  text renders inert.
+
+## FLAN-07: Project budget & cost estimates  [traces: PRD-6, PRD-7]  **Status: planned**
+- **Statement:** The system shall let a project be **planned financially before any ERP document
+  exists** — a budget envelope plus categorised **estimate lines** — so FLAN is usable from day one
+  and produces the input FLAN-08 promotes.
+- **Acceptance criteria:**
+  1. **Budget envelope** — a project carries a total budget, fiscal year, currency, a contingency
+     percent and configurable **alert thresholds** (e.g. 50/75/90/100%); the project view shows
+     consumption against the envelope and raises the crossed threshold.
+  2. **Approval state** — the budget follows **`draft → submitted → approved`** (+ `rejected`),
+     enforced server-side (4xx invalid), recording approver and approval date.
+  3. **Estimate lines** — create/edit/delete an estimate line (description, category, amount,
+     currency, needed-by date, optional phase, optional **SYERP vendor** reference
+     (`syerp_partner.is_vendor`), notes). Amounts must be **> 0**; envelope figures must be **≥ 0**
+     (4xx otherwise).
+  4. **Estimate roll-up** — estimated cost totals per phase, per category and per project,
+     **Decimal-exact** (no float).
+  5. **Attachments** — an estimate line can carry document attachments (quote, spec) stored
+     server-side.
+  6. **Import** — estimate lines bulk-import from CSV/Excel through a **column-mapping** step that
+     previews the result and **reports rejected rows** rather than failing the whole file.
+  7. **Audit + RBAC** — as FLAN-01.7.
+- **Verification:** `verify_flan_budget.py` — Decimal-exact per-phase/per-category roll-up, FSM 4xx,
+  non-positive amount 4xx, threshold crossing asserted **at the boundary value**; an import
+  round-trip with a deliberately malformed row proving it is reported, not swallowed; pytest;
+  FE Vitest.
+
+## FLAN-08: SYERP cost roll-up & estimate promotion  [traces: PRD-6, PRD-7]  **Status: planned** — **the v5.0 DoD crux**
+- **Statement:** The system shall make a FLAN project a **cost object in SYERP**: purchase orders,
+  vendor bills and MOUSSE work orders may be **tagged** with a project, and the project reports
+  **Estimated / Committed / Actual** cost where **Actual is GL-posted** — and an approved FLAN
+  estimate line can be **promoted** into a real SYERP purchase order carrying that tag (D-V5-5).
+- **Acceptance criteria:**
+  1. **Project cost object** — `syerp_purchase_order`, `syerp_bill` and `mousse_work_order` gain an
+     **optional, nullable** `flan_project_id` FK. Every existing document keeps working untagged;
+     the FK is `RESTRICT`-guarded so a project with tagged documents cannot be hard-deleted (4xx).
+  2. **Tagging** — a user with `syerp:write` can set or clear the project on a purchase order or
+     bill **while it is still editable**; a **posted** bill's project tag is **immutable** (it has
+     already hit the GL) — 4xx on change.
+  3. **Estimate promotion** — an approved estimate line can be **promoted** to a SYERP purchase
+     order carrying the vendor, amount, needed-by date and `flan_project_id`. The estimate line
+     records the PO it became and is thereafter read-only for amount and vendor. Promotion is
+     **idempotent**: an already-promoted line cannot be promoted again (4xx). **Promotion is the
+     only way FLAN causes spend, and FLAN never writes a SYERP table directly** — it calls the SYERP
+     service, which owns the document, its numbering and its posting
+     (`docs/features/flan/INVARIANTS.md`: FLAN must not directly modify SYERP data).
+  4. **Three-column roll-up** — per project **and per phase**: **Estimated** (Σ FLAN estimate
+     lines), **Committed** (Σ open PO lines tagged to the project — ordered, not yet billed) and
+     **Actual** (Σ **GL-posted** amounts on journal entries whose source document carries the tag),
+     plus variance. All arithmetic **Decimal-exact**.
+  5. **Actual ties to the books** — for any project, Σ Actual equals the tagged, posted source
+     documents' amounts **as the GL holds them**; tagging a document never alters a journal entry,
+     an account balance, or the **trial balance, which still nets zero**.
+  6. **No double count** — a promoted estimate contributes to Estimated once and reaches
+     Committed/Actual **only** through its PO; receiving then billing the same PO line does not
+     count the cost twice — **Committed retires exactly as Actual appears**.
+  7. **Cross-suite navigation** — from a tagged SYERP document the user can reach its project, and
+     from a project the documents charged to it.
+  8. **Concurrency** — the roll-up reads committed rows in a single consistent snapshot; two
+     concurrently posted tagged bills cannot produce a torn Actual, and the new column **does not
+     weaken NFR-7's lock discipline** on any inventory writer.
+  9. **Audit + RBAC** — tagging and promotion emit audit events; promotion requires **both**
+     `flan:write` and `syerp:write`.
+- **Verification:** live-Postgres `backend/scripts/verify_flan_syerp.py` — drive
+  **estimate → promote → PO → receive → bill → post**, asserting Estimated/Committed/Actual at every
+  step (**the crux: Committed retires exactly as Actual appears, and no step double-counts**), a
+  Decimal-exact tie between Actual and the tagged journal lines, **trial balance nets zero
+  throughout**, double-promotion 4xx, posted-bill re-tag 4xx, project-delete-with-tagged-docs 4xx,
+  and a two-concurrent-posting scenario. Plus a **regression run of the existing `verify_*` suite**
+  proving the new nullable column changed no shipped behaviour. Ported into pytest (NFR-5).
+
+## FLAN-09: Analytics & insights  [traces: PRD-6]  **Status: planned**
+- **Statement:** The system shall derive project insight from the data it already holds — health,
+  resource load, critical path, velocity and estimate-vs-actual — with every figure computed on the
+  FLAN-02.6 basis and labelled with it.
+- **Acceptance criteria:**
+  1. **Project health** — a composite score from schedule breach, risk exposure, budget consumption
+     and completion, shown **with the factors that drove it**, not as a bare number.
+  2. **Resource table** — per owner: task count, To Do / In Progress / Done, % done, **open
+     work-days**, tasks past gate and worst risk; sortable by any column.
+  3. **Utilisation** — per-owner load against a configurable **capacity in work-days per week**,
+     flagging over-allocation. Derived from **task durations, not logged hours** (D-M5-2).
+  4. **Critical path** — the longest dependency chain driving the projected finish, listed and
+     highlighted on the board.
+  5. **Velocity** — completed tasks per period over time.
+  6. **Estimate vs actual** — per phase and project: estimated vs actual **cost** (FLAN-08) with an
+     accuracy percentage, and estimated vs actual **duration** for schedule.
+  7. **Basis honesty** — every panel states the basis it was computed on and yields `—`, never a
+     silent fallback, when that basis is empty.
+- **Verification:** `verify_flan_analytics.py` — critical path on a fixture with **two competing
+  chains** (the longer must win) and on a chain broken by a pin; utilisation asserted **exactly at
+  capacity**; health score at each band boundary; and every metric recomputed under **all four**
+  bases; FE Vitest.
+
+## FLAN-10: Exports, comments & project record  [traces: PRD-6]  **Status: planned**
+- **Statement:** The system shall get a project's plan in and out and keep a shared record of it —
+  CSV/Excel/JSON import-export, ICS, PDF and HTML report, threaded comments, an activity log, and
+  undo of the last action (D-V5-6).
+- **Acceptance criteria:**
+  1. **CSV/Excel round-trip** — tasks export to CSV/Excel and import back, with a downloadable
+     **template**. Import is **tolerant by design** — a malformed date or risk value defaults rather
+     than aborting the file (an undated row becomes a one-day task at today) — and **reports what it
+     repaired**. A round-trip preserves keys, dates, status, assignee, risk, tags and links.
+  2. **JSON export/import** — a whole project exports to JSON and re-imports faithfully (the
+     platform equivalent of the prototype's file), mirroring PLUM-10.
+  3. **ICS** — milestones, deliveries and task due dates export as a calendar file.
+  4. **PDF & HTML report** — a printable project report (summary, verdict, phases, tasks, risks,
+     milestones, budget) as PDF and as a standalone HTML file.
+  5. **Comments** — threaded comments on a project, phase or task, attributable to the acting user;
+     edits and deletions are **recorded rather than silent**.
+  6. **Deep links** — every project, phase and task has a stable in-app URL that **still enforces
+     login and `flan:read`**. **No unauthenticated public share tokens ship in v5.0** (D-V5-6).
+  7. **Activity log** — a server-side, per-project chronological record of mutations (who, what,
+     when), readable in-app. This is FLAN's **view of NFR-1**, not a second audit system.
+  8. **Undo** — the last mutating action of the current session can be undone in one step,
+     **including bulk operations** (bulk tag, sweep, snap). The prototype's 50-deep client history
+     and client-side snapshots are **not** ported (D-V5-6); server baselines (FLAN-02.9) serve that
+     need.
+- **Verification:** `verify_flan_io.py` — CSV round-trip fidelity **including a tag whose value
+  contains a colon and a task with multiple links**, malformed-row repair **reported not swallowed**,
+  JSON round-trip equality; FE Vitest for the export builders; an **unauthenticated request to a
+  deep link must 401/redirect**, asserted in the API suite.
+
+## FLAN-11: Prototype supersession  [traces: PRD-6]  **Status: planned**
+- **Statement:** The system shall **supersede both FLAN prototypes**: every capability of
+  `prj-mgmt-v24.html` and `schedule_gate-v45.html` is either delivered on the platform or recorded
+  as a deliberate, dated deferral, and both files are frozen in-repo as historical reference only.
+- **Acceptance criteria:**
+  1. **Capability coverage matrix** — a checked-in document maps **every** capability of both
+     prototypes to the FLAN-0x requirement that delivers it, or to a dated deferral entry in
+     `.zj/BACKLOG.md` with a reason. Nothing is unaccounted for. *(This is the clause that makes
+     "retired" checkable rather than asserted — the v4.0 audit's lesson that an omission in an
+     enumeration is invisible to every gate downstream, D-M4-5.)*
+  2. **Both prototypes tracked** — `flan/app/schedule_gate-v45.html` is **committed** to the
+     repository (it is currently untracked) and both files are marked frozen, matching the D-ADOPT-4
+     treatment of `plum/app/plm_v54.html`.
+  3. **Retirement recorded** — `CLAUDE.md`, `.zj/PROJECT.md` and `docs/features/flan/` state that
+     the platform module is authoritative and the prototypes are reference only; and
+     `docs/features/flan/INVARIANTS.md` is corrected to cite the **real** implementation paths
+     (`backend/app/modules/flan/`) instead of the `src/modules/flan/` paths it names today, which
+     have never existed.
+  4. **Working proof** — one real project is run end-to-end on the platform module: phases with
+     tasks, dependencies, a gate verdict, a team, a budget with **at least one estimate promoted to
+     a SYERP PO**, and cost rolled up. This is the D-M5-2 DoD sentence, executed.
+- **Verification:** the coverage matrix reviewed against a fresh read of **both** prototype files;
+  both files present in version control; the working proof recorded in the v5.0 QA checklist and
+  re-driven at the milestone audit.
 - **Statement:** The system shall provide FLAN project management on the new stack: projects, phases, tasks, timeline, budgets, team members. *(Functional reference: frozen prototype `flan/app/prj-mgmt-v24.html`.)*
 
 ---
@@ -874,6 +1222,29 @@ future scope (expanded via `/zj:spec` when their milestones near).
 
 ---
 
+## v5.0 — FLAN port (NFR-9)  [traces: PRD-6]
+
+## NFR-9: Deterministic, bounded schedule computation  [traces: PRD-6]  **Status: planned**
+- **Statement:** FLAN's schedule computation (FLAN-02) is **deterministic** — the same tasks,
+  links, pins and settings produce the same dates, the same projected finish and the same verdict
+  **regardless of row ordering or which node the topological walk starts from**; **total** — a
+  dependency cycle is rejected at write time (FLAN-02.1), so no computation can loop or run
+  unbounded; and **bounded** — a project of **500 tasks with 1,000 links** recomputes its full
+  schedule and verdict server-side in **under 1 second** on the CI runner.
+- **Why measurable this way:** the 1 s ceiling is a deliberately generous assertion (the target is
+  well under 200 ms) so the gate catches an algorithmic regression — an accidental O(n²) walk or an
+  N+1 query per link — without going flaky on a loaded shared runner, which is the failure mode that
+  makes timing assertions get deleted.
+- **Verification:** a property-style test that **shuffles task and link input order N times and
+  asserts an identical resulting schedule**; a cycle-injection test asserting 4xx at write, never a
+  hang; and a 500-task / 1,000-link fixture timed inside the pytest suite with the 1 s threshold
+  asserted, so exceeding it **fails the suite** (and therefore CI, NFR-4).
+- **Source:** v5.0 spec (D-V5-7). Derived from the `schedule_gate-v45` engine's design — its layered
+  DATA→STATE→SCHED→LAYOUT→RENDER separation exists precisely so the scheduling math is pure and
+  testable in isolation; this NFR keeps that property once the math moves server-side.
+
+---
+
 ## Traceability
 
 | PRD | Covered by | Gaps |
@@ -883,13 +1254,23 @@ future scope (expanded via `/zj:spec` when their milestones near).
 | PRD-3 | CORE-06..08 | — |
 | PRD-4 | SYERP-01..05, PLUM-07 | — |
 | PRD-5 | PLUM-01..16 | Phase-7 **verified** 2026-07-09 (`8975eeb`): fixes `5c33ed8`/`1b8bfa1`/`37b5f97` proven live, plus blocker `7562a02` (int4 overflow bricked auto-numbering) found and fixed in the verify fix loop; PLUM-01/07/10 backends now guarded by `verify_plum_vendor_paths.py`, `verify_part_numbering.py`, `test_part_number.py`, `ImportExport.test.tsx`. PLUM-04..10 flow-level UI confirmation still deferred to v1.0 milestone UAT (`.zj/UAT-v1.0.md`, 2/12 done, D-P7-5) |
-| PRD-6 | FLAN-01 | expand at milestone planning |
+| PRD-6 | FLAN-01..11, NFR-9 | **expanded 2026-08-18 (v5.0 spec, D-V5-1..8)** — FLAN-01 grew from a one-line placeholder into eleven requirements plus NFR-9, all `planned`: work-breakdown + team core (01), the `schedule_gate-v45` dependency/gate engine (02), board & views (03), facet taxonomy (04), governance (05), deliveries/notes (06), budget & estimates (07), **SYERP cost roll-up + estimate promotion (08 — the DoD crux)**, analytics (09), exports/comments/record (10), prototype supersession (11). **Two** source prototypes, not one (`schedule_gate-v45.html` added by the owner at this spec, D-V5-3). No ID renumbered. Explicitly deferred: labor/time capture and its costing (D-M5-2), public share tokens and multi-step client undo/snapshots (D-V5-6), any prototype **data** migration (D-V5-4) |
 | PRD-7 | SYERP-10..13, MOUSSE-01 | SYERP-10/11 backend built & live-verified (Phase 8: migrations 0007/0008; `verify_inventory`/`verify_purchasing`/`verify_e2e_p8` scripts), UI flow UAT deferred to v2.0 milestone (D-P7-5); **SYERP-12 built & verified (Phases 9a/9b/9c, all 9 ACs)**; **SYERP-13 (AR) expanded 2026-07-16 for v3.0 Phase 13 (7 ACs — sell-side books, invoice-from-shipment, AR aging tie-out; D-V3-1..9)**; **MOUSSE-01 materials-only slice built & live-verified (Phase 10, verified 2026-07-16 `5cffeeb`: `verify_mousse.py`/`verify_mousse_api.py`; migration 0012); routing/labor/shop-floor deferred (D-P10-1)** |
 | PRD-8 | CRUMB-01, GELATO-01, SYERP-13 | **expanded 2026-07-16 (v3.0 spec, D-V3-1..9)** — CRUMB-01 (CRM + sales orders, Phase 11), GELATO-01 (warehouse core, Phase 12), SYERP-13 (AR + sell-side books, Phase 13); all `planned`, full ACs written. SYERP-13 now also traces PRD-8 (invoices flow from CRUMB sales orders). Lot/serial + email/analytics + price lists explicitly deferred |
 | PRD-9 | CRISP-01, NFR-1 | CRISP coarse |
 | PRD-10 | NFR-3 | — |
 | PRD-11 | NFR-2 | license audit outstanding |
 | PRD-12 | NFR-4, NFR-5, NFR-6, NFR-7, NFR-8 | **v4.0 spec (2026-07-20, D-M4-1..3)** — all `planned`. Infra/quality, no new end-user capability: CI on every push (GitHub Actions), pytest harness repair so the ~100 DB-backed tests run + verify_* ported into the suite, both lint gates fixed-to-clean, shared FOR-UPDATE lock across every inventory writer + inbound bin-blind fix, human UAT of all shipped flows. CRISP-01 + NFR-3 groundwork deferred (D-M4-1). |
+
+**v5.0 spec update (2026-08-18, D-V5-1..8):** **FLAN-01** moved from a *one-line placeholder* to
+**eleven fully-specified `planned` requirements (FLAN-01..11) plus NFR-9** — ~70 acceptance
+criteria, each with a named verification. No ID renumbered (append-only); FLAN-01 kept its ID and
+its scope narrowed to the work-breakdown/team core, with the rest of the port appended as new IDs.
+Two source prototypes now, not one (`schedule_gate-v45.html` added, D-V5-3). **CRISP-01 and NFR-3
+are the only coarse placeholders left in this document.** Deferred on the record: labor/time capture
+and its costing (D-M5-2), public share tokens and multi-step client undo/snapshots (D-V5-6), and any
+prototype **data** migration (D-V5-4). Counts below are a provenance snapshot and are **not**
+re-tallied here.
 
 **v3.0 spec update (2026-07-16):** SYERP-13, CRUMB-01, and GELATO-01 moved from *coarse
 placeholder* to *fully-specified `planned`* (7 / 7 / 8 acceptance criteria respectively), targeting

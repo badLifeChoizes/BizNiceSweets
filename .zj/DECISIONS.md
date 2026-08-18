@@ -1,5 +1,9 @@
 # DECISIONS — BizNiceSweets
-Updated: 2026-08-18 (**v4.0 milestone close** — D-M4-4 (C4 amended, not met), D-M4-5 (NFR-7 names `pick`), D-M5-1/2 (v5.0 = FLAN port, port + one hub integration). Index regenerated to match the body exactly; 171 decisions)
+Updated: 2026-08-18 (**v5.0 "FLAN port" spec** — D-V5-1..8: unified task model, roster with optional
+user link, full prototype scope **plus the second prototype `schedule_gate-v45.html`**, no data
+migration, **estimate→SYERP-PO promotion (the crux)**, server-native sharing/undo, NFR-9 bound,
+phase mapping. Index appended, not regenerated; **179 decisions**)
+Prior: 2026-08-18 (**v4.0 milestone close** — D-M4-4 (C4 amended, not met), D-M4-5 (NFR-7 names `pick`), D-M5-1/2 (v5.0 = FLAN port, port + one hub integration). Index regenerated to match the body exactly; 171 decisions)
 Prior: 2026-08-17 (v4.0 Phase 5 close — D-P5-1..11 appended, incl. D-P5-10 the dedicated `.env.db` that fixed blocker U0, and D-P5-11 the rescope making the QA checklist the deliverable rather than the owner's reading; 148 decisions)
 Prior: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — D-M4-1..3 scope/CI-platform/lint-baseline; v3.0 shipped to master via PR #3, D-M3-4 updated; 137 decisions)
 
@@ -185,6 +189,15 @@ at milestone close, never hand-edit it. 171 decisions (regenerated at the v4.0 c
 - **D-M4-5:** NFR-7's Statement extended to name `pick` — an omission in a requirement's enumeration is a scope boundary verification honours literally, which is how execute_pick stayed unlocked through Phase 4…
 - **D-M5-1:** Next milestone = v5.0 FLAN port — the last frozen prototype; chosen over Quality & release, PLUM-advanced and a consolidation milestone…
 - **D-M5-2:** v5.0 DoD = port + ONE hub integration (project cost rolls up from SYERP actuals); a straight parity port was declined so FLAN lands as a suite member, not an island; labor/time capture out…
+
+- **D-V5-1:** Unified task model — a phase groups scheduled tasks and derives its dates and % from them; v24's hand-set progress slider is not ported, because two sources of truth for a date let the gate verdict and the phase board disagree…
+- **D-V5-2:** FLAN team roster is project-owned with an OPTIONAL platform-user link — real teams include people who will never hold a login, and a users-only model cannot hold the data the module exists for…
+- **D-V5-3:** Full prototype scope (all four capability groups) PLUS a second source prototype, `schedule_gate-v45.html` — a dependency-scheduling/deadline-gate engine built after BizNiceSweets was planned; this is why the spec produced eleven FLAN requirements, not one…
+- **D-V5-4:** No prototype data migration — FLAN is a new module, not a ported dataset; a `Crisis.json` importer was declined, so FLAN-11's capability-coverage matrix replaces it as the checkable evidence of retirement…
+- **D-V5-5:** SYERP owns spend; FLAN estimates are PROMOTED into SYERP purchase orders carrying `flan_project_id`, and the project reports Estimated/Committed/Actual with Actual GL-posted — the v5.0 crux; v24's parallel expenses/vendors/POs tables are not ported…
+- **D-V5-6:** Server-native equivalents for sharing/snapshots/undo — deep links that enforce login + `flan:read`, server baselines, one-step undo; NO unauthenticated public share tokens, which would be the platform's first public attack surface…
+- **D-V5-7:** NFR-9 asserts schedule determinism (shuffled input → identical schedule) and a deliberately generous 1 s bound at 500 tasks/1,000 links — a tight threshold on a shared runner goes flaky and then gets deleted…
+- **D-V5-8:** v5.0 phase mapping = 7 phases / 9 units (1 → 2a/2b → 3 → 4a/4b → 5 → 6 → 7), engine before board and budget before promotion; analytics and exports sit after the DoD crux so a long milestone risks the tail, not the definition of done…
 
 ## Product & Architecture
 
@@ -1280,3 +1293,95 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   couples FLAN's and PLUM's costing models in one milestone; unblocking PLUM-13 is not a v5.0 goal);
   CRISP-01 and NFR-3 stay PRD-9/PRD-10. Phase mapping deferred to `/zj:spec`, with a 9a/b/c-shaped
   sub-split expected.
+
+---
+
+## v5.0 "FLAN port" spec (2026-08-18)
+
+- **D-V5-1 (owner, `/zj:spec`):** **Unified task model — a phase groups scheduled tasks and derives
+  from them.** FLAN is `Project → Phase → Task`, where the **Task** carries the full
+  `schedule_gate-v45` field set (start/due, `blockedBy`/`blocks`, pinned, risk level, facet tags,
+  `To Do|In Progress|Done`) and a **Phase's start date, due date and % complete are computed from
+  its tasks** — earliest start, latest due, share `Done` — never hand-set. *Why:* the two prototypes
+  model work incompatibly (v24: phases with a hand-dragged progress slider and checkbox subtasks;
+  v45: flat dependency-scheduled tasks), and keeping both would give every date two sources of truth
+  that can silently disagree — the gate verdict would say one thing and the phase board another.
+  v24's slider is the weaker model on its own terms: `docs/features/flan/INVARIANTS.md` already
+  records that "subtask deletion does NOT affect phase progress" because progress is slider-based
+  and unrelated to the work beneath it. Rejected: layered (both keep their own dates) and two
+  separate per-project objects. *Cost accepted:* a phase can no longer be marked "80% done" by
+  judgement — it is 80% done when its tasks say so.
+- **D-V5-2 (owner, `/zj:spec`):** **Team roster with an optional platform-user link.** A FLAN team
+  member is a project-owned row (name, role, email, colour, rate) that **may** reference a
+  `CORE-04` user account but need not. *Why:* real project teams include people who will never hold
+  a login (contractors, vendor engineers, another department), so a users-only model cannot hold the
+  data the module exists to hold; the optional link still makes assignment attributable for the
+  people who do have accounts. Rejected: users-only (blocks non-account collaborators) and a
+  standalone roster with no link (assignment never attributable). *Invariant kept from the
+  prototype's spec:* deleting a user must never delete roster history.
+- **D-V5-3 (owner, `/zj:spec`):** **Full prototype scope — all four capability groups — plus a
+  second source prototype, `schedule_gate-v45.html`.** The owner selected governance (risks/
+  milestones/decisions), deliveries + notes, analytics & visualisation, **and** exports &
+  collaboration, and disclosed a **second app built after BizNiceSweets was first planned** —
+  `flan/app/schedule_gate-v45.html`, a ~3.8k-line dependency-scheduling and deadline-gate engine
+  (topological auto-move, pins, snap/sweep, projected finish, breach gate, named calculation basis,
+  facet taxonomy, baselines) — as in-scope capability to reuse. *Consequence, on the record:* v5.0
+  is materially larger than a v24 parity port, and is the reason the spec produced **eleven** FLAN
+  requirements rather than one. The size is managed by phase sequencing, not by silently trimming
+  the spec: FLAN-01/02/07/08 carry the DoD, FLAN-09/10 are the tail most safely deferred if the
+  milestone runs long, and any such deferral is an owner call at that point, not an assumption made
+  here.
+- **D-V5-4 (owner, `/zj:spec`):** **No prototype data migration — FLAN is a new module, not a
+  port of a dataset.** A `Crisis.json` importer was offered as the way to make "prototype retired"
+  objectively verifiable and was **declined**: that data belongs to the first prototype the owner
+  happened to use, not to FLAN. *Consequence:* retirement can no longer be evidenced by "the old
+  data renders on the platform", so **FLAN-11 replaces it with a capability-coverage matrix** —
+  every capability of both prototypes mapped to the requirement that delivers it or to a dated
+  deferral. This is the v4.0 audit's lesson applied forward (D-M4-5): an omission in an enumeration
+  is invisible to every gate downstream of it, so the enumeration has to be the artefact.
+- **D-V5-5 (owner, `/zj:spec`):** **SYERP owns spend; FLAN estimates are *promoted* into it.** A
+  FLAN project holds **estimate lines** (the v24 budget UX, but explicitly estimates), and an
+  approved line can be **promoted** into a real SYERP purchase order carrying an optional
+  `flan_project_id`. The project then reports **Estimated / Committed / Actual**, where Actual is
+  **GL-posted**. FLAN never writes a SYERP table directly — it calls the SYERP service. *Why:* the
+  owner asked that FLAN work be able to "transition from prototype to actual, ready for SYERP data",
+  which needs both halves — FLAN must be fully usable with no ERP document in existence (early-stage
+  projects are where estimates live), *and* the same project must become ERP-backed without
+  re-keying. Promotion is the only construction that gives both without creating a second place a
+  cost can be born: once promoted, the spend is SYERP's, and the estimate line records the PO it
+  became. Rejected: porting v24's parallel expenses/vendors/POs tables (duplicates a shipped
+  subsystem — SYERP purchasing + AP + GL — and gives one cost two homes), independent
+  estimate-vs-actual with no traceable link, and a per-project prototype/production flag (carries no
+  estimate across the boundary). *This is the milestone's crux (FLAN-08) and its hardest
+  verification: Committed must retire exactly as Actual appears, with no double count and the trial
+  balance still netting zero.*
+- **D-V5-6 (owner, `/zj:spec`):** **Server-native equivalents for sharing, snapshots and undo — no
+  public share tokens.** Exports (CSV/Excel/JSON/ICS/PDF/HTML report) port as-is; **comments and the
+  activity log become server-side**; the prototype's "shareable link" becomes an **in-app deep link
+  that still enforces login and `flan:read`**; client snapshots become **server-side named
+  baselines** (FLAN-02.9); and the 50-deep client history stack becomes **one-step undo of the last
+  action**, bulk operations included. *Why:* all three ported behaviours assume one user owns one
+  file — an assumption that stopped being true at `CORE-02` and would be actively wrong the first
+  time two people edit a project. Rejected: unauthenticated tokenised public URLs, which would add
+  the platform's **first** public attack surface (token issuance, expiry, revocation, scope) for a
+  capability nobody has asked for yet; if external sharing is wanted later it should be specified
+  deliberately, not inherited from a single-user prototype.
+- **D-V5-7 (manager, `/zj:spec`):** **NFR-9 asserts schedule determinism and a 1-second bound at
+  500 tasks / 1,000 links** — deliberately generous against a sub-200 ms target. *Why:* the
+  scheduling engine is the one piece of FLAN that is pure math over a graph, so it is the one piece
+  where an accidental O(n²) walk or an N+1 query per link would pass every functional test and only
+  show up as "the board got slow". A tight threshold on a shared CI runner goes flaky and then gets
+  deleted, which is worse than no gate; a loose one still catches the regression class it exists
+  for. Determinism is asserted by shuffling input order and demanding an identical schedule — the
+  property `schedule_gate-v45`'s layered DATA→STATE→SCHED→LAYOUT→RENDER design was built to have,
+  and the one most easily lost when the math moves server-side.
+- **D-V5-8 (manager, `/zj:spec`):** **v5.0 phase mapping = 7 phases / 9 units**, with the
+  9a/b/c-shaped sub-split D-M5-2 anticipated: 1 (FLAN-01 core) → 2a (FLAN-02 engine + FLAN-04
+  taxonomy) → 2b (FLAN-03 board) → 3 (FLAN-05 + FLAN-06) → 4a (FLAN-07 budget) → **4b (FLAN-08
+  SYERP roll-up + promotion — the DoD crux)** → 5 (FLAN-09) → 6 (FLAN-10) → 7 (FLAN-11
+  supersession). *Why this order:* the engine (2a) is pure server-side math and must land before the
+  board that renders it (2b), which is the 11a/11b split that worked in v3.0; budget (4a) must
+  exist before promotion (4b) has anything to promote; and FLAN-11's coverage matrix is last because
+  it audits everything before it. Analytics (5) and exports (6) sit deliberately **after** the crux
+  so that if the milestone runs long, what is at risk is the tail rather than the definition of
+  done.

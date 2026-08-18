@@ -1,5 +1,11 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-08-18 (**Milestone v4.0 "Infra-debt + quality paydown" CLOSED + tagged `v4.0`** at
+Updated: 2026-08-18 (**v5.0 "FLAN port" SPEC'D** — PRD-6 rewritten; SRD FLAN-01 expanded into
+**FLAN-01..11 + NFR-9**; phase→FR mapping proposed below (7 phases / 9 units, DoD crux at **4b**).
+Scope grew at the owner's direction: a **second source prototype**, `schedule_gate-v45.html`, joined
+`prj-mgmt-v24.html`, and all four v24 capability groups are in (D-V5-3). No prototype **data** is
+migrated (D-V5-4); FLAN estimates **promote into SYERP purchase orders** rather than FLAN keeping
+its own spend tables (D-V5-5). D-V5-1..8. **Next: `/zj:plan 1`.**)
+Prior: 2026-08-18 (**Milestone v4.0 "Infra-debt + quality paydown" CLOSED + tagged `v4.0`** at
 `6549142` on **master** — and this time the tag is on master, not a branch: the whole v4.0 stack
 merged via PR #5 (CI 6/6 green), clearing **four consecutive milestones** of master-merge debt.
 Until that merge `origin/master` carried **no `.github/` at all**, so a fresh clone got none of
@@ -470,9 +476,38 @@ roll-up from SYERP actuals is the smallest clause that forces it.
 PLUM's costing models in one milestone, and unblocking PLUM-13 is not a v5.0 goal). CRISP-01 and
 NFR-3 offline stay deferred — they remain PRD-9/PRD-10.
 
-**Phase mapping:** to be proposed at `/zj:spec`. Expect a sub-split in the 9a/b/c and 11a/b shape:
-the domain port (projects → phases → tasks → team) is separable from the timeline/budget surface
-and from the SYERP cost roll-up, and the third depends on the first two.
+**Requirements (spec'd 2026-08-18, D-V5-1..8):** SRD **FLAN-01..11 + NFR-9**, all `planned`. PRD-6
+was rewritten from "port the prototype" into project planning whose estimates become SYERP spend.
+
+**Two source prototypes, not one (D-V5-3).** The owner disclosed a second app at the spec —
+`flan/app/schedule_gate-v45.html` (~3.8k lines: dependency links, topological auto-move, pins,
+snap/sweep, projected finish, a deadline **gate verdict**, a named calculation basis, a facet tag
+taxonomy, baselines), built after BizNiceSweets was first planned — and put its capabilities in
+scope alongside `prj-mgmt-v24.html`. All four v24 capability groups are in as well. **v5.0 is
+therefore materially larger than a parity port**, on the record; the size is managed by the phase
+order below, not by trimming the spec. **No prototype data is migrated** (D-V5-4) — FLAN is a new
+module, and `flan/data/Crisis.json` is not a requirements source.
+
+**Phase → FR mapping (D-V5-8) — 7 phases, 9 units:**
+
+| Phase | Delivers | Why here |
+|-------|----------|----------|
+| **1** | **FLAN-01** — project/phase/task core, team roster (optional user link), assignment, RBAC `flan:read`/`flan:write`, audit | Nothing else has anything to attach to. Establishes the unified task model (D-V5-1): a phase *derives* its dates and % from its tasks |
+| **2a** | **FLAN-02** scheduling engine + gate verdict, **FLAN-04** facet taxonomy | Pure server-side math over a graph; the taxonomy ships with it because the engine's `in-plan`/`Parked` basis *is* a reserved facet |
+| **2b** | **FLAN-03** timeline board, list, calendar, search/filter/grouping, flags | The 11a/11b split that worked in v3.0 — engine proven headless before the surface that renders it |
+| **3** | **FLAN-05** risks/milestones/decisions, **FLAN-06** deliveries + notes | Flat CRUD over the core; no new integration. Cheapest full-parity group |
+| **4a** | **FLAN-07** budget envelope, approval FSM, estimate lines, import | Promotion needs something to promote |
+| **4b** | **FLAN-08 — SYERP cost roll-up + estimate promotion** | **The DoD crux.** `flan_project_id` on PO/bill/work-order, estimate→PO promotion, Estimated/Committed/Actual with Actual GL-posted, trial balance still nets zero |
+| **5** | **FLAN-09** analytics — health, resource table, utilisation, critical path, velocity, estimate-vs-actual | Derives from everything above; nothing depends on it |
+| **6** | **FLAN-10** exports (CSV/Excel/JSON/ICS/PDF/HTML), comments, activity log, deep links, one-step undo | Server-native equivalents per D-V5-6 — no public share tokens |
+| **7** | **FLAN-11** prototype supersession — capability-coverage matrix, both prototypes committed and frozen, working proof | Audits every phase before it; the DoD sentence executed |
+
+**NFR-9** (deterministic, bounded schedule computation) is verified in Phase **2a** and re-asserted
+by CI thereafter.
+
+**Sequencing intent:** the DoD lands at **4b**. Analytics (5) and exports (6) sit deliberately after
+it, so a milestone that runs long puts the *tail* at risk rather than the definition of done — and
+any trim there is an owner call at that point, not an assumption baked in now.
 
 **Standing debt carried in, not scheduled:** the human QA checklist stays unrun by design
 (BACKLOG p1, `.zj/QA.md` §6); pick-path race **Q2** is still open (p2 — a pick can append to a

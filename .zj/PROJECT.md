@@ -24,7 +24,7 @@ one shop can actually deploy and operate on its own.
 | MOUSSE | Manufacturing Execution | Materials-only work-order core shipped (Phase 10, v2.0). Routing/work-centers, labor/overhead, shop-floor view deferred (D-P10-1) |
 | CRUMB | CRM | **Shipped v3.0 (Phases 11a/11b, CRUMB-01 complete):** leads → opportunities → quotes → sales orders with PLUM-derived pricing, communication log, soft-reservation |
 | GELATO | Warehouse Management | **Shipped v3.0 (Phases 12a/12b, GELATO-01):** bins, directed putaway, pick → pack → ship, reservation relief + COGS JE. Lot/serial deferred (D-V3-4) |
-| FLAN | Project Management | HTML prototype only — **the last frozen prototype; the v5.0 milestone (D-M5-1)** |
+| FLAN | Project Management | HTML prototypes only — **the last frozen prototypes; the v5.0 milestone (D-M5-1), spec'd 2026-08-18 as FLAN-01..11 + NFR-9.** *Two* sources: `prj-mgmt-v24.html` (~11.6k lines) **and** `schedule_gate-v45.html` (~3.8k lines, scheduling/gate engine — added at the v5.0 spec, D-V5-3; currently **untracked** in git, committed by FLAN-11.2) |
 | CRISP | Quality Management | Planned (deferred out of v4.0, D-M4-1; a Quality & release candidate) |
 
 ## Users
@@ -71,8 +71,19 @@ A straight parity port was offered and declined: the **SYERP cost roll-up clause
 One real foreign key to the hub is what made CRUMB and GELATO land as suite members rather than
 islands, and cost roll-up from SYERP actuals is the smallest clause that forces it. **Out of
 scope:** labor/time capture and its costing (couples FLAN's and PLUM's costing models in one
-milestone); CRISP-01 and NFR-3 offline stay deferred as PRD-9/PRD-10. Phase mapping at `/zj:spec`.
-**Next: `/zj:spec`, then `/zj:plan 1`.**
+milestone); CRISP-01 and NFR-3 offline stay deferred as PRD-9/PRD-10.
+
+**Spec'd 2026-08-18 (D-V5-1..8).** PRD-6 rewritten; SRD FLAN-01 expanded into **FLAN-01..11 +
+NFR-9**; phase→FR mapping in `ROADMAP.md` (7 phases / 9 units, DoD crux at **4b**). Scope grew at
+the owner's direction: a **second source prototype** joined the milestone —
+`flan/app/schedule_gate-v45.html` (~3.8k lines: dependency scheduling, deadline gate, facet
+taxonomy, baselines), written after BizNiceSweets was first planned — alongside all four
+`prj-mgmt-v24.html` capability groups (D-V5-3). **No prototype data is migrated** (D-V5-4): FLAN is
+a new module, so `flan/data/Crisis.json` is not a requirements source, and "retired" is evidenced by
+a capability-coverage matrix (FLAN-11) rather than by old data rendering. The hub clause resolves to
+**estimate → SYERP purchase order promotion** with the project reporting Estimated / Committed /
+**GL-posted Actual** (D-V5-5) — SYERP keeps sole ownership of spend.
+**Next: `/zj:plan 1`.**
 
 **Shipped milestones:**
 - **v4.0 — Infra-debt & quality paydown.** *"CI green on every push, both lint gates at a
