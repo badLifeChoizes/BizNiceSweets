@@ -37,7 +37,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
 # --- Projects --- create / update / read (FLAN-01.1)
@@ -260,3 +260,302 @@ class PhaseRead(BaseModel):
 
 
 # --- Tasks, roster and assignment schemas: Task 8 ---
+
+# ---------------------------------------------------------------------------
+# --- Tasks --- create / update / read (FLAN-01.3)
+# ---------------------------------------------------------------------------
+
+# Task status values, matching the flan_task.status column; the Done share is
+# what a phase's derived percent_complete counts (FLAN-01.3, D-V5-1)
+TaskStatus = Literal["To Do", "In Progress", "Done"]
+
+# Task risk levels, matching the flan_task.risk_level column (FLAN-01.3)
+RiskLevel = Literal["none", "low", "medium", "high"]
+
+
+def _check_date_order(start: date | None, due: date | None) -> None:
+    """
+    Reject a task whose due date precedes its start date (FLAN-01.3).
+
+    `due == start` is a **valid zero-duration milestone** and passes; only
+    `due < start` raises. Either date being None is fine — a task may carry one,
+    both or neither.
+
+    This can only judge the two dates it can see. A PATCH that moves ONLY one of
+    them passes here by construction, because the schema cannot read the stored
+    row; `update_task` re-checks the order over the MERGED values (Task 14). That
+    service check is load-bearing, not belt-and-braces.
+    """
+    if start is not None and due is not None and due < start:
+        raise ValueError(
+            f"due_date ({due}) must not precede start_date ({start}); "
+            "due_date == start_date is a valid zero-duration milestone."
+        )
+
+
+def _normalize_member_ids(member_ids: list[str]) -> list[str]:
+    """
+    Strip and de-duplicate a list of roster member ids, order-preserving.
+
+    Assignment rows are keyed `(task_id, member_id)` / `(phase_id, member_id)`,
+    so a payload naming the same member twice would collide on the composite PK
+    at insert. De-duplicating here makes the repeat a no-op rather than a 500.
+    Membership itself (active, same project) is the service's call — the schema
+    knows no project scope.
+    """
+    seen: list[str] = []
+    for raw in member_ids:
+        member_id = raw.strip()
+        if not member_id:
+            raise ValueError("A member id must not be empty or whitespace-only.")
+        if member_id not in seen:
+            seen.append(member_id)
+    return seen
+
+
+class TaskCreate(BaseModel):
+    """
+    Task creation payload (POST /flan/projects/{project_id}/tasks).
+
+    `phase_id` and `summary` are required. Two fields are deliberately ABSENT:
+
+      * **`key`** — the task key is server-generated as `<PREFIX>-<n>` from the
+        project's key_prefix (D-V5P1-2, D-V5P1-7) under a row lock, and is never
+        client-supplied. There is no field for a caller to fight over.
+      * **`project_id`** — the service sets it from the phase, so a task can
+        never claim a project its phase does not belong to.
+
+    `start_date`/`due_date` are optional and `due == start` is a valid
+    zero-duration milestone; only `due < start` is refused (422 here, re-checked
+    in the service). `assignee_ids` names roster members to link on create; the
+    service validates each is an ACTIVE member of the same project (FLAN-01.5).
+    `tags` are opaque strings (D-V5P1-5), same rules as a project's.
+    """
+
+    phase_id: str
+    summary: str = Field(..., min_length=1)
+    status: TaskStatus = "To Do"
+    risk_level: RiskLevel = "none"
+    start_date: date | None = None
+    due_date: date | None = None
+    pinned: bool = False
+    assignee_ids: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str]) -> list[str]:
+        """Strip, reject-if-blank and de-duplicate the tag list (D-V5P1-5)."""
+        return _normalize_tags(value)
+
+    @field_validator("assignee_ids")
+    @classmethod
+    def normalize_assignee_ids(cls, value: list[str]) -> list[str]:
+        """Strip and de-duplicate the assignee list (composite-PK safety)."""
+        return _normalize_member_ids(value)
+
+    @model_validator(mode="after")
+    def check_date_order(self) -> TaskCreate:
+        """Refuse `due_date < start_date`; `due == start` is a milestone."""
+        _check_date_order(self.start_date, self.due_date)
+        return self
+
+
+class TaskUpdate(BaseModel):
+    """
+    Task PATCH payload (PATCH /flan/tasks/{task_id}).
+
+    All fields optional — only the supplied fields are changed. `key` and
+    `project_id` are absent because both are immutable: the key is
+    server-generated once (D-V5P1-2) and the project follows the phase.
+    `phase_id` IS present — moving a task to another phase of the SAME project
+    is allowed (the service 422s a cross-project move).
+
+    The date check here sees only what the payload carries. **A PATCH that moves
+    only one of the two dates passes this schema** — it cannot read the stored
+    row — so `update_task` re-checks the order over the merged values (Task 14).
+    Supplying `tags` or `assignee_ids` REPLACES the respective set.
+    """
+
+    phase_id: str | None = None
+    summary: str | None = Field(None, min_length=1)
+    status: TaskStatus | None = None
+    risk_level: RiskLevel | None = None
+    start_date: date | None = None
+    due_date: date | None = None
+    pinned: bool | None = None
+    assignee_ids: list[str] | None = None
+    tags: list[str] | None = None
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str] | None) -> list[str] | None:
+        """Strip, reject-if-blank and de-duplicate the tag list (D-V5P1-5)."""
+        return None if value is None else _normalize_tags(value)
+
+    @field_validator("assignee_ids")
+    @classmethod
+    def normalize_assignee_ids(cls, value: list[str] | None) -> list[str] | None:
+        """Strip and de-duplicate the assignee list (composite-PK safety)."""
+        return None if value is None else _normalize_member_ids(value)
+
+    @model_validator(mode="after")
+    def check_date_order(self) -> TaskUpdate:
+        """
+        Refuse `due_date < start_date` when the payload carries BOTH dates.
+
+        A one-date PATCH is invisible here by construction; the service's merged
+        re-check is what closes that gap.
+        """
+        _check_date_order(self.start_date, self.due_date)
+        return self
+
+
+class TaskRead(BaseModel):
+    """
+    Task returned to API callers, serialized from a Task ORM instance via
+    from_attributes=True.
+
+    `key` is the human handle (`<PREFIX>-<n>`, unpadded — D-V5P1-7) and
+    `project_id` is carried alongside `phase_id` so a client never has to walk
+    the tree to learn the scope. `assignee_ids` and `tags` are service-filled
+    from `flan_task_assignee` / `flan_task_tag` (join tables, not columns, hence
+    the empty defaults when unfetched).
+    """
+
+    id: str
+    project_id: str
+    phase_id: str
+    key: str
+    summary: str
+    status: str
+    risk_level: str
+    start_date: date | None = None
+    due_date: date | None = None
+    pinned: bool
+    assignee_ids: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# --- Team roster --- create / update / read (FLAN-01.4)
+# ---------------------------------------------------------------------------
+
+
+class TeamMemberCreate(BaseModel):
+    """
+    Roster member creation payload (POST /flan/projects/{project_id}/team).
+
+    `name` is the only required field, so a person can be rostered before an
+    email or a platform account exists. `project_id` comes from the path — the
+    roster is per-project by design (FLAN-01.4), so the same person on two
+    projects is two rows.
+
+    `user_id` optionally links the member to a platform user and is **normally
+    None**: an unlinked member is fully usable as an assignee. The service
+    checks the user exists and that no other active member of the project
+    already links it (uq_flan_member_project_user).
+
+    `hourly_rate` is a fixed-point Decimal (never float — D-11) and is
+    **stored and read by nothing in v5.0** (D-V5-2 / D-M5-2): no rollup, report
+    or endpoint in this release computes cost from it. It crosses the wire as a
+    JSON string, matching `Decimal` handling everywhere else in the platform.
+
+    `active` is absent — it is the soft-remove flag, owned by
+    DELETE /flan/team/{member_id} (which also clears the member's assignment
+    rows, D-V5P1-6); a member is always created active.
+    """
+
+    name: str = Field(..., min_length=1)
+    role: str | None = Field(None, max_length=60)
+    email: str | None = Field(None, max_length=255)
+    color: str | None = Field(None, max_length=7)
+    hourly_rate: Decimal | None = Field(None, ge=0)
+    user_id: str | None = None
+
+
+class TeamMemberUpdate(BaseModel):
+    """
+    Roster member PATCH payload (PATCH /flan/team/{member_id}).
+
+    All fields optional — only the supplied fields are changed. `project_id` is
+    absent because a member belongs to exactly one project's roster for its
+    whole life (FLAN-01.4).
+
+    `active` is absent for the same reason it is absent from ProjectUpdate:
+    removal is its own endpoint (DELETE /flan/team/{member_id}), a soft-remove
+    that ALSO deletes the member's `flan_task_assignee` / `flan_phase_assignee`
+    rows in the same transaction (D-V5P1-6). A PATCH able to flip the flag on
+    its own would leave those assignment rows orphaned — exactly the state the
+    soft-remove exists to prevent.
+
+    `hourly_rate` remains stored-and-unread in v5.0 (D-V5-2 / D-M5-2).
+    """
+
+    name: str | None = Field(None, min_length=1)
+    role: str | None = Field(None, max_length=60)
+    email: str | None = Field(None, max_length=255)
+    color: str | None = Field(None, max_length=7)
+    hourly_rate: Decimal | None = Field(None, ge=0)
+    user_id: str | None = None
+
+
+class TeamMemberRead(BaseModel):
+    """
+    Roster member returned to API callers, serialized from a TeamMember ORM
+    instance via from_attributes=True.
+
+    `active` is the soft-remove flag — False means removed: the row is retained
+    so historical references still resolve, but the member is excluded from
+    assignee pickers and from the default roster listing (FLAN-01.4). `user_id`
+    is None for the common unlinked member. `hourly_rate` is emitted as a JSON
+    string (never a float — D-11) and, in v5.0, is read by nothing (D-V5-2 /
+    D-M5-2) — it is returned for display and round-tripping only.
+    """
+
+    id: str
+    project_id: str
+    name: str
+    role: str | None = None
+    email: str | None = None
+    color: str | None = None
+    hourly_rate: Decimal | None = None
+    user_id: str | None = None
+    active: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# --- Assignment --- full-replacement assignee set (FLAN-01.5)
+# ---------------------------------------------------------------------------
+
+
+class AssigneeSet(BaseModel):
+    """
+    Assignee replacement payload for PUT /flan/tasks/{task_id}/assignees and
+    PUT /flan/phases/{phase_id}/assignees.
+
+    It is a PUT, not a PATCH: `member_ids` is the COMPLETE assignee list after
+    the call, and the service replaces the existing rows with it. An empty list
+    is valid and means "no assignees" — that is how assignments are cleared.
+
+    Ids are stripped and de-duplicated here; the service enforces the part the
+    schema cannot see: every id must name an ACTIVE member of the SAME project
+    as the target (422 naming the offending id), which is what makes "assignees
+    drawn from the project roster" (FLAN-01.5) enforced rather than
+    conventional.
+    """
+
+    member_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("member_ids")
+    @classmethod
+    def normalize_member_ids(cls, value: list[str]) -> list[str]:
+        """Strip, reject-if-blank and de-duplicate the member id list."""
+        return _normalize_member_ids(value)
