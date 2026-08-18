@@ -19,17 +19,28 @@ before tagging.
       102]`, (j) green; drop only `prepared.sort(...)` → (j) RED
       `asyncpg.exceptions.DeadlockDetectedError`, (i) green; both restored → 23/23 PASS.
       Gate: 17/17 non-API `verify_*` exit 0, `pytest -q` 245 passed, `ruff check .` exit 0
-- [ ] **GAP-3** (major) — CI job running the 9 `verify_*_api.py` scripts (161 assertions,
-      currently zero coverage anywhere, incl. the financial-reporting HTTP surface)
+- [x] **GAP-3** (major) — new glob-driven `verify-scripts-api` job boots uvicorn on :8099
+      against the Postgres service and runs the 9 `verify_*_api.py`. Locally reproduced on a
+      fresh `postgres:17`: **9/9 exit 0, 251 PASS assertions**. **Negative control executed** —
+      the audit's own scenario (`require_permission("syerp:reed")` on `/reports/balance-sheet`)
+      → `verify_reports_api.py` exit 1, `FAIL: … status=403`; router restored byte-identical.
+      This closes the one claim the audit itself could not prove.
 - [ ] **GAP-4** (major) — push the audited tip, get CI green, merge the v4.0 stack to `master`
       (4th consecutive milestone of master-merge debt)
 - [ ] **GAP-5** (minor) — branch protection: add `container-image` (+ the new API job) to the
       required contexts, set `enforce_admins: true` — **after** the merge
-- [ ] **GAP-6** (minor) — `container-image` job boots the image it builds and curls
-      `/health/ready`, converting the boot path from asserted to exercised
+- [x] **GAP-6** (minor) — `container-image` now runs the image it builds against a
+      `postgres:17-alpine` service (the image `compose.yml` pins), with `.env`/`.env.db` built
+      from the tracked templates. Locally: entrypoint wait → `alembic 0001→0017` → startup
+      complete → `/health/ready` `{"status":"ok","db":"connected"}`. **Negative control:** omit
+      `--env-file .env.db` → never ready, dies on `postgres_password Field required` — i.e. it
+      reproduces U0 on demand.
 - [ ] **GAP-7** (minor) — `.zj/QA.md` NFR-8 status row contradicts the SRD; extend
       `verify_qa_doc.py` to cross-check status cells against the SRD
-- [ ] **GAP-8** (nit) — `frontend/eslint.config.js` falls outside its own `files` glob
+- [x] **GAP-8** (nit) — second config block gates `**/*.{js,mjs,cjs}` so the config lints
+      itself. Coverage demonstrated: planted `no-empty` violation caught (exit 1) against the new
+      config, **exit 0 / 0 problems** against the reconstructed old one; a new `.js` file is also
+      caught. `npm run lint` exit 0.
 
 ## Doctor / spec hygiene
 

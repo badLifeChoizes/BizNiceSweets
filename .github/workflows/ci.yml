@@ -25,6 +25,25 @@ jobs:
   container-image:
     name: container-image
     runs-on: ubuntu-latest
+    # GAP-6 (v4.0 milestone audit): the job used to build and stop, so NOTHING in
+    # CI ever ran the stack it ships. This service exists for the boot probe at the
+    # end of the job. postgres:17-alpine (not the plain postgres:17 the test jobs
+    # use) is deliberate: it is the image compose/compose.yml pins, and this job is
+    # about what a self-hoster actually deploys. Credentials must match ../.env.db.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: ci_test_pw
+          POSTGRES_DB: biznice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       # `docker build` on the runner returns a trustworthy exit status, unlike the
@@ -53,6 +72,58 @@ jobs:
           # Positive side: the tag must actually exist afterwards.
           docker image inspect biznicesweets-api:ci > /dev/null
           echo "image built from Containerfile, log clean"
+
+      # --- Boot the image we just built (GAP-6) --------------------------------
+      # test_compose_config.py and test_containerfile_config.py parse TEXT; they
+      # never boot anything. So a change to backend/entrypoint.sh (the Postgres
+      # wait, `alembic upgrade head`, the seed order) or to the .env/.env.db wiring
+      # passed every static assertion and every green job, and the first person to
+      # find out was a self-hoster on a fresh volume. That is defect U0's story one
+      # layer up. These steps convert the boot path from asserted to exercised.
+      - name: Create .env and .env.db from the templates, as a deploy does
+        # The container must get its config the way a real deploy does (D-P5-10):
+        # app secrets from .env, database credentials from .env.db. Building them
+        # from the tracked *.example templates means a template that stops carrying
+        # a key the app needs fails HERE, on the runbook's own first two commands.
+        run: |
+          sed -e 's|^JWT_SECRET=.*|JWT_SECRET=ci_test_jwt_secret_at_least_32_chars_long|' \
+              -e 's|^BNS_ADMIN_PASSWORD=.*|BNS_ADMIN_PASSWORD=ci_test_pw|' \
+              .env.example > .env
+          sed -e 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=ci_test_pw|' \
+              .env.db.example > .env.db
+          grep -q '^POSTGRES_PASSWORD=ci_test_pw$' .env.db  # the sed actually hit
+
+      - name: Run the built image against Postgres and probe /health/ready
+        # --network host because the service container is published on the runner's
+        # own localhost:5432, and it puts the api on localhost:8000 for curl.
+        # POSTGRES_HOST is overridden on the command line for exactly the reason
+        # compose.yml overrides it in `environment:` — .env ships the compose
+        # service name `db`, which is not this network's name for it.
+        run: |
+          docker run -d --name bns-api-ci --network host \
+            --env-file .env --env-file .env.db \
+            -e POSTGRES_HOST=localhost \
+            biznicesweets-api:ci
+          for _ in $(seq 1 60); do
+            # /health/ready returns 503 when the DB is unreachable, so `curl -f`
+            # here proves migrations ran and the pool connects — not merely that
+            # a process started.
+            if curl -fsS http://localhost:8000/health/ready; then
+              echo
+              echo "the built image booted and reports ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::the image built but never came up. Every static config'
+          echo 'assertion can still pass while entrypoint.sh or the .env/.env.db'
+          echo 'wiring is broken — that is U0. Container log follows.'
+          docker logs bns-api-ci
+          exit 1
+
+      - name: Remove the probe container
+        if: always()
+        run: docker rm -f bns-api-ci 2> /dev/null || true
 
   frontend:
     name: frontend
@@ -324,3 +395,96 @@ jobs:
           fi
           echo "manifest byte-identical across two runs on a fresh database"
           wc -l "$RUNNER_TEMP/manifest-1.txt" "$RUNNER_TEMP/census-1.txt"
+
+  # GAP-3 (v4.0 milestone audit): the 9 `verify_*_api.py` scripts ran in NO job.
+  # `verify-scripts` deliberately `continue`s past them because they need a SERVING
+  # api, so ~250 router-level assertions — RBAC status codes, audit rows, FSM
+  # rejections — sat outside CI entirely. Worst of it: verify_reports_api.py is the
+  # ONLY automated coverage anywhere of /reports/trial-balance, /reports/profit-loss,
+  # /reports/balance-sheet and /ap/aging (`grep -rn "profit-loss" backend/tests/` → 0),
+  # including the P&L missing-bound 422 that was the v2.0 milestone audit's own
+  # remediation. Drop the syerp:read gate off a report and every other job stays green.
+  #
+  # Glob-driven exactly like `verify-scripts` (`for s in scripts/verify_*_api.py`,
+  # `set -e`), so a future API script enrols in CI for free — no workflow edit.
+  #
+  # NOTE — like `container-image`, this job is NOT yet one of `master`'s required
+  # status contexts; that is a repo-settings change no workflow file can make.
+  # Until someone adds it, it reports but does not block.
+  verify-scripts-api:
+    name: verify-scripts-api
+    runs-on: ubuntu-latest
+    # Same shape as `verify-scripts`: the scripts build their own engine against
+    # `biznice` (config default DB) and do NOT self-create or migrate it, so the
+    # service creates it at init (POSTGRES_DB) and the job migrates it below.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: ci_test_pw
+          POSTGRES_DB: biznice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: biznice
+      POSTGRES_PASSWORD: ci_test_pw
+      JWT_SECRET: ci_test_jwt_secret_at_least_32_chars_long
+      BNS_ADMIN_PASSWORD: ci_test_pw
+      PYTHONPATH: ${{ github.workspace }}/backend
+      # Every *_api.py reads this (default http://localhost:8000). 8099 keeps the
+      # job off the port a self-hoster's stack uses, matching how the audit ran it.
+      BNS_API_BASE_URL: http://127.0.0.1:8099
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Migrate biznice to head
+        # Only the migration is done by hand here. Unlike `verify-scripts`, the
+        # seeds are NOT run as a separate step: app.main's lifespan runs them when
+        # uvicorn starts below, which is the real startup path — so booting the app
+        # is itself the proof that the seeds apply to a freshly migrated database.
+        run: python -m alembic upgrade head
+      - name: Boot the api and wait for /health/ready
+        run: |
+          set -e
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8099 \
+            > "$RUNNER_TEMP/uvicorn.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -fsS "$BNS_API_BASE_URL/health/ready"; then
+              echo
+              echo "api is serving on 8099"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the api never became ready on 8099 — the *_api.py scripts"
+          echo "drive it over real HTTP and cannot run without it."
+          cat "$RUNNER_TEMP/uvicorn.log"
+          exit 1
+      - name: Run the *_api.py verify scripts against the running api
+        run: |
+          set -e
+          for s in scripts/verify_*_api.py; do
+            echo "== $s =="
+            python "$s"
+          done
+      - name: Dump the api log on failure
+        if: failure()
+        run: cat "$RUNNER_TEMP/uvicorn.log"
