@@ -256,7 +256,7 @@ UI or service list that orders by key must sort on the **numeric suffix**, not t
 - **Verify:** `cd $BNS/backend && env $PGTEST POSTGRES_PASSWORD=x JWT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx BNS_ADMIN_PASSWORD=x .venv/bin/python -c "import app.core.models; from app.core.base import Base; print([t for t in Base.metadata.tables if t.startswith('flan_')])" && .venv/bin/ruff check .`
 - **Parallel-ok:** no
 
-### [ ] 3. Define the TeamMember model and the two assignment join tables
+### [x] 3. Define the TeamMember model and the two assignment join tables
 - **Serves:** FLAN-01.4, FLAN-01.5
 - **Files:** `backend/app/modules/flan/models.py`
 - **Do:**
@@ -950,6 +950,14 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
 - **Task 2 — `description` columns are bare `String`** (unbounded) on both `flan_project` and
   `flan_phase`, matching the CRUMB exemplar; the plan said "nullable" without naming a length.
 
+- **Task 3 — verified from a throwaway container, not `compose_api_1`.** Task 5's concurrent
+  cold-start check took the whole `compose_*` stack down mid-run. The Task-3 check is pure
+  SQLAlchemy metadata introspection and needs no database, so it ran the identical Python in a
+  throwaway container off the same `compose_api` image with `backend/` mounted at `/app` and both
+  env files passed (`app.modules.auth.router` instantiates `Settings()` at import, which has no
+  defaults for the three secrets). Real import path, no stub. Deviation is in the runner, not the
+  check.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -965,3 +973,12 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
 - **Alembic will emit `ix_flan_project_tag_tag` / `ix_flan_task_tag_tag` as separate
   `CREATE INDEX` statements** — they come from `index=True` on a column that is also part of a
   composite PK. Worth confirming in Task 6's hand-review of `0018` rather than assuming.
+
+- **A module `__init__.py` that imports a not-yet-existing `router` breaks `import app.core.models`
+  repo-wide** — Alembic's `env.py` included — for the whole window. It happened here between Task 5
+  writing `flan/__init__.py` and Task 5 writing `flan/router.py`, and self-resolved. Worth knowing
+  because the failure mode is a spurious `ModuleNotFoundError` in an *unrelated* command: retry
+  before debugging.
+- **`podman exec … compose_api_1` is a fragile default for DB-free checks** given the stack gets
+  cycled several times across a phase (Task 5 and Task 33 both require a full `down`/`up`). For any
+  check that needs no database, the throwaway-container form is the more robust idiom.
