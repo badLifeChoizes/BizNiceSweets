@@ -277,7 +277,7 @@ UI or service list that orders by key must sort on the **numeric suffix**, not t
   `cd $BNS/backend && .venv/bin/ruff check .`
 - **Parallel-ok:** no (same file as Task 2)
 
-### [ ] 4. Seed the `flan:read` and `flan:write` permissions
+### [x] 4. Seed the `flan:read` and `flan:write` permissions
 - **Serves:** FLAN-01.7 (CORE-05, D-P10-6)
 - **Files:** `backend/app/modules/auth/seed.py`
 - **Do:** Add `("flan:read", "Read access to FLAN (project management)")` and
@@ -897,3 +897,54 @@ Everything the CONTEXT names as a non-goal, restated so build cannot drift:
 - **A concurrency crux.** The project-row lock in Task 14 is defensive; no barrier race is verified
   in this phase.
 - **A server-side module-enable gate** — the standing p2 gap; FLAN inherits the existing behaviour.
+
+---
+
+## Deviations
+
+Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went to the owner.
+
+- **Preflight — the plan's Context block was stale on three command details.** The compose db user
+  is **`app`** with database `biznice` (`.env.db`), not `postgres`/`biznice`; health routes are
+  **`/health/live` / `/health/ready`**, not `/api/v1/health`; and the stack that was actually
+  running was the **prod-only** compose (no source bind mount, no `--reload`), so backend edits
+  would have been invisible to the API container. The dev overlay is now up. Full corrected-command
+  table lives in `docs/tasks/feature-flan-core.md` → "Build notes".
+
+- **Preflight — "the backend pytest suite CANNOT run in-container" is wrong, and this retires the
+  tax the Context says has ridden four phases.** The blocker was never the container; it was the
+  **mount point**. Two separate walls: `backend/tests/conftest.py` has no no-DB run mode, so a host
+  venv run aborts at collection against the unpublished compose `db`; and under the dev overlay's
+  `-v ../backend:/app`, `tests/test_compose_config.py` and `tests/test_containerfile_config.py`
+  resolve the repo root by walking up from `__file__`, land on `/`, and give `3 failed, 236 passed,
+  6 errors`. Mounting the **repo root** clears both:
+
+  ```bash
+  podman run --rm --user root --network compose_default -v "$PWD:/repo:z" -w /repo/backend \
+    --env-file .env --env-file .env.db \
+    -e POSTGRES_HOST=db -e PYTHONPATH=/repo/backend -e TEST_POSTGRES_DB=biznice_test \
+    compose_api sh -c "pip install -q -r requirements-dev.txt >/dev/null 2>&1; python -m pytest -q"
+  ```
+
+  Verified at preflight: those 9 layout tests go **9 passed** under it. This is the runner for
+  Tasks 31, 32 and 33 wherever the plan says "host venv … pytest". Note the Risks table's last row
+  ("The backend suite cannot be run at all") is therefore resolved, not merely worked around.
+
+- **Preflight — `flan/app/schedule_gate-v45.html` was untracked.** D-V5P1-2 and D-V5P1-7 cite it by
+  line number (`:3197-3207`, `:3205`), so two binding decisions referenced a file that existed only
+  on the owner's disk. Committed as a frozen reference (`49567ff`) on `master` before branching,
+  with the owner's agreement.
+
+- **Task 4 — placement within the seed lists.** The plan said "line 32ff / 47ff" without specifying
+  position. The pair went after the `gelato:*` pair and before `settings:manage` in `_PERMISSIONS`,
+  and last in `_USER_ROLE_PERMS`, matching the file's suite-by-suite ordering with `settings:manage`
+  kept as the trailing non-suite entry.
+
+## Noticed
+
+Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
+
+- **`backend/app/modules/auth/seed.py`'s module docstring enumerates a stale permission list.** Its
+  step-1 enumeration runs only through `plum:*` — it omits `mousse:*`, `crumb:*`, `gelato:*` and
+  `settings:manage`. Task 4 appended `flan:read`/`flan:write` as instructed but deliberately did not
+  back-fill the other four suites' codes. A one-line doc fix; no behaviour depends on it.
