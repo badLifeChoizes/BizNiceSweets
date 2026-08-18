@@ -1,10 +1,45 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-18 (**v5.0 Phase 1 "FLAN core" PLANNED — `/zj:plan 1`.**
-`.zj/phases/01-flan-core/` holds `CONTEXT.md` + `PLAN.md`: **35 tasks in five waves**, all 7 of
-FLAN-01's acceptance criteria covered and cited, every task with a runnable Verify command.
-**7 owner decisions → D-V5P1-1..7.** Nothing built yet. **Next: `/zj:build 1`.**)
+Updated: 2026-08-18 (**v5.0 Phase 1 "FLAN core" BUILD IN FLIGHT — `/zj:build 1`.**
+Branch `feature-flan-core`; checklist `docs/tasks/feature-flan-core.md`. Task 1 done (`74e4b30`).
+Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PLAN.md`.**)
 
-## Position: v5.0 Phase 1 planned — build not started
+## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
+
+**Current task:** Wave A (schema), tasks 2-6. Ticked tasks are marked `### [x]` in
+`.zj/phases/01-flan-core/PLAN.md`; resume at the first `### [ ]`.
+
+**Preflight corrections recorded at build start** (the plan's Context block was stale on three
+command details — full table in `docs/tasks/feature-flan-core.md` "Build notes"):
+
+1. The compose db user is **`app`**, database `biznice` (`.env.db`) — the plan's `psql -U postgres`
+   and `-U biznice` both fail.
+2. Health routes are **`/health/live`** and **`/health/ready`**, not `/api/v1/health`.
+3. **The backend pytest suite DOES run** — retiring the "cannot run in-container" tax the plan
+   carried into a fourth phase. The blocker was never the container; it was the *mount point*.
+   `backend/tests/conftest.py` has no no-DB run mode, so a host venv run aborts at collection
+   against the unpublished compose `db`; and under the dev overlay's `-v ../backend:/app`,
+   `tests/test_compose_config.py` + `tests/test_containerfile_config.py` resolve the repo root by
+   walking up from `__file__` and land on `/`, giving 3 failed + 6 errors. Mounting the **repo
+   root** fixes both:
+
+   ```bash
+   podman run --rm --user root --network compose_default -v "$PWD:/repo:z" -w /repo/backend \
+     --env-file .env --env-file .env.db \
+     -e POSTGRES_HOST=db -e PYTHONPATH=/repo/backend -e TEST_POSTGRES_DB=biznice_test \
+     compose_api sh -c "pip install -q -r requirements-dev.txt >/dev/null 2>&1; python -m pytest -q"
+   ```
+
+   Verified: those 9 layout tests go **9 passed** under it. Pre-build baseline under the *old*
+   mount was `3 failed, 236 passed, 6 errors`.
+4. The stack that was running was **prod-only** (no source bind mount, no `--reload`) so backend
+   edits were invisible to the API. The dev overlay is now up:
+   `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`.
+
+**Also committed at preflight:** `flan/app/schedule_gate-v45.html` (`49567ff`, on master before
+branching) — the v45 prototype that D-V5P1-2 and D-V5P1-7 cite by line number was untracked, so
+those binding decisions cited a file that existed only on the owner's disk.
+
+## Position (as planned): v5.0 Phase 1 planned — build not started
 
 **Phase 1 = SRD FLAN-01** (project/phase/task core, team roster with an optional platform-user link,
 assignment, RBAC `flan:read`/`flan:write`, audit) — the first phase of the 7-phase v5.0 FLAN port

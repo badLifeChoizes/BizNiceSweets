@@ -209,7 +209,7 @@ UI or service list that orders by key must sort on the **numeric suffix**, not t
 
 ## Tasks
 
-### [ ] 1. Open the `feature-flan-core` branch with its task checklist
+### [x] 1. Open the `feature-flan-core` branch with its task checklist
 - **Files:** `docs/tasks/feature-flan-core.md` (new)
 - **Do:** Branch from `master` as `feature-flan-core` (project rule: `feature-*`). Create the
   checklist file listing tasks 2–35 of this plan verbatim as unchecked items, each with its
