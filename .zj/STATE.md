@@ -5,26 +5,31 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** Wave A (schema), tasks 2-6. **Done: 1, 2, 3, 4.** Task **5 is in flight**
-(module registration — it owns `flan/__init__.py`, `flan/router.py`, `app/main.py`, and is running
-the required full `down`/`up` cold start, so the `compose_*` stack may be down or mid-boot).
-Task 6 (migration `0018`) serializes behind it. Ticked tasks are marked `### [x]` in
-`.zj/phases/01-flan-core/PLAN.md`; **resume at the first `### [ ]`** — re-run any in-flight task
-from scratch rather than trusting a partial edit.
+**Current task:** Wave A (schema). **Done: 1, 2, 3, 4, 5.** Task **6 (Alembic `0018`) is in
+flight** — the last Wave A task. Next after it: Wave B (service + router), tasks 7-18, which opens
+with 7 and 8 (Pydantic schemas) as a parallel pair.
 
-**If the working tree holds uncommitted `backend/app/main.py`, `flan/__init__.py` or an untracked
-`flan/router.py`**, that is Task 5's engineer mid-write, not abandoned work: `git checkout` /
-remove them and re-run Task 5.
+Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
+`### [ ]`** — re-run any in-flight task from scratch rather than trusting a partial edit. An
+uncommitted `backend/alembic/versions/0018*.py` in the tree is Task 6 mid-write.
 
-**Before running anything, bring the stack back up** — Task 5 cycles it:
-`podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`
+**Verified live at Wave A close (manager, not taken on report):** all eight `flan_*` tables in
+`Base.metadata`; `registry` lists `flan` among seven modules; a full `down`/`up` cold boot is clean
+with no cross-module FK-resolution traceback; `ruff` 0. The FLAN tables are in metadata but **not
+yet in the database** — that is exactly what Task 6 adds.
 
-**Live hazard for Task 6.** A module `__init__.py` that imports a not-yet-existing `router` breaks
-`import app.core.models` repo-wide, Alembic's `env.py` included. If `alembic revision --autogenerate`
-dies with a spurious `ModuleNotFoundError`, retry before debugging — see PLAN `## Noticed`.
+**Corrected commands** (the plan's Context block is wrong on all three; full table in
+`docs/tasks/feature-flan-core.md` → "Build notes"):
+- db is `psql -U app -d biznice`, not `-U postgres` / `-U biznice`
+- health is `/health/ready`, not `/api/v1/health`
+- modules is `/api/v1/core/modules` (auth-gated, OAuth2 **form** login), not `/api/v1/modules`
+- alembic and pytest both run from a **throwaway container with the repo root at `/repo`**,
+  `--user root`, on `--network compose_default` — not the host venv (compose `db` is unpublished)
+  and not `compose_api_1` (non-root, so writes to the bind mount fail)
 
-Commits so far: `74e4b30` (T1), `dadbf58` (T4), `fdf556c` (T2), `ae13509` (T3), plus `de5bde1` /
-`91a83a7` / `1afdc19` / `205b63b` recording ticks, deviations and Noticed.
+Commits: `74e4b30` (T1), `fdf556c` (T2), `ae13509` (T3), `dadbf58` (T4), `9dfd406` (T5), plus
+`de5bde1` / `91a83a7` / `1afdc19` / `205b63b` / `f8b110d` / `a560e83` recording ticks, deviations
+and Noticed.
 
 ## Position (as planned): v5.0 Phase 1 planned — build not started
 
