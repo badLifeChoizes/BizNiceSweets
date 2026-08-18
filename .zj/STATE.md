@@ -5,8 +5,17 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** Wave A (schema), tasks 2-6. Ticked tasks are marked `### [x]` in
-`.zj/phases/01-flan-core/PLAN.md`; resume at the first `### [ ]`.
+**Current task:** Wave A (schema), tasks 2-6. **Done: 1, 2, 4.** Tasks **3 and 5 are in flight**
+as concurrent engineers (file lists verified disjoint: 3 owns `flan/models.py`, 5 owns
+`flan/__init__.py` + `flan/router.py` + `app/main.py`). Task 6 (migration `0018`) serializes behind
+both. Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
+`### [ ]`** — re-run any in-flight task from scratch rather than trusting a partial edit.
+
+**If the working tree holds uncommitted `backend/app/modules/flan/models.py` changes**, that is
+Task 3's engineer mid-write, not abandoned work: `git checkout` it and re-run Task 3.
+
+Commits so far: `74e4b30` (T1), `dadbf58` (T4), `fdf556c` (T2), plus `de5bde1` / `91a83a7`
+recording ticks, deviations and Noticed.
 
 **Preflight corrections recorded at build start** (the plan's Context block was stale on three
 command details — full table in `docs/tasks/feature-flan-core.md` "Build notes"):
