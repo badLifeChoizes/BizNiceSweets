@@ -554,7 +554,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS && curl -s http://localhost:8000/openapi.json | python3 -c "import json,sys; p=json.load(sys.stdin)['paths']; print(sorted(k for k in p if k.startswith('/api/v1/flan')))"`
 - **Parallel-ok:** no
 
-### [ ] 18. Expose the task, roster and assignment endpoints on the FLAN router
+### [x] 18. Expose the task, roster and assignment endpoints on the FLAN router
 - **Serves:** FLAN-01.3, FLAN-01.4, FLAN-01.5, FLAN-01.7 (NFR-1, CORE-05)
 - **Files:** `backend/app/modules/flan/router.py`
 - **Do:** `GET/POST /flan/projects/{project_id}/tasks` (GET takes `phase_id` and `assignee_id` query
@@ -1306,6 +1306,23 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   (CRIS/USD/dated/Client vs MANI/EUR/undated/None), so hardcoded defaults cannot satisfy it. Tests
   went 6 → 9 with all six pre-existing Task 22 tests still passing.
 
+- **Task 18 — the plan's "all twelve routes" is an off-by-one.** Task 18's own additions are **11**
+  operations (2 tasks-list + 3 task + 2 team-list + 2 member + 2 PUTs); Task 17 landed 9; 9 + 11 = the
+  **20**-operation surface the Context block specifies. Every route the `Do` bullet enumerates exists
+  — the count in the Done-when was simply wrong, like Task 17's "eight".
+- **Task 18 — the assignee PUTs answer with `AssigneeSet`** (`{"member_ids": [...]}`), not the target
+  row, because `PhaseRead` carries **no** assignee field at all — a phase row physically could not
+  show the caller what it just set. The FE hooks type those responses `Task`/`Phase` but never read
+  the body (they invalidate from the mutation variables), so nothing breaks; the type is cosmetically
+  wrong and is a one-word change if anyone ever reads it.
+- **Task 18 — `GET /flan/projects/{id}/team` gained an `include_removed` query flag** (default false),
+  mirroring `include_archived` on the project list and the existing `list_members` kwarg. Adds no
+  route. The FE never sends it — deliberately, per the owner's no-reactivation decision — but it made
+  the soft-remove row-level proof possible.
+- **Task 18 — `task.deleted`'s detail names the task id, not its key.** `delete_task` returns `None`
+  and fetching the key first would add a read to a thin route. Matches Task 17's `phase.deleted`. The
+  plan required only `task.created` to name the key.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1433,3 +1450,15 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   running UAT database. Audit rows are append-only (D-14) so they were deliberately not deleted, and
   the project was left archived so it stays out of default lists. A `--fresh` stack restart clears it;
   Task 33's cold `down`/`up` is the natural moment.
+
+- **⚠ TASK KEYS ARE RE-ISSUED AFTER A DELETE — raised to the owner.** `generate_task_key` derives from
+  the max **existing** key, so deleting the highest-numbered task frees its number: after deleting
+  `T18P-1`, the next create got `T18P-1` again. Uniqueness still holds (the constraint is over live
+  rows), but **two different task ids now appear in `audit_log` under the same key**, and a key is a
+  handle people quote. Matters more here than in most projects: the platform's stated posture is that
+  audit trail and traceability are first-class (medical-device origin), and FLAN-10's deep links and
+  exports will treat a key as a stable handle.
+- **`flan_phase.project_id`, `flan_team_member.project_id` and `flan_phase_assignee.member_id` carry
+  no `ondelete=CASCADE`**, so deleting a project row directly fails on all three. Nothing is broken
+  today — there is no project-delete endpoint, only archive — but "delete a project" would be a
+  four-statement operation if it is ever added.
