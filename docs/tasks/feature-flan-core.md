@@ -14,7 +14,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 
 - [ ] 2. Define the Project, Phase and Task ORM models — _FLAN-01.1, FLAN-01.2, FLAN-01.3_
 - [ ] 3. Define the TeamMember model and the two assignment join tables — _FLAN-01.4, FLAN-01.5_
-- [ ] 4. Seed the `flan:read` and `flan:write` permissions — _FLAN-01.7 (CORE-05, D-P10-6)_
+- [x] 4. Seed the `flan:read` and `flan:write` permissions — _FLAN-01.7 (CORE-05, D-P10-6)_
 - [ ] 5. Register the flan module with the app registry — _FLAN-01.7 (CORE-07)_
 - [ ] 6. Generate and apply Alembic migration 0018 for the FLAN tables — _FLAN-01.1, .2, .3, .4, .5_
 

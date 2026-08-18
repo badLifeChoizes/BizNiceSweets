@@ -7,7 +7,8 @@ All operations are idempotent — safe to call on repeated `podman-compose up`
 
 Seed sequence:
   1. Upsert permission rows by code (users:manage, syerp:read, syerp:write,
-     plum:read, plum:write) — check existence before insert.
+     plum:read, plum:write, flan:read, flan:write) — check existence before
+     insert.
   2. Upsert 'admin' and 'user' roles by name.
   3. Assign ALL permissions to 'admin'; assign the business read/write
      permissions to 'user' (but NOT users:manage).
@@ -41,6 +42,8 @@ _PERMISSIONS: list[tuple[str, str]] = [
     ("crumb:write", "Write access to CRUMB"),
     ("gelato:read", "Read access to GELATO (warehouse management)"),
     ("gelato:write", "Write access to GELATO"),
+    ("flan:read", "Read access to FLAN (project management)"),
+    ("flan:write", "Write access to FLAN"),
     ("settings:manage", "Configure system settings and enable/disable modules"),
 ]
 
@@ -56,6 +59,8 @@ _USER_ROLE_PERMS: set[str] = {
     "crumb:write",
     "gelato:read",
     "gelato:write",
+    "flan:read",
+    "flan:write",
 }
 
 
