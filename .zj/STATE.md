@@ -23,33 +23,42 @@ merge to `master` → tag there. Checklist: `docs/tasks/chore-human-uat.md`.
   requirements-progress.md (still claimed the PLUM tests "have never actually run"). `e28d720`
 - **Work log** `.zj/logs/milestone-v4.0.md` + **LEARNINGS "Milestone v4.0"** roll-up. `e9ffccb`
 
-### In flight — two engineers running, work UNCOMMITTED in the tree
-- **GAP-2** (major) — `execute_pick` is the one ledger writer outside the NFR-7 lock discipline.
-  Auditor reproduced both modes under a barrier: two concurrent first-picks → **two open
-  shipments** (stock unreachable, no list-shipments-for-SO route); opposite-order lines →
-  **deadlock 6/6**. Fix = sort lines by `item_id` + lock the SO row, both mutation-pinned as
-  `verify_gelato_ship.py` barrier scenarios. *Touching `backend/app/modules/gelato/service/
-  shipments.py` + `backend/scripts/verify_gelato_ship.py` — these are the uncommitted files.*
+- **GAP-2** (major) — **FIXED `4dc3154`.** `execute_pick` was the last ledger writer outside the
+  NFR-7 discipline. Both modes had been reproduced under a barrier; the fix locks the SO row
+  `FOR UPDATE` before the shipment get-or-create and moves lines in sorted item-id order after a
+  pure-read validation pass. **Each half proven load-bearing in isolation** (drop only the lock →
+  scenario (i) RED `shipments_for_so=[101, 102]`; drop only the sort → (j) RED
+  `DeadlockDetectedError`; both restored → 23/23 PASS). Also fixed an unnamed lost `qty_picked`
+  update. Gate: 17/17 non-API `verify_*`, pytest 245/0-skipped, ruff clean.
+- **NFR-7 trued up + `zj doctor` now 0 errors** (`233ef70`) — the Statement had never listed
+  `pick`, which is exactly how `execute_pick` passed Phase 4 verification. Amended (D-M4-5),
+  Evidence added, status → `implemented`, re-stamped to `4dc3154`. BACKLOG: the unsorted-locks item
+  CLOSED; the Q1/Q2 item **half**-closed (Q1 fixed, **Q2 still open** — a pick can still append to
+  a shipment a concurrent pack flipped to `packed`; the SO lock does not close it); new p3 filed
+  for GELATO's missing list-shipments-for-an-SO route.
+
+### In flight — one engineer running, work UNCOMMITTED in the tree
 - **GAP-3/6/8** — CI job for the 9 `verify_*_api.py` scripts (161 assertions, currently zero
   coverage incl. the whole financial-reporting HTTP surface); `container-image` job must **boot**
   the artifact it builds and curl `/health/ready`; `eslint.config.js` lints itself.
+  *Uncommitted: `.github/workflows/ci.yml`, `frontend/eslint.config.js` — left in the tree
+  deliberately because the agent has not yet proven them; do not commit them blind.*
 
-### Remaining after those land
-1. `SRD.md` NFR-7 — status `verified` → vocabulary word + `Evidence:` line (the one `zj doctor`
-   **error**); Statement extended to name `pick` as a writer.
-2. `CHANGELOG.md` v4.0 section (generated from commits — 25 feat/fix/ci since `v3.0`).
-3. **GAP-4** — push `chore-human-uat`, confirm CI green, fresh PR → merge to `master`. PR #4 is
-   stale (180+ commits behind). `origin/master` = `9903f1f` and has **no `.github/` at all**;
+### Remaining after that lands
+1. `CHANGELOG.md` v4.0 section (generated from commits — 25 feat/fix/ci since `v3.0`, plus the
+   close fixes).
+2. **GAP-4** — push `chore-human-uat`, confirm CI green, fresh PR → merge to `master`. PR #4 is
+   stale (180+ commits behind). `origin/master` = `9903f1f` and has **no `.github/` at all`**;
    4th consecutive milestone of master-merge debt.
-4. **GAP-5** — branch protection: add `container-image` + `verify-scripts-api` to required
+3. **GAP-5** — branch protection: add `container-image` + `verify-scripts-api` to required
    contexts, `enforce_admins: true`. **MUST come after the merge** — requiring a context that has
    never reported on `master` would block the v4.0 PR itself.
-5. Tag `v4.0` on `master`; archive `.zj/phases/` → `.zj/history/v4.0/phases/`; roll ROADMAP +
+4. Tag `v4.0` on `master`; archive `.zj/phases/` → `.zj/history/v4.0/phases/`; roll ROADMAP +
    PROJECT (new DoD, owner-approved) forward; reset this file.
 
 ## Next action
 
-Resume `/zj:milestone` — the two engineers' results are pending; nothing to run by hand yet.
+Resume `/zj:milestone` — the GAP-3/6/8 engineer's result is pending; nothing to run by hand yet.
 
 ---
 ## Prior state (v4.0 Phase 5 retro, 2026-08-18)
