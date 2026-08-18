@@ -25,6 +25,12 @@ from app.modules.flan.service._common import (
     resolve_phase,
     resolve_task,
 )
+from app.modules.flan.service.phases import (
+    create_phase,
+    delete_phase,
+    list_phases,
+    update_phase,
+)
 from app.modules.flan.service.projects import (
     archive_project,
     create_project,
@@ -44,6 +50,11 @@ __all__ = [
     "require_writable_project",
     "resolve_phase",
     "resolve_task",
+    # phases — phase CRUD with the derived rollup attached (FLAN-01.2)
+    "create_phase",
+    "delete_phase",
+    "list_phases",
+    "update_phase",
     # projects — project CRUD, archive and tags (FLAN-01.1, FLAN-01.6)
     "archive_project",
     "create_project",
