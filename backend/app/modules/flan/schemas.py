@@ -1,6 +1,6 @@
 # ABOUTME: FLAN (Project Management) Pydantic request/response schemas —
-# ABOUTME: project create/update/read (with its opaque tag list) and phase
-# ABOUTME: create/update/read (FLAN-01.1, FLAN-01.2).
+# ABOUTME: project, phase, task, team-roster and assignment create/update/read,
+# ABOUTME: each with its opaque tag list (FLAN-01.1 through FLAN-01.5).
 # ABOUTME: The phase WRITE schemas carry no date and no percent field at all:
 # ABOUTME: those three values are derived from the phase's tasks on every read
 # ABOUTME: (D-V5-1), so "never hand-set" is structural, not a rule to remember.
