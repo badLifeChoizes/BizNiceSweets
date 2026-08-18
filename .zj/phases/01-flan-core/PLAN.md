@@ -443,7 +443,7 @@ print('ok')" && .venv/bin/ruff check .`
   `cd $BNS/backend && .venv/bin/ruff check . && .venv/bin/python -c "from app.modules.flan.service import list_phases, delete_phase; print('ok')"`
 - **Parallel-ok:** no
 
-### [ ] 13. Implement the numeric-safe task key generator
+### [x] 13. Implement the numeric-safe task key generator
 - **Serves:** FLAN-01.3 (D-P8-6)
 - **Files:** `backend/app/modules/flan/service/keys.py` (new),
   `backend/app/modules/flan/service/__init__.py`
@@ -488,8 +488,15 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
     the **merged** values (422) — the schema validator alone cannot see a PATCH that moves only one
     of the two dates. `key` and `project_id` are immutable. Moving a task between phases within the
     same project is allowed; across projects is 422.
+  - **⚠ ADDED AT BUILD (see `## Deviations`): `create_task` MUST consume `assignee_ids` and `tags`,
+    and `update_task` must apply them too.** Task 8 put both on `TaskCreate`/`TaskUpdate`, but this
+    task's text describes only the insert and the key retry — so a literal reading builds a service
+    that accepts both fields over the wire and **silently drops them**. That is the 11a/11b
+    "green backend, dead through the UI" defect exactly. Assert the round-trip through
+    `TaskRead.model_validate(...)`, not just service-side, the way Task 10 closed the same trap for
+    project tags.
 - **Done when:** creating a task with `due == start` succeeds; `due < start` 422s on both POST and
-  PATCH (including the patch-one-date case); a created task's `key` matches `^<PREFIX>-\d{4,}$` and
+  PATCH (including the patch-one-date case); a created task's `key` matches `^<PREFIX>-\d+$` and
   its `project_id` equals its phase's.
 - **Verify:** live proof in `verify_flan.py` scenarios (B)/(C), Task 28; for this commit:
   `cd $BNS/backend && .venv/bin/ruff check . && .venv/bin/python -m pytest tests/flan -q` (no-op
@@ -597,7 +604,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS/frontend && grep -c "phasesKey" src/routes/flan/hooks.ts && npm run lint && npx tsc -b`
 - **Parallel-ok:** yes (with Task 19)
 
-### [ ] 21. Build the FLAN nav with the project switcher
+### [x] 21. Build the FLAN nav with the project switcher
 - **Serves:** FLAN-01.6 (D-V5P1-3)
 - **Files:** `frontend/src/routes/flan/components/FlanNav.tsx` (new)
 - **Do:** Mirror `frontend/src/routes/gelato/components/GelatoNav.tsx`. Renders the per-project
@@ -1114,11 +1121,14 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   `PhaseRead` exposes no assignees, and an assignment change moves no date or percentage.
 - **Task 20 — `useDeleteTask` / `useSetTaskAssignees` take `projectId` from mutation variables**,
   not from the response, so invalidation never depends on a DELETE or PUT returning a body.
-- **Manager — Wave C screens (22-25) are HELD until Tasks 17-18 land.** Their Done-when asserts the
-  create dialogs POST "the exact payload shape the router accepts"; with `router.py` still the Task 5
-  stub there is no router to be exact against, and a screen test written to a guessed shape is the
-  11a/11b defect with a green test on top. Tasks 19, 20 and 21 were safe to pull forward because
-  their contract is `schemas.py`, which exists.
+- **Manager — Wave C screens are released per-screen as their SERVICE layer lands**, not as a block.
+  The original hold (all of 22-25 until Tasks 17-18) was too coarse. The rule applied instead: a
+  screen is released once the service behind it is built **and verified**, because the payload shape
+  a screen must be "exact" against is `schemas.py` + the service contract — the router is thin and
+  adds paths, not shapes. So **22 released** (its service is Task 10, done) and **23 released** (Task
+  12, done); **24 and 25 stay held** pending Tasks 14 and 15. Each released screen's brief requires
+  it to check its POST body against the real `model_fields` of the schema, so a key the schema does
+  not have is caught at build rather than as a 422 in production that a mocked test would never see.
 
 - **Task 12 — `list_phases` does NOT 404 on an unknown project id**, returning `[]` instead. This
   matches the house idiom for parent-scoped list functions (`crumb/service/interactions.py::
@@ -1129,6 +1139,40 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   `db.delete(orm_obj)`, matching the plan's literal `DELETE FROM flan_phase WHERE id = :id`.
   Behaviourally identical (`Phase` declares no ORM relationships), but it keeps the cascade
   unambiguously the **database's**, which is the property the live check proves.
+
+- **Task 21 — a colocated `FlanNav.test.tsx` was added that the plan does not ask for.** Task 21's
+  Verify is only `npm run lint && npx tsc -b`, deferring behaviour to "the screen tests in Tasks
+  22-25" — but those tasks build the Projects/Phases/Tasks/Team screens and assert screen behaviour,
+  so **nothing would ever have exercised the switcher**, and section-preservation is the one place
+  D-V5P1-3 can regress silently. The engineer mutation-checked it: hardcoding the target section to
+  `phases` turned the section-preservation test RED, then restored.
+- **Task 21 — the test mocks `@/api/client`, not `useProjects`.** Every existing test under
+  `frontend/src/routes/` mocks the axios client and lets the real hook run; mocking the hook module
+  would have been the only such test in the repo. Navigation is asserted on a real `MemoryRouter`
+  with a location probe, so it proves the **URL changed** rather than that a function was called.
+- **Task 21 — the tab strip renders only when `projectId` is present** (otherwise its hrefs would be
+  `/flan/projects//phases` on the projects-list screen), and the `Select` value is
+  `projectId ?? undefined` so Radix shows its placeholder rather than treating `''` as a value.
+
+- **⚠ Task 14's Done-when regex was WRONG and is amended in place.** It read
+  `^<PREFIX>-\d{4,}$` — the pre-D-V5P1-7 zero-padded expectation — which directly contradicts the
+  decision the same plan records: keys are **unpadded**, so `PRJ-1` has one digit and would have
+  failed its own acceptance check. Corrected to `^<PREFIX>-\d+$`. Found by Task 13's engineer.
+- **⚠ Task 14's `Do:` amended to require `create_task`/`update_task` to CONSUME `assignee_ids` and
+  `tags`.** Task 8 put both on the write schemas, but Task 14's original text described only the
+  insert and the key retry, so a literal reading would have built a service that accepts both over
+  the wire and silently drops them — the 11a/11b defect exactly. The amendment also requires the
+  round-trip be asserted through `TaskRead.model_validate(...)`, the way Task 10 closed the same trap
+  for project tags (a service-side assertion alone would miss a serialization gap).
+- **Task 13 — the `Integer`-cast defect was DEMONSTRATED, not asserted.** The engineer ran the
+  identical query twice over the same rows, differing only in cast target: `Numeric` returned
+  `PRJ-9999999999`; `Integer` raised
+  `asyncpg.exceptions.NumericValueOutOfRangeError: value "9999999999" is out of range for type
+  integer`. So one legal 10-digit key makes **every** subsequent auto-numbered create in that project
+  500 permanently — PLUM-01 Phase-7 `7562a02` exactly. They also showed a naive `MAX(key)` string
+  aggregate returns `PRJ-9` at the boundary, i.e. would have re-issued an existing key.
+- **Task 13 — `generate_task_key(db, project_id, key_prefix)` takes two scalars**, not a `Project`
+  instance, keeping `keys.py` free of a model import; Task 14 already holds the locked project row.
 
 ## Noticed
 
@@ -1215,3 +1259,18 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   `compose_api_1` and `psql -U postgres`, but the role `postgres` does not exist on this database
   (the compose user is `app`). A pre-existing doc defect in a shipped script, same family as the
   plan's Context errors. Anyone following that script's header verbatim gets an auth failure.
+
+- **`sectionFromPath` in `FlanNav.tsx` reads the 4th path segment.** Task 26 wires three literal
+  sibling routes (`/flan/projects/:projectId/phases|tasks|team`) rather than one `:section` route,
+  which works either way — but if FLAN is ever nested under an extra path segment, that helper needs
+  updating. Worth a glance when Task 26 lands.
+
+- **⚠ `podman run --rm` WITHOUT `-i` makes a `python -` heredoc silently vacuous.** stdin is not
+  attached, so `python -` reads an empty program, prints nothing and **exits 0** — a pass that proves
+  nothing. Task 13's engineer hit it. Every later task using the `python -` idiom must pass
+  `--rm -i`. This is a verification-integrity hazard, not a convenience: it is indistinguishable from
+  a green run in a transcript.
+- **`Task.key` is `String(20)` and keys are unpadded**, so a 10-char prefix leaves 9 digits; a key
+  like `ABCDEFGHIJ-999999999` would increment to 21 chars and hit the column limit. Needs ~10^9 tasks
+  in one project, and Postgres would raise on insert rather than truncate, so it is not a live risk —
+  but `String(20)` → `String(32)` in a later migration is the cheap airtight fix.
