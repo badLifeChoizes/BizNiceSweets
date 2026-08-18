@@ -5,34 +5,41 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** Wave A (schema). **Done: 1, 2, 3, 4, 5.** Task **6 (Alembic `0018`) is in
-flight** — the last Wave A task. Next after it: Wave B (service + router), tasks 7-18, which opens
-with 7 and 8 (Pydantic schemas) as a parallel pair.
+**Current task:** **Wave A COMPLETE** (tasks 1-6). Wave B (service + router, tasks 7-18) under
+way: tasks **7** (project/phase schemas) and **9** (service skeleton + archived-project guard) are
+in flight as concurrent engineers on disjoint files.
+
+**Task 8 is deliberately SERIALIZED behind Task 7** even though `PLAN.md` marks it `Parallel-ok:
+yes` — the two tasks' `Files:` lists are the *same file* (`flan/schemas.py`). The plan's caveat
+("if the two authors split the file cleanly") is not worth a lost update for the ~2 minutes it
+saves. Run 8 after 7 lands.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
-`### [ ]`** — re-run any in-flight task from scratch rather than trusting a partial edit. Any
-uncommitted file under `backend/alembic/versions/` is Task 6 mid-write — note that **autogenerate
-names it by hash first** (e.g. `6708ad70a037_flan_core.py`), and renaming it to `0018_flan_core.py`
-with plain `"0018"` / `"0017"` revision strings is part of the task, so do not go looking for a
-`0018*.py` that does not exist yet. Delete the stray hash-named file and re-run Task 6.
+`### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit.
 
-**Verified live at Wave A close (manager, not taken on report):** all eight `flan_*` tables in
-`Base.metadata`; `registry` lists `flan` among seven modules; a full `down`/`up` cold boot is clean
-with no cross-module FK-resolution traceback; `ruff` 0. The FLAN tables are in metadata but **not
-yet in the database** — that is exactly what Task 6 adds.
+**Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
+`flan_*` tables exist; all five load-bearing constraint shapes are in the database (`flan_task
+.phase_id`, `flan_task_assignee.task_id`, `flan_phase_assignee.phase_id` → `CASCADE`;
+`flan_team_member.user_id` → `SET NULL`; **both** `member_id` FKs → `NO ACTION`, which is what
+D-V5P1-6's soft-remove depends on); both named unique constraints present; `registry` lists `flan`
+among seven modules; cold `down`/`up` boot clean; `ruff` 0.
 
-**Corrected commands** (the plan's Context block is wrong on all three; full table in
+**⚠ Carry this into every later autogenerate.** Task 6's draft also proposed **seven destructive
+drops** against PLUM and SYERP unique constraints — pre-existing metadata-vs-DB drift, not FLAN's
+doing. The engineer removed them, but the drift is still there and every future
+`alembic revision --autogenerate` will propose them again. See PLAN `## Noticed`.
+
+**Corrected commands** (the plan's Context block is wrong on all four; table in
 `docs/tasks/feature-flan-core.md` → "Build notes"):
-- db is `psql -U app -d biznice`, not `-U postgres` / `-U biznice`
-- health is `/health/ready`, not `/api/v1/health`
-- modules is `/api/v1/core/modules` (auth-gated, OAuth2 **form** login), not `/api/v1/modules`
-- alembic and pytest both run from a **throwaway container with the repo root at `/repo`**,
-  `--user root`, on `--network compose_default` — not the host venv (compose `db` is unpublished)
-  and not `compose_api_1` (non-root, so writes to the bind mount fail)
+- `psql -U app -d biznice` — not `-U postgres` / `-U biznice`
+- `/health/ready` — not `/api/v1/health`
+- `/api/v1/core/modules`, auth-gated via OAuth2 **form** login — not `/api/v1/modules`
+- alembic and pytest run from a **throwaway container, repo root at `/repo`, `--user root`, on
+  `--network compose_default`** — not the host venv (compose `db` is unpublished) and not
+  `compose_api_1` (non-root, cannot write the bind mount)
 
-Commits: `74e4b30` (T1), `fdf556c` (T2), `ae13509` (T3), `dadbf58` (T4), `9dfd406` (T5), plus
-`de5bde1` / `91a83a7` / `1afdc19` / `205b63b` / `f8b110d` / `a560e83` recording ticks, deviations
-and Noticed.
+Commits: `74e4b30` (T1), `fdf556c` (T2), `ae13509` (T3), `dadbf58` (T4), `9dfd406` (T5),
+`67e191d` (T6), plus the `docs(zj):` commits recording ticks, deviations and Noticed.
 
 ## Position (as planned): v5.0 Phase 1 planned — build not started
 
