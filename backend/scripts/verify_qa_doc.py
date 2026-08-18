@@ -29,6 +29,11 @@ SCENARIO (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
      check section for an uncovered requirement is caught too.
   3. HEADLINE PROSE. §3's "**N of M requirements have at least one human check.**" matches
      the actual covered count and the actual row count.
+  5. STATUS CELLS AGREE WITH THE SRD. Each §3 row's Status cell matches the first word of
+     that requirement's ``**Status: …**`` in `.zj/SRD.md` (first word only — the SRD
+     elaborates in prose that `.zj/QA.md` abbreviates). Added at the v4.0 milestone close
+     (audit GAP-7): §3 called NFR-8 "planned" while the SRD said "verified", and scenarios
+     1–4 passed regardless because none of them read what §3 says ABOUT a requirement.
   4. §5 PARTITIONS THE REMAINDER. The §5 buckets ("Real gaps", "Not built yet",
      "Machine-only by nature", "Self-referential") are pairwise disjoint, their union is
      exactly the set of §3 rows with no check, and buckets + covered == the SRD total.
@@ -85,6 +90,12 @@ QA_MAP_ROW = re.compile(r"^\|\s*\*\*([A-Z]+-\d+)\*\*\s*—\s*(.*?)\|(.*?)\|(.*?)
 QA_CHECK_SECTION = re.compile(r"^### ([A-Z]+-\d+)\s*—")
 # `**31 of 47 requirements have at least one human check.**`
 QA_HEADLINE = re.compile(r"\*\*(\d+) of (\d+) requirements have at least one human check\.\*\*")
+# `## NFR-7: Concurrency-safe inventory ledger  [traces: …]  **Status: implemented**`
+# Group 1 = requirement ID, group 2 = the FIRST word of the status. Only the first word
+# is compared: the SRD elaborates ("partially verified (materials-only slice…)",
+# "VERIFIED — 12a inbound foundation…") and `.zj/QA.md` mirrors the leading word, so
+# comparing full strings would fail on prose that is not drift.
+SRD_STATUS = re.compile(r"^## ([A-Z]+-\d+):.*?\*\*Status:\s*([A-Za-z]+)", re.MULTILINE)
 BOLD_REQ = re.compile(r"\*\*([A-Z]+-\d+)\*\*")
 
 # The §5 buckets, in document order. Every `### ` heading in §5 must be one of these —
@@ -282,10 +293,37 @@ def run() -> None:
         f"but `.zj/SRD.md` has {len(srd_set)} requirements",
     )
 
+    # -----------------------------------------------------------------------
+    # 5. STATUS CELLS AGREE WITH THE SRD (v4.0 milestone audit, GAP-7)
+    # -----------------------------------------------------------------------
+    # The audit found `.zj/QA.md` §3 calling NFR-8 "planned" while `.zj/SRD.md` said
+    # "verified". Scenarios 1–4 all passed anyway, because they only ever checked the
+    # requirement SET and the coverage ARITHMETIC — never what §3 says ABOUT each
+    # requirement. So the standing QA document could contradict the spec it summarises
+    # and CI stayed green. Every status change from here on has to be made in both
+    # places or this fails, naming the row and both values.
+    srd_statuses = {m.group(1): m.group(2).lower() for m in SRD_STATUS.finditer(srd_text)}
+    status_drift: list[str] = []
+    for m in map_rows:
+        if not m:
+            continue
+        req_id = m.group(1)
+        qa_cell = m.group(3).strip()
+        srd_word = srd_statuses.get(req_id)
+        if srd_word is None or not qa_cell:
+            continue
+        if qa_cell.split()[0].lower() != srd_word:
+            status_drift.append(f"{req_id}: §3 says '{qa_cell}', `.zj/SRD.md` says '{srd_word}'")
+    check(
+        "§3 status cells agree with `.zj/SRD.md`",
+        not status_drift,
+        "; ".join(status_drift) + " — update whichever is stale, in BOTH documents",
+    )
+
     print(
         f"\n{len(srd_set)} requirements in `.zj/SRD.md`; {len(covered)} covered by "
         f"{len(section_set)} §4 section(s); {len(bucketed)} itemised across "
-        f"{len(BUCKET_HEADINGS)} §5 bucket(s)."
+        f"{len(BUCKET_HEADINGS)} §5 bucket(s); {len(srd_statuses)} status cell(s) cross-checked."
     )
 
 

@@ -35,8 +35,13 @@ before tagging.
       complete → `/health/ready` `{"status":"ok","db":"connected"}`. **Negative control:** omit
       `--env-file .env.db` → never ready, dies on `postgres_password Field required` — i.e. it
       reproduces U0 on demand.
-- [ ] **GAP-7** (minor) — `.zj/QA.md` NFR-8 status row contradicts the SRD; extend
-      `verify_qa_doc.py` to cross-check status cells against the SRD
+- [x] **GAP-7** (minor) — two rows were drifted, not one: NFR-8 (`planned` vs SRD `verified`)
+      and NFR-7 (`verified` vs SRD `implemented`, drifted by this close's own edit). Both
+      corrected. `verify_qa_doc.py` gained scenario 5 cross-checking all **47** status cells
+      against the SRD, comparing the first word only (the SRD elaborates in prose that QA.md
+      abbreviates — MOUSSE-01/GELATO-01 mirror it faithfully and must not false-positive).
+      Mutation-proven: restore NFR-8 to `planned` → exit 1 with the row and both values named;
+      restore → exit 0, QA.md byte-identical. CI-resident via the `verify-scripts` glob.
 - [x] **GAP-8** (nit) — second config block gates `**/*.{js,mjs,cjs}` so the config lints
       itself. Coverage demonstrated: planted `no-empty` violation caught (exit 1) against the new
       config, **exit 0 / 0 problems** against the reconstructed old one; a new `.js` file is also

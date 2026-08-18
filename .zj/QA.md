@@ -337,8 +337,8 @@ Requirements with none are itemised in [§5](#5-requirements-with-no-human-check
 | **NFR-4** — Continuous integration on every push | verified | — |
 | **NFR-5** — Runnable integration coverage — pytest harness repair + ported cruxes | done | — |
 | **NFR-6** — Enforced static-analysis (lint) gates | verified | — |
-| **NFR-7** — Concurrency-safe inventory ledger | verified | — |
-| **NFR-8** — Human-verified release readiness | planned | — |
+| **NFR-7** — Concurrency-safe inventory ledger | implemented | — |
+| **NFR-8** — Human-verified release readiness | verified | — |
 
 ---
 
