@@ -5,14 +5,20 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** **21 of 36 tasks done** (the plan is now 36 — Task **22a** was added at build by
-owner decision, see below). Wave A complete (1-6). **Wave B's SERVICE LAYER IS COMPLETE** (7-16);
-only the two router tasks remain in that wave. Wave C has 19, 20, 21, 22, 23 done.
+**Current task:** **24 of 36 tasks done.** Wave A complete (1-6). Wave B complete except Task 18.
+Wave C has 19, 20, 21, 22, **22a**, 23, 24 done.
 
-**In flight:** **17** (project + phase endpoints, `router.py`) and **24** (Tasks screen).
+**In flight:** **18** (the remaining twelve routes, `router.py`) and **25** (Team roster screen).
 
-**Next:** **18** (the remaining twelve routes — same `router.py`, so it SERIALIZES behind 17), then
-**22a** and **25** on the frontend, then **26**, then Wave D (27-33) and Wave E (34-35).
+**Next:** **26** (wire `/flan` routes into `App.tsx` — the last Wave C task, and the one that makes
+every screen built so far actually reachable; nothing in `App.tsx` mentions FLAN yet, so all five
+screens are currently dead in the running app). Then Wave D (27-33) and Wave E (34-35).
+
+**⚠ Watch when Task 25 lands:** its in-flight `components/MemberDialog.tsx` was failing the
+zero-violation lint gate with two `react-refresh/only-export-components` errors (non-component
+exports in a component file). The engineer appears to be fixing it by extracting
+`components/platformUsers.ts`. **Confirm `npm run lint` exits 0 after that commit** — NFR-6's gate is
+phase-wide, so one file breaks it for everything.
 
 **Wave C screens are released per-screen as their SERVICE layer is verified**, not as a block — a
 screen's payload shape is settled by `schemas.py` plus its service contract, since the router is thin
@@ -52,9 +58,16 @@ output over "DONE":
    `active` predicate, so the plan's "refuse only if an *active* member links it" passes the service
    check and then raises `IntegrityError` at flush. Widened to refuse both cases.
 
-**⚠ A VERIFICATION-INTEGRITY HAZARD.** `podman run --rm` **without `-i`** leaves stdin unattached, so
-a `python -` heredoc reads an empty program, prints nothing and **exits 0** — indistinguishable from
-a real pass in a transcript. Every task using that idiom must pass `-i`.
+**⚠ THREE SILENT-FAILURE HAZARDS — checks that measure nothing and pass. All three matter most in
+Wave D, which is entirely verification:**
+1. **`podman run --rm` without `-i`** leaves stdin unattached, so a `python -` heredoc reads an empty
+   program, prints nothing and **exits 0** — indistinguishable from a real pass in a transcript.
+2. **On FastAPI 0.138, `app.routes` no longer yields flattened `APIRoute`s** — includes are wrapped
+   in `_IncludedRouter`, so you must walk `.original_router`. A script iterating `app.routes` finds
+   **zero** module routes and passes vacuously. Tasks 30 and 32 are warned in the plan text.
+3. **OpenAPI cannot prove RBAC.** Its `security` block records only the bearer *scheme*, never
+   *which* permission — so a check that greps it passes on a route gated by the wrong permission.
+   Task 17 introspected the live dependency graph instead; Tasks 30/32 must do the same.
 
 **⚠ Wave D input:** `verify_flan.py` must `import app.modules.auth.models` before touching
 `flan_team_member`, or SQLAlchemy raises `NoReferencedTableError` on the `user_id → users.id` FK.
@@ -63,8 +76,8 @@ container and psql role.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
 `### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An
-uncommitted `router.py` is Task 17 mid-write; untracked `frontend/src/routes/flan/Tasks.tsx` or
-`components/TaskSheet.tsx` is Task 24.
+uncommitted `router.py` is Task 18 mid-write; untracked `Team.tsx`, `Team.test.tsx`,
+`components/MemberDialog.tsx` or `components/platformUsers.ts` is Task 25.
 
 **Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
 `flan_*` tables; all five load-bearing constraint shapes in the database (`flan_task.phase_id`,
