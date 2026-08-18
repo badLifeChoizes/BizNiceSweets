@@ -25,6 +25,9 @@ from app.modules.flan.service._common import (
     resolve_phase,
     resolve_task,
 )
+from app.modules.flan.service.keys import (
+    generate_task_key,
+)
 from app.modules.flan.service.phases import (
     create_phase,
     delete_phase,
@@ -50,6 +53,8 @@ __all__ = [
     "require_writable_project",
     "resolve_phase",
     "resolve_task",
+    # keys — numeric-safe task-key generation (FLAN-01.3, D-P8-6, D-V5P1-7)
+    "generate_task_key",
     # phases — phase CRUD with the derived rollup attached (FLAN-01.2)
     "create_phase",
     "delete_phase",
