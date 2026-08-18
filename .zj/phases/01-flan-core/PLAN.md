@@ -582,7 +582,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS/frontend && npm run lint && npx tsc -b`
 - **Parallel-ok:** yes (with Task 20)
 
-### [ ] 20. Add the FLAN task, roster and assignment query hooks
+### [x] 20. Add the FLAN task, roster and assignment query hooks
 - **Serves:** FLAN-01.3, FLAN-01.4, FLAN-01.5
 - **Files:** `frontend/src/routes/flan/hooks.ts`
 - **Do:** Types `Task` (with `key`, `assignee_ids`), `TeamMember` (`hourly_rate: string | null`);
@@ -1099,6 +1099,27 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   reads better in the project switcher (D-V5P1-3), and since duplicate names are legal, `created_at`
   is the tiebreak that keeps ordering stable between reads.
 
+- **Task 20 — `tasksKey` deliberately omits fixed filter slots**, and this closes the plan's
+  top-listed risk more completely than the plan's own wording would have. TanStack invalidation is
+  **prefix-based**: with trailing `null` slots, `invalidateQueries(tasksKey(projectId))` would not
+  match an assignee-filtered list, so the filtered board would stay stale after a task write — the
+  crux dying through the UI by a different route than the one the plan anticipated. The unfiltered
+  key is now a strict prefix of every filtered one, so a single invalidation sweeps them all, and it
+  still varies by filter as FLAN-01.5 requires.
+- **Task 20 — `taskKey(id)` is `['flan','task',id]` (singular)** so a task's detail is not swept by
+  the list key's prefix, unlike `projectKey`, where Task 19 deliberately nested detail under the list.
+- **Task 20 — `useRemoveMember` also invalidates `tasksKey`** (not required by the task text):
+  soft-removal clears the member's assignment rows in the same transaction (D-V5P1-6), so every task
+  that named them has a shorter `assignee_ids`. It deliberately does **not** invalidate `phasesKey` —
+  `PhaseRead` exposes no assignees, and an assignment change moves no date or percentage.
+- **Task 20 — `useDeleteTask` / `useSetTaskAssignees` take `projectId` from mutation variables**,
+  not from the response, so invalidation never depends on a DELETE or PUT returning a body.
+- **Manager — Wave C screens (22-25) are HELD until Tasks 17-18 land.** Their Done-when asserts the
+  create dialogs POST "the exact payload shape the router accepts"; with `router.py` still the Task 5
+  stub there is no router to be exact against, and a screen test written to a guessed shape is the
+  11a/11b defect with a green test on top. Tasks 19, 20 and 21 were safe to pull forward because
+  their contract is `schemas.py`, which exists.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1173,3 +1194,9 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   Task 10 hand-rolled `_load_tags`/`_attach_tags`/`_replace_tags`. Tasks 14 (`flan_task_tag`) and 16
   (assignee links) need the same trio. If a third copy appears, extract it — flagged now so the
   duplication is a decision rather than an accident.
+
+- **`GET /flan/projects/{project_id}/team` has no `include_removed` query param** in the router
+  contract, so `useTeam(projectId)` takes none. D-V5P1-6 excludes soft-removed members from the
+  *default* listing, which implies a non-default exists; the service signature
+  (`list_members(db, project_id, include_removed=False)`) already supports it. If the roster UI needs
+  to show removed members, the param must be added to the endpoint **and** to `teamKey`.

@@ -36,7 +36,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 ### Wave C — UI
 
 - [x] 19. Add the FLAN project and phase query hooks — _FLAN-01.1, FLAN-01.2, FLAN-01.6_
-- [ ] 20. Add the FLAN task, roster and assignment query hooks — _FLAN-01.3, FLAN-01.4, FLAN-01.5_
+- [x] 20. Add the FLAN task, roster and assignment query hooks — _FLAN-01.3, FLAN-01.4, FLAN-01.5_
 - [ ] 21. Build the FLAN nav with the project switcher — _FLAN-01.6 (D-V5P1-3)_
 - [ ] 22. Build the FLAN Projects list screen — _FLAN-01.1, FLAN-01.6_
 - [ ] 23. Build the project Phases screen showing the derived dates and % — _FLAN-01.2_
