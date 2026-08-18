@@ -5,14 +5,22 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** Wave A complete (1-6). **Wave B at 5/12** — tasks **7, 8, 9, 11** done and
-verified. In flight: **10** (project CRUD + archive, `service/projects.py` + `service/__init__.py`)
-and **19** (frontend project/phase query hooks, `frontend/src/routes/flan/hooks.ts`).
+**Current task:** Wave A complete (1-6). **11 of 35 tasks done** — Wave B at 5/12 (tasks 7, 8, 9,
+11) plus Wave C's Task 19. In flight: **10** (project CRUD + archive, `service/projects.py` +
+`service/__init__.py`) and **20** (task/roster/assignment query hooks, `frontend/.../flan/hooks.ts`).
 
-**Next:** 12 → 13 → 14 → 15 → 16 → 17 → 18, then Wave C. Tasks 10, 12, 13, 14, 15, 16 **all touch
-`service/__init__.py`**, so they cannot run concurrently with one another — pair each with a
-frontend task (19, 20, 22-25) instead. Tasks 19 and 20 share `hooks.ts`, so those two also
-serialize against each other.
+**Next:** 12 → 13 → 14 → 15 → 16 → 17 → 18, then the rest of Wave C. **Scheduling constraint:**
+tasks 10, 12, 13, 14, 15, 16 **all touch `service/__init__.py`**, so they cannot run concurrently
+with one another — pair each with a frontend task instead. Tasks 19 and 20 share `hooks.ts` and also
+serialize against each other; 22-25 are four genuinely independent screen files and are the real
+parallel opportunity in Wave C.
+
+**Task 20 carries the plan's top-listed risk.** Every one of `useCreateTask`, `useUpdateTask`,
+`useDeleteTask` and `useSetTaskAssignees` must invalidate **`phasesKey(projectId)`**, because a task
+write changes its phase's derived dates and %. Miss one and the Phases screen serves stale derived
+values while the backend is correct — the 11a/11b "green backend, dead through the UI" class. Note
+the plan's own Verify for that task (`grep -c "phasesKey"`) is a **count**, which cannot show *which*
+hooks invalidate; the brief requires a per-hook listing instead.
 
 **⚠ THE CRUX IS BUILT AND ITS VERIFICATION WAS FIXED.** Task 11 (`service/rollup.py`, `ffdbc01`) is
 done: one grouped query proven by a cursor tap counting statements (1, not N+1), `MIN`/`MAX` not
@@ -42,8 +50,9 @@ transaction. FLAN-01.4 does not ask for reactivation, so it is out of scope as b
 UI (Task 25) will set an expectation either way.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
-`### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An untracked
-`frontend/src/routes/flan/` is Task 19 mid-write; an uncommitted `service/projects.py` is Task 10.
+`### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An
+uncommitted `service/projects.py` + `service/__init__.py` is Task 10 mid-write; an uncommitted
+`frontend/src/routes/flan/hooks.ts` is Task 20.
 
 **Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
 `flan_*` tables; all five load-bearing constraint shapes in the database (`flan_task.phase_id`,
