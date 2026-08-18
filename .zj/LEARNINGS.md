@@ -3,6 +3,114 @@
 Kept lessons that change how we plan/build/verify future phases. Skip trivia; an empty
 section beats a padded one. Newest phase at the top.
 
+## Milestone v4.0 — Infra-debt + quality paydown (closed 2026-08-18)
+
+Roll-up of Phases 1, 2a, 2b, 3, 4, 5 — lint gates, pytest harness repair, ported cruxes, GitHub
+Actions CI, inventory race-safety, and the standing QA checklist. **No new end-user capability
+shipped.** Distilled from the six phase retros plus the milestone audit
+(`.zj/MILESTONE-v4.0-AUDIT.md`), which returned **GAPS FOUND** against a milestone whose every
+phase had already passed verification.
+
+The milestone's dominant lesson is about **what a green gate is actually evidence of**. v3.0's
+roll-up concluded that the adversarial review, not the verify suite, caught the defect that
+mattered on all five phases. v4.0 sharpens that: a gate is evidence about **the exact artifact it
+ran against, in the exact state it ran in** — and for five phases running, nothing had ever run
+against the artifact a self-hoster receives.
+
+### Repeat these
+
+- **Make the deployable artifact its own deliverable with its own standing gate.** `U2` (the API
+  image could not be built *at all* — `COPY frontend/package*.json` never matched the dotfile
+  `.npmrc`) and `U0` (a fresh-volume deploy could not start — `db` took its password by
+  interpolation from a `compose/.env` that does not exist) are **the same blind spot at two
+  layers**, and both hid for five phases behind a long-lived stale image and a dev overlay that
+  bind-mounts over `frontend/dist`. A suite that runs from a checkout says nothing about the image;
+  a stack that has been up for months says nothing about `up` on a fresh volume. Both are now
+  CI-resident — and the close audit found the third layer of the same class: the `container-image`
+  job **built** the artifact but never **booted** it, so `entrypoint.sh` and the `.env`/`.env.db`
+  wiring were still asserted-not-exercised. Fixed at close (GAP-6). Expect a fourth layer.
+- **A verification is only as good as the state it ran against — say what that state was.** Phase
+  3's harness "self-provisions its test database" was true, and had only ever been proven on a
+  *dirty* local DB where `biznice_test` already existed from an earlier session; on the ephemeral
+  CI Postgres it aborted the whole run (D-P3-4). Phase 4's race-safety was "empirically true" but
+  proven by the verifier's own throwaway script — hand-checked, not pinned. Phase 5's prod smoke
+  ran against an image built *before* the fix loop's last commit. Same shape three times in one
+  milestone: **name the substrate in the claim** ("green on a fresh `postgres:17`", "green at tip
+  X"), because "it passed" without a substrate is not a falsifiable statement.
+- **A mutation proof must go red for the *intended* reason, and some cruxes cannot prove
+  themselves.** Phase 2b's MOUSSE WIP crux passes under its own advertised mutation because the
+  arithmetic divides evenly — the wrong formula yields the right number — so its residual sibling
+  is the real guard. Phase 4 learned the converse: a fixture guard hijacks red as easily as green.
+  Keeper: when you write the mutation table, assert **which named test goes red and why**, then
+  execute it. The SC2 mutation table is the highest-signal artifact a phase produces; read its
+  claims against the arithmetic rather than trusting its exit codes.
+- **A fix for "X silently passes" must ship a test that goes RED when X silently passes again.**
+  Phase 2a did not stop at greening ~100 tests: it made a database a *hard* requirement (no-DB now
+  fails loud) and added `test_harness_selfcheck.py` to pin the zero-silent-skip invariant. That is
+  the difference between fixing an instance and closing a class — the D-P7-4 silent skip is the
+  bug that let a 500 ship through four plans, and it can no longer return quietly.
+- **Glob-driven CI keeps paying, milestone after milestone.** `for s in scripts/verify_*.py`
+  enrolled `verify_qa_doc.py`, `verify_qa_citations.py`, `verify_inventory_race.py` and scenario
+  `(G5)` into standing protection with **zero** workflow edits, and it is why the close audit's
+  GAP-3 fix was cheap. Design the gate so new guards enrol themselves.
+- **An owner-attributed rescope survives adversarial review when it keeps both halves stated.**
+  D-P5-11 is exactly the shape of a criterion quietly redefined to match what got built, and it was
+  attacked as such — twice, once by the phase reviewer and once by the milestone audit. It held
+  because it is owner-attributed, names what it supersedes, preserves every struck criterion's
+  original wording inline with its reason, states the accepted cost out loud, and repeats "NOT
+  evidenced, by design" everywhere the claim appears. **That checklist is the test for any future
+  rescope.**
+
+### Never again
+
+- **Never write a plan task whose `Done when` is "the owner ran X".** Twelve such tasks stalled
+  Phase 5 at 22/41 for **three weeks** and held the entire milestone behind one ~3 h sitting. This
+  was the single largest cost in v4.0 and it was structural, not circumstantial. Produce the
+  runbook, build everything that does not strictly depend on the reading, record the reading as
+  pending, and surface the owner action as a **parallel to-do**. Now a standing owner preference
+  (`QA docs: non-blocking`).
+- **Never let a rescope amend the requirement and leave the milestone's own definition of done
+  saying something else.** D-P5-11 rewrote NFR-8's Statement *and* PRD-12's acceptance signal, but
+  the DoD sentence in PROJECT.md/ROADMAP.md was the last unamended copy — and the close audit
+  caught it as the blocker-to-close (GAP-1). One clause survived in four places and was corrected
+  in three. Keeper: **when you amend a criterion, grep for its wording across every artifact and
+  fix them in the same commit.**
+- **Never assume a refactor that touches N sibling call sites preserved each one's local guard.**
+  Phase 4's bin-awareness transform silently dropped MOUSSE's per-location floor. The control that
+  catches this is the **cross-sibling guard diff** — read the N call sites against each other, not
+  each against its own before/after.
+- **Never state both an aggregate estimate and per-unit targets in a plan without reconciling
+  them.** D-P5-1 said "~40–50 checks, est. 2–3 h" while the plan's own per-suite maxima summed to
+  exactly 59. One of the two is always wrong, and finding out at task 15 costs a decision the owner
+  should have made at task 0.
+- **Never quote a whole-ledger aggregate as a fixture literal**, and never trust "it balances" as a
+  fixture invariant. Phase 5 found a seeded Balance Sheet reporting **total assets −258.25** while
+  the books were perfectly `in_balance`, and a trial-balance line that was pure `verify_*` litter
+  accumulating at +50.00 per sweep. Fixture layers need domain invariants (`total_assets > 0`, both
+  aging tie-outs) asserted on **every** seed run — the cost of a false defect is owner trust.
+- **Never rely on "don't point it at prod" when the tooling cannot tell prod from dev.**
+  podman-compose names both stacks `compose`, so a destructive seed command targets whichever is
+  up. Gate destructive scripts with an explicit env opt-in a copy-pasted command cannot satisfy.
+- **Never carry master-merge debt across a milestone close.** v4.0 is the **fourth consecutive**
+  milestone to reach its close with the work unmerged; `origin/master` still had no `.github/` at
+  all, so every hardening this milestone paid for was invisible on the branch a new deploy comes
+  from. D-M3-4 cleared this once and it came straight back. Merge before tagging, always.
+
+### Structural observations
+
+- **The `feat:`/`fix:` ratio inverts for an infra milestone** — 9 feat / 12 fix out of 187 commits,
+  against 67 feat / 8 fix for v3.0. Two phases (2a, 2b) shipped with `git diff -- backend/app/`
+  provably empty. Plan infra phases in tests, config and docs; a phase that "changes no product
+  code" is a *feature* of the plan, and worth asserting as an acceptance criterion.
+- **Adversarial close audits have now found real defects in four of four milestones** (v1.0 G1
+  Where-Used, v2.0 G1, v3.0 GAP-1/2, v4.0 GAP-1..8). This is no longer a run of bad luck; it is the
+  measured yield of the step. Budget it as non-optional, and budget *fix time after it*, not just
+  the audit.
+- **The milestone's own subject matter is where its audit found the holes.** v4.0 hardened the
+  inventory ledger and CI; the audit found an unlocked ledger writer and three CI coverage holes.
+  A milestone is least skeptical about the thing it believes it just fixed — point the close audit
+  at the headline claim first, not last.
+
 ## Phase 05 — Human click-through UAT (v4.0, NFR-8, verified 2026-08-17)
 
 Rescoped mid-flight (D-P5-11): the deliverable became `.zj/QA.md` — 61 requirement-keyed residue
