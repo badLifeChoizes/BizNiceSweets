@@ -30,7 +30,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 - [x] 14. Implement task CRUD with server-side date validation — _FLAN-01.3_
 - [x] 15. Implement team-roster CRUD with removal clearing assignments — _FLAN-01.4_
 - [x] 16. Implement phase and task assignment set/clear — _FLAN-01.5_
-- [ ] 17. Expose the project and phase endpoints on the FLAN router — _FLAN-01.1, FLAN-01.2, FLAN-01.6, FLAN-01.7 (NFR-1, CORE-05)_
+- [x] 17. Expose the project and phase endpoints on the FLAN router — _FLAN-01.1, FLAN-01.2, FLAN-01.6, FLAN-01.7 (NFR-1, CORE-05)_
 - [ ] 18. Expose the task, roster and assignment endpoints on the FLAN router — _FLAN-01.3, FLAN-01.4, FLAN-01.5, FLAN-01.7 (NFR-1, CORE-05)_
 
 ### Wave C — UI
@@ -41,7 +41,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 - [x] 22. Build the FLAN Projects list screen — _FLAN-01.1, FLAN-01.6_
 - [ ] 22a. Build the project edit dialog (ADDED AT BUILD, owner decision) — _FLAN-01.1_
 - [x] 23. Build the project Phases screen showing the derived dates and % — _FLAN-01.2_
-- [ ] 24. Build the project Tasks screen — _FLAN-01.3, FLAN-01.5_
+- [x] 24. Build the project Tasks screen — _FLAN-01.3, FLAN-01.5_
 - [ ] 25. Build the project Team roster screen — _FLAN-01.4_
 - [ ] 26. Wire the FLAN routes into App.tsx with the `/flan` redirect — _FLAN-01.6, FLAN-01.7 (CORE-07/08)_
 

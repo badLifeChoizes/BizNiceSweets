@@ -537,7 +537,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS/backend && .venv/bin/ruff check . && .venv/bin/python -c "from app.modules.flan.service import set_task_assignees, set_phase_assignees; print('ok')"` — behaviour proven over HTTP in Task 30
 - **Parallel-ok:** no (needs Task 15)
 
-### [ ] 17. Expose the project and phase endpoints on the FLAN router
+### [x] 17. Expose the project and phase endpoints on the FLAN router
 - **Serves:** FLAN-01.1, FLAN-01.2, FLAN-01.6, FLAN-01.7 (NFR-1, CORE-05)
 - **Files:** `backend/app/modules/flan/router.py`
 - **Do:** Mirror `backend/app/modules/gelato/router.py` exactly — thin endpoints, full path spelled
@@ -676,7 +676,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS/frontend && npx vitest run src/routes/flan/Phases.test.tsx`
 - **Parallel-ok:** yes (with Tasks 22, 24, 25)
 
-### [ ] 24. Build the project Tasks screen
+### [x] 24. Build the project Tasks screen
 - **Serves:** FLAN-01.3, FLAN-01.5
 - **Files:** `frontend/src/routes/flan/Tasks.tsx` (new),
   `frontend/src/routes/flan/Tasks.test.tsx` (new),
@@ -1267,6 +1267,29 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   their own cross-project-422, clear-to-empty and idempotency checks. A bug in one is invisible from
   the other.
 
+- **Task 17 — `GET /flan/projects/{id}/phases` 404s on an unknown project** (the choice the manager
+  flagged rather than decided). The router calls `get_project_or_404` first. Reasoning: `list_phases`
+  returns `[]` for both "no phases" and "no such project", and only the HTTP layer can tell them
+  apart — a 200 `[]` for a typo'd or deleted id makes a nonexistent project read as an empty one,
+  the same ambiguity `GET /flan/projects/{id}` already refuses. The service keeps its house idiom;
+  the router owns the 404. Task 18 applies the same to `/tasks` and `/team`.
+- **Task 17 — the plan's "eight routes" is a miscount; the surface is NINE operations across five
+  paths.** The plan's own route list enumerates nine. All nine shipped; nothing added or dropped.
+- **Task 17 — OpenAPI cannot prove RBAC**, and this is worth carrying: `security` records only the
+  bearer *scheme*, never *which* permission. The engineer introspected the live app's dependency
+  graph to assert `flan:read` on every GET and `flan:write` on every mutation. A verify that only
+  greps `security` in the schema would pass on a route gated by the wrong permission.
+- **Task 24 — both mutation checks turned RED then green.** A hardcoded key literal broke two
+  assertions (the fixtures carry `PRJ-9` and `PRJ-10`, so no single literal satisfies them), and
+  adding a client-side `.sort()` on the key string flipped the rendered order — which is the check
+  that pins D-V5P1-7's consequence, since the service orders by numeric suffix and a browser sort
+  would put `PRJ-10` before `PRJ-9`.
+- **Task 24 — no delete action on the Tasks screen.** The task text specifies table + filters +
+  create/edit sheet only. `DELETE /flan/tasks/{id}` and `useDeleteTask` both exist; the Phases screen
+  *does* have delete, so this is an asymmetry. **Not an acceptance-criteria gap** — FLAN-01.3 lists a
+  task's fields and lifecycle, never a delete verb (unlike FLAN-01.1's explicit "archive"). Left as
+  built; flagged so it is a known asymmetry rather than an oversight.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1382,3 +1405,15 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   first**, or SQLAlchemy raises `NoReferencedTableError` resolving `flan_team_member.user_id →
   users.id`. Task 27/28's `verify_flan.py` text has been amended in place to require it. This is the
   cross-module FK-resolution trap the LEARNINGS keeper warns about, arriving exactly where predicted.
+
+- **⚠ WAVE D HAZARD — on FastAPI 0.138, `app.routes` no longer yields flattened `APIRoute`s.**
+  Includes are wrapped in `_IncludedRouter`; you must walk `.original_router`. A verify script or
+  test that iterates `app.routes` directly finds **zero** module routes and **passes vacuously**
+  rather than failing loudly. Task 17's engineer hit this. Tasks 30 and 32 must not iterate
+  `app.routes` naively. This is the same family as the `podman -i` hazard: a check that silently
+  measures nothing.
+- **Dev-DB residue from Task 17's verification:** an archived probe project
+  `c07b0ae6-e2b7-479f-ac7c-4d7f5d81c26f` ("Task17 Audit Probe") and audit rows 110-115 remain in the
+  running UAT database. Audit rows are append-only (D-14) so they were deliberately not deleted, and
+  the project was left archived so it stays out of default lists. A `--fresh` stack restart clears it;
+  Task 33's cold `down`/`up` is the natural moment.
