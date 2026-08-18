@@ -5,28 +5,45 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** Wave A complete (1-6). **Wave B at 3/12** — tasks **7** and **9** done and
-verified; tasks **8** (task/roster/assignment schemas, appending to `flan/schemas.py`) and **11**
-(the phase-rollup CRUX, `service/rollup.py` + `service/__init__.py`) are in flight on disjoint files.
+**Current task:** Wave A complete (1-6). **Wave B at 5/12** — tasks **7, 8, 9, 11** done and
+verified. In flight: **10** (project CRUD + archive, `service/projects.py` + `service/__init__.py`)
+and **19** (frontend project/phase query hooks, `frontend/src/routes/flan/hooks.ts`).
 
-**Next after those land:** Task 10 (project CRUD + archive), then 12 → 13 → 14 → 15 → 16 → 17 → 18.
-Note tasks 10, 11, 12, 13, 14, 15 and 16 **all touch `service/__init__.py`** for their re-exports,
-so they cannot run concurrently with each other; pair each with a non-`service/` task instead.
+**Next:** 12 → 13 → 14 → 15 → 16 → 17 → 18, then Wave C. Tasks 10, 12, 13, 14, 15, 16 **all touch
+`service/__init__.py`**, so they cannot run concurrently with one another — pair each with a
+frontend task (19, 20, 22-25) instead. Tasks 19 and 20 share `hooks.ts`, so those two also
+serialize against each other.
 
-**Two manager overrides of the plan, both deliberate:**
-1. **Task 8 serialized behind Task 7** despite `Parallel-ok: yes` — identical `Files:` lists (the
-   same `schemas.py`). Not worth a lost update for ~2 minutes.
-2. **Task 11 pulled ahead of Task 10.** 11 is the crux and is on the critical path (Task 12's
-   `list_phases` consumes `phase_rollups`); 10 is on nobody's. Plan order is otherwise preserved.
+**⚠ THE CRUX IS BUILT AND ITS VERIFICATION WAS FIXED.** Task 11 (`service/rollup.py`, `ffdbc01`) is
+done: one grouped query proven by a cursor tap counting statements (1, not N+1), `MIN`/`MAX` not
+first/last inserted, NULL dates skipped, and `flan_phase` stores none of the three derived columns.
+All three of Task 29's mutations were pre-run and each turned RED, file restored.
 
-**Engineers no longer touch `docs/tasks/feature-flan-core.md` — the manager owns it.** Two parallel
-engineers collided on it: one ticked item 9, the other staged the file wholesale and swept that tick
-into commit `cde26d9`. Nothing was lost, but attribution went wrong and the next collision could
-silently revert a tick. Ticking now happens only after the manager verifies.
+**But Task 27's scenario A0 was amended in place, and this is the single most important carry-forward
+of the phase.** As the plan originally wrote it, A0 asserts the empty phase via a **solo**
+`phase_rollups(db, [empty_phase_id])` — which is **immune to Task 29's mutation 3**: with a
+one-element batch, `phase_ids[0]` *is* the empty phase, so the mutated fall-through returns the empty
+shape and the assertion stays GREEN while the code is broken. Task 11's engineer hit it on their
+first run. A0 now **requires the empty phase be asserted inside a batch where a non-empty phase comes
+first**. The amendment is written into Task 27's own text in `PLAN.md`, not only into Deviations.
+
+**Engineers no longer touch `docs/tasks/feature-flan-core.md` — the manager owns it** (two parallel
+engineers collided on it; one swept the other's tick into commit `cde26d9`).
+
+**⚠ Open trap for Task 14.** `TaskCreate` accepts `assignee_ids` and `tags`, but the plan's Task 14
+spec never says `create_task` consumes them. If it does not, the API accepts both and silently drops
+the data — the "green backend, dead through the UI" class that shipped in 11a and 11b. Task 14's
+brief must require both applied and asserted. Same trap handled for Task 10's project tags.
+
+**Owner decision pending (not blocking):** there is **no reactivation path for a soft-removed roster
+member**. Task 8 correctly omitted `active` from the roster write schemas — a PATCH flipping
+`active=False` alone would orphan the assignment rows D-V5P1-6 requires be deleted in the same
+transaction. FLAN-01.4 does not ask for reactivation, so it is out of scope as built, but the roster
+UI (Task 25) will set an expectation either way.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
-`### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An
-uncommitted `flan/schemas.py` is Task 8 mid-write; an uncommitted `service/rollup.py` is Task 11.
+`### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An untracked
+`frontend/src/routes/flan/` is Task 19 mid-write; an uncommitted `service/projects.py` is Task 10.
 
 **Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
 `flan_*` tables; all five load-bearing constraint shapes in the database (`flan_task.phase_id`,
@@ -38,7 +55,7 @@ cold `down`/`up` boot clean; `ruff` 0.
 **⚠ Standing warning for every later autogenerate.** Task 6's draft proposed **seven destructive
 drops** against PLUM and SYERP unique constraints — pre-existing metadata-vs-DB drift, not FLAN's
 doing. Removed from `0018`, but the drift remains and every future `--autogenerate` proposes them
-again. See PLAN `## Noticed`; worth a BACKLOG entry.
+again. Worth a BACKLOG entry.
 
 **Corrected commands** (the plan's Context block is wrong on all four; table in
 `docs/tasks/feature-flan-core.md` → "Build notes"):
@@ -46,13 +63,13 @@ again. See PLAN `## Noticed`; worth a BACKLOG entry.
 - `/health/ready` — not `/api/v1/health`
 - `/api/v1/core/modules`, auth-gated via OAuth2 **form** login — not `/api/v1/modules`
 - alembic and pytest run from a **throwaway container, repo root at `/repo`, `--user root`, on
-  `--network compose_default`** — not the host venv (compose `db` is unpublished) and not
-  `compose_api_1` (non-root, cannot write the bind mount). For DB-free import checks, mount
-  `backend/` at `/app` instead. **Mounting the scratchpad into a container hits `Permission
-  denied`** for the container user — pipe probe scripts in on stdin via `python -`.
+  `--network compose_default`**; for DB-free import checks mount `backend/` at `/app` instead.
+  **Mounting the scratchpad into a container hits `Permission denied`** — pipe probe scripts in on
+  stdin via `python -`.
 
 Commits: `74e4b30` (T1), `fdf556c` (T2), `ae13509` (T3), `dadbf58` (T4), `9dfd406` (T5),
-`67e191d` (T6), `cde26d9` (T7), `f0be8f1` (T9), plus the `docs(zj):` bookkeeping commits.
+`67e191d` (T6), `cde26d9` (T7), `c97bac8` (T8), `f0be8f1` (T9), `ffdbc01` (T11), plus the
+`docs(zj):` bookkeeping commits and `9cfbf66` (ABOUTME fix).
 
 ## Position (as planned): v5.0 Phase 1 planned — build not started
 
