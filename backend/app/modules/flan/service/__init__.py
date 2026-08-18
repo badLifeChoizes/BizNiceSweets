@@ -25,6 +25,10 @@ from app.modules.flan.service._common import (
     resolve_phase,
     resolve_task,
 )
+from app.modules.flan.service.rollup import (
+    PhaseRollup,
+    phase_rollups,
+)
 
 __all__ = [
     # _common — shared loader, archive guard, resolvers
@@ -32,4 +36,7 @@ __all__ = [
     "require_writable_project",
     "resolve_phase",
     "resolve_task",
+    # rollup — phase-derived dates and % complete (D-V5-1)
+    "PhaseRollup",
+    "phase_rollups",
 ]
