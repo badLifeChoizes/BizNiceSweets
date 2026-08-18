@@ -1,4 +1,59 @@
 # STATE — BizNiceSweets
+Updated: 2026-08-18 (**`/zj:milestone` IN PROGRESS — v4.0 close, mid-flight. Not yet tagged.**)
+
+## Position: milestone v4.0 close, step 3 of 5
+
+All six phases (1, 2a, 2b, 3, 4, 5) are `[verified]`. The close audit ran and returned
+**GAPS FOUND — 1 blocker-to-close, 3 major, 4 minor** (`.zj/MILESTONE-v4.0-AUDIT.md`).
+Clause verdicts: **C2 MET · C1/C3/C5 PARTIAL · C4 NOT MET**.
+
+**Owner triage (this session):** amend the C4 DoD clause; fix **all** gaps; push → CI green →
+merge to `master` → tag there. Checklist: `docs/tasks/chore-human-uat.md`.
+
+### Done
+- **GAP-1** (blocker-to-close) — DoD clause C4 amended in PROJECT.md + ROADMAP.md to "has a
+  **documented, runnable** human check", matching D-P5-11 (which had already moved NFR-8's
+  Statement and PRD-12's acceptance signal but left the DoD sentence as the last unamended copy).
+  Accepted cost stated out loud: v4.0 ships with **no** human-exercised UI evidence. `e28d720`
+- **PLUM-01** re-stamped `a88431c` → `ad05c7a` (stale-verified flag cleared; only post-stamp change
+  was semantically-inert ruff autofix `d2b9b9c`). `e28d720`
+- **DECISIONS.md index** regenerated 148 → 167 entries, verified to match the body exactly. `e28d720`
+- **Doc truth-up** — README.md (8 months stale: four shipped suites listed "Planned", "no build
+  tools or dependencies required", no mention of Podman/`.env`/`.env.db`) and
+  requirements-progress.md (still claimed the PLUM tests "have never actually run"). `e28d720`
+- **Work log** `.zj/logs/milestone-v4.0.md` + **LEARNINGS "Milestone v4.0"** roll-up. `e9ffccb`
+
+### In flight — two engineers running, work UNCOMMITTED in the tree
+- **GAP-2** (major) — `execute_pick` is the one ledger writer outside the NFR-7 lock discipline.
+  Auditor reproduced both modes under a barrier: two concurrent first-picks → **two open
+  shipments** (stock unreachable, no list-shipments-for-SO route); opposite-order lines →
+  **deadlock 6/6**. Fix = sort lines by `item_id` + lock the SO row, both mutation-pinned as
+  `verify_gelato_ship.py` barrier scenarios. *Touching `backend/app/modules/gelato/service/
+  shipments.py` + `backend/scripts/verify_gelato_ship.py` — these are the uncommitted files.*
+- **GAP-3/6/8** — CI job for the 9 `verify_*_api.py` scripts (161 assertions, currently zero
+  coverage incl. the whole financial-reporting HTTP surface); `container-image` job must **boot**
+  the artifact it builds and curl `/health/ready`; `eslint.config.js` lints itself.
+
+### Remaining after those land
+1. `SRD.md` NFR-7 — status `verified` → vocabulary word + `Evidence:` line (the one `zj doctor`
+   **error**); Statement extended to name `pick` as a writer.
+2. `CHANGELOG.md` v4.0 section (generated from commits — 25 feat/fix/ci since `v3.0`).
+3. **GAP-4** — push `chore-human-uat`, confirm CI green, fresh PR → merge to `master`. PR #4 is
+   stale (180+ commits behind). `origin/master` = `9903f1f` and has **no `.github/` at all**;
+   4th consecutive milestone of master-merge debt.
+4. **GAP-5** — branch protection: add `container-image` + `verify-scripts-api` to required
+   contexts, `enforce_admins: true`. **MUST come after the merge** — requiring a context that has
+   never reported on `master` would block the v4.0 PR itself.
+5. Tag `v4.0` on `master`; archive `.zj/phases/` → `.zj/history/v4.0/phases/`; roll ROADMAP +
+   PROJECT (new DoD, owner-approved) forward; reset this file.
+
+## Next action
+
+Resume `/zj:milestone` — the two engineers' results are pending; nothing to run by hand yet.
+
+---
+## Prior state (v4.0 Phase 5 retro, 2026-08-18)
+
 Updated: 2026-08-18 (**v4.0 Phase 5 RETRO'D — `/zj:retro 5`. Phase CLOSED**, ROADMAP Phase 5 →
 `[done — verified 2026-08-17 + retro'd 2026-08-18]`. **This closes the final phase of milestone v4.0.**
 
