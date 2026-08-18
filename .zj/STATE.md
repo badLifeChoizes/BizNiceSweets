@@ -5,48 +5,26 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** Wave A (schema), tasks 2-6. **Done: 1, 2, 4.** Tasks **3 and 5 are in flight**
-as concurrent engineers (file lists verified disjoint: 3 owns `flan/models.py`, 5 owns
-`flan/__init__.py` + `flan/router.py` + `app/main.py`). Task 6 (migration `0018`) serializes behind
-both. Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
-`### [ ]`** — re-run any in-flight task from scratch rather than trusting a partial edit.
+**Current task:** Wave A (schema), tasks 2-6. **Done: 1, 2, 3, 4.** Task **5 is in flight**
+(module registration — it owns `flan/__init__.py`, `flan/router.py`, `app/main.py`, and is running
+the required full `down`/`up` cold start, so the `compose_*` stack may be down or mid-boot).
+Task 6 (migration `0018`) serializes behind it. Ticked tasks are marked `### [x]` in
+`.zj/phases/01-flan-core/PLAN.md`; **resume at the first `### [ ]`** — re-run any in-flight task
+from scratch rather than trusting a partial edit.
 
-**If the working tree holds uncommitted `backend/app/modules/flan/models.py` changes**, that is
-Task 3's engineer mid-write, not abandoned work: `git checkout` it and re-run Task 3.
+**If the working tree holds uncommitted `backend/app/main.py`, `flan/__init__.py` or an untracked
+`flan/router.py`**, that is Task 5's engineer mid-write, not abandoned work: `git checkout` /
+remove them and re-run Task 5.
 
-Commits so far: `74e4b30` (T1), `dadbf58` (T4), `fdf556c` (T2), plus `de5bde1` / `91a83a7`
-recording ticks, deviations and Noticed.
+**Before running anything, bring the stack back up** — Task 5 cycles it:
+`podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`
 
-**Preflight corrections recorded at build start** (the plan's Context block was stale on three
-command details — full table in `docs/tasks/feature-flan-core.md` "Build notes"):
+**Live hazard for Task 6.** A module `__init__.py` that imports a not-yet-existing `router` breaks
+`import app.core.models` repo-wide, Alembic's `env.py` included. If `alembic revision --autogenerate`
+dies with a spurious `ModuleNotFoundError`, retry before debugging — see PLAN `## Noticed`.
 
-1. The compose db user is **`app`**, database `biznice` (`.env.db`) — the plan's `psql -U postgres`
-   and `-U biznice` both fail.
-2. Health routes are **`/health/live`** and **`/health/ready`**, not `/api/v1/health`.
-3. **The backend pytest suite DOES run** — retiring the "cannot run in-container" tax the plan
-   carried into a fourth phase. The blocker was never the container; it was the *mount point*.
-   `backend/tests/conftest.py` has no no-DB run mode, so a host venv run aborts at collection
-   against the unpublished compose `db`; and under the dev overlay's `-v ../backend:/app`,
-   `tests/test_compose_config.py` + `tests/test_containerfile_config.py` resolve the repo root by
-   walking up from `__file__` and land on `/`, giving 3 failed + 6 errors. Mounting the **repo
-   root** fixes both:
-
-   ```bash
-   podman run --rm --user root --network compose_default -v "$PWD:/repo:z" -w /repo/backend \
-     --env-file .env --env-file .env.db \
-     -e POSTGRES_HOST=db -e PYTHONPATH=/repo/backend -e TEST_POSTGRES_DB=biznice_test \
-     compose_api sh -c "pip install -q -r requirements-dev.txt >/dev/null 2>&1; python -m pytest -q"
-   ```
-
-   Verified: those 9 layout tests go **9 passed** under it. Pre-build baseline under the *old*
-   mount was `3 failed, 236 passed, 6 errors`.
-4. The stack that was running was **prod-only** (no source bind mount, no `--reload`) so backend
-   edits were invisible to the API. The dev overlay is now up:
-   `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`.
-
-**Also committed at preflight:** `flan/app/schedule_gate-v45.html` (`49567ff`, on master before
-branching) — the v45 prototype that D-V5P1-2 and D-V5P1-7 cite by line number was untracked, so
-those binding decisions cited a file that existed only on the owner's disk.
+Commits so far: `74e4b30` (T1), `dadbf58` (T4), `fdf556c` (T2), `ae13509` (T3), plus `de5bde1` /
+`91a83a7` / `1afdc19` / `205b63b` recording ticks, deviations and Noticed.
 
 ## Position (as planned): v5.0 Phase 1 planned — build not started
 
