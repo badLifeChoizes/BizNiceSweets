@@ -25,6 +25,10 @@ from app.modules.flan.service._common import (
     resolve_phase,
     resolve_task,
 )
+from app.modules.flan.service.assignments import (
+    set_phase_assignees,
+    set_task_assignees,
+)
 from app.modules.flan.service.keys import (
     generate_task_key,
 )
@@ -67,6 +71,10 @@ __all__ = [
     "require_writable_project",
     "resolve_phase",
     "resolve_task",
+    # assignments — full-replacement assignee set/clear for tasks and phases,
+    # validated against the project roster (FLAN-01.5)
+    "set_phase_assignees",
+    "set_task_assignees",
     # keys — numeric-safe task-key generation (FLAN-01.3, D-P8-6, D-V5P1-7)
     "generate_task_key",
     # phases — phase CRUD with the derived rollup attached (FLAN-01.2)
