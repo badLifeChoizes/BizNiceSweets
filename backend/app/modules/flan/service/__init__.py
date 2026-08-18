@@ -1,0 +1,35 @@
+# ABOUTME: FLAN service layer package — re-exports the public surface so
+# ABOUTME: `from app.modules.flan.service import X` and `service.X` work
+# ABOUTME: unchanged. Holds the shared surface (project loader, archived-project
+# ABOUTME: write guard, phase/task resolvers) now; the per-entity modules
+# ABOUTME: (projects, rollup, phases, keys, tasks, roster, assignments) are
+# ABOUTME: re-exported here as plan tasks 10-16 add them.
+"""FLAN service layer (business logic).
+
+Split into cohesive per-entity submodules like syerp/service and crumb/service
+(D-P10-6 — keep new suites' service layers thin; FLAN-01 is the Project
+Management suite). This package re-exports the full public surface so
+`from app.modules.flan.service import X` and `service.X` work unchanged.
+
+Adding a submodule: append one alphabetically-placed `from
+app.modules.flan.service.<name> import (...)` block below and one
+correspondingly-labelled group to `__all__`. Both lists are kept one-name-per-
+line and grouped by submodule so two engineers appending different submodules
+touch different lines.
+"""
+from __future__ import annotations
+
+from app.modules.flan.service._common import (
+    get_project_or_404,
+    require_writable_project,
+    resolve_phase,
+    resolve_task,
+)
+
+__all__ = [
+    # _common — shared loader, archive guard, resolvers
+    "get_project_or_404",
+    "require_writable_project",
+    "resolve_phase",
+    "resolve_task",
+]
