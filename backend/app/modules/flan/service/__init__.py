@@ -46,6 +46,14 @@ from app.modules.flan.service.rollup import (
     PhaseRollup,
     phase_rollups,
 )
+from app.modules.flan.service.tasks import (
+    create_task,
+    delete_task,
+    get_task,
+    list_tasks,
+    require_project_members,
+    update_task,
+)
 
 __all__ = [
     # _common — shared loader, archive guard, resolvers
@@ -70,4 +78,12 @@ __all__ = [
     # rollup — phase-derived dates and % complete (D-V5-1)
     "PhaseRollup",
     "phase_rollups",
+    # tasks — task CRUD (FLAN-01.3) + the shared roster-membership guard
+    # every assignee write validates against (FLAN-01.5)
+    "create_task",
+    "delete_task",
+    "get_task",
+    "list_tasks",
+    "require_project_members",
+    "update_task",
 ]
