@@ -1,6 +1,6 @@
 // ABOUTME: FLAN Projects list screen (/flan/projects) — a table of projects (name,
 // ABOUTME: category, currency, start/gate date, key prefix, archived badge), a
-// ABOUTME: "Show archived" switch, the create dialog and a soft-archive action behind a
+// ABOUTME: "Show archived" switch, create/edit dialogs and a soft-archive action behind a
 // ABOUTME: confirmation. Rows navigate to /flan/projects/:id/phases (FLAN-01.1, FLAN-01.6).
 
 /**
@@ -28,9 +28,15 @@
  * Row click navigates to that project's phases — the URL is the active project
  * (D-V5P1-3), so no "current project" state lives on this screen either.
  *
- * Server 4xx from create surfaces inside ProjectCreateDialog; archive failures
- * surface here through `getApiErrorMessage` + `toast.error`, so a refusal is
- * reported in the server's own words rather than a generic message.
+ * The row actions cover the rest of FLAN-01.1's verbs: **Open** (view), **Edit**
+ * and **Archive**. Edit and Archive are offered on active projects only —
+ * `require_writable_project` refuses every write inside an archived project with
+ * a 422, so offering either there would only ever produce an error toast.
+ *
+ * Server 4xx from create and edit surface inside their own dialogs (a refused
+ * `key_prefix` change is a 422 from PATCH, D-V5P1-2); archive failures surface
+ * here through `getApiErrorMessage` + `toast.error`, so a refusal is reported in
+ * the server's own words rather than a generic message.
  */
 
 import { useState } from 'react'
@@ -66,6 +72,7 @@ import {
 import { getApiErrorMessage } from '@/routes/crumb/components/apiError'
 import { FlanNav } from './components/FlanNav'
 import { ProjectCreateDialog } from './components/ProjectCreateDialog'
+import { ProjectEditDialog } from './components/ProjectEditDialog'
 import { useArchiveProject, useProjects } from './hooks'
 import type { Project } from './hooks'
 
@@ -187,6 +194,7 @@ export function Projects() {
   const navigate = useNavigate()
   const [createOpen, setCreateOpen] = useState(false)
   const [includeArchived, setIncludeArchived] = useState(false)
+  const [editProject, setEditProject] = useState<Project | null>(null)
   const [archiveProject, setArchiveProject] = useState<Project | null>(null)
 
   const { data: projects = [], isLoading, isError } = useProjects(includeArchived)
@@ -289,13 +297,19 @@ export function Projects() {
                       >
                         Open
                       </DropdownMenuItem>
+                      {/* Writes inside an archived project are refused (422). */}
                       {project.active && (
-                        <DropdownMenuItem
-                          onClick={() => setArchiveProject(project)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          Archive
-                        </DropdownMenuItem>
+                        <>
+                          <DropdownMenuItem onClick={() => setEditProject(project)}>
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setArchiveProject(project)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            Archive
+                          </DropdownMenuItem>
+                        </>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -308,6 +322,13 @@ export function Projects() {
 
       {/* ─── Create dialog ────────────────────────────────────────────────── */}
       <ProjectCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
+
+      {/* ─── Edit dialog ──────────────────────────────────────────────────── */}
+      <ProjectEditDialog
+        open={editProject !== null}
+        project={editProject}
+        onClose={() => setEditProject(null)}
+      />
 
       {/* ─── Archive confirmation ─────────────────────────────────────────── */}
       <ProjectArchiveDialog

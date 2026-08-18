@@ -1,7 +1,8 @@
 // ABOUTME: Component tests for the FLAN Projects screen (FLAN-01.1, FLAN-01.6) — rows
 // ABOUTME: render each project's OWN key prefix, the create dialog POSTs a ProjectCreate
-// ABOUTME: body, archived rows stay hidden until the Show-archived switch is on, a 4xx
-// ABOUTME: detail reaches toast.error, and archiving confirms before POSTing /archive.
+// ABOUTME: body, the edit dialog opens pre-filled and PATCHes a ProjectUpdate body,
+// ABOUTME: archived rows stay hidden until the Show-archived switch is on, a 4xx detail
+// ABOUTME: reaches toast.error, and archiving confirms before POSTing /archive.
 
 /**
  * Projects screen — component tests.
@@ -21,6 +22,17 @@
  *   4. A 4xx with a string `detail` (a refused key prefix) surfaces via
  *      toast.error in the server's own words.
  *   5. Archiving asks for confirmation first, then POSTs the archive endpoint.
+ *   6. The edit dialog opens seeded with the edited row's OWN values — asserted
+ *      for TWO different rows in one test, so a blank form, or one with
+ *      hard-coded defaults, cannot satisfy both (the same LEARNINGS
+ *      counter-measure as the key-prefix cell).
+ *   7. The edit dialog PATCHes a body whose every key exists in the backend's
+ *      `ProjectUpdate` and which carries neither `id` nor `active` — both are
+ *      absent from that schema (the id is immutable, archiving is its own
+ *      endpoint).
+ *   8. A 422 refusing a `key_prefix` change on a project that already has tasks
+ *      (D-V5P1-2) surfaces the server's own `detail` through toast.error — the
+ *      client never predicts that lock.
  *
  * Modelled on routes/gelato/Bins.test.tsx.
  */
@@ -65,7 +77,26 @@ import { apiClient } from '@/api/client'
 import { toast } from 'sonner'
 const mockGet = vi.mocked(apiClient.get)
 const mockPost = vi.mocked(apiClient.post)
+const mockPatch = vi.mocked(apiClient.patch)
 const mockToastError = vi.mocked(toast.error)
+
+/**
+ * The field set of the backend's `ProjectUpdate` schema, verified against the
+ * real class with
+ * `python -c "from app.modules.flan.schemas import ProjectUpdate; print(sorted(ProjectUpdate.model_fields))"`
+ * → ['category', 'currency', 'description', 'gate_date', 'key_prefix', 'name',
+ * 'start_date', 'tags'] — `id` and `active` are absent by design.
+ */
+const PROJECT_UPDATE_FIELDS = [
+  'category',
+  'currency',
+  'description',
+  'gate_date',
+  'key_prefix',
+  'name',
+  'start_date',
+  'tags',
+]
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -319,5 +350,134 @@ describe('Projects screen', () => {
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith('/api/v1/flan/projects/p1/archive')
     })
+  })
+
+  // ─── Edit dialog (FLAN-01.1's "edit" verb) ─────────────────────────────────
+
+  /** Open the row-actions menu for `name` and pick Edit. */
+  async function openEditDialog(user: ReturnType<typeof userEvent.setup>, name: string) {
+    await user.click(screen.getByRole('button', { name: `Project actions for ${name}` }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit' }))
+    expect(await screen.findByRole('heading', { name: 'Edit Project' })).toBeInTheDocument()
+  }
+
+  it('opens the edit dialog pre-filled with the edited row’s OWN values', async () => {
+    const user = userEvent.setup()
+    mockGets()
+
+    renderProjects()
+    await screen.findByText('Crisis Simulator')
+
+    // Row 1: fully populated — every field must show that project's value.
+    await openEditDialog(user, 'Crisis Simulator')
+    expect(screen.getByLabelText('Name')).toHaveValue('Crisis Simulator')
+    expect(screen.getByLabelText('Key prefix')).toHaveValue('CRIS')
+    expect(screen.getByLabelText('Currency')).toHaveValue('USD')
+    expect(screen.getByLabelText('Start date')).toHaveValue('2026-01-05')
+    expect(screen.getByLabelText('Gate date')).toHaveValue('2026-06-30')
+    expect(screen.getByLabelText('Category')).toHaveTextContent('Client')
+    expect(screen.getByLabelText('Description')).toHaveValue('')
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Edit Project' })).not.toBeInTheDocument()
+    })
+
+    // Row 2: DIFFERENT values, nulls included. A blank form or hard-coded
+    // defaults would fail one of these two rows.
+    await openEditDialog(user, 'Manikin Refresh')
+    expect(screen.getByLabelText('Name')).toHaveValue('Manikin Refresh')
+    expect(screen.getByLabelText('Key prefix')).toHaveValue('MANI')
+    expect(screen.getByLabelText('Currency')).toHaveValue('EUR')
+    expect(screen.getByLabelText('Start date')).toHaveValue('')
+    expect(screen.getByLabelText('Gate date')).toHaveValue('')
+    expect(screen.getByLabelText('Category')).toHaveTextContent('None')
+  })
+
+  it('PATCHes a ProjectUpdate body carrying neither id nor active', async () => {
+    const user = userEvent.setup()
+    mockGets()
+    mockPatch.mockResolvedValueOnce({ data: { ...CRISIS, name: 'Crisis Simulator II' } })
+
+    renderProjects()
+    await screen.findByText('Crisis Simulator')
+    await openEditDialog(user, 'Crisis Simulator')
+
+    const name = screen.getByLabelText('Name')
+    await user.clear(name)
+    await user.type(name, 'Crisis Simulator II')
+
+    // Typed lowercase: the dialog uppercases it the way derive_key_prefix does.
+    const keyPrefix = screen.getByLabelText('Key prefix')
+    await user.clear(keyPrefix)
+    await user.type(keyPrefix, 'cris2')
+
+    // Clearing an OPTIONAL field is legitimate — category crosses as null.
+    await user.click(screen.getByLabelText('Category'))
+    await user.click(await screen.findByRole('option', { name: 'None' }))
+
+    fireEvent.change(screen.getByLabelText('Gate date'), { target: { value: '2026-07-31' } })
+    await user.type(screen.getByLabelText('Description'), 'Gate slipped a month')
+
+    await user.click(screen.getByRole('button', { name: 'Save Project' }))
+
+    await waitFor(() => {
+      expect(mockPatch).toHaveBeenCalledWith('/api/v1/flan/projects/p1', {
+        name: 'Crisis Simulator II',
+        key_prefix: 'CRIS2',
+        category: null,
+        description: 'Gate slipped a month',
+        currency: 'USD',
+        start_date: '2026-01-05',
+        gate_date: '2026-07-31',
+      })
+    })
+
+    // Every key is one ProjectUpdate declares, and the two it deliberately
+    // omits are omitted here too.
+    const body = mockPatch.mock.calls[0][1] as Record<string, unknown>
+    expect(PROJECT_UPDATE_FIELDS).toEqual(expect.arrayContaining(Object.keys(body)))
+    expect(body).not.toHaveProperty('id')
+    expect(body).not.toHaveProperty('active')
+  })
+
+  it('surfaces the server’s 422 detail when a key prefix can no longer change', async () => {
+    const user = userEvent.setup()
+    mockGets()
+    // The client never predicts the lock (D-V5P1-2) — it tries, and reports back.
+    mockPatch.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        status: 422,
+        data: {
+          detail:
+            'Project p1 already has tasks, so its key prefix (CRIS) can no longer be changed.',
+        },
+      },
+    })
+
+    renderProjects()
+    await screen.findByText('Crisis Simulator')
+    await openEditDialog(user, 'Crisis Simulator')
+
+    const keyPrefix = screen.getByLabelText('Key prefix')
+    await user.clear(keyPrefix)
+    await user.type(keyPrefix, 'NEWP')
+    await user.click(screen.getByRole('button', { name: 'Save Project' }))
+
+    await waitFor(() => {
+      expect(mockPatch).toHaveBeenCalledWith(
+        '/api/v1/flan/projects/p1',
+        expect.objectContaining({ key_prefix: 'NEWP' })
+      )
+    })
+    // The server's own words, verbatim — no generic fallback.
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Project p1 already has tasks, so its key prefix (CRIS) can no longer be changed.'
+      )
+    })
+    // A refused edit keeps the dialog open so the user can fix it.
+    expect(screen.getByRole('heading', { name: 'Edit Project' })).toBeInTheDocument()
   })
 })
