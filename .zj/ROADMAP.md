@@ -492,7 +492,7 @@ module, and `flan/data/Crisis.json` is not a requirements source.
 
 | Phase | Delivers | Why here |
 |-------|----------|----------|
-| **1** | **FLAN-01** — project/phase/task core, team roster (optional user link), assignment, RBAC `flan:read`/`flan:write`, audit | Nothing else has anything to attach to. Establishes the unified task model (D-V5-1): a phase *derives* its dates and % from its tasks |
+| **1** ✅planned | **FLAN-01** — project/phase/task core, team roster (optional user link), assignment, RBAC `flan:read`/`flan:write`, audit | Nothing else has anything to attach to. Establishes the unified task model (D-V5-1): a phase *derives* its dates and % from its tasks |
 | **2a** | **FLAN-02** scheduling engine + gate verdict, **FLAN-04** facet taxonomy | Pure server-side math over a graph; the taxonomy ships with it because the engine's `in-plan`/`Parked` basis *is* a reserved facet |
 | **2b** | **FLAN-03** timeline board, list, calendar, search/filter/grouping, flags | The 11a/11b split that worked in v3.0 — engine proven headless before the surface that renders it |
 | **3** | **FLAN-05** risks/milestones/decisions, **FLAN-06** deliveries + notes | Flat CRUD over the core; no new integration. Cheapest full-parity group |
@@ -504,6 +504,15 @@ module, and `flan/data/Crisis.json` is not a requirements source.
 
 **NFR-9** (deterministic, bounded schedule computation) is verified in Phase **2a** and re-asserted
 by CI thereafter.
+
+**Phase 1 planned 2026-08-18** (`/zj:plan 1`) — `.zj/phases/01-flan-core/PLAN.md`, **35 tasks** in
+five waves (schema → service+router → UI → verification → close), one full-stack phase per D-V5P1-1.
+All 7 of FLAN-01's acceptance criteria covered and cited. Crux = the phase-derived dates/% rollup
+with **no stored columns**, empty-phase case fixtured first and mutation-proven. 7 owner decisions,
+**D-V5P1-1..7** (namespace `D-V5P1-*` because `D-P1-*` was spent by v4.0's Phase 1). Two draft
+errors caught at plan review: FLAN seeds `enabled=True` (the `False` in the seed tuple is
+`always_on`), which would have made the CORE-07/08 nav check pass vacuously; and a padded-key format
+that contradicted the plan's own `PRJ-9 → PRJ-10` verify scenario. **Next: `/zj:build 1`.**
 
 **Sequencing intent:** the DoD lands at **4b**. Analytics (5) and exports (6) sit deliberately after
 it, so a milestone that runs long puts the *tail* at risk rather than the definition of done — and

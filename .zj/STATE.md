@@ -1,10 +1,66 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-18 (**Milestone v4.0 CLOSED + tagged `v4.0` at `6549142` on master.**
-Milestone v5.0 "FLAN port" chosen, DoD owner-approved, and **now spec'd** — PRD-6 rewritten,
-SRD **FLAN-01..11 + NFR-9**, phase→FR mapping in ROADMAP (7 phases / 9 units), D-V5-1..8.
-`.zj/phases/` is empty. **Next: `/zj:plan 1`.**)
+Updated: 2026-08-18 (**v5.0 Phase 1 "FLAN core" PLANNED — `/zj:plan 1`.**
+`.zj/phases/01-flan-core/` holds `CONTEXT.md` + `PLAN.md`: **35 tasks in five waves**, all 7 of
+FLAN-01's acceptance criteria covered and cited, every task with a runnable Verify command.
+**7 owner decisions → D-V5P1-1..7.** Nothing built yet. **Next: `/zj:build 1`.**)
 
-## Position: v5.0 spec'd — Phase 1 not yet planned
+## Position: v5.0 Phase 1 planned — build not started
+
+**Phase 1 = SRD FLAN-01** (project/phase/task core, team roster with an optional platform-user link,
+assignment, RBAC `flan:read`/`flan:write`, audit) — the first phase of the 7-phase v5.0 FLAN port
+mapped at D-V5-8. It stacks on nothing unverified: v4.0 closed and tagged, every phase archived
+with a PASS verdict.
+
+**Plan shape (`/zj:plan 1`, architect + manager goal-backward check):** one full-stack phase in wave
+order (D-V5P1-1) — **A** schema (5 tasks: models, roster + assignment join tables, permission seed,
+module registration, migration `0018`) → **B** service + router (12) → **C** UI (8) → **D**
+verification (7) → **E** close (2). 35 tasks, one atomic commit each.
+
+**The one crux: phase-derived dates and % complete (FLAN-01.2, D-V5-1).** A phase carries **no**
+`start_date`, `due_date` or `percent_complete` column at all — the three values are computed on
+every read from the phase's tasks in one grouped query. Storing them would make "never hand-set" a
+rule someone must remember; omitting the columns makes it structural. The **empty-phase case** (no
+tasks → null dates, `"0.00"`) is fixtured **first** in `verify_flan.py` scenario (A) and is one of
+the three mutations Task 29 must drive RED — it is precisely the case a happy-path fixture would
+miss.
+
+**7 owner decisions at plan → D-V5P1-1..7** (ID namespace note: `D-P1-*` was already spent by v4.0's
+Phase 1, so v5.0 phase decisions are `D-V5P1-*`):
+1. **One full-stack phase, not sub-split** — FLAN-01 has one provable crux, and the standing rule is
+   to sub-split at two.
+2. **Task key prefix = per-project `key_prefix` column**, defaulted from the project name, **locked
+   once the first task is issued**. v45's majority-inference is not ported.
+3. **Active project is URL-scoped** — `/flan/projects/:projectId/...` + a switcher that merely
+   navigates. Makes FLAN-01.6's "no view mixes two projects" structural, and is the shape FLAN-10's
+   deep links need.
+4. **Refresh `.zj/codebase/MAP.md` at phase close.** `plum/service.py` split and the atlas stay out.
+5. **Tags = two join tables** (`flan_project_tag`, `flan_task_tag`) holding **opaque strings** — no
+   facet semantics in Phase 1, that is FLAN-04 at 2a.
+6. **Roster removal is a soft-remove** (`active=False` + delete that member's assignment rows).
+7. **Task keys are unpadded** — `PRJ-9 → PRJ-10`, per the SRD's own verification literal.
+
+**Two errors caught at the manager's plan review, both now corrected in `PLAN.md`:**
+- **FLAN seeds `enabled=True`, not disabled.** The `False` in `("flan", …, False, 30)`
+  (`backend/app/core/modules_seed.py:26`) is `always_on`; the insert at `:52` hardcodes
+  `enabled=True`. The draft plan asserted the opposite, which would have made the CORE-07/08
+  nav-gating check **pass vacuously** ("enable it, then see the nav"). It is now asserted the other
+  way — toggle FLAN **off**, assert the nav item disappears, toggle back on.
+- **The key format contradicted its own verify scenario** — padded `PRJ-0001` while scenario (B)
+  drove a project to `PRJ-9` and demanded `PRJ-10`, which padding makes unreachable. Resolved
+  unpadded (D-V5P1-7), with the string-sort consequence (`PRJ-10` before `PRJ-9`) carried into the
+  plan's risk table and Task 24's Done-when.
+
+**Standing debt carried in, not scheduled:** the human QA checklist stays unrun by design (BACKLOG
+p1, `.zj/QA.md` §6 holds zero readings — non-blocking per owner preference); pick-path race `Q2`
+open (p2); no server-side module-enable gate (p2); `plum/service.py` ~3,000 lines unsplit (p2).
+
+**Also known going in:** the backend pytest suite **cannot** run in-container (`pytest` is absent
+from the image and the bind-mounted venv carries host-path shebangs) — run it from the host venv
+against a reachable Postgres. Verify scripts need `PYTHONPATH=/app` in-container. CI needs no
+workflow edit: the `verify-scripts` jobs are glob-driven, so `verify_flan.py` and
+`verify_flan_api.py` are picked up automatically.
+
+## Prior position: v5.0 spec'd — Phase 1 not yet planned
 
 **v4.0 "Infra-debt + quality paydown" is closed.** Six phases (1, 2a, 2b, 3, 4, 5), 187 commits,
 ~31.0 h across 15 sessions, 2026-07-20 → 2026-08-18. No new end-user capability — CI on every push,
@@ -90,9 +146,20 @@ concurrent pack just flipped to `packed`); module enable/disable has no server-s
 ## Next action
 
 ```
-/zj:spec
+/zj:build 1
 ```
-Sharpen the v5.0 DoD into clauses and expand FLAN-01 into numbered requirements, then `/zj:plan 1`.
+Execute `.zj/phases/01-flan-core/PLAN.md` — 35 tasks, wave order, one atomic commit each, on a
+`feature-flan-core` branch off master with its `docs/tasks/feature-flan-core.md` checklist.
+Read `CONTEXT.md` alongside it: it carries the binding decisions, the verified codebase facts, and
+the LEARNINGS keepers that apply (chief among them — this phase mirrors CRUMB/GELATO heavily, and
+*mirroring an exemplar retires architectural risk, never correctness risk; the copy is un-audited
+exactly where your case differs*. The named trap here is the key-collision retry: FLAN's task insert
+carries a `phase_id` FK the quote exemplar lacks, so the `except IntegrityError` must be narrowed to
+`uq_flan_task_project_key` and bounded — that is the Phase-13 `create_invoice` unbounded-recursion
+500 in miniature).
+
+*(Superseded, kept for the record: the previous next action was `/zj:spec`, now done — PRD-6
+rewritten, SRD FLAN-01..11 + NFR-9, D-V5-1..8.)*
 
 *(One open item first if you want it clean: **PR #6** from `chore-v4-close-rollforward` carries
 this roll-forward plus the archived milestone-close checklist and needs merging to master — the
