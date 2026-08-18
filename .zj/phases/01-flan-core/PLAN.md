@@ -382,7 +382,7 @@ TaskCreate(phase_id='p', summary='x', start_date=date(2026,1,10), due_date=date(
 - **Verify:** `cd $BNS/backend && .venv/bin/python -c "from app.modules.flan.service import require_writable_project; print('ok')" && .venv/bin/ruff check .`
 - **Parallel-ok:** no
 
-### [ ] 10. Implement project CRUD and archive in the service
+### [x] 10. Implement project CRUD and archive in the service
 - **Serves:** FLAN-01.1, FLAN-01.6
 - **Files:** `backend/app/modules/flan/service/projects.py` (new),
   `backend/app/modules/flan/service/__init__.py`
@@ -1075,6 +1075,30 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
 - **Manager — synced `docs/tasks/feature-flan-core.md` to `PLAN.md`'s ticks.** It had fallen behind
   once engineers stopped touching it; the manager now ticks both together after verifying.
 
+- **Task 10 — `derive_key_prefix` falls back to `PRJ` in one more case than the plan spells out.**
+  The plan says fall back "if the name yields nothing"; it also falls back when the derived prefix
+  does not **start with a letter** (`"3M Widgets"` → `"3MWI"` → `"PRJ"`). This is load-bearing, not
+  cosmetic: the schema pattern is `^[A-Za-z][A-Za-z0-9]{0,9}$`, and **Task 13 interpolates
+  `key_prefix` into a `^{prefix}-[0-9]+$` regex on the strength of that pattern**. A derived prefix
+  violating it would be the one value in the column the key generator's safety argument does not
+  cover. Verified: `Crisis Simulator → CRIS`, `!!! → PRJ`, `3M Widgets → PRJ`.
+- **Task 10 — `update_project` skips explicit nulls aimed at NOT NULL columns** (`name`,
+  `key_prefix`, `currency`), named `_NOT_NULL_FIELDS`. `exclude_unset` alone (the gelato `update_bin`
+  idiom) lets an explicit null legitimately clear a *nullable* field like `category`, but those three
+  are typed `X | None` on the update schema, so `{"currency": null}` would otherwise reach the DB as
+  an IntegrityError 500.
+- **Task 10 — `archive_project` deliberately does NOT call `require_writable_project`.** That guard
+  would 422 the second call and break the required idempotency. It uses `get_project_or_404`.
+- **Task 10 — tags are attached via a plain non-mapped `.tags` attribute** on the returned ORM
+  instance, read by `ProjectRead.tags` through `from_attributes`. `Project` has no ORM relationship
+  to `ProjectTag` (the join-table decision D-V5P1-5). The engineer additionally proved
+  `ProjectRead.model_validate(...)` carries the tags on all three read paths — create, get and list —
+  which is the assertion that actually closes the silent-no-op trap, since a service-side round-trip
+  alone would not have caught a serialization gap.
+- **Task 10 — list ordering is `ORDER BY name, created_at`** (unspecified in the plan). Alphabetical
+  reads better in the project switcher (D-V5P1-3), and since duplicate names are legal, `created_at`
+  is the tiebreak that keeps ordering stable between reads.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1144,3 +1168,8 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
 - **`PhaseRead.status` is a plain `str` in the backend schema** while `PhaseCreate`/`PhaseUpdate`
   use the `PhaseStatus` Literal. The frontend mirrors that asymmetry, as CRUMB does for
   `Lead.status`. Harmless, but any screen wanting an exhaustive status switch needs a narrow first.
+
+- **A shared tag/link helper is emerging.** `Project` has no ORM relationship to `ProjectTag`, so
+  Task 10 hand-rolled `_load_tags`/`_attach_tags`/`_replace_tags`. Tasks 14 (`flan_task_tag`) and 16
+  (assignee links) need the same trio. If a third copy appears, extract it — flagged now so the
+  duplication is a decision rather than an accident.

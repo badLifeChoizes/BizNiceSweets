@@ -23,7 +23,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 - [x] 7. Write the project and phase Pydantic schemas — _FLAN-01.1, FLAN-01.2_
 - [x] 8. Write the task, roster and assignment Pydantic schemas — _FLAN-01.3, FLAN-01.4, FLAN-01.5_
 - [x] 9. Build the flan service package skeleton with the archived-project guard — _FLAN-01.1_
-- [ ] 10. Implement project CRUD and archive in the service — _FLAN-01.1, FLAN-01.6_
+- [x] 10. Implement project CRUD and archive in the service — _FLAN-01.1, FLAN-01.6_
 - [x] 11. Implement the phase-derived dates and % rollup  ⟵ **THE CRUX** — _FLAN-01.2 (D-V5-1)_
 - [ ] 12. Implement phase CRUD with delete-cascades-to-tasks — _FLAN-01.2_
 - [ ] 13. Implement the numeric-safe task key generator — _FLAN-01.3 (D-P8-6)_
