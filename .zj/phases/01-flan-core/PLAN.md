@@ -896,7 +896,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 
 ## Wave E — close
 
-### [ ] 34. Refresh `.zj/codebase/MAP.md` (D-V5P1-4)
+### [x] 34. Refresh `.zj/codebase/MAP.md` (D-V5P1-4)
 - **Serves:** D-V5P1-4 (phase-close hygiene for phases 2a–7)
 - **Files:** `.zj/codebase/MAP.md`
 - **Do:** Regenerate/edit so the map covers FLAN, and **fix the four false claims in `## Concerns`**
@@ -1549,6 +1549,25 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   lists** — the first because tasks do not declare files they *temporarily* mutate, the second because
   they do not declare the *database* they share.
 
+- **Task 34 — MANAGER ERROR corrected by the engineer: FLAN has FOUR screens, not five.** My brief
+  said five; the truth is `Projects/Phases/Tasks/Team.tsx` on four routes plus a `/flan →
+  /flan/projects` redirect (`App.tsx:135-140`). The "five" came from conflating screens with the
+  **five FLAN test files** (four screens + `FlanNav.test.tsx`). They checked and wrote four.
+- **Task 34 — the autogenerate hazard was REPRODUCED today**, not cited from Task 6's memory: a
+  throwaway copy of `backend/` at head `0018` produced a draft whose `upgrade()` was **exactly** the
+  seven `drop_constraint`/`drop_index` calls and nothing else. The p2 BACKLOG item is live, not
+  historical.
+- **Task 34 — the `app.routes` hazard was measured:** `Counter(...)` over `app.routes` gives
+  `{'_IncludedRouter': 10, 'Route': 4}`, and a naive `APIRoute` scan for `/flan` returns **0**.
+- **Task 34 — three MORE stale claims found and fixed while sweeping**, beyond the four the plan
+  named: Concern 3 (root `CLAUDE.md`'s Tech Stack and Architecture were rewritten and are accurate
+  now — what is stale is its ⚠ banner and Suite Status table), Concern 6 (a Windows comment cited at
+  `compose.yml:57-60` actually lives at `:74-79`), and Concern 9 (placeholder dirs hold 35 files, not
+  "CLAUDE.md only"). The file-existence sweep also cleared three dead paths.
+- **Task 34 — independently hit the shared-test-DB collision too**, getting `10 failed, 238 passed,
+  20 errors` while sharing `biznice_test`, then `268 passed` on a private `TEST_POSTGRES_DB`. Third
+  independent observation of the same gap; documented in the map's Concerns and Commands table.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1712,3 +1731,18 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   SYERP/MOUSSE/CRUMB/GELATO are now false — the harness was repaired in v4.0 Phase 2a and the suite
   runs 268/0. Deliberately not touched by Task 35 (out of scope, and the header calls itself
   historical). Worth a separate `docs:` cleanup.
+
+- **⚠ ESCALATED — `verify-scripts` is a REQUIRED branch-protection context, and it is RED on master.**
+  Task 34 confirmed via `gh api repos/:owner/:repo/branches/master/protection` that the required
+  contexts are `["frontend","backend-lint","backend-tests","verify-scripts","verify-scripts-api",
+  "container-image"]`. Since `verify_qa_doc.py` fails and `verify-scripts` globs `scripts/verify_*.py`,
+  **every PR into master is currently blocked on it** — including this phase's. It will also mask the
+  next genuine regression in that job. This raises the p1 QA.md item from "CI is red" to "merges are
+  blocked": it must be fixed on master before `/zj:ship`.
+- **`.github/workflows/ci.yml:21-24` and `:411-413` contradict branch protection** — the comments say
+  `container-image` and `verify-scripts-api` "report but do not block", but `gh api` lists both as
+  required. Two stale comment blocks to delete.
+- **Root `CLAUDE.md` is internally contradictory:** its ⚠ banner says "Technology Stack" and
+  "Architecture" are legacy-only, but both were rewritten to describe the live codebase; and its Suite
+  Status table still lists **FLAN as "Prototype only, not yet re-platformed"** and GELATO as
+  "Planned". Both are now false — worth a `docs:` pass at phase close.

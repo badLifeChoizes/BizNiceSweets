@@ -1,45 +1,64 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-18 (**v5.0 Phase 1 "FLAN core" BUILD IN FLIGHT — `/zj:build 1`.**
+Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" BUILD COMPLETE — `/zj:build 1`.** All 36 tasks
 Branch `feature-flan-core`; checklist `docs/tasks/feature-flan-core.md`. Task 1 done (`74e4b30`).
 Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PLAN.md`.**)
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** **30 of 36 tasks done. Waves A, B and C are COMPLETE**; Wave D is 4/7.
-The module is built and its two verify scripts are green: `verify_flan.py` **38 PASS** across
-scenarios (A)-(F), `verify_flan_api.py` **123 PASS** across all 20 routes and 14 audit actions.
+**Position: v5.0 Phase 1 "FLAN core" — BUILD COMPLETE. All 36 tasks done. Next: `/zj:verify 1`.**
 
-**In flight:** **29** (formalise the three rollup mutations into a recorded table) and **31**
-(port the crux to pytest).
+Branch `feature-flan-core`, 36/36 tasks ticked in `.zj/phases/01-flan-core/PLAN.md`, checklist
+`docs/tasks/feature-flan-core.md` complete. **Nothing is verified yet — `/zj:verify 1` is the gate.**
 
-**Next:** **32** (pytest RBAC/audit — **its text was amended, see below**), then **33** (full
-regression gate), then Wave E: **34** (refresh `MAP.md`) and **35** (requirements-progress),
-parallel-ok with each other.
+**What shipped (SRD FLAN-01, all 7 acceptance criteria):** eight `flan_*` tables + migration `0018`;
+a `service/` package (`_common, rollup, projects, phases, keys, tasks, roster, assignments`); a
+**20-operation** router under `/api/v1/flan` with `flan:read`/`flan:write` on every route and audit
+on every mutation; **four** React screens (Projects, Phases, Tasks, Team) + `FlanNav` + `hooks.ts`,
+wired into `App.tsx` behind a `/flan → /flan/projects` redirect.
 
-**⚠ Task 32 carries an AMENDED requirement — a real coverage gap Task 28 found.** The `due < start`
-refusal is proven only **in-process**: `verify_flan.py` (C1) sees a `pydantic.ValidationError` on
-create, (C2) a service `HTTPException` on the merged PATCH, and `verify_flan_api.py` posts dates but
-never asserts the status. **Nothing yet proves the 4xx a client actually receives**, and FLAN-01.3's
-"rejected server-side (4xx)" is a claim about the wire. Task 32 must assert the HTTP 422 on both
-`POST .../tasks` and a one-date `PATCH /flan/tasks/{id}`.
+**Regression gate (Task 33) — GREEN on every FLAN-owned surface:** ruff 0, eslint 0, **268 backend
+tests / 0 skipped**, **26 of 26 runnable `verify_*` scripts** on a cold `down`/`up` with no
+cross-module FK-resolution 500, **Vitest 51 files / 196 tests**, `npm run build` 0, trial balance
+`in_balance: true` with debit == credit == `8547.250000` (FLAN posts no GL, so any movement would
+have been a regression). `verify_flan.py` **38 PASS**, `verify_flan_api.py` **123 PASS**.
 
-**✅ THE PHASE'S HEADLINE RESULT — the A0 amendment is empirically confirmed.** Task 27 asserted A0
-four ways and ran the empty-phase mutation against all four: **the solo-batch form
-`phase_rollups([empty])` — what the plan originally specified — stayed GREEN**, while the
-batch-with-a-non-empty-phase-first forms (`A0c` via `phase_rollups`, `A0d` via `list_phases`) went
-RED. The phase's headline crux had a verification that could not detect its own violation. `A0d`
-runs through `list_phases`, the read the router actually serves, so the non-vacuous shape is the
-production call shape. Both are labelled `CRUX` in the source with a "do not simplify this to a
-single-id call" comment.
+**⚠ ONE RED, INHERITED FROM MASTER, AND IT BLOCKS MERGING.** `verify_qa_doc.py` fails because
+`.zj/QA.md` is 11 requirements behind `.zj/SRD.md` (`FLAN-02..11`, `NFR-9`, added on master in
+`6f664a9`/`23bf467`). Proven pre-existing: this branch touches neither file, and master exits 1
+identically. **`verify-scripts` is a REQUIRED branch-protection context**, so every PR into master is
+currently blocked on it. Owner triaged it non-blocking for the phase; **it must be fixed on master
+before `/zj:ship`.** Filed p1 in `.zj/BACKLOG.md`.
 
-**FIVE VERIFICATION GAPS FOUND IN THIS PHASE** — every one in the plan's checks rather than its code,
-and every one found by an engineer *running* the thing rather than reading it:
-1. Task 27's A0 was vacuous against its own mutation (amended, then empirically confirmed).
+**Three owner decisions taken mid-build:** (1) **Task 22a added** — FLAN-01.1's "edit" verb was
+covered by no planned task, so verify could not have marked FLAN-01 complete without it; (2) **no
+reactivation path** for a soft-removed roster member (FLAN-01.4 does not ask for one); (3)
+**task-key reuse accepted** for Phase 1 (FLAN-01.3 requires only uniqueness among live rows), filed
+p2 for FLAN-10 at the latest.
+
+**Five verification gaps found and fixed in the PLAN itself** — every one in the plan's *checks*, not
+its code, and every one found by an engineer running the thing rather than reading it:
+1. **Task 27's A0 was vacuous** — and this was then **empirically confirmed**: under the empty-phase
+   mutation the solo form `phase_rollups([empty])` stayed **GREEN** while the batched forms went RED.
+   The phase's headline crux had a verification that could not detect its own violation.
 2. Task 20's Verify was a `grep -c` count that cannot show *which* hooks invalidate.
 3. Task 14's Done-when regex `\d{4,}` contradicted D-V5P1-7's unpadded keys.
 4. Task 33's frontend gate would have **hung** — `npm run test` is watch mode.
-5. `due < start` was proven in-process by three separate checks, none of which proved the wire
-   status the acceptance criterion actually states (Task 32 amended).
+5. `due < start` was proven in-process by three separate checks, none proving the wire status
+   FLAN-01.3 actually states (closed in Task 32; both new assertions mutation-proved).
+
+**One defect found and fixed in-build (`5b3d09f`):** `useDeletePhase` invalidated only `phasesKey`,
+but `flan_task.phase_id` cascades — the Tasks screen would have listed deleted rows. **Keeper: a
+cascade is a write to a table you did not name.**
+
+**Two manager errors, both mine, both from parallel scheduling, both invisible in the plan's
+`Files:` lists:** tasks declare neither the files they *temporarily* mutate (two tasks mutated
+`rollup.py` concurrently → one silent false green) nor the *database* they share (two pytest runs on
+`biznice_test` → spurious 401s that read like an auth bug). Filed p2 for conftest isolation.
+
+**Four silent-failure hazards discovered — checks that measure nothing and pass:** `podman run`
+without `-i`; `app.routes` on FastAPI 0.138 (`{'_IncludedRouter': 10, 'Route': 4}`, naive scan finds
+**0** module routes); OpenAPI `security` proving a scheme not a permission; and
+`podman exec … || echo` masking exit codes.
 
 **⚠ A FOURTH GATE DEFECT, fixed before it fired.** `frontend/package.json`'s `test` script is bare
 `vitest` — **watch mode**, which never exits. The plan's frontend gate (`npm run lint && npm run test

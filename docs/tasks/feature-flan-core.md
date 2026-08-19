@@ -57,7 +57,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 
 ### Wave E — close
 
-- [ ] 34. Refresh `.zj/codebase/MAP.md` (D-V5P1-4) — _D-V5P1-4 (phase-close hygiene for phases 2a–7)_
+- [x] 34. Refresh `.zj/codebase/MAP.md` (D-V5P1-4) — _D-V5P1-4 (phase-close hygiene for phases 2a–7)_
 - [x] 35. Record FLAN-01 in the requirements-progress table — _project rule (`CLAUDE.md` → Feature Alignment step 3)_
 ## Build notes — corrections to the plan's paste-able commands
 
