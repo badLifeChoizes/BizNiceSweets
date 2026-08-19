@@ -96,7 +96,9 @@ export PGTEST='POSTGRES_HOST=localhost POSTGRES_PORT=5432 TEST_POSTGRES_DB=bizni
   temporarily, or point at a local Postgres — compose `db` is never host-mapped by default):
   `cd $BNS/backend && env $PGTEST POSTGRES_PASSWORD=<from .env.db> JWT_SECRET=<from .env> BNS_ADMIN_PASSWORD=<from .env> .venv/bin/python -m pytest -q`
 - **Backend lint:** `cd $BNS/backend && .venv/bin/ruff check .` (must exit 0)
-- **Frontend:** `cd $BNS/frontend && npm run lint && npm run test && npm run build` (all exit 0)
+- **Frontend:** `cd $BNS/frontend && npm run lint && npm run test -- --run && npm run build` (all
+  exit 0). ⚠ **CORRECTED AT BUILD:** the `test` script is bare `vitest`, i.e. **watch mode** — a plain
+  `npm run test` never exits and would hang Task 33's gate. The `-- --run` is required.
 
 ### Design constraints this plan fixes (not open questions)
 
@@ -709,7 +711,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS/frontend && npx vitest run src/routes/flan/Team.test.tsx`
 - **Parallel-ok:** yes (with Tasks 22-24)
 
-### [ ] 26. Wire the FLAN routes into App.tsx with the `/flan` redirect
+### [x] 26. Wire the FLAN routes into App.tsx with the `/flan` redirect
 - **Serves:** FLAN-01.6, FLAN-01.7 (CORE-07/08)
 - **Files:** `frontend/src/App.tsx`
 - **Do:** Add the import block and, following the `/gelato` and `/crumb` precedent:
@@ -868,7 +870,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:**
   ```bash
   cd $BNS/backend && .venv/bin/ruff check .
-  cd $BNS/frontend && npm run lint && npm run test && npm run build
+  cd $BNS/frontend && npm run lint && npm run test -- --run && npm run build   # -- --run: `test` is watch mode
   cd $BNS && podman-compose -f compose/compose.yml -f compose/compose.dev.yml down && podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d && sleep 30
   for s in $BNS/backend/scripts/verify_*.py; do n=$(basename $s); echo "== $n"; podman exec -e PYTHONPATH=/app compose_api_1 python scripts/$n || echo "FAILED $n"; done
   cd $BNS/backend && env $PGTEST POSTGRES_PASSWORD=<from .env.db> JWT_SECRET=<from .env> BNS_ADMIN_PASSWORD=<from .env> .venv/bin/python -m pytest -q
@@ -1343,6 +1345,23 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   alternative — deriving the next key from `audit_log` — would couple key generation to an
   append-only table that may one day be pruned.
 
+- **⚠ Task 33's frontend gate CORRECTED — `npm run test` would have HUNG.** `frontend/package.json`'s
+  `test` script is bare `vitest`, i.e. **watch mode**; it never exits. Both occurrences in the plan
+  (Context "How to run things" and Task 33's Verify block) now read `npm run test -- --run`. Found by
+  Task 26's engineer, whose own brief told them to run `npm run test`.
+- **Task 26 — an `App.test.tsx` was added beyond the plan's `Files:` list.** No browser driver exists
+  in this repo (no Playwright/Puppeteer), so a render test was the only empirical way to satisfy
+  "lands on the projects list" and "each scoped route renders". The engineer **non-vacuity-checked
+  it**: reverting `App.tsx` to HEAD turned 6 of the 9 tests RED, then restored. The 3 that pass
+  either way are the generic Sidebar-filter gates, which is by design.
+- **Task 26 — `FlanNav.sectionFromPath` was checked, not assumed.** `pathname.split('/')[4]` on
+  `/flan/projects/:projectId/<section>` is index 4; the routes are wired at exactly that depth, so
+  Task 21's flagged hazard needed no change.
+- **Task 26 — the CORE-07/08 split is explicit:** the module toggle and its propagation through the
+  API and database are **live** (flipped off, `flan` disappeared from the enabled-keys list, flipped
+  back on, left enabled); the "nav item appears/disappears in the DOM" assertions are
+  **test-driven**, because the sidebar is client-rendered and curl cannot observe it.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1482,3 +1501,14 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
   no `ondelete=CASCADE`**, so deleting a project row directly fails on all three. Nothing is broken
   today — there is no project-delete endpoint, only archive — but "delete a project" would be a
   four-statement operation if it is ever added.
+
+- **The production bundle is 905 kB (228 kB gzip), past Vite's 500 kB warn threshold, with no
+  code-splitting** — every suite is eagerly imported in `App.tsx`. A modular monolith with
+  *installable* modules is a natural fit for `React.lazy` per suite. Worth a backlog item before more
+  suites land; it will only get worse with CRISP and the rest of FLAN.
+- **`frontend/package.json`'s `test` script is bare `vitest` (watch mode)**, so every non-interactive
+  invocation must remember `-- --run`. Making `test` non-watch (or adding `test:run`) would remove a
+  recurring footgun that has now bitten a task brief in this very phase.
+- **No `flan:read`-holding non-admin fixture user exists in the dev database** — only
+  `UAT-PLUM-ONLY` (`plum:read`). Task 30's RBAC script mints its own throwaway users so it is
+  unaffected, but human UAT of FLAN's permission gating would need one seeded.

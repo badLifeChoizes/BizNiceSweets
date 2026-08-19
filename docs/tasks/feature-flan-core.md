@@ -43,7 +43,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 - [x] 23. Build the project Phases screen showing the derived dates and % — _FLAN-01.2_
 - [x] 24. Build the project Tasks screen — _FLAN-01.3, FLAN-01.5_
 - [x] 25. Build the project Team roster screen — _FLAN-01.4_
-- [ ] 26. Wire the FLAN routes into App.tsx with the `/flan` redirect — _FLAN-01.6, FLAN-01.7 (CORE-07/08)_
+- [x] 26. Wire the FLAN routes into App.tsx with the `/flan` redirect — _FLAN-01.6, FLAN-01.7 (CORE-07/08)_
 
 ### Wave D — verification
 
