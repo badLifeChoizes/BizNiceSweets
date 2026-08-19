@@ -1,9 +1,11 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" BUILD COMPLETE — `/zj:build 1`.** All 36 tasks
-Branch `feature-flan-core`; checklist `docs/tasks/feature-flan-core.md`. Task 1 done (`74e4b30`).
-Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PLAN.md`.**)
+Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" BUILD COMPLETE — `/zj:build 1`.** All **36** tasks
+done on `feature-flan-core` (35 planned + Task **22a**, added at build by owner decision). Gate GREEN
+on every FLAN-owned surface; one inherited red (`verify_qa_doc.py`) proven pre-existing on master and
+owner-triaged non-blocking — but `verify-scripts` is a **required** branch-protection context, so it
+blocks merging and must be fixed on master before `/zj:ship`. **Next: `/zj:verify 1`.**)
 
-## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
+## Position: v5.0 Phase 1 — BUILD COMPLETE on `feature-flan-core`, awaiting `/zj:verify 1`
 
 **Position: v5.0 Phase 1 "FLAN core" — BUILD COMPLETE. All 36 tasks done. Next: `/zj:verify 1`.**
 
