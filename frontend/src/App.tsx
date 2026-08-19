@@ -56,6 +56,12 @@ import { Bins } from '@/routes/gelato/Bins'
 import { Putaway } from '@/routes/gelato/Putaway'
 import Fulfillment from '@/routes/gelato/Fulfillment'
 
+// FLAN routes (v5.0 Phase 1)
+import { Projects } from '@/routes/flan/Projects'
+import { Phases } from '@/routes/flan/Phases'
+import { Tasks } from '@/routes/flan/Tasks'
+import { Team } from '@/routes/flan/Team'
+
 export function App() {
   return (
     <Routes>
@@ -122,6 +128,16 @@ export function App() {
         <Route path="/gelato/bins" element={<Bins />} />
         <Route path="/gelato/putaway" element={<Putaway />} />
         <Route path="/gelato/fulfillment" element={<Fulfillment />} />
+
+        {/* FLAN module routes — Sidebar nav lands on /flan → redirect to projects list.
+            The per-project screens are URL-scoped (D-V5P1-3): FlanNav reads the section
+            from the 4th path segment, so the depth below is load-bearing. */}
+        <Route path="/flan" element={<Navigate to="/flan/projects" replace />} />
+        {/* Keep the static `projects` list route BEFORE the `/:projectId` routes. */}
+        <Route path="/flan/projects" element={<Projects />} />
+        <Route path="/flan/projects/:projectId/phases" element={<Phases />} />
+        <Route path="/flan/projects/:projectId/tasks" element={<Tasks />} />
+        <Route path="/flan/projects/:projectId/team" element={<Team />} />
 
         {/* Catch-all: unknown protected paths fall back to Home instead of a blank screen */}
         <Route path="*" element={<Navigate to="/" replace />} />
