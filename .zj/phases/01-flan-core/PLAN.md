@@ -802,7 +802,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_flan.py`
 - **Parallel-ok:** no
 
-### [ ] 29. Mutation-prove the phase-rollup assertions turn RED
+### [x] 29. Mutation-prove the phase-rollup assertions turn RED
 - **Serves:** FLAN-01.2 (NFR-5 non-vacuity discipline)
 - **Files:** `backend/app/modules/flan/service/rollup.py` (temporarily), `docs/tasks/feature-flan-core.md`
 - **Do:** Execute three documented mutations one at a time, run `verify_flan.py` after each, record
@@ -867,7 +867,13 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 ### [ ] 33. Run the full regression gate
 - **Serves:** all seven criteria (the phase's own definition of not-broken)
 - **Files:** none (gate only); any fix lands in the file it belongs to
-- **Do:** In order — (1) both lint gates at the zero-violation baseline; (2) the full backend suite
+- **Do:** ⚠ **ADDED AT BUILD — before anything else, confirm the working tree is CLEAN**
+  (`git status --porcelain` empty, and `git diff --stat -- backend/app/` empty). A manager scheduling
+  error ran two mutation-testing tasks against `backend/app/modules/flan/service/rollup.py`
+  concurrently, and one run came back a **silent false green** because the file was restored
+  mid-flight. A regression gate run against a mutant, or against a half-restored file, certifies
+  nothing. Re-confirm cleanliness immediately **before** the gate, not only after.
+  Then, in order — (1) both lint gates at the zero-violation baseline; (2) the full backend suite
   from the **host venv** (see Context — it cannot run in-container); (3) every non-API `verify_*`
   script and every `verify_*_api.py` script, not just FLAN's, so an adjacent untouched surface
   proves itself on a **cold** process (the LEARNINGS keeper: adding a module to `main.py` and a
@@ -1435,6 +1441,31 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   status, so **nothing proved the 4xx a client actually receives**. FLAN-01.3's "rejected server-side
   (4xx)" is a statement about the wire. Task 32 now asserts the HTTP 422 on both the create and the
   one-date PATCH.
+
+- **⚠ MANAGER ERROR — I scheduled Tasks 29 and 31 concurrently, and they both mutate
+  `backend/app/modules/flan/service/rollup.py`.** Task 29 applies the three documented mutations;
+  Task 31's brief tells it to apply the empty-phase mutation to prove its ported A0. Their `Files:`
+  lists looked disjoint (`docs/tasks/…` vs `backend/tests/flan/`) because **neither declares the file
+  it temporarily mutates** — the overlap is invisible in the plan and I did not think it through.
+  Consequences, both caught: Task 29 found `rollup.py` already dirty at start, and its first
+  mutation-1 run returned a **silent false green (38 PASS, exit 0)** because the file was restored
+  between the edit and the run. The engineer did not record that false green; they hardened the method
+  instead (see below). **`rollup.py` is verified byte-identical to HEAD now**
+  (`sha256 1c4c70e8…3a6c`, no `MUTATION` marker). **Task 31's results must be re-checked against a
+  clean tree before being trusted**, since it ran through the same window.
+- **Task 29 — the hardened mutation method is better than the plan's guidance and should be the
+  house idiom.** Rather than "wait a few seconds for the reload", every run bundles an
+  `inspect.getsource` mutant-loaded check into the **same `podman exec`** as the script, plus a
+  host-side `grep` immediately before and after. All three recorded results show `MUTANT-LOADED:
+  True` and the mutation still present afterwards. A timing-based wait cannot distinguish "reloaded"
+  from "reverted underneath me"; this can.
+- **Task 29 — A0b stayed GREEN under mutation 3, recorded verbatim.** So did `A0a`, for the same
+  reason: both are solo reads. **Only the batched `A0c`/`A0d` went RED.** A solo-only A0, as the plan
+  originally specified, would have certified this phase green with the crux broken. That contrast is
+  now a committed artifact in `docs/tasks/feature-flan-core.md`, not a fact living in transcripts.
+- **Task 29 — mutations 1 and 2 take down 3 and 6 assertions respectively**, beyond their headline
+  one. That is healthy coupling, not leakage: a broken `MIN` also breaks the "does not flatten its
+  neighbours" check. Noted so nobody reads the >1 FAIL counts as a defect in the script.
 
 ## Noticed
 
