@@ -48,7 +48,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 ### Wave D — verification
 
 - [x] 27. Write `verify_flan.py` scenario (A) — the phase-rollup crux including the empty phase — _FLAN-01.2 (the SRD's named verification)_
-- [ ] 28. Add `verify_flan.py` scenarios (B)–(F) — keys, dates, roster, cascade, archive — _FLAN-01.1, FLAN-01.3, FLAN-01.4_
+- [x] 28. Add `verify_flan.py` scenarios (B)–(F) — keys, dates, roster, cascade, archive — _FLAN-01.1, FLAN-01.3, FLAN-01.4_
 - [ ] 29. Mutation-prove the phase-rollup assertions turn RED — _FLAN-01.2 (NFR-5 non-vacuity discipline)_
 - [x] 30. Write `verify_flan_api.py` for HTTP RBAC and audit — _FLAN-01.7 (CORE-05, NFR-1)_
 - [ ] 31. Port the rollup crux into the pytest suite — _FLAN-01.2 (NFR-5)_

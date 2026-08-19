@@ -778,7 +778,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_flan.py && podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_flan.py`
 - **Parallel-ok:** no
 
-### [ ] 28. Add `verify_flan.py` scenarios (B)–(F) — keys, dates, roster, cascade, archive
+### [x] 28. Add `verify_flan.py` scenarios (B)–(F) — keys, dates, roster, cascade, archive
 - **Serves:** FLAN-01.1, FLAN-01.3, FLAN-01.4
 - **Files:** `backend/scripts/verify_flan.py`
 - **Do:**
@@ -854,6 +854,12 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
   users, asserting 401/403/2xx on a representative mutation and read for each of the five entity
   groups (project, phase, task, member, assignment), plus one `audit_log` attribution assertion per
   group.
+  ⚠ **ADDED AT BUILD:** also assert the **HTTP 422 for `due < start`** on `POST /flan/projects/{id}/tasks`
+  and on a one-date `PATCH /flan/tasks/{id}`. Task 28 found the gap: `verify_flan.py` (C1/C2) proves the
+  refusal **in-process** (a `pydantic.ValidationError` on create, a service `HTTPException` on the merged
+  PATCH), and `verify_flan_api.py` posts dates but never asserts the wire status — so **nothing yet proves
+  the 4xx a client actually receives.** FLAN-01.3 says `due < start` is "rejected server-side (4xx)", which
+  is a statement about the wire.
 - **Done when:** `pytest tests/flan/test_api.py -q` passes with 0 skipped.
 - **Verify:** `cd $BNS/backend && env $PGTEST POSTGRES_PASSWORD=<from .env.db> JWT_SECRET=<from .env> BNS_ADMIN_PASSWORD=<from .env> .venv/bin/python -m pytest tests/flan/test_api.py -q`
 - **Parallel-ok:** yes (with Task 31)
@@ -1407,6 +1413,28 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
 - **Task 30 — the archive call is sequenced LAST** in the happy path, since it 422s every subsequent
   write in that project. The RBAC sweep runs after it safely, because 401/403 short-circuit before
   the service is reached.
+
+- **Task 28 — 38 PASS across (A)-(F), and (B2) is the sharpest assertion in the phase.** It does not
+  merely check that `PRJ-9 → PRJ-10`; it shows that with `PRJ-1 … PRJ-10` present, a plain `MAX(key)`
+  **string** aggregate answers `PRJ-9`, whose successor `PRJ-10` **the project already holds** — so the
+  naive generator would re-issue a live key, while the real one answers `PRJ-11`. That is the defect
+  demonstrated, not merely avoided.
+- **Task 28 — (D1) proves "unchanged" literally.** Both tasks come back byte-identical including
+  `updated_at`, so no task row was even loaded, dirtied and re-saved; the other member keeps her row
+  on the *shared* task, which is what shows the delete was scoped by `member_id` and not `task_id`.
+- **Task 28 — (C1)'s create-time refusal is a `pydantic.ValidationError`, not an `HTTPException`**,
+  because `create_task` has no service-side date check: the create-path guard genuinely is
+  `schemas.py::_check_date_order`, which FastAPI renders as 422. The engineer asserted the refusal in
+  its real shape **and** that no row landed, rather than forcing it into the wrong exception type.
+- **Task 28 — scenario (D) mints and deletes its own platform user** (email pattern
+  `verify-flan-roster-%@example.test`), because the project-keyed cleanup cannot reach a `users` row.
+  Safe: `flan_team_member.user_id` is `ON DELETE SET NULL`, so this can never take project history
+  with it, and a killed run is swept by the next one.
+- **⚠ Task 32's text AMENDED — a real coverage gap Task 28 found.** `verify_flan.py` proves the
+  `due < start` refusal **in-process**, and `verify_flan_api.py` posts dates but never asserts the wire
+  status, so **nothing proved the 4xx a client actually receives**. FLAN-01.3's "rejected server-side
+  (4xx)" is a statement about the wire. Task 32 now asserts the HTTP 422 on both the create and the
+  one-date PATCH.
 
 ## Noticed
 
