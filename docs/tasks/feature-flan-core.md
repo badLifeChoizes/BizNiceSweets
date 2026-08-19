@@ -101,6 +101,72 @@ podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d
 `verify_*` scripts still run in the long-lived api container:
 `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_flan.py`
 
+## Mutation proof (Task 29 — NFR-5 non-vacuity)
+
+`verify_flan.py` is worthless if its assertions cannot fail. Three mutations were applied to
+`backend/app/modules/flan/service/rollup.py` **one at a time** — each applied, run, recorded, then
+reverted and confirmed clean before the next. Every run was
+`podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_flan.py`, and each run was
+preceded, in the same `podman exec`, by an `inspect.getsource` check that the container had actually
+loaded the mutant (the dev overlay's `WATCHFILES_FORCE_POLLING` bind mount can lag, and measuring
+pre-mutation code would fabricate a green). Baseline before and after: **38 PASS, exit 0**.
+
+| # | Mutation | Result | The exact FAIL line it produced |
+|---|---|---|---|
+| 1 | `func.min(Task.start_date)` → `func.max(Task.start_date)` | RED — exit 1, 35 PASS / 3 FAIL | `FAIL: (A1/FLAN-01.2) derived start == 2026-03-01 (the EARLIEST task start, inserted 2nd) and derived due == 2026-03-20 (the LATEST task due, inserted 1st) — MIN/MAX, not first/last inserted — PhaseRollup(derived_start_date=datetime.date(2026, 3, 9), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('0.00'), task_count=3, done_count=0)` |
+| 2 | `_percent` returns `Decimal("0.00")` unconditionally | RED — exit 1, 32 PASS / 6 FAIL | `FAIL: (A2/FLAN-01.2) 1 of 3 Done through the REAL update_task → "33.33" (Decimal, ROUND_HALF_UP — never a float) — PhaseRollup(derived_start_date=None, derived_due_date=None, percent_complete=Decimal('0.00'), task_count=3, done_count=1)` |
+| 3 | empty-phase branch falls through to a `phase_ids[0]` default (`rollups.get(requested[0], NO_TASKS)`) instead of `NO_TASKS` | RED — exit 1, 36 PASS / 2 FAIL | `FAIL: (A0c/FLAN-01.2 CRUX) phase_rollups([dated, EMPTY, percent, undated]) — the empty phase asserted inside a batch whose FIRST member is a non-empty phase — still reports derived_start_date None, derived_due_date None, percent_complete Decimal("0.00") and 0/0 tasks, and does NOT inherit the leading phase's rollup — empty=PhaseRollup(derived_start_date=datetime.date(2026, 3, 1), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('25.00'), task_count=4, done_count=1) leading_dated=PhaseRollup(derived_start_date=datetime.date(2026, 3, 1), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('25.00'), task_count=4, done_count=1)` |
+
+### The line that matters most: A0b stays GREEN under mutation 3
+
+Mutation 3 is the one the A0 amendment exists for. Under it the **solo-batch** form of the
+empty-phase assertion **still passes**, because when the batch holds only the empty phase,
+`phase_ids[0]` *is* that phase and the mutant returns the empty shape anyway:
+
+```text
+PASS: (A0b/FLAN-01.2) solo phase_rollups([empty]) → no dates, 0.00%, 0/0 (the weak form — see A0c for the assertion that carries the proof)
+```
+
+Only the **batched** forms see the mutation — `A0c` (batch led by the dated phase) and `A0d`
+(through `list_phases`, the read the router serves) both go RED. `A0a` (rollup attached by
+`create_phase`) also stays GREEN, for the same reason: it is a solo read.
+
+**Do not "simplify" A0c/A0d down to A0b.** The plan's original solo-only A0 would have certified
+this phase green with the crux broken. That is the whole of NFR-5 here, and this table is the
+evidence.
+
+### Full FAIL output per mutation
+
+**Mutation 1 — MIN → MAX on the derived start (3 FAIL)**
+
+```text
+FAIL: (A1/FLAN-01.2) derived start == 2026-03-01 (the EARLIEST task start, inserted 2nd) and derived due == 2026-03-20 (the LATEST task due, inserted 1st) — MIN/MAX, not first/last inserted — PhaseRollup(derived_start_date=datetime.date(2026, 3, 9), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('0.00'), task_count=3, done_count=0)
+FAIL: (A3/FLAN-01.2) a 4th UNDATED task joins the dated phase: the derived dates are UNCHANGED (2026-03-01 → 2026-03-20) while task_count rises 3 → 4 and the percentage moves 33.33 → 25.00 — MIN/MAX skip NULLs but the undated task is still counted work — before=PhaseRollup(derived_start_date=datetime.date(2026, 3, 9), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('33.33'), task_count=3, done_count=1) after=PhaseRollup(derived_start_date=datetime.date(2026, 3, 9), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('25.00'), task_count=4, done_count=1)
+FAIL: (A0c/FLAN-01.2) the same batch still answers every OTHER phase with its own real aggregates — the empty branch does not flatten its neighbours — dated=PhaseRollup(derived_start_date=datetime.date(2026, 3, 9), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('25.00'), task_count=4, done_count=1) percent=PhaseRollup(derived_start_date=None, derived_due_date=None, percent_complete=Decimal('100.00'), task_count=3, done_count=3) undated=PhaseRollup(derived_start_date=None, derived_due_date=None, percent_complete=Decimal('33.33'), task_count=3, done_count=1)
+```
+
+**Mutation 2 — _percent returns Decimal("0.00") unconditionally (6 FAIL)**
+
+```text
+FAIL: (A2/FLAN-01.2) 1 of 3 Done through the REAL update_task → "33.33" (Decimal, ROUND_HALF_UP — never a float) — PhaseRollup(derived_start_date=None, derived_due_date=None, percent_complete=Decimal('0.00'), task_count=3, done_count=1)
+FAIL: (A2/FLAN-01.2) "In Progress" does NOT count as done — still "33.33" with 1 of 3 done — PhaseRollup(derived_start_date=None, derived_due_date=None, percent_complete=Decimal('0.00'), task_count=3, done_count=1)
+FAIL: (A2/FLAN-01.2) 3 of 3 Done → "100.00" exactly — PhaseRollup(derived_start_date=None, derived_due_date=None, percent_complete=Decimal('0.00'), task_count=3, done_count=3)
+FAIL: (A3/FLAN-01.2) a 4th UNDATED task joins the dated phase: the derived dates are UNCHANGED (2026-03-01 → 2026-03-20) while task_count rises 3 → 4 and the percentage moves 33.33 → 25.00 — MIN/MAX skip NULLs but the undated task is still counted work — before=PhaseRollup(derived_start_date=datetime.date(2026, 3, 1), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('0.00'), task_count=3, done_count=1) after=PhaseRollup(derived_start_date=datetime.date(2026, 3, 1), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('0.00'), task_count=4, done_count=1)
+FAIL: (A3/FLAN-01.2) a phase whose tasks ALL lack dates reports no dates but a REAL "33.33" over 3 tasks — no-dates is not the same state as no-tasks — PhaseRollup(derived_start_date=None, derived_due_date=None, percent_complete=Decimal('0.00'), task_count=3, done_count=1)
+FAIL: (A0c/FLAN-01.2) the same batch still answers every OTHER phase with its own real aggregates — the empty branch does not flatten its neighbours — dated=PhaseRollup(derived_start_date=datetime.date(2026, 3, 1), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('0.00'), task_count=4, done_count=1) percent=PhaseRollup(derived_start_date=None, derived_due_date=None, percent_complete=Decimal('0.00'), task_count=3, done_count=3) undated=PhaseRollup(derived_start_date=None, derived_due_date=None, percent_complete=Decimal('0.00'), task_count=3, done_count=1)
+```
+
+**Mutation 3 — empty-phase branch falls through to phase_ids[0] (2 FAIL)**
+
+```text
+FAIL: (A0c/FLAN-01.2 CRUX) phase_rollups([dated, EMPTY, percent, undated]) — the empty phase asserted inside a batch whose FIRST member is a non-empty phase — still reports derived_start_date None, derived_due_date None, percent_complete Decimal("0.00") and 0/0 tasks, and does NOT inherit the leading phase's rollup — empty=PhaseRollup(derived_start_date=datetime.date(2026, 3, 1), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('25.00'), task_count=4, done_count=1) leading_dated=PhaseRollup(derived_start_date=datetime.date(2026, 3, 1), derived_due_date=datetime.date(2026, 3, 20), percent_complete=Decimal('25.00'), task_count=4, done_count=1)
+FAIL: (A0d/FLAN-01.2 CRUX) through list_phases — the batched read GET /flan/projects/{id}/phases actually serves, which returns the dated phase FIRST (sort_order 1) and the empty phase second — the empty phase still shows no dates, "0.00" and 0 tasks — order=['A1 dated 610144ea', 'A0 empty 610144ea', 'A2 percent 610144ea', 'A3 undated 610144ea'] empty=(start=datetime.date(2026, 3, 1) due=datetime.date(2026, 3, 20) pct=Decimal('25.00') count=4)
+```
+
+After the third revert, `git diff -- backend/app/modules/flan/service/rollup.py` is empty and the
+file is byte-identical to HEAD (sha256 `1c4c70e8e73a865bc4fca7764eb6d1f9a2724fb54d9099722d0d6eada1dc3a6c`,
+matching `git show HEAD:...`); the final clean run is **38 PASS, exit 0**.
+
 ## Deviations
 
 _(appended as they occur; mirrored to `PLAN.md` `## Deviations`)_
