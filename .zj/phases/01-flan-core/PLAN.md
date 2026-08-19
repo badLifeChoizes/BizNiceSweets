@@ -847,7 +847,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS/backend && env $PGTEST POSTGRES_PASSWORD=<from .env.db> JWT_SECRET=<from .env> BNS_ADMIN_PASSWORD=<from .env> .venv/bin/python -m pytest tests/flan/test_rollup.py -q`
 - **Parallel-ok:** yes (with Task 32)
 
-### [ ] 32. Port the RBAC and audit assertions into the pytest suite
+### [x] 32. Port the RBAC and audit assertions into the pytest suite
 - **Serves:** FLAN-01.7 (NFR-5)
 - **Files:** `backend/tests/flan/test_api.py` (new)
 - **Do:** Follow `backend/tests/gelato/test_api.py` — the ASGI-transport client with role-backed
@@ -1489,6 +1489,20 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   plan's port set for this task; both remain covered by the standalone `verify_flan.py`.
 - **Backend suite is now 261 passed** (245 pre-FLAN under the repo-root runner + Task 31's 16), 0
   skipped, no regressions.
+
+- **✅ Task 32 — the amended HTTP-422 assertions land, and BOTH go RED when their guard is weakened.**
+  No-op'ing the schema validator made `POST .../tasks` return **201** with the inverted dates in the
+  body; no-op'ing the service's merged re-check made the one-date `PATCH` return **200** with
+  `start_date 2026-03-10, due_date 2026-03-01`. Crucially the failure messages carry the *observed*
+  mutated response in the same process that ran the assertion — not a timing inference, which is what
+  the earlier false green in this phase came from. This closes the last uncovered acceptance-criterion
+  claim: FLAN-01.3's "rejected server-side (4xx)" is a statement about the wire, and three prior
+  checks all touched `due < start` without ever proving it.
+- **Task 32 — the audit assertions pin five things, not one:** `len(rows) == 1`, `actor_id`,
+  `target_type`, `target_id == str(id)` **and** `isinstance(target_id, str)` (the GELATO int-PK
+  lesson). Each group also asserts the two *refusals* wrote **no** audit row, since auth
+  short-circuits before the service.
+- **Backend suite is now 268 passed, 0 skipped** (245 pre-FLAN + 16 rollup + 7 API).
 
 ## Noticed
 
