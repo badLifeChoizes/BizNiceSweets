@@ -864,7 +864,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS/backend && env $PGTEST POSTGRES_PASSWORD=<from .env.db> JWT_SECRET=<from .env> BNS_ADMIN_PASSWORD=<from .env> .venv/bin/python -m pytest tests/flan/test_api.py -q`
 - **Parallel-ok:** yes (with Task 31)
 
-### [ ] 33. Run the full regression gate
+### [x] 33. Run the full regression gate
 - **Serves:** all seven criteria (the phase's own definition of not-broken)
 - **Files:** none (gate only); any fix lands in the file it belongs to
 - **Do:** ⚠ **ADDED AT BUILD — before anything else, confirm the working tree is CLEAN**
@@ -1503,6 +1503,29 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   lesson). Each group also asserts the two *refusals* wrote **no** audit row, since auth
   short-circuits before the service.
 - **Backend suite is now 268 passed, 0 skipped** (245 pre-FLAN + 16 rollup + 7 API).
+
+- **✅ Task 33 — the gate is GREEN on every FLAN-owned surface, with ONE inherited red, owner-triaged.**
+  Clean-tree check first (both `git status --porcelain` and `git diff --stat -- backend/app/` empty, so
+  the gate did not run against a mutant). Then: **ruff 0**, **eslint 0**, **268 passed / 0 skipped**,
+  **26 of 26 runnable `verify_*` scripts** on a genuinely cold `down`/`up` (cold boot evidenced by the
+  container ages and the api log's migration lines — **no cross-module FK-resolution 500**), **Vitest
+  51 files / 196 tests**, **`npm run build` 0**, and the trial balance `in_balance: true` with
+  `total_debit == total_credit == 8547.250000` and a difference of exactly `0.000000` — FLAN posts no
+  GL, so any movement would have been a regression.
+- **⚠ The one red — `verify_qa_doc.py` — is INHERITED FROM MASTER and is not this phase's.** `.zj/QA.md`
+  is 11 requirements behind `.zj/SRD.md` (`FLAN-02..11`, `NFR-9`, added on master in `6f664a9`/`23bf467`
+  without a matching QA update). **Proven, not asserted:** this branch's diff against master touches
+  neither file, and the manager re-ran the script on a clean `master` worktree — **exit 1, identical
+  failures**. CI's glob-driven `verify-scripts` job is therefore already red on master. **Owner
+  triaged 2026-08-19: tick 33 green, fix as a separate `docs(qa):` commit on master** — consistent
+  with the standing `QA docs: non-blocking` preference. Filed **p1** in `.zj/BACKLOG.md`.
+- **Task 33's engineer reported BLOCKED rather than narrowing the gate**, and refused to author the 11
+  missing QA rows to turn it green — correctly, since bucketing them means making coverage claims.
+  That is the behaviour the "do not narrow the gate" instruction exists to produce.
+- **Task 33 — `podman exec … || echo FAILED` masks exit codes.** A trailing `echo "EXIT=$?"` after a
+  pipe reads the **pipe's** status and prints `EXIT=0` for a script that just threw. The plan's own
+  Task 33 Verify snippet has this shape, and the manager hit the same thing checking master. A fourth
+  member of this phase's silent-failure family.
 
 ## Noticed
 

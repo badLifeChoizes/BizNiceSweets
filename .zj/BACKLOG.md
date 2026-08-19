@@ -1,5 +1,9 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-08-18 (v5.0 Phase 1 build — two p2 items filed: **FLAN task keys are re-issued after a
+Updated: 2026-08-19 (v5.0 Phase 1 Task 33 regression gate — two **p1** items filed: **`.zj/QA.md` is
+11 requirements behind `.zj/SRD.md`**, which makes `verify_qa_doc.py` and CI's `verify-scripts` job
+red on master (owner-triaged non-blocking for the phase, fix belongs in a `docs(qa):` commit on
+master); and the two `verify_qa_*.py` scripts failing opaquely under the documented in-container idiom)
+Prior: 2026-08-18 (v5.0 Phase 1 build — two p2 items filed: **FLAN task keys are re-issued after a
 delete** (owner-accepted for Phase 1, to be fixed by FLAN-10 at the latest), and **autogenerate
 proposes dropping seven live unique constraints** across PLUM and SYERP, which bit migration `0018`
 in draft and will bite every future autogenerate)
@@ -49,6 +53,26 @@ Prior: 2026-07-04 (seeded at adoption from the v1.0 milestone audit, codebase ma
 kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-ADOPT-5)
 
 ## p1 — quality/infra debt that already bit once
+
+- [ ] **`.zj/QA.md` is 11 requirements behind `.zj/SRD.md`, so `verify_qa_doc.py` and CI's
+  `verify-scripts` job are RED on master** (found by v5.0 Phase 1 Task 33's regression gate,
+  2026-08-19; owner triaged 2026-08-19 as non-blocking for the phase) — `.zj/SRD.md` holds **58**
+  requirements, `.zj/QA.md` §3 prose says **47**, and §5's 16 bucketed + §3's 31 covered = 47. The
+  eleven missing ids are **`FLAN-02..FLAN-11` and `NFR-9`**, added to the SRD on **master** in
+  `6f664a9` / `23bf467` without a matching QA update. `FLAN-01` itself is already present.
+  **Proven pre-existing, not a Phase-1 regression:** `git diff master...feature-flan-core --stat --
+  .zj/QA.md .zj/SRD.md` is empty, and the script exits 1 identically on a clean `master` worktree.
+  Fix: author the 11 §3 rows and bucket each in §5 (all are unbuilt, so the bucketing is
+  near-mechanical) in a **`docs(qa):` commit on master**, not on a phase branch. Until then CI's
+  glob-driven `verify-scripts` job is red for every branch.
+
+- [ ] **The two `verify_qa_*.py` scripts silently fail in the documented in-container idiom**
+  (v5.0 Phase 1 Task 33, 2026-08-19) — they compute `REPO_ROOT = Path(__file__).resolve().parents[2]`
+  (`verify_qa_citations.py:84`, `verify_qa_doc.py:78`), which resolves to `/` inside the container
+  because compose mounts only `backend/` at `/app`. Anyone following the plan's documented
+  "verify scripts (in-container)" idiom gets a `FileNotFoundError` that reads like a code break.
+  CI runs them from a full checkout with cwd `backend/`, where `parents[2]` is correct. Fix: either
+  guard with a clear "run me from a full checkout" message, or exclude them from any container loop.
 
 - [x] **CI pipeline** — **RESOLVED by v4.0 Phase 3 (verified 2026-07-25, tag
   `zj/good-03-ci-pipeline`, NFR-4).** `.github/workflows/ci.yml`: four independent blocking jobs
