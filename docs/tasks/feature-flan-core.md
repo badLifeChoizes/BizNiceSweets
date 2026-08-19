@@ -51,7 +51,7 @@ each with its FLAN-01.N citation. One atomic commit per item; update this file b
 - [x] 28. Add `verify_flan.py` scenarios (B)–(F) — keys, dates, roster, cascade, archive — _FLAN-01.1, FLAN-01.3, FLAN-01.4_
 - [x] 29. Mutation-prove the phase-rollup assertions turn RED — _FLAN-01.2 (NFR-5 non-vacuity discipline)_
 - [x] 30. Write `verify_flan_api.py` for HTTP RBAC and audit — _FLAN-01.7 (CORE-05, NFR-1)_
-- [ ] 31. Port the rollup crux into the pytest suite — _FLAN-01.2 (NFR-5)_
+- [x] 31. Port the rollup crux into the pytest suite — _FLAN-01.2 (NFR-5)_
 - [ ] 32. Port the RBAC and audit assertions into the pytest suite — _FLAN-01.7 (NFR-5)_
 - [ ] 33. Run the full regression gate — _all seven criteria (the phase's own definition of not-broken)_
 

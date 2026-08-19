@@ -834,7 +834,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_flan_api.py`
 - **Parallel-ok:** no
 
-### [ ] 31. Port the rollup crux into the pytest suite
+### [x] 31. Port the rollup crux into the pytest suite
 - **Serves:** FLAN-01.2 (NFR-5)
 - **Files:** `backend/tests/flan/__init__.py` (new), `backend/tests/flan/test_rollup.py` (new)
 - **Do:** Follow `backend/tests/gelato/test_shipments.py` — module docstring naming the ported
@@ -1466,6 +1466,29 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
 - **Task 29 — mutations 1 and 2 take down 3 and 6 assertions respectively**, beyond their headline
   one. That is healthy coupling, not leakage: a broken `MIN` also breaks the "does not flatten its
   neighbours" check. Noted so nobody reads the >1 FAIL counts as a defect in the script.
+
+- **Task 31 — re-verified by the manager on a confirmed-clean tree** (`git status --porcelain` shows
+  only untracked test files, `git diff --stat -- backend/app/` empty): **16 passed, 0 skipped**. This
+  re-check was owed because Task 31 ran through the concurrent-mutation window described above; its
+  results stand.
+- **Task 31 — the engineer independently observed the same clash from the other side**, and their
+  tests caught **both** foreign mutations unprompted: `test_task_keys_are_numeric_safe` hit
+  `NumericValueOutOfRangeError` with the SQL compiling as `CAST(… AS INTEGER)` while `keys.py`
+  momentarily carried an `Integer` cast, and a full-suite run failed `test_phase_rollup_crux` while
+  `rollup.py` carried a foreign mutation. Both reverted; both final runs green. That the ported tests
+  detected two unrelated live mutations without being asked is the strongest available evidence they
+  are not vacuous.
+- **Task 31 — a `flan_db` fixture instead of `seeded_ledger_db`.** The gelato exemplar seeds a chart
+  of accounts because it posts GL; FLAN posts none, so a local fixture over conftest's existing
+  `test_sessionmaker` is used. No conftest change.
+- **Task 31 — roster (D) captures ids as plain strings.** The first draft held ORM instances across
+  `session.expire_all()`, so a later `task_a.id` triggered sync lazy IO → `MissingGreenlet`. Rewritten
+  to capture ids eagerly and re-`SELECT` task state; the `updated_at`-unchanged assertion is preserved
+  and remains the observable proof that `remove_member` never re-saves a task row.
+- **Task 31 — (D)'s user-deactivation sub-case and (E) archived-project are NOT ported**, matching the
+  plan's port set for this task; both remain covered by the standalone `verify_flan.py`.
+- **Backend suite is now 261 passed** (245 pre-FLAN under the repo-root runner + Task 31's 16), 0
+  skipped, no regressions.
 
 ## Noticed
 
