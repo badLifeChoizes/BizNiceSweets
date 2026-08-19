@@ -5,26 +5,41 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** **28 of 36 tasks done. Waves A, B and C are COMPLETE** — the module is built:
-eight tables + migration `0018`, the full service package, a live 20-operation router, five React
-screens, `/flan` wired into `App.tsx`. **Wave D (verification) is under way.**
+**Current task:** **30 of 36 tasks done. Waves A, B and C are COMPLETE**; Wave D is 4/7.
+The module is built and its two verify scripts are green: `verify_flan.py` **38 PASS** across
+scenarios (A)-(F), `verify_flan_api.py` **123 PASS** across all 20 routes and 14 audit actions.
 
-**In flight:** **28** (`verify_flan.py` scenarios B-F). **Task 30's commit `c332712` is on the branch
-but its report has not been reviewed — it is NOT ticked and must not be treated as done until its
-verify output is checked.**
+**In flight:** **29** (formalise the three rollup mutations into a recorded table) and **31**
+(port the crux to pytest).
 
-**Next:** **29** (mutation-prove the rollup assertions) serializes behind 28. **31** and **32**
-(pytest ports) are parallel-ok with each other. Then **33** (full regression gate), then Wave E:
-**34** (refresh `MAP.md`) and **35** (requirements-progress), parallel-ok with each other.
+**Next:** **32** (pytest RBAC/audit — **its text was amended, see below**), then **33** (full
+regression gate), then Wave E: **34** (refresh `MAP.md`) and **35** (requirements-progress),
+parallel-ok with each other.
+
+**⚠ Task 32 carries an AMENDED requirement — a real coverage gap Task 28 found.** The `due < start`
+refusal is proven only **in-process**: `verify_flan.py` (C1) sees a `pydantic.ValidationError` on
+create, (C2) a service `HTTPException` on the merged PATCH, and `verify_flan_api.py` posts dates but
+never asserts the status. **Nothing yet proves the 4xx a client actually receives**, and FLAN-01.3's
+"rejected server-side (4xx)" is a claim about the wire. Task 32 must assert the HTTP 422 on both
+`POST .../tasks` and a one-date `PATCH /flan/tasks/{id}`.
 
 **✅ THE PHASE'S HEADLINE RESULT — the A0 amendment is empirically confirmed.** Task 27 asserted A0
-four ways and ran Task 29's mutation 3 against all four: **the solo-batch form
+four ways and ran the empty-phase mutation against all four: **the solo-batch form
 `phase_rollups([empty])` — what the plan originally specified — stayed GREEN**, while the
-batch-with-a-non-empty-phase-first forms (`A0c` via `phase_rollups`, `A0d` via `list_phases`) both
-went RED. The phase's headline crux had a verification that could not detect its own violation.
-`A0d` runs through `list_phases`, the read the router actually serves, so the non-vacuous shape is
-the production call shape, not a contrivance. Both are labelled `CRUX` in the source with a "do not
-simplify this to a single-id call" comment.
+batch-with-a-non-empty-phase-first forms (`A0c` via `phase_rollups`, `A0d` via `list_phases`) went
+RED. The phase's headline crux had a verification that could not detect its own violation. `A0d`
+runs through `list_phases`, the read the router actually serves, so the non-vacuous shape is the
+production call shape. Both are labelled `CRUX` in the source with a "do not simplify this to a
+single-id call" comment.
+
+**FIVE VERIFICATION GAPS FOUND IN THIS PHASE** — every one in the plan's checks rather than its code,
+and every one found by an engineer *running* the thing rather than reading it:
+1. Task 27's A0 was vacuous against its own mutation (amended, then empirically confirmed).
+2. Task 20's Verify was a `grep -c` count that cannot show *which* hooks invalidate.
+3. Task 14's Done-when regex `\d{4,}` contradicted D-V5P1-7's unpadded keys.
+4. Task 33's frontend gate would have **hung** — `npm run test` is watch mode.
+5. `due < start` was proven in-process by three separate checks, none of which proved the wire
+   status the acceptance criterion actually states (Task 32 amended).
 
 **⚠ A FOURTH GATE DEFECT, fixed before it fired.** `frontend/package.json`'s `test` script is bare
 `vitest` — **watch mode**, which never exits. The plan's frontend gate (`npm run lint && npm run test
@@ -85,7 +100,7 @@ container and psql role.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
 `### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An
-an uncommitted `backend/scripts/verify_flan.py` is Task 28 mid-write.
+an untracked `backend/tests/flan/` is Task 31 mid-write.
 
 **Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
 `flan_*` tables; all five load-bearing constraint shapes in the database (`flan_task.phase_id`,
