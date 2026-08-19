@@ -5,27 +5,22 @@ Wave A under way. **Next: resume `/zj:build 1` at the first unticked task in `PL
 
 ## Position: v5.0 Phase 1 — build in flight on `feature-flan-core`
 
-**Current task:** **24 of 36 tasks done.** Wave A complete (1-6). Wave B complete except Task 18.
-Wave C has 19, 20, 21, 22, **22a**, 23, 24 done.
+**Current task:** **27 of 36 tasks done. Waves A, B and C are COMPLETE.** The module is built:
+eight tables + migration `0018`, the full service package, a live 20-operation router, five React
+screens, and `/flan` routes wired into `App.tsx`.
 
-**In flight:** **18** (the remaining twelve routes, `router.py`) and **25** (Team roster screen).
+**In flight (Wave D):** **27** (`verify_flan.py` scenario A — the rollup crux, with the amended
+non-vacuous A0) and **30** (`verify_flan_api.py` — HTTP RBAC + audit).
 
-**Next:** **26** (wire `/flan` routes into `App.tsx` — the last Wave C task, and the one that makes
-every screen built so far actually reachable; nothing in `App.tsx` mentions FLAN yet, so all five
-screens are currently dead in the running app). Then Wave D (27-33) and Wave E (34-35).
+**Next:** **28** (verify scenarios B-F) and **29** (mutation-prove) both SERIALIZE behind 27 — same
+file / same subject. **31** and **32** (pytest ports) are parallel-ok with each other. Then **33**
+(full regression gate), then Wave E: **34** (refresh `MAP.md`) and **35** (requirements-progress),
+which are parallel-ok with each other.
 
-**⚠ Watch when Task 25 lands:** its in-flight `components/MemberDialog.tsx` was failing the
-zero-violation lint gate with two `react-refresh/only-export-components` errors (non-component
-exports in a component file). The engineer appears to be fixing it by extracting
-`components/platformUsers.ts`. **Confirm `npm run lint` exits 0 after that commit** — NFR-6's gate is
-phase-wide, so one file breaks it for everything.
-
-**Wave C screens are released per-screen as their SERVICE layer is verified**, not as a block — a
-screen's payload shape is settled by `schemas.py` plus its service contract, since the router is thin
-and adds paths, not shapes. All four services are now verified, so **22, 23, 24, 25 and 22a are all
-released**. Each released screen's brief requires checking its POST/PATCH body against the real
-`model_fields`, so a key the schema lacks is caught at build rather than as a production 422 a mocked
-test would never see.
+**⚠ A FOURTH GATE DEFECT, fixed before it fired.** `frontend/package.json`'s `test` script is bare
+`vitest` — **watch mode**, which never exits. The plan's frontend gate (`npm run lint && npm run test
+&& npm run build`) appears twice and would have **hung Task 33**. Both occurrences now read
+`npm run test -- --run`.
 
 **⚠ OWNER DECISIONS taken mid-build (both binding):**
 1. **Task 22a added — FLAN-01.1's "edit" verb was covered by NO task.** The criterion reads
@@ -36,6 +31,11 @@ test would never see.
 2. **No reactivation path for a soft-removed roster member, deliberately.** FLAN-01.4 does not ask
    for one; the row and its history survive, so a later phase can add it additively. Recorded in
    `roster.py`'s module docstring so the omission reads as a decision.
+3. **Task-key reuse accepted for Phase 1.** `generate_task_key` takes the max *existing* key, so
+   deleting the highest-numbered task frees its number — `audit_log` already names two task ids under
+   `T18P-1`. FLAN-01.3 requires only "unique within the project", which holds. **Filed p2 in
+   `.zj/BACKLOG.md`** with FLAN-10 named as the latest phase to fix it, since that is where deep
+   links make a key a durable handle. The autogenerate-drift item was filed p2 at the same time.
 
 **⚠ DEFECT FOUND AND FIXED IN-BUILD (`5b3d09f`).** `useDeletePhase` invalidated only `phasesKey`, but
 `flan_task.phase_id` is `ondelete="CASCADE"` — deleting a phase destroys its tasks, so the Tasks
@@ -76,8 +76,8 @@ container and psql role.
 
 Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
 `### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An
-uncommitted `router.py` is Task 18 mid-write; untracked `Team.tsx`, `Team.test.tsx`,
-`components/MemberDialog.tsx` or `components/platformUsers.ts` is Task 25.
+an untracked `backend/scripts/verify_flan.py` is Task 27 mid-write; an untracked
+`backend/scripts/verify_flan_api.py` is Task 30.
 
 **Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
 `flan_*` tables; all five load-bearing constraint shapes in the database (`flan_task.phase_id`,
