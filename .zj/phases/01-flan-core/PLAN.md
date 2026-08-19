@@ -693,7 +693,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS/frontend && npx vitest run src/routes/flan/Tasks.test.tsx`
 - **Parallel-ok:** yes (with Tasks 22, 23, 25)
 
-### [ ] 25. Build the project Team roster screen
+### [x] 25. Build the project Team roster screen
 - **Serves:** FLAN-01.4
 - **Files:** `frontend/src/routes/flan/Team.tsx` (new),
   `frontend/src/routes/flan/Team.test.tsx` (new),
@@ -1322,6 +1322,26 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
 - **Task 18 — `task.deleted`'s detail names the task id, not its key.** `delete_task` returns `None`
   and fetching the key first would add a read to a thin route. Matches Task 17's `phase.deleted`. The
   plan required only `task.created` to name the key.
+
+- **Task 25 — a fourth file, `components/platformUsers.ts`.** Putting `usePlatformUsers()` and
+  `platformUserLabel()` in `MemberDialog.tsx` failed the zero-violation lint gate with two
+  `react-refresh/only-export-components` errors (a component file may not export non-component
+  functions). Extracted rather than duplicated, following the `routes/crumb/components/apiError.ts`
+  precedent. Caught by Task 22a's engineer in the overlap window and fixed before the commit —
+  `npm run lint` exits 0.
+- **Task 25 — the users endpoint is `GET /api/v1/auth/users`, gated by `users:manage`.** A non-admin
+  FLAN user gets 403, so the query uses `retry: false` and both callers degrade gracefully: the
+  picker offers "No platform user" alone, and the Platform-user column falls back to the raw
+  `user_id`. The alternative — gating the whole roster screen on an admin-only permission — would
+  have made FLAN-01.4's roster unusable for exactly the collaborators it exists to model.
+- **Task 25 — the mutation check used the backend's own `"42.500000"`.** `toFixed(2)` turns it into
+  `"42.50"`, so the assertion genuinely pins "render the string as returned" rather than passing on a
+  fixture where formatting happens to be a no-op.
+- **OWNER DECISION — task-key reuse accepted for Phase 1** (see `## Noticed`). FLAN-01.3 requires only
+  "unique within the project", which holds. Filed as **p2 BACKLOG** with FLAN-10 named as the latest
+  phase to fix it, since that is where deep links make a key a durable handle. The rejected
+  alternative — deriving the next key from `audit_log` — would couple key generation to an
+  append-only table that may one day be pruned.
 
 ## Noticed
 
