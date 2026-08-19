@@ -817,7 +817,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS && git diff --stat -- backend/app/modules/flan/service/rollup.py && grep -c 'FAIL:' docs/tasks/feature-flan-core.md`
 - **Parallel-ok:** no (needs Task 27)
 
-### [ ] 30. Write `verify_flan_api.py` for HTTP RBAC and audit
+### [x] 30. Write `verify_flan_api.py` for HTTP RBAC and audit
 - **Serves:** FLAN-01.7 (CORE-05, NFR-1)
 - **Files:** `backend/scripts/verify_flan_api.py` (new)
 - **Do:** Mirror `backend/scripts/verify_gelato_api.py`. Mint three throwaway users backed by
@@ -1385,6 +1385,29 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   (`podman run --rm`). Both correct in context; gelato's header was only ever wrong about the psql
   role. Corrected in the task text above.
 
+- **Task 30 — 123 assertions, and the mutation proof is unusually sharp.** Mis-gating
+  `PATCH /flan/team/{member_id}` from `flan:write` to `flan:read` made the reader's call return
+  **422**, not 403 — and 422 is the archived-project guard *inside the service*, a status only
+  reachable **after** `require_permission` allowed the request. So the FAIL line does not merely say
+  "wrong status", it demonstrates the caller got past the gate. Restored byte-identical.
+- **Task 30 — the 20-route sweep is self-checking three ways:** `len(write_routes)==14 and
+  len(read_routes)==6`, `ROUTE_COUNT==20`, and **`declared_keys == set(exercised)` with every
+  recorded status 2xx** — so a route the writer never actually called cannot pass as one that did.
+  That last one is the check that makes "all 20" a measurement rather than a claim.
+- **Task 30 — tokens are minted with `create_access_token`, not the OAuth2 form login**, matching the
+  gelato exemplar and load-bearing here: a login round-trip writes its own `audit_log` rows
+  attributable to these users, which would corrupt the "this run wrote exactly one row per successful
+  mutation, and reads wrote none" count. The form-login contract is exercised by `verify_flan.py` and
+  the pytest suite instead.
+- **Task 30 — audit rows are deliberately NOT deleted in cleanup** (D-14 append-only; the plan says
+  so, though the gelato exemplar *does* delete them). ~18 rows per run survive with an `actor_id`
+  naming a now-deleted throwaway user — safe because `AuditLog.actor_id` is a plain `String(36)`, not
+  a FK, and rows are located by a per-run uuid `target_id`, so stale rows can never let a later run
+  pass on an earlier run's evidence. Everything else is cleaned in a `finally`.
+- **Task 30 — the archive call is sequenced LAST** in the happy path, since it 422s every subsequent
+  write in that project. The RBAC sweep runs after it safely, because 401/403 short-circuit before
+  the service is reached.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1535,3 +1558,10 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
 - **No `flan:read`-holding non-admin fixture user exists in the dev database** — only
   `UAT-PLUM-ONLY` (`plum:read`). Task 30's RBAC script mints its own throwaway users so it is
   unaffected, but human UAT of FLAN's permission gating would need one seeded.
+
+- **`verify_gelato_api.py` deletes its audit rows in cleanup**, which is in tension with the
+  append-only rule (D-14) that Task 30 applied to FLAN. Two scripts in the same repo now treat the
+  audit table by opposite rules. Worth reconciling — small, and out of scope here.
+- **Under the dev overlay's `WATCHFILES_FORCE_POLLING`, a bind-mounted edit takes a few seconds to
+  reload.** Relevant to anyone doing mutation testing against `compose_api_1`: re-running too quickly
+  measures the pre-mutation code and reports a false green.
