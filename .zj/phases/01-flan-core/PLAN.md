@@ -734,15 +734,18 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 
 ## Wave D — verification
 
-### [ ] 27. Write `verify_flan.py` scenario (A) — the phase-rollup crux including the empty phase
+### [x] 27. Write `verify_flan.py` scenario (A) — the phase-rollup crux including the empty phase
 - **Serves:** FLAN-01.2 (the SRD's named verification)
 - **Files:** `backend/scripts/verify_flan.py` (new)
 - **Do:** ⚠ **ADDED AT BUILD:** the script MUST `import app.modules.auth.models` (or
   `app.core.models`) **before** touching `flan_team_member`, or SQLAlchemy raises
   `NoReferencedTableError` resolving `flan_team_member.user_id → users.id`. Found by Task 16's
-  engineer. Note also that `backend/scripts/verify_gelato.py`'s own header documents the wrong
-  container and psql role (`compose_api_1`, `-U postgres`) — the working values are `compose_api`
-  and `-U app`; do not copy that header verbatim.
+  engineer. Note also that `backend/scripts/verify_gelato.py`'s own header documents the wrong psql
+  role (`-U postgres`) — the working value is **`-U app`**; do not copy that header verbatim.
+  ⚠ **MANAGER CORRECTION:** an earlier version of this amendment also called the container name
+  wrong. It is not. **`compose_api_1` is the CONTAINER** (for `podman exec`) and **`compose_api` is
+  the IMAGE** (for `podman run --rm`) — both correct in their own context, and gelato's header is
+  right about the container. Only the psql role was ever wrong.
   Mirror `backend/scripts/verify_gelato.py`'s structure: ABOUTME header, a WHY-THIS-EXISTS
   docstring, its **own** async engine + sessionmaker from `POSTGRES_*` env (never the test conftest),
   `PASS:`/`FAIL:` prints, a `_FAILURES` counter, `main()` returning non-zero, and a `finally` cleanup
@@ -1361,6 +1364,26 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   API and database are **live** (flipped off, `flan` disappeared from the enabled-keys list, flipped
   back on, left enabled); the "nav item appears/disappears in the DOM" assertions are
   **test-driven**, because the sidebar is client-rendered and curl cannot observe it.
+
+- **✅ THE A0 AMENDMENT IS EMPIRICALLY CONFIRMED — the phase's most important result.** Task 27 asserts
+  A0 four ways and ran Task 29's mutation 3 against all four. Under the mutation: **the solo-batch
+  form `phase_rollups([empty])` stayed GREEN**, while the batch-with-a-non-empty-phase-first forms
+  (`A0c` via `phase_rollups`, `A0d` via `list_phases`) both went RED. Direct proof that the plan's
+  original A0 **would have passed while the crux was broken** — the exact failure mode the SRD named
+  the empty-phase case to prevent. Both load-bearing assertions are labelled `CRUX` in the source with
+  a "do not simplify this to a single-id call" comment, so the vacuity cannot be reintroduced by a
+  later tidy-up.
+- **Task 27 — `A0d` asserts through `list_phases`, the read the ROUTER actually serves**, and
+  `list_phases` orders the dated phase first. So the non-vacuous batch shape is not a contrivance of
+  the test — it is the production call shape.
+- **Task 27 — A3 gained a second half and A2 an extra assertion.** A fourth phase whose tasks *all*
+  lack dates reports no dates but a real `33.33` over 3 tasks, distinguishing "no dates" from "no
+  tasks" — the two states most easily conflated. And `In Progress` is asserted **not** to count as
+  done, guarding the `filter(status == 'Done')` predicate against a truthiness-style loosening.
+- **MANAGER CORRECTION — I mis-stated the container name in the Task 27/28 amendment.**
+  `compose_api_1` is the **container** (`podman exec`); `compose_api` is the **image**
+  (`podman run --rm`). Both correct in context; gelato's header was only ever wrong about the psql
+  role. Corrected in the task text above.
 
 ## Noticed
 
