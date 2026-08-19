@@ -153,6 +153,16 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p2 — architecture & docs
 
+- [ ] **`backend/tests/conftest.py` has no test-database isolation, so two concurrent pytest runs
+  silently corrupt each other** (v5.0 Phase 1 Tasks 33/35, 2026-08-19) — both runs default to the same
+  `biznice_test` database, and the `_isolate` TRUNCATE of one run tears out the other's fixtures
+  mid-test. The symptom is **not** an obvious lock error: it surfaces as spurious `401`s and a
+  TRUNCATE stall, which reads like an auth or deadlock bug in the code under test. It cost real
+  diagnosis time twice in this phase. The only current defence is knowing to pass
+  `TEST_POSTGRES_DB=<something-unique>` by hand. Fix: default `TEST_POSTGRES_DB` to a
+  PID- or worker-suffixed name (conftest already self-provisions and migrates whatever name it is
+  given, so the change is small), which also makes `pytest -n` viable later.
+
 - [ ] **FLAN task keys are re-issued after a delete** (v5.0 Phase 1 Task 18, owner decision
   2026-08-18) — `flan/service/keys.py::generate_task_key` derives the next key from the **max
   existing** key in the project, so deleting the highest-numbered task frees its number: after

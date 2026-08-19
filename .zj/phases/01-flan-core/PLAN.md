@@ -911,7 +911,7 @@ assert _next_key('PRJ', 9)=='PRJ-10' and _next_key('PRJ', None)=='PRJ-1'; print(
 - **Verify:** `cd $BNS && grep -n "eslintrc\|No CI\|SyerpPartner" .zj/codebase/MAP.md; for f in $(grep -oE '(backend|frontend|compose|\.github)/[A-Za-z0-9_./-]+' .zj/codebase/MAP.md | sort -u); do [ -e "$f" ] || echo "MISSING: $f"; done`
 - **Parallel-ok:** yes (with Task 35)
 
-### [ ] 35. Record FLAN-01 in the requirements-progress table
+### [x] 35. Record FLAN-01 in the requirements-progress table
 - **Serves:** project rule (`CLAUDE.md` → Feature Alignment step 3)
 - **Files:** `docs/features/requirements-progress.md`
 - **Do:** Add a `## FLAN Module` section with a FLAN-01 row in the established column shape
@@ -1527,6 +1527,28 @@ Recorded during `/zj:build 1`. Trivial fixes taken in-task; material ones went t
   Task 33 Verify snippet has this shape, and the manager hit the same thing checking master. A fourth
   member of this phase's silent-failure family.
 
+- **Task 35 — every figure was re-derived, not copied from the brief.** The engineer re-ran both
+  verify scripts (`grep -c "^PASS"` → 38 and 123), both pytest scopes, the frontend suite, `\dt flan_*`
+  (8 tables), `alembic_version` (`0018`) and `grep -c '^@router\.'` (20), and re-resolved all 34 cited
+  commit hashes with `git log -1 --format='%h %s'` to confirm each subject matches the wave role
+  claimed for it. That is the right posture for a document whose whole value is that a later phase can
+  trust it.
+- **Task 35 — both caveats are recorded twice by design:** as a blockquote above the FLAN table (so
+  nobody reads the row without them) and inside the Status cell (so a status-column scan cannot miss
+  them). The Status reads "built & live-verified … pending `/zj:verify 1`", **not** "Complete",
+  matching how other built-but-unverified rows are worded in that file.
+- **Task 35 — Wave E hashes are deliberately not cited.** Tasks 34/35's own commits do not exist at
+  write time, so the row cites Waves A-D plus Task 33's gate commit rather than fabricating one.
+- **⚠ MANAGER ERROR, SECOND INSTANCE — `backend/tests/conftest.py` has NO test-DB isolation.** Task 35's
+  first `pytest tests/flan` run came back `1 failed, 9 passed, 13 errors` (401s and a TRUNCATE stall)
+  purely because Task 33's engineer was running the suite against the **same shared `biznice_test`
+  database** at that moment. Not a code defect — a second collision caused by my running two tasks in
+  parallel. The engineer diagnosed it (`podman ps` showed the other pytest container), re-ran with
+  `TEST_POSTGRES_DB=biznice_test_t35`, got clean 23/23 and 268/0, and dropped the database afterwards.
+  **Both of this phase's parallelism failures were mine, and both were invisible in the plan's `Files:`
+  lists** — the first because tasks do not declare files they *temporarily* mutate, the second because
+  they do not declare the *database* they share.
+
 ## Noticed
 
 Unrelated defects found in passing. **Not fixed mid-task**; reported to the owner at phase end.
@@ -1684,3 +1706,9 @@ Unrelated defects found in passing. **Not fixed mid-task**; reported to the owne
 - **Under the dev overlay's `WATCHFILES_FORCE_POLLING`, a bind-mounted edit takes a few seconds to
   reload.** Relevant to anyone doing mutation testing against `compose_api_1`: re-running too quickly
   measures the pre-mutation code and reports a false green.
+
+- **`docs/features/requirements-progress.md`'s header caveat is stale.** Its top blockquote and the
+  per-module "Evidence caveat (D-P7-4): the backend live-DB pytest harness is still broken" notes on
+  SYERP/MOUSSE/CRUMB/GELATO are now false — the harness was repaired in v4.0 Phase 2a and the suite
+  runs 268/0. Deliberately not touched by Task 35 (out of scope, and the header calls itself
+  historical). Worth a separate `docs:` cleanup.
