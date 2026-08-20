@@ -1,6 +1,6 @@
 # STATE — BizNiceSweets
 Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" VERIFIED WITH GAPS — `/zj:verify 1` reports landed,
-FIX LOOP IN FLIGHT.** Verifier and reviewer both ran; artifacts committed. **Verdict: GAPS** —
+FIX LOOP 3/4 ENGINEERS LANDED, `flan:rates` in flight.** Verifier and reviewer both ran; artifacts committed. **Verdict: GAPS** —
 0 blockers, 7 major, 7 minor. The phase **goal is true**: all 7 FLAN-01 acceptance criteria were
 driven empirically and every build-reported number was independently re-proved. The gaps are
 regression protection, one reachability miss, and one real concurrency bug. Owner approved the full
@@ -70,7 +70,66 @@ only; three docs still say FLAN is unbuilt; `.zj/QA.md` has no FLAN coverage; th
    `NFR-9`) alongside the FLAN-01 coverage, clearing the inherited red and unblocking the merge in
    the same edit. Arithmetic: 32 covered + 26 bucketed = 58.
 
-### Fix loop — in flight as of this write
+### Fix loop — three of four engineers landed
+
+**Landed so far** (`b1ded29`, `033e2a8`, `3df78ce`, `9943846`, `af2f426`, `c343d72`, `b845c81`,
+`c8f05df`, `1e08aca`):
+
+- **A — R1 closed.** `create_task`'s locked select now carries `populate_existing`; `update_project`
+  takes the row lock **before** `_project_has_tasks` and holds it to commit (conditionally, only on
+  the branch that changes `key_prefix`, so a name/tag PATCH no longer contends with task creation).
+  `derive_key_prefix` re-validates against `KEY_PREFIX_PATTERN` with a `DEFAULT_KEY_PREFIX` fallback.
+  **Two keepers:** (i) the SQLAlchemy identity map is **weak** — A's first test passed against the
+  reverted fix because the unreferenced `Project` was garbage-collected and the next `db.get`
+  silently re-read it from the DB; the test now deliberately holds a reference. (ii) a *blocking*
+  test does not discriminate here — without the lock, `update_project`'s plain `UPDATE` blocks on
+  the held row anyway at commit time, so A used a `FOR UPDATE NOWAIT` probe (55P03 = held) instead.
+- **C — G2–G6 + G8 closed.** `verify_flan.py` **38 → 50 PASS**; `test_rollup.py` **16 → 29** tests.
+  New scenarios `(G)` duplicate-names/immutable-id and `(H)` cross-project scoping; tags into `(E)`,
+  roster rule + user-delete into `(D)`, literals into `(C4)`. Every one mutation-proven with a real
+  lever (a unique index on `flan_project.name`, an `id` field added to `ProjectUpdate`, the FK
+  regenerated without `ondelete`, the roster check removed). To break files engineer A held, C used
+  a **detached git worktree at HEAD** rather than touching A's in-flight edits.
+- **B — G1 + the hook typing closed.** New `TagInput.tsx` (chips, Enter/comma commit, ×, and
+  trim/blank/de-dupe/60-char rules mirroring `schemas.py::_normalize_tags` exactly) and `TagList.tsx`;
+  wired into both project dialogs and the task sheet, with Tags columns on Projects and Tasks.
+  PLUM's `PartSheet` was rejected as the model — its fixed `TAG_VOCABULARY` multiselect is the facet
+  semantics D-V5P1-5 forbids until FLAN-04. `AssigneeSet` now types both assignee PUT hooks.
+- **Manager — two gate/doc fixes.** `frontend/vite.config.ts` `testTimeout: 15000`: the form-filling
+  suites were **already flaky before any FLAN change** (a stashed baseline failed four tests at 5s
+  under parallel backend runs). A gate whose result depends on host load is not a gate.
+  `CLAUDE.md`'s Suite Status table corrected for FLAN **and** GELATO (the latter read "Planned" with
+  no live location while GELATO-01 has been verified since Phase 12b).
+
+**Owner decision reversed on new information — `hourly_rate`.** The chosen "drop it from
+`TeamMemberRead`" turned out to be unsafe: `MemberDialog.tsx:113` seeds its input from
+`member.hourly_rate` and `:136` sends it on every save, so a read-only removal would make **every
+member edit silently wipe the stored rate** — worse than the exposure. Re-asked; owner chose the
+**`flan:rates` permission** instead, which keeps read and write coherent and FLAN-01.4's "carries …
+an hourly rate" whole. **Engineer D is building it now** (seed the permission but *not* into
+`_USER_ROLE_PERMS`; a non-raising `has_permission` helper reusing the same admin-wildcard rule;
+reads **omit the key entirely** for non-holders rather than nulling it, since null is
+indistinguishable from "no rate recorded" and would re-create the wipe; writes carrying the key from
+a non-holder get **403**, not a silent drop).
+
+### Still owed before this phase can close
+
+1. Engineer D lands `flan:rates`.
+2. Atomic edit: flip `.zj/SRD.md` FLAN-01 to `verified` + stamp `- **Verified:** <sha>`, **and** land
+   `.zj/QA.md` §3 (retitle the FLAN-01 row, add the 11 missing rows `FLAN-02..11` + `NFR-9`),
+   §4.8 (the eight checks, renumbered `C-FLAN-01…08`), §5 (FLAN-01 out of "Not built yet", the 11
+   in). All three must land together — `verify_qa_doc.py` cross-checks §3↔§4 both ways and §3's
+   status cells against the SRD. Arithmetic: **32 covered + 26 bucketed = 58**. This also clears the
+   inherited red and unblocks the merge.
+3. Refresh `.zj/phases/01-flan-core/QA.md` for what the fix loop changed — `C-FLAN-01-01/02/05` gain
+   tag steps, `C-FLAN-01-06`'s rate step needs the admin-wildcard note, and §6's "tags cannot be set
+   anywhere in the UI" limitation is now false.
+4. `docs/features/requirements-progress.md` counts (verify 38→50, `tests/flan` 23→46+, Vitest 196→199+).
+5. Append the fix loop to `docs/tasks/feature-flan-core.md`.
+6. **Full re-verification** — not a partial re-check; that is where regressions slip in.
+7. Then: `.zj/ROADMAP.md` `[verified]`, tag `zj/good-01-flan-core`, STATE → `/zj:retro 1`.
+
+### Fix loop — original dispatch
 
 Three engineers on disjoint files, with **separate test databases** (`biznice_fix_a`,
 `biznice_fix_c`) because this build already lost a run to two pytest suites sharing `biznice_test`.
