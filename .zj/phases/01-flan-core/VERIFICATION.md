@@ -1,7 +1,7 @@
 # Verification: 01 — FLAN core (v5.0 Phase 1)
 Date: 2026-08-19 | Commits: `49567ff..dbbcba9` (86 commits, branch `feature-flan-core`)
 Requirement: SRD **FLAN-01** (AC1–AC7) · touches NFR-1, NFR-5, CORE-05, CORE-07/08
-Verdict: **GAPS** on first pass → **PASS** after the fix loop (see the closing section)
+Verdict: PASS (first pass GAPS — all 14 findings fixed and the whole verification re-run; see the closing section)
 
 **Summary.** The phase goal is **true**. Every one of the seven acceptance criteria was driven
 empirically — over real HTTP against the live stack, at the SQL level, through the pytest suite and
@@ -398,4 +398,4 @@ All ten gaps and four review findings are closed. No finding was logged rather t
 
 ---
 
-Verdict: **PASS**
+Verdict: PASS
