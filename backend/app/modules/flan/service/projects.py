@@ -43,6 +43,7 @@ function (house idiom — service/_common.py, crumb/service/leads.py).
 """
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
@@ -62,10 +63,10 @@ if TYPE_CHECKING:
     from app.modules.flan.schemas import ProjectCreate, ProjectUpdate
 
 
-#: Prefix used when a project name yields no usable prefix at all — an empty
-#: name-derived prefix, or one that does not begin with a letter (the schema's
-#: KEY_PREFIX_PATTERN requires a leading letter so the prefix is safe to
-#: interpolate into the key generator's regex).
+#: Prefix used when a project name yields no usable prefix at all — one that
+#: does not match the schema's KEY_PREFIX_PATTERN (empty, not starting with a
+#: letter, carrying a non-ASCII alphanumeric, or longer than the column), so the
+#: prefix is always safe to interpolate into the key generator's regex.
 DEFAULT_KEY_PREFIX = "PRJ"
 
 #: Number of characters taken from the name when deriving a prefix — "Crisis
@@ -89,20 +90,30 @@ def derive_key_prefix(name: str) -> str:
     Derive a project's task-key prefix from its name (D-V5P1-2).
 
     The first four alphanumeric characters of the name, uppercased: "Crisis
-    Simulator" → "CRIS", "R&D 2026" → "RD20". Falls back to `PRJ` when the name
-    yields nothing usable — either no alphanumerics at all ("!!!" → "PRJ") or a
-    result that does not start with a letter ("3M Widgets" → "3MWI" → "PRJ").
+    Simulator" → "CRIS", "R&D 2026" → "RD20". Falls back to `PRJ` whenever that
+    yields anything KEY_PREFIX_PATTERN would reject — no alphanumerics at all
+    ("!!!"), no leading letter ("3M Widgets" → "3MWI"), a non-ASCII alphanumeric
+    ("Café Simulator" → "CAFÉ") or an over-long result ("ﬃﬃﬃﬃ" →
+    "FFIFFIFFIFFI").
 
-    That second fallback is not cosmetic: the schema validates key_prefix
-    against `^[A-Za-z][A-Za-z0-9]{0,9}$` precisely so the key generator can
-    interpolate it into a `^{prefix}-[0-9]+$` regex, and a derived prefix must
-    honour the same shape a client-supplied one does.
+    That fallback is not cosmetic: the schema validates key_prefix against
+    KEY_PREFIX_PATTERN (`^[A-Za-z][A-Za-z0-9]{0,9}$`) precisely so the key
+    generator can interpolate it into a `^{prefix}-[0-9]+$` regex, and a derived
+    prefix must honour the same shape a client-supplied one does. So the derived
+    value is checked against **that same pattern**, not against a hand-rolled
+    approximation of it: `str.isalnum()` and `str.upper()` are Unicode-aware and
+    the slice runs before the uppercasing, so "Café Simulator" would otherwise
+    derive the non-conforming "CAFÉ", and "ﬃﬃﬃﬃ" (U+FB03, alnum) would derive
+    the 12-character "FFIFFIFFIFFI" — an overflow of `key_prefix VARCHAR(10)`
+    and an unhandled 500 on create. Both fall back to `PRJ`.
 
     Pure (no DB) so it is unit-testable in isolation, and used only when the
     client omits key_prefix — a supplied one is stored verbatim.
     """
+    from app.modules.flan.schemas import KEY_PREFIX_PATTERN
+
     derived = "".join(ch for ch in name if ch.isalnum())[:KEY_PREFIX_LENGTH].upper()
-    if not derived or not derived[0].isalpha():
+    if not re.fullmatch(KEY_PREFIX_PATTERN, derived):
         return DEFAULT_KEY_PREFIX
     return derived
 
