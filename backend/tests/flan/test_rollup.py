@@ -59,7 +59,25 @@ D-P2b-5 (hard rule, the 11a/11b keeper): every fixture below is built through
   service call can produce and which exists precisely to prove the ``Numeric``
   (not ``Integer``) cast; it is flagged at its call site.
 
-The (E) archived-project scenario and the HTTP RBAC/audit surface stay in the
+ALSO PORTED — the five AC sentences that had no automated pin anywhere
+(``/zj:verify 1`` gaps G2-G6, G8; each mirrors a ``verify_flan.py`` check of the
+same scenario id):
+
+  * **(E) TAGS** — a project created with ``tags`` and a task created with
+    ``tags`` round-trip through ``get_project`` / ``get_task``, asserted against
+    ``flan_project_tag`` / ``flan_task_tag`` as well. Every tag assertion in the
+    suite before this one compared an EMPTY list to an EMPTY list and would have
+    passed with the whole write path deleted (G2).
+  * **(D3)** deleting the linked platform user does NOT delete the roster row —
+    ``flan_team_member.user_id`` is ``ON DELETE SET NULL`` (G6).
+  * **(D4)** an assignee must be on THIS project's roster (FLAN-01.5, G4).
+  * **(G)** duplicate project names are allowed and the project id is immutable
+    (FLAN-01.1, G5).
+  * **(H)** no list read mixes two projects' data (FLAN-01.6, G3).
+  * the task ``status`` / ``risk_level`` ``Literal``s refuse anything outside
+    their sets (FLAN-01.3, G8).
+
+The (E) archived-project WRITE FREEZE and the HTTP RBAC/audit surface stay in the
 standalone scripts and ``tests/flan/test_api.py`` respectively; only the rollup
 crux and its immediate neighbours are ported here. All percentages are Decimal
 — never float (D-11).
@@ -72,7 +90,7 @@ from decimal import Decimal
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 # Import the central model aggregator FIRST so Base.metadata is fully populated.
 # Not cosmetic: `flan_team_member.user_id` FKs into `users.id`, so touching a
@@ -80,10 +98,22 @@ from sqlalchemy import func, select
 # (the plan's Task-16 lesson). conftest already imports app.main, which pulls
 # this in; the explicit import keeps the guarantee local to this module.
 import app.core.models  # noqa: F401
-from app.modules.flan.models import Phase, PhaseAssignee, Task, TaskAssignee, TeamMember
+from app.modules.auth.models import User
+from app.modules.auth.service import create_user
+from app.modules.flan.models import (
+    Phase,
+    PhaseAssignee,
+    Project,
+    ProjectTag,
+    Task,
+    TaskAssignee,
+    TaskTag,
+    TeamMember,
+)
 from app.modules.flan.schemas import (
     PhaseCreate,
     ProjectCreate,
+    ProjectUpdate,
     TaskCreate,
     TaskUpdate,
     TeamMemberCreate,
@@ -94,13 +124,17 @@ from app.modules.flan.service import (
     create_project,
     create_task,
     delete_phase,
+    get_project,
+    get_task,
     list_members,
     list_phases,
+    list_projects,
     list_tasks,
     phase_rollups,
     remove_member,
     set_phase_assignees,
     set_task_assignees,
+    update_project,
     update_task,
 )
 from app.modules.flan.service.keys import _next_key
@@ -126,7 +160,9 @@ async def flan_db(test_sessionmaker):
 # ---------------------------------------------------------------------------
 
 
-async def _make_project(session, tag: str, key_prefix: str = "PRJ") -> str:
+async def _make_project(
+    session, tag: str, key_prefix: str = "PRJ", tags: list[str] | None = None
+) -> str:
     """Create a FLAN project via the REAL create_project service; return its id."""
     project = await create_project(
         session,
@@ -135,6 +171,7 @@ async def _make_project(session, tag: str, key_prefix: str = "PRJ") -> str:
             key_prefix=key_prefix,
             category="work",
             currency="USD",
+            tags=tags or [],
         ),
     )
     return project.id
@@ -156,6 +193,7 @@ async def _make_task(
     summary: str,
     start: date | None = None,
     due: date | None = None,
+    tags: list[str] | None = None,
 ) -> Task:
     """Create a task via the REAL create_task service and the REAL TaskCreate schema."""
     return await create_task(
@@ -166,6 +204,7 @@ async def _make_task(
             status="To Do",
             start_date=start,
             due_date=due,
+            tags=tags or [],
         ),
     )
 
@@ -241,6 +280,59 @@ def test_next_key_increments_past_the_int4_boundary() -> None:
     Phase-7 defect 7562a02), and (B) below proves that live.
     """
     assert _next_key("PRJ", 9999999999) == "PRJ-10000000000"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("status", "Blocked"),
+        ("status", "done"),
+        ("status", ""),
+        ("risk_level", "extreme"),
+        ("risk_level", "None"),
+        ("risk_level", "critical"),
+    ],
+)
+def test_task_status_and_risk_refuse_anything_outside_their_literal(
+    field: str, value: str
+) -> None:
+    """
+    A `status` or `risk_level` outside its set is refused — on CREATE and PATCH.
+
+    The enforcement is the `Literal` type in schemas.py and NOTHING else: no
+    service check, no CHECK constraint, no enum column. Widening either to a
+    bare `str` — the obvious way to "fix" a circular import or a mypy
+    complaint — would therefore break no other assertion in this suite while
+    the column quietly started accepting values no reader can render. Mirrors
+    `verify_flan.py` (C4).
+    """
+    with pytest.raises(ValidationError):
+        TaskCreate(**{"phase_id": "no-such-phase", "summary": "literal", field: value})
+    with pytest.raises(ValidationError):
+        TaskUpdate(**{field: value})
+
+
+def test_every_legal_status_and_risk_value_still_constructs() -> None:
+    """
+    The non-vacuity half of the test above: each LEGAL member of both sets is
+    still accepted, so the refusals are the `Literal` doing its job and not a
+    schema that has started rejecting the field outright.
+    """
+    statuses = [
+        TaskCreate(phase_id="p", summary="s", status=value).status
+        for value in ("To Do", "In Progress", "Done")
+    ]
+    risks = [
+        TaskCreate(phase_id="p", summary="s", risk_level=value).risk_level
+        for value in ("none", "low", "medium", "high")
+    ]
+    phase_statuses = [
+        PhaseCreate(name="p", status=value).status
+        for value in ("pending", "in-progress", "complete")
+    ]
+    assert statuses == ["To Do", "In Progress", "Done"]
+    assert risks == ["none", "low", "medium", "high"]
+    assert phase_statuses == ["pending", "in-progress", "complete"]
 
 
 # ---------------------------------------------------------------------------
@@ -684,3 +776,324 @@ async def test_phase_delete_cascades_to_its_tasks_only(flan_db) -> None:
     assert set(remaining) == {sibling_id}
     assert remaining[sibling_id].task_count == 2
     assert remaining[sibling_id].percent_complete == Decimal("0.00")
+
+
+# ---------------------------------------------------------------------------
+# (E) TAGS ROUND-TRIP — the flan_project_tag / flan_task_tag write path
+# (FLAN-01.1, FLAN-01.3, D-V5P1-5)
+# ---------------------------------------------------------------------------
+
+
+async def test_tags_round_trip_on_projects_and_tasks(flan_db) -> None:
+    """
+    Port of verify_flan.py (E)'s tag checks — tags are asserted NON-EMPTY.
+
+    `tags` is named literally in FLAN-01.1 (a project's fields) and again in
+    FLAN-01.3 (a task's), and `flan_project_tag` / `flan_task_tag` are real
+    tables — but before this test every automated tag assertion in the suite
+    compared an EMPTY list to an EMPTY list, so the whole write path could be
+    deleted and ruff, pytest, both verify scripts and Vitest would all stay
+    green until FLAN-04's facet engine found no rows.
+
+    Both halves are read back TWICE: through the REAL `get_project` /
+    `get_task` the router serves, and straight from the join tables as an
+    independent oracle (a service that filled the field from the request rather
+    than the database would pass the first and fail the second).
+    """
+    session = flan_db
+    project_id = await _make_project(session, "tags", tags=["alpha", "beta"])
+    phase_id = await _make_phase(session, project_id, "tag phase", 1)
+    task = await _make_task(session, phase_id, "tagged task", tags=["x"])
+
+    # The instances the service handed back on the way OUT of the write.
+    assert sorted(task.tags) == ["x"]
+
+    # ...and the reads the router serves.
+    assert sorted((await get_project(session, project_id)).tags) == ["alpha", "beta"]
+    assert sorted((await get_task(session, task.id)).tags) == ["x"]
+    assert sorted(t for t in (await list_tasks(session, project_id))[0].tags) == ["x"]
+
+    # ...and the join tables themselves — the rows that must exist for FLAN-04.
+    project_tags = (
+        await session.execute(
+            select(ProjectTag.tag).where(ProjectTag.project_id == project_id)
+        )
+    ).scalars().all()
+    task_tags = (
+        await session.execute(select(TaskTag.tag).where(TaskTag.task_id == task.id))
+    ).scalars().all()
+    assert sorted(project_tags) == ["alpha", "beta"]
+    assert sorted(task_tags) == ["x"]
+
+    # A tag set is REPLACED, not merged (the PATCH semantics the router relies on).
+    await update_project(session, project_id, ProjectUpdate(tags=["gamma"]))
+    await update_task(session, task.id, TaskUpdate(tags=["y", "z"]))
+    assert sorted((await get_project(session, project_id)).tags) == ["gamma"]
+    assert sorted((await get_task(session, task.id)).tags) == ["y", "z"]
+    assert await _count(session, ProjectTag, ProjectTag.project_id == project_id) == 1
+    assert await _count(session, TaskTag, TaskTag.task_id == task.id) == 2
+
+
+# ---------------------------------------------------------------------------
+# (D3) DELETING THE LINKED PLATFORM USER LEAVES THE ROSTER ROW (FLAN-01.4)
+# ---------------------------------------------------------------------------
+
+
+async def test_deleting_the_linked_platform_user_leaves_the_roster_row(flan_db) -> None:
+    """
+    Port of verify_flan.py (D3) — FLAN-01.4's "deleting a user account does not
+    delete the roster row".
+
+    The whole behaviour rests on one clause of one FK:
+    `flan_team_member.user_id -> users.id ON DELETE SET NULL` (models.py,
+    migration 0018). Alembic's default when a constraint is regenerated is
+    `NO ACTION`, which would make the DELETE below fail outright, and a
+    `CASCADE` would take the roster row and its assignment history with it.
+    Both break a rule the SRD states, and neither is visible from Python — so
+    the user is deleted for REAL and the member row read back afterwards.
+
+    `session.expire_all()` before the re-read is load-bearing: the SET NULL
+    happens inside the database, so an identity-mapped instance would still be
+    holding the old `user_id`.
+    """
+    session = flan_db
+    project_id = await _make_project(session, "userdel")
+    phase_id = await _make_phase(session, project_id, "userdel phase", 1)
+    task = await _make_task(session, phase_id, "userdel task", date(2026, 7, 1), None)
+
+    user = await create_user(
+        session,
+        email="flan-rollup-userdel@example.test",
+        password="flan-rollup-userdel-pw",
+        full_name="FLAN roster link",
+    )
+    member = await create_member(
+        session,
+        project_id,
+        TeamMemberCreate(name="Linked Member", role="Engineer", user_id=user.id),
+    )
+    await set_task_assignees(session, task.id, [member.id])
+    await set_phase_assignees(session, phase_id, [member.id])
+    assert member.user_id == user.id
+    # Held as plain strings: `expire_all()` below would make reading them off the
+    # instances a lazy load, which is a MissingGreenlet under async SQLAlchemy.
+    member_id, user_id = member.id, user.id
+
+    await session.execute(delete(User).where(User.id == user_id))
+    await session.commit()
+    session.expire_all()
+
+    survivor = (
+        await session.execute(select(TeamMember).where(TeamMember.id == member_id))
+    ).scalars().one()
+    # The row survives with only the LINK cleared — SET NULL, not CASCADE.
+    assert survivor.user_id is None
+    assert survivor.name == "Linked Member"
+    assert survivor.role == "Engineer"
+    assert survivor.active is True
+    # ...and so does every assignment it carried: roster history outlives the
+    # platform account it happened to be linked to.
+    assert await _count(session, TaskAssignee, TaskAssignee.member_id == member_id) == 1
+    assert await _count(session, PhaseAssignee, PhaseAssignee.member_id == member_id) == 1
+    assert [m.id for m in await list_members(session, project_id)] == [member_id]
+
+
+# ---------------------------------------------------------------------------
+# (D4) ASSIGNEES ARE DRAWN FROM THE PROJECT'S OWN ROSTER (FLAN-01.5)
+# ---------------------------------------------------------------------------
+
+
+async def test_assignees_must_be_on_the_tasks_own_project_roster(flan_db) -> None:
+    """
+    Port of verify_flan.py (D4) — a member of ANOTHER project's roster is
+    refused with 422 on every path that can name an assignee.
+
+    `flan_task_assignee.member_id` FKs into `flan_team_member`, so the database
+    can prove the member EXISTS but not that it is on the same project as the
+    task; that half is `tasks.py::require_project_members`, shared with
+    `assignments.py`. Every other scenario in this module builds one project, in
+    which every member is trivially "on the roster" — so the guard could be
+    deleted outright and nothing would notice.
+
+    All three write paths are driven (create, task assignees, phase assignees),
+    a soft-REMOVED member of the right project is checked too, and each refusal
+    is paired with the identical call using the project's OWN member, so a
+    service that refused every assignee list could not read as a pass.
+    """
+    session = flan_db
+    home_id = await _make_project(session, "home")
+    away_id = await _make_project(session, "away")
+    home_phase = await _make_phase(session, home_id, "home phase", 1)
+    away_phase = await _make_phase(session, away_id, "away phase", 1)
+    home_task = await _make_task(session, home_phase, "home task")
+    await _make_task(session, away_phase, "away task")
+
+    insider = await create_member(
+        session, home_id, TeamMemberCreate(name="Insider", role="Engineer")
+    )
+    outsider = await create_member(
+        session, away_id, TeamMemberCreate(name="Outsider", role="Engineer")
+    )
+    removed = await create_member(
+        session, home_id, TeamMemberCreate(name="Removed", role="Engineer")
+    )
+    await remove_member(session, removed.id)
+
+    for label, call in (
+        ("create_task", lambda: create_task(
+            session,
+            TaskCreate(phase_id=home_phase, summary="cross", assignee_ids=[outsider.id]),
+        )),
+        ("set_task_assignees", lambda: set_task_assignees(session, home_task.id, [outsider.id])),
+        ("set_phase_assignees", lambda: set_phase_assignees(session, home_phase, [outsider.id])),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await call()
+        assert exc.value.status_code == 422, label
+        assert "roster" in str(exc.value.detail), label
+
+    # A SOFT-REMOVED member of the RIGHT project is refused too (D-V5P1-6):
+    # the roster is the ACTIVE roster, not every row that ever existed.
+    with pytest.raises(HTTPException) as removed_exc:
+        await set_task_assignees(session, home_task.id, [removed.id])
+    assert removed_exc.value.status_code == 422
+
+    # Not one assignment row landed for either refused member.
+    assert await _count(session, TaskAssignee, TaskAssignee.member_id == outsider.id) == 0
+    assert await _count(session, PhaseAssignee, PhaseAssignee.member_id == outsider.id) == 0
+    assert await _count(session, TaskAssignee, TaskAssignee.member_id == removed.id) == 0
+
+    # The IDENTICAL calls with the project's OWN active member are accepted.
+    assert await set_task_assignees(session, home_task.id, [insider.id]) == [insider.id]
+    assert await set_phase_assignees(session, home_phase, [insider.id]) == [insider.id]
+    created = await create_task(
+        session,
+        TaskCreate(phase_id=home_phase, summary="own roster", assignee_ids=[insider.id]),
+    )
+    assert created.assignee_ids == [insider.id]
+
+
+# ---------------------------------------------------------------------------
+# (G) PROJECT IDENTITY — duplicate names, immutable id (FLAN-01.1)
+# ---------------------------------------------------------------------------
+
+
+async def test_duplicate_project_names_are_allowed(flan_db) -> None:
+    """
+    Port of verify_flan.py (G1) — FLAN-01.1 says duplicate project names are
+    allowed, and nothing pinned it.
+
+    Every other suite's master table has a unique business key
+    (`syerp_partner.code`, `plum_part.part_number`), so the tempting
+    "consistency fix" is a `UniqueConstraint("name")` on `flan_project` — which
+    would break a stated rule while every gate stayed green. Both projects are
+    created through the REAL service with the identical name AND no explicit
+    key_prefix, so their derived prefixes collide too: nothing about a project
+    is unique except its id.
+    """
+    session = flan_db
+    name = "Crisis Simulator"
+    first = await create_project(session, ProjectCreate(name=name, category="work"))
+    second = await create_project(session, ProjectCreate(name=name, category="work"))
+
+    assert first.id != second.id
+    assert first.name == second.name == name
+    assert first.key_prefix == second.key_prefix
+    listed = {project.id for project in await list_projects(session)}
+    assert {first.id, second.id} <= listed
+    assert await _count(session, Project, Project.name == name) == 2
+
+
+async def test_the_project_id_is_immutable(flan_db) -> None:
+    """
+    Port of verify_flan.py (G2) — a PATCH cannot move a project's id.
+
+    The immutability is structural: `ProjectUpdate` carries no `id` field, so a
+    body naming one is dropped by pydantic before the service sees it. That
+    matters because `update_project` writes every key the patch DOES carry with
+    a plain `setattr`, so an `id` field added to the schema would move the row —
+    silently, since no other check would notice.
+
+    The same body also carries a legal `name`, which MUST land: without it this
+    test would pass just as happily against a service that ignored the payload.
+    """
+    session = flan_db
+    project_id = await _make_project(session, "immutable")
+
+    # Built the way the ROUTER builds it — model_validate over a raw body dict,
+    # so the `id` key travels exactly the road a real request body would.
+    patch = ProjectUpdate.model_validate({"id": "hacked-id", "name": "Renamed"})
+    updated = await update_project(session, project_id, patch)
+
+    assert updated.id == project_id
+    assert updated.name == "Renamed"
+    assert await _count(session, Project, Project.id == "hacked-id") == 0
+    assert (await get_project(session, project_id)).name == "Renamed"
+    # The structural half LAST, so the behavioural assertions above are the ones
+    # a mutant trips first: an `id` field added to the schema moves the row.
+    assert "id" not in ProjectUpdate.model_fields
+
+
+# ---------------------------------------------------------------------------
+# (H) NO VIEW MIXES TWO PROJECTS' DATA (FLAN-01.6)
+# ---------------------------------------------------------------------------
+
+
+async def test_no_list_read_mixes_two_projects_data(flan_db) -> None:
+    """
+    Port of verify_flan.py (H) — every list read is scoped to the project it was
+    asked for.
+
+    Every other test in this module builds ONE project, so a `list_tasks`,
+    `list_phases` or `list_members` that lost its `project_id` filter would pass
+    all of them; the first symptom in production is one customer's project
+    showing another's tasks. The likeliest way to lose it is a refactor of the
+    `phase_id` / `assignee_id` filtering FLAN-03 extends — so those two filters
+    are driven ACROSS the boundary as well: they must be ANDed with the project
+    scope, never replace it.
+
+    Both projects share one key prefix on purpose, so both hold a `PRJ-1` and a
+    leaked row would look entirely plausible; only the ids can tell them apart.
+    """
+    session = flan_db
+    left_id = await _make_project(session, "left")
+    right_id = await _make_project(session, "right")
+    left_phase = await _make_phase(session, left_id, "left phase", 1)
+    right_phase = await _make_phase(session, right_id, "right phase", 1)
+    left_tasks = {(await _make_task(session, left_phase, f"left {n}")).id for n in (1, 2)}
+    right_tasks = {(await _make_task(session, right_phase, f"right {n}")).id for n in (1, 2)}
+    left_member = await create_member(
+        session, left_id, TeamMemberCreate(name="Left Member", role="Engineer")
+    )
+    right_member = await create_member(
+        session, right_id, TeamMemberCreate(name="Right Member", role="Engineer")
+    )
+    await set_task_assignees(session, sorted(left_tasks)[0], [left_member.id])
+    await set_task_assignees(session, sorted(right_tasks)[0], [right_member.id])
+
+    # Phases: each project's read holds its own phase and only its own.
+    assert [phase.id for phase in await list_phases(session, left_id)] == [left_phase]
+    assert [phase.id for phase in await list_phases(session, right_id)] == [right_phase]
+
+    # Tasks: 2 each, disjoint, every row carrying the requested project_id —
+    # even though the two projects' KEYS are identical (both PRJ-1, PRJ-2).
+    listed_left = await list_tasks(session, left_id)
+    listed_right = await list_tasks(session, right_id)
+    assert {task.id for task in listed_left} == left_tasks
+    assert {task.id for task in listed_right} == right_tasks
+    assert all(task.project_id == left_id for task in listed_left)
+    assert all(task.project_id == right_id for task in listed_right)
+    assert {task.key for task in listed_left} == {task.key for task in listed_right}
+
+    # The narrowing filters do not open a hole into the neighbour...
+    assert await list_tasks(session, left_id, phase_id=right_phase) == []
+    assert await list_tasks(session, left_id, assignee_id=right_member.id) == []
+    # ...while the same two filters aimed at its OWN phase and member work.
+    assert {t.id for t in await list_tasks(session, left_id, phase_id=left_phase)} == left_tasks
+    assert [t.id for t in await list_tasks(session, left_id, assignee_id=left_member.id)] == [
+        sorted(left_tasks)[0]
+    ]
+
+    # Rosters: one member each, neither list naming the other's.
+    assert [m.id for m in await list_members(session, left_id)] == [left_member.id]
+    assert [m.id for m in await list_members(session, right_id)] == [right_member.id]
