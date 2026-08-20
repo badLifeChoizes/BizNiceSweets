@@ -310,6 +310,14 @@ export interface Task {
  * `hourly_rate` is a Decimal serialized as an exact **string** (D-11) — render
  * it as-is; never `parseFloat` it, never reformat it. In v5.0 it is stored and
  * read by nothing (D-V5-2 / D-M5-2): display and round-tripping only.
+ *
+ * It is also **OPTIONAL, and that is not the same as null.** It is compensation
+ * data gated on `flan:rates`, and the API OMITS THE KEY for a caller without
+ * that permission (flan/router.py) rather than nulling it — `null` already
+ * means "no rate recorded", and a client round-tripping a null would clear the
+ * stored rate. So `undefined` = "not disclosed to me", `null` = "no rate set".
+ * Use `useHasPermission('flan:rates')` to decide whether to render or send it,
+ * never the value's own absence.
  */
 export interface TeamMember {
   id: string
@@ -318,7 +326,7 @@ export interface TeamMember {
   role: string | null
   email: string | null
   color: string | null
-  hourly_rate: string | null
+  hourly_rate?: string | null
   user_id: string | null
   active: boolean
   created_at: string
@@ -367,7 +375,10 @@ export interface TaskUpdatePayload {
  * Roster member creation payload (TeamMemberCreate). `name` is the only
  * requirement, so a person can be rostered before an email or a platform
  * account exists; `user_id` is normally null. `active` is absent — removal is
- * its own endpoint. `hourly_rate` crosses the wire as a **string** (D-11).
+ * its own endpoint. `hourly_rate` crosses the wire as a **string** (D-11) and
+ * needs `flan:rates`: sending the key without it is refused with 403 (a null
+ * counts — it clears a stored rate), so omit the key entirely when the current
+ * user lacks the permission.
  */
 export interface TeamMemberCreatePayload {
   name: string
@@ -382,6 +393,8 @@ export interface TeamMemberCreatePayload {
  * Roster member PATCH payload (TeamMemberUpdate). `project_id` is absent (a
  * member belongs to one roster for life) and so is `active`: soft-removal also
  * clears the member's assignment rows (D-V5P1-6), which a flag flip would not.
+ * `hourly_rate` needs `flan:rates` — sending the key without it is a 403, and
+ * omitting it leaves the stored rate alone (`exclude_unset` server-side).
  */
 export interface TeamMemberUpdatePayload {
   name?: string | null

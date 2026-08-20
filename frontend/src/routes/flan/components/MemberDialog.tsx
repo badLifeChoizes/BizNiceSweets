@@ -1,7 +1,8 @@
 // ABOUTME: Create/edit Dialog for a FLAN roster member (FLAN-01.4) — name, role, email,
 // ABOUTME: colour, hourly rate and an OPTIONAL platform-user link whose "No platform user"
 // ABOUTME: option posts `user_id: null`. The rate carries the helper text saying nothing
-// ABOUTME: derives a cost from it in v5.0 (D-V5-2 / D-M5-2); it is a STRING on the wire.
+// ABOUTME: derives a cost from it in v5.0 (D-V5-2 / D-M5-2); it is a STRING on the wire,
+// ABOUTME: and both the input AND the key are absent without the flan:rates permission.
 
 /**
  * MemberDialog — the shared create/edit form for a project's roster.
@@ -10,9 +11,11 @@
  *   open: boolean            — controls dialog visibility
  *   projectId: string        — the URL's project (D-V5P1-3); scopes the POST
  *   member: TeamMember|null  — the row being edited; null is the create case
+ *   canSeeRates: boolean     — the caller's `flan:rates` answer, passed down from
+ *                              Team.tsx so the column and this input agree
  *   onClose: () => void      — called on save success and on Cancel
  *
- * Three rules are load-bearing here:
+ * Four rules are load-bearing here:
  *
  *   - **The platform-user link is optional, and "no user" is a real answer.**
  *     A member with no `user_id` is a full collaborator (roster.py) — listed,
@@ -28,6 +31,13 @@
  *     report or endpoint in this release derives a cost from it, so the field
  *     says so in its own helper text rather than letting a user infer a costing
  *     feature that does not exist.
+ *   - **Without `flan:rates` the rate input is gone AND the key is left out of
+ *     the body.** Not sent as null — the server treats a null as a deliberate
+ *     CLEAR of stored compensation data and refuses it with 403 exactly like a
+ *     figure (flan/router.py), and it never reaches this caller's copy of the
+ *     member in the first place (the API omits the key from its responses). So
+ *     a non-holder editing a member leaves the stored rate alone by saying
+ *     nothing about it, which is what `exclude_unset` means server-side.
  *
  * The user list itself comes from ./platformUsers (an AUTH endpoint, so it is
  * not in flan/hooks.ts); the Team screen shares the same cached query to label
@@ -66,7 +76,7 @@ import {
 } from '@/components/ui/select'
 import { getApiErrorMessage } from '@/routes/crumb/components/apiError'
 import { useCreateMember, useUpdateMember } from '../hooks'
-import type { TeamMember } from '../hooks'
+import type { TeamMember, TeamMemberCreatePayload } from '../hooks'
 import { platformUserLabel, usePlatformUsers } from './platformUsers'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -87,12 +97,20 @@ interface MemberDialogProps {
   open: boolean
   projectId: string
   member: TeamMember | null
+  /** Whether the current user holds `flan:rates` (Team.tsx owns the lookup). */
+  canSeeRates: boolean
   onClose: () => void
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export function MemberDialog({ open, projectId, member, onClose }: MemberDialogProps) {
+export function MemberDialog({
+  open,
+  projectId,
+  member,
+  canSeeRates,
+  onClose,
+}: MemberDialogProps) {
   const { data: users = [] } = usePlatformUsers()
 
   const [name, setName] = useState('')
@@ -110,6 +128,8 @@ export function MemberDialog({ open, projectId, member, onClose }: MemberDialogP
     setRole(member?.role ?? '')
     setEmail(member?.email ?? '')
     setColor(member?.color ?? '')
+    // `hourly_rate` is undefined for a non-holder (the key is omitted, not
+    // nulled), so this seeds blank — and the field it seeds is not rendered.
     setHourlyRate(member?.hourly_rate ?? '')
     setUserId(member?.user_id ?? NO_USER)
   }, [open, member])
@@ -126,14 +146,18 @@ export function MemberDialog({ open, projectId, member, onClose }: MemberDialogP
     // is always present and is an explicit null when unlinked: on a PATCH that
     // is what CLEARS an existing link (roster.py::update_member), which omitting
     // the key would not do.
-    const payload = {
+    // `hourly_rate` is SPREAD IN, not set to null, when the user lacks
+    // flan:rates: the key must be absent from the body. Sending `null` is a
+    // deliberate clear and the server answers 403 — and even if it did not, it
+    // would wipe a rate this user was never shown.
+    const payload: TeamMemberCreatePayload = {
       name: name.trim(),
       role: role.trim() || null,
       email: email.trim() || null,
       color: color.trim() || null,
       // The rate is sent as the string it was typed as (D-11) — no parseFloat,
       // no toFixed; a blank field clears it.
-      hourly_rate: hourlyRate.trim() || null,
+      ...(canSeeRates ? { hourly_rate: hourlyRate.trim() || null } : {}),
       user_id: userId === NO_USER ? null : userId,
     }
     const onError = (err: unknown) => {
@@ -241,22 +265,28 @@ export function MemberDialog({ open, projectId, member, onClose }: MemberDialogP
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="member-rate">Hourly rate</Label>
-              <Input
-                id="member-rate"
-                aria-label="Hourly rate"
-                // Text, not number: the rate is a Decimal that crosses the wire
-                // as a string (D-11), and a number input would hand back a float.
-                inputMode="decimal"
-                value={hourlyRate}
-                onChange={(e) => setHourlyRate(e.target.value)}
-                placeholder="Optional"
-              />
-              <p id="member-rate-helper" className="text-xs text-muted-foreground">
-                {RATE_HELPER}
-              </p>
-            </div>
+            {/* Compensation data — rendered only for a holder of flan:rates,
+                who is also the only caller whose member payload carries the
+                key. A disabled input would be worse: it would show an empty
+                rate as though none were recorded. */}
+            {canSeeRates && (
+              <div className="space-y-2">
+                <Label htmlFor="member-rate">Hourly rate</Label>
+                <Input
+                  id="member-rate"
+                  aria-label="Hourly rate"
+                  // Text, not number: the rate is a Decimal that crosses the wire
+                  // as a string (D-11), and a number input would hand back a float.
+                  inputMode="decimal"
+                  value={hourlyRate}
+                  onChange={(e) => setHourlyRate(e.target.value)}
+                  placeholder="Optional"
+                />
+                <p id="member-rate-helper" className="text-xs text-muted-foreground">
+                  {RATE_HELPER}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* The optional platform-user link — "No platform user" is the default

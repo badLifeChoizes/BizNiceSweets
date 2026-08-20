@@ -1,7 +1,8 @@
 // ABOUTME: FLAN Team screen (/flan/projects/:projectId/team) — one project's roster
 // ABOUTME: (name, role, email, colour, hourly rate, linked platform user) with add/edit
 // ABOUTME: and a remove that CONFIRMS and says the member's assignments will be cleared.
-// ABOUTME: The rate cell prints the API's string verbatim — no parseFloat, no toFixed.
+// ABOUTME: The rate cell prints the API's string verbatim — no parseFloat, no toFixed —
+// ABOUTME: and the whole rate COLUMN is absent without the flan:rates permission.
 
 /**
  * Team screen — one project's roster, the pool every assignee comes from
@@ -9,16 +10,23 @@
  *
  * Layout: p-8 space-y-6, mirroring routes/flan/Phases.tsx.
  *
- * Table columns: Member | Role | Email | Colour | Hourly rate | Platform user
- *                | Actions
+ * Table columns: Member | Role | Email | Colour | [Hourly rate] | Platform user
+ *                | Actions — the rate column is conditional (see below).
  *
- * Four rules are load-bearing here:
+ * Five rules are load-bearing here:
  *
  *   - **The hourly rate is rendered exactly as the API returned it.** It is a
  *     Decimal serialized as a string (D-11), so the backend's `"42.500000"` is
  *     printed as `42.500000`. No `parseFloat`, no `toFixed`, no currency
  *     formatter: every one of those re-rounds the shop's own figure on the
  *     client's terms and makes the screen disagree with the database.
+ *   - **The rate COLUMN only exists for a holder of `flan:rates`.** It is
+ *     compensation data on a roster the whole project can read, so the API
+ *     omits the `hourly_rate` KEY for everyone else (flan/router.py) — the
+ *     column would be a row of em-dashes that look like "no rate recorded".
+ *     Header and cells are dropped together, so the remaining columns keep
+ *     their alignment. This is presentation only: the server refuses the field
+ *     regardless of what this screen renders.
  *   - **Nothing reads that rate in v5.0** (D-V5-2 / D-M5-2). No rollup, report
  *     or endpoint in this release derives a cost from it, and the dialog's own
  *     helper text says so — otherwise a user reasonably assumes a costing
@@ -71,6 +79,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useHasPermission } from '@/hooks/useAuth'
 import { getApiErrorMessage } from '@/routes/crumb/components/apiError'
 import { FlanNav } from './components/FlanNav'
 import { MemberDialog } from './components/MemberDialog'
@@ -189,6 +198,10 @@ export function Team() {
   const [editMember, setEditMember] = useState<TeamMember | null>(null)
   const [removeMember, setRemoveMember] = useState<TeamMember | null>(null)
 
+  // Compensation data: without flan:rates the API omits the `hourly_rate` key
+  // entirely, so the column has nothing to show and is dropped whole.
+  const canSeeRates = useHasPermission('flan:rates')
+
   // The roster the API returns: active members only, in its own order (name,
   // then created_at). Removed members are excluded server-side and there is no
   // parameter here to ask for them.
@@ -244,7 +257,7 @@ export function Team() {
               <TableHead>Role</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Colour</TableHead>
-              <TableHead>Hourly rate</TableHead>
+              {canSeeRates && <TableHead>Hourly rate</TableHead>}
               <TableHead>Platform user</TableHead>
               <TableHead className="w-12">Actions</TableHead>
             </TableRow>
@@ -260,8 +273,13 @@ export function Team() {
                   <ColorSwatch color={member.color} />
                 </TableCell>
                 {/* The API's own Decimal string, printed verbatim (D-11). Never
-                    parseFloat'd, never toFixed'd, never currency-formatted. */}
-                <TableCell className="font-mono text-sm">{member.hourly_rate ?? '—'}</TableCell>
+                    parseFloat'd, never toFixed'd, never currency-formatted — and
+                    only rendered at all for a holder of flan:rates, for whom the
+                    key exists. An em-dash here means "no rate recorded", which
+                    is why a non-holder gets no cell rather than a dashed one. */}
+                {canSeeRates && (
+                  <TableCell className="font-mono text-sm">{member.hourly_rate ?? '—'}</TableCell>
+                )}
                 {/* An unlinked member is the normal case, not a gap. */}
                 <TableCell>
                   {member.user_id ? (userLabels.get(member.user_id) ?? member.user_id) : '—'}
@@ -303,6 +321,7 @@ export function Team() {
         open={createOpen || editMember !== null}
         projectId={projectId}
         member={editMember}
+        canSeeRates={canSeeRates}
         onClose={() => {
           setCreateOpen(false)
           setEditMember(null)

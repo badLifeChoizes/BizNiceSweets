@@ -2,6 +2,8 @@
 // ABOUTME: the API's OWN Decimal string ("42.500000", which any float formatting would
 // ABOUTME: change), saving with "No platform user" POSTs a literal user_id: null, and the
 // ABOUTME: remove confirmation names the assignment clearing before any DELETE is sent.
+// ABOUTME: Without flan:rates the rate column and input are ABSENT and the PATCH body
+// ABOUTME: carries no hourly_rate KEY — a null would be a 403 and would clear the rate.
 
 /**
  * Team screen — component tests.
@@ -24,6 +26,15 @@
  *       soft remove that ALSO deletes the member's task and phase assignment
  *       rows (D-V5P1-6), and the copy says both that and "the tasks themselves
  *       are left intact" before the DELETE is sent.
+ *
+ *   (d) **`flan:rates` gates the rate, in the column AND in the body.** The
+ *       screen reads the current user's permissions from GET /auth/me, so
+ *       every render here mocks it. Without the permission the "Hourly rate"
+ *       header, the cells and the dialog input are all gone, and the save body
+ *       has NO `hourly_rate` key — not the key set to null, which the API
+ *       refuses with 403 (a null CLEARS a stored rate) and which this user was
+ *       never shown to begin with, since the API omits the key from its
+ *       responses too.
  *
  * Also covered: the rate field's "no cost is derived from it" helper text
  * (D-V5-2 / D-M5-2), an unlinked member rendering as a full row of em-dashes,
@@ -147,13 +158,49 @@ const USERS = [
 ]
 
 /**
- * GET routing: the roster, the platform users the picker and the linked-user
- * column read, plus the project list FlanNav needs. The `/team` branch is
- * checked first — every FLAN url contains "/flan/projects".
+ * The session GET /auth/me returns. `roles: []` on purpose — no admin wildcard,
+ * so `permissions` alone decides and a test asking for a rate-less user really
+ * gets one.
  */
-function mockGets() {
+function session(canSeeRates: boolean) {
+  return {
+    id: 'me',
+    email: 'me@corp.test',
+    full_name: 'Me',
+    is_active: true,
+    roles: [],
+    permissions: canSeeRates
+      ? ['flan:read', 'flan:write', 'flan:rates']
+      : ['flan:read', 'flan:write'],
+  }
+}
+
+/**
+ * The roster as a caller WITHOUT flan:rates receives it: the `hourly_rate` key
+ * is omitted by the API, not nulled (flan/router.py). Building the fixture with
+ * `delete` rather than `hourly_rate: null` is the point — a nulled fixture would
+ * let a component that renders `null` as an em-dash pass the absence tests.
+ */
+function withoutRates<T extends object>(member: T): Omit<T, 'hourly_rate'> {
+  const copy = { ...member } as Record<string, unknown>
+  delete copy.hourly_rate
+  return copy as Omit<T, 'hourly_rate'>
+}
+
+/**
+ * GET routing: the session (whose permissions gate the rate column), the
+ * roster, the platform users the picker and the linked-user column read, plus
+ * the project list FlanNav needs. The `/team` branch is checked first — every
+ * FLAN url contains "/flan/projects".
+ *
+ * `canSeeRates: false` also strips the key from the roster rows, because that
+ * is what the server does for such a caller.
+ */
+function mockGets(canSeeRates = true) {
+  const team = canSeeRates ? TEAM : TEAM.map(withoutRates)
   mockGet.mockImplementation((url: string) => {
-    if (url.endsWith('/team')) return Promise.resolve({ data: TEAM })
+    if (url.endsWith('/auth/me')) return Promise.resolve({ data: session(canSeeRates) })
+    if (url.endsWith('/team')) return Promise.resolve({ data: team })
     if (url.endsWith('/auth/users')) return Promise.resolve({ data: USERS })
     if (url.includes('/flan/projects')) return Promise.resolve({ data: [PROJECT] })
     return Promise.reject(new Error(`unexpected GET ${url}`))
@@ -440,5 +487,108 @@ describe('Team screen', () => {
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith(detail)
     })
+  })
+
+  // ─── (d) the flan:rates gate ───────────────────────────────────────────────
+
+  it('hides the Hourly rate column entirely without flan:rates', async () => {
+    mockGets(false)
+    renderTeam()
+
+    await screen.findByText('Ada Lovelace')
+
+    // The HEADER is gone — not a column of em-dashes, which would read as "no
+    // rate recorded" for everyone on the roster.
+    expect(screen.queryByRole('columnheader', { name: 'Hourly rate' })).toBeNull()
+    expect(
+      screen.getAllByRole('columnheader').map((header) => header.textContent)
+    ).toEqual(['Member', 'Role', 'Email', 'Colour', 'Platform user', 'Actions'])
+
+    // The cells go with it, so the remaining columns stay aligned: Ada's row is
+    // one cell shorter and her rate string appears nowhere on the screen.
+    expect(cellText('Ada Lovelace').slice(0, 5)).toEqual([
+      'Ada Lovelace',
+      'Lead Engineer',
+      'ada@example.test',
+      '#4F46E5',
+      'Ada Lovelace (admin)',
+    ])
+    expect(screen.queryByText('42.500000')).toBeNull()
+  })
+
+  it('shows the Hourly rate column when the user holds flan:rates', async () => {
+    mockGets(true)
+    renderTeam()
+
+    await screen.findByText('Ada Lovelace')
+
+    // The same assertions, the other way round — without this pair the test
+    // above would pass on a screen that never had a rate column at all.
+    expect(screen.getByRole('columnheader', { name: 'Hourly rate' })).toBeInTheDocument()
+    expect(
+      screen.getAllByRole('columnheader').map((header) => header.textContent)
+    ).toEqual(['Member', 'Role', 'Email', 'Colour', 'Hourly rate', 'Platform user', 'Actions'])
+    expect(cellText('Ada Lovelace')[4]).toBe('42.500000')
+  })
+
+  it('hides the rate input and OMITS the key from the PATCH without flan:rates', async () => {
+    const user = userEvent.setup()
+    mockGets(false)
+    mockPatch.mockResolvedValueOnce({ data: withoutRates({ ...ADA, role: 'Principal Engineer' }) })
+
+    renderTeam()
+    await screen.findByText('Ada Lovelace')
+    await rowAction(user, 'Ada Lovelace', 'Edit')
+
+    await screen.findByRole('heading', { name: 'Edit Team Member' })
+    // No input and no helper text — a disabled empty input would still say
+    // "this member has no rate", which is not something this user can know.
+    expect(dialog().queryByLabelText('Hourly rate')).toBeNull()
+    expect(dialog().queryByText(/no cost is derived from it/i)).toBeNull()
+
+    const role = dialog().getByLabelText('Role')
+    await user.clear(role)
+    await user.type(role, 'Principal Engineer')
+    await user.click(screen.getByRole('button', { name: 'Save Member' }))
+
+    await waitFor(() => expect(mockPatch).toHaveBeenCalled())
+
+    const [url, body] = mockPatch.mock.calls[0] as [string, Record<string, unknown>]
+    expect(url).toBe('/api/v1/flan/team/m1')
+    // The KEY is absent. `hourly_rate: null` would be a deliberate clear — a 403
+    // from the server, and a wiped rate if it ever were not.
+    expect(Object.keys(body)).not.toContain('hourly_rate')
+    expect(body).toEqual({
+      name: 'Ada Lovelace',
+      role: 'Principal Engineer',
+      email: 'ada@example.test',
+      color: '#4F46E5',
+      user_id: 'u1',
+    })
+    for (const field of Object.keys(body)) {
+      expect(MEMBER_FIELDS).toContain(field)
+    }
+  })
+
+  it('shows the rate input and SENDS the key when the user holds flan:rates', async () => {
+    const user = userEvent.setup()
+    mockGets(true)
+    mockPost.mockResolvedValueOnce({ data: { ...GRACE, id: 'm5', name: 'Alan Turing' } })
+
+    renderTeam()
+    await screen.findByText('Ada Lovelace')
+
+    await user.click(screen.getByRole('button', { name: 'Add Member' }))
+    await screen.findByRole('heading', { name: 'Add Team Member' })
+
+    expect(dialog().getByLabelText('Hourly rate')).toBeInTheDocument()
+    await user.type(dialog().getByLabelText('Name'), 'Alan Turing')
+    await user.type(dialog().getByLabelText('Hourly rate'), '19.750000')
+    await user.click(screen.getByRole('button', { name: 'Add to Team' }))
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalled())
+    const body = mockPost.mock.calls[0][1] as Record<string, unknown>
+    expect(Object.keys(body)).toContain('hourly_rate')
+    expect(body.hourly_rate).toBe('19.750000')
   })
 })

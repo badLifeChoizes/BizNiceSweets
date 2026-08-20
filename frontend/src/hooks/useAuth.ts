@@ -9,6 +9,17 @@
  *                   the global queryClient retry:1 default (PATTERNS.md note).
  *   staleTime    — consider the session fresh for 5 minutes to avoid hammering
  *                  /auth/me on every navigation.
+ *
+ * Also exports the client-side permission predicate:
+ *   hasPermission(user, code) — the same rule the backend applies in
+ *     app/modules/auth/dependencies.py::has_permission: an "admin" role is a
+ *     wildcard, otherwise the flat `permissions` list must carry the code.
+ *   useHasPermission(code)   — that predicate over the current session.
+ *
+ * This is presentation only. Hiding a control the server would refuse is a
+ * courtesy, not a security boundary — the server refuses it either way (FLAN's
+ * `flan:rates` omits `hourly_rate` from its responses and 403s a body that sets
+ * it, whatever the UI chose to render).
  */
 
 import { useQuery } from '@tanstack/react-query'
@@ -21,6 +32,26 @@ export interface AuthUser {
   is_active: boolean
   roles: Array<{ name: string }>
   permissions: string[] // flat permission codes e.g. ["syerp:read", "plum:write"] (D-04)
+}
+
+/**
+ * Does this user hold `code`? Admin role is the wildcard, mirroring the backend.
+ *
+ * Same shape as AppShell's getVisibleModules check (`<key>:read` against
+ * `user.permissions`), lifted here because it is needed for FIELDS as well as
+ * for modules: `flan:rates` decides whether a roster member's hourly rate is
+ * rendered and sent at all.
+ */
+export function hasPermission(user: AuthUser | null, code: string): boolean {
+  if (!user) return false
+  if (user.roles.some((r) => r.name === 'admin')) return true
+  return user.permissions.includes(code)
+}
+
+/** hasPermission over the current session; false while /auth/me is in flight. */
+export function useHasPermission(code: string): boolean {
+  const { user } = useAuth()
+  return hasPermission(user, code)
 }
 
 export function useAuth(): { user: AuthUser | null; isLoading: boolean } {
