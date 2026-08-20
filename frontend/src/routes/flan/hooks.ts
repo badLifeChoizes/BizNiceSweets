@@ -393,13 +393,26 @@ export interface TeamMemberUpdatePayload {
 }
 
 /**
- * Assignee replacement payload (AssigneeSet) for the two PUT endpoints.
- * `member_ids` is the COMPLETE list after the call, not a delta — an empty
- * array is how assignments are cleared.
+ * The assignee set of a task or a phase (the backend's `AssigneeSet`), which is
+ * BOTH the body of the two PUT endpoints and their response: each route declares
+ * `response_model=AssigneeSet` (router.py) and answers with the ids read back
+ * after the commit, so the response equals a subsequent GET.
+ *
+ * `member_ids` is the COMPLETE list after the call, not a delta — an empty array
+ * is how assignments are cleared.
+ *
+ * **Neither PUT answers a Task or a Phase.** `apiClient.put<T>` is an unchecked
+ * assertion, so typing one of them `Task` would compile cleanly and then hand
+ * every consumer a `task.key` that is `undefined` at runtime — and an
+ * invalidation keyed on `task.project_id` would sweep `['flan','tasks',undefined]`
+ * and leave the board stale.
  */
-export interface AssigneeSetPayload {
+export interface AssigneeSet {
   member_ids: string[]
 }
+
+/** The request direction of the same schema, named for the call sites below. */
+export type AssigneeSetPayload = AssigneeSet
 
 // ─── Query keys (tasks, roster) ───────────────────────────────────────────────
 
@@ -584,17 +597,26 @@ export function useRemoveMember() {
  * board must not keep showing a task the filter no longer matches (FLAN-01.5).
  * `projectId` comes from the variables so the invalidation never depends on the
  * response body's shape.
+ *
+ * **The result is an `AssigneeSet`, not a `Task`** — the route's response_model
+ * is `AssigneeSet` and it answers `{"member_ids": [...]}`. Typing it as a Task
+ * would type-check (the generic is an assertion, not a check) and then hand a
+ * consumer `undefined` for every task field it read.
  */
 export function useSetTaskAssignees() {
   const qc = useQueryClient()
-  return useMutation<Task, Error, { taskId: string; projectId: string; memberIds: string[] }>({
+  return useMutation<
+    AssigneeSet,
+    Error,
+    { taskId: string; projectId: string; memberIds: string[] }
+  >({
     mutationFn: ({ taskId, memberIds }) =>
       apiClient
-        .put<Task>(`/api/v1/flan/tasks/${taskId}/assignees`, {
+        .put<AssigneeSet>(`/api/v1/flan/tasks/${taskId}/assignees`, {
           member_ids: memberIds,
         } satisfies AssigneeSetPayload)
         .then((r) => r.data),
-    onSuccess: (_task, { taskId, projectId }) => {
+    onSuccess: (_assignees, { taskId, projectId }) => {
       qc.invalidateQueries({ queryKey: tasksKey(projectId) })
       qc.invalidateQueries({ queryKey: taskKey(taskId) })
       qc.invalidateQueries({ queryKey: phasesKey(projectId) })
@@ -605,17 +627,25 @@ export function useSetTaskAssignees() {
 /**
  * Replace a phase's assignees (PUT, same full-replacement semantics).
  * Invalidates the project's phases. `projectId` comes from the variables.
+ *
+ * Answers an `AssigneeSet` for the same reason the task hook does — the route's
+ * response_model is `AssigneeSet`, and a `Phase` here would be a type the server
+ * never sends.
  */
 export function useSetPhaseAssignees() {
   const qc = useQueryClient()
-  return useMutation<Phase, Error, { phaseId: string; projectId: string; memberIds: string[] }>({
+  return useMutation<
+    AssigneeSet,
+    Error,
+    { phaseId: string; projectId: string; memberIds: string[] }
+  >({
     mutationFn: ({ phaseId, memberIds }) =>
       apiClient
-        .put<Phase>(`/api/v1/flan/phases/${phaseId}/assignees`, {
+        .put<AssigneeSet>(`/api/v1/flan/phases/${phaseId}/assignees`, {
           member_ids: memberIds,
         } satisfies AssigneeSetPayload)
         .then((r) => r.data),
-    onSuccess: (_phase, { projectId }) => {
+    onSuccess: (_assignees, { projectId }) => {
       qc.invalidateQueries({ queryKey: phasesKey(projectId) })
     },
   })
