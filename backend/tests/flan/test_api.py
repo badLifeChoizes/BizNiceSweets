@@ -93,12 +93,21 @@ from app.modules.auth.service import create_access_token, hash_password
 @pytest.fixture
 async def flan_identities(test_sessionmaker) -> dict:
     """
-    Mint three real Users bound to real Roles and return their ids + Bearer tokens.
+    Mint five real Users bound to real Roles and return their ids + Bearer tokens.
 
     writer → role with flan:read + flan:write; reader → role with flan:read
     only; noperm → no roles. Tokens are minted with create_access_token (the
     perms claim is ignored by RBAC, which authorizes from the DB roles —
     D-P2a-4).
+
+    Two more exist for the `hourly_rate` field gate, which is a scope ABOVE
+    flan:write (auth/seed.py grants the default 'user' role flan:read+flan:write
+    and NOT flan:rates, so `writer` is deliberately the realistic non-holder):
+      * rater — role with flan:read + flan:write + flan:rates (the holder);
+      * wildcard_admin — a role literally NAMED "admin" holding NO permission
+        rows at all, which is the only way to prove the wildcard in
+        has_permission grants flan:rates rather than a stray explicit grant
+        doing it.
     """
     unique = uuid.uuid4().hex[:8]
     async with test_sessionmaker() as session:
@@ -106,13 +115,16 @@ async def flan_identities(test_sessionmaker) -> dict:
             p.code: p
             for p in (
                 await session.execute(
-                    select(Permission).where(Permission.code.in_(["flan:read", "flan:write"]))
+                    select(Permission).where(
+                        Permission.code.in_(["flan:read", "flan:write", "flan:rates"])
+                    )
                 )
             ).scalars().all()
         }
         assert "flan:read" in perms and "flan:write" in perms, (
             "seeded flan:read/flan:write permissions not found"
         )
+        assert "flan:rates" in perms, "seeded flan:rates permission not found"
 
         writer_role = Role(
             name=f"test-flan-writer-{unique}",
@@ -161,16 +173,71 @@ async def flan_identities(test_sessionmaker) -> dict:
         session.add(noperm)
         await session.flush()
 
+        rater_role = Role(
+            name=f"test-flan-rater-{unique}",
+            description="test throwaway role: flan:read + flan:write + flan:rates",
+        )
+        session.add(rater_role)
+        await session.flush()
+        (await rater_role.awaitable_attrs.permissions).extend(
+            [perms["flan:read"], perms["flan:write"], perms["flan:rates"]]
+        )
+
+        rater = User(
+            email=f"test-flan-rater-{unique}@example.test",
+            hashed_password=hash_password("test-flan-rater-pw"),
+            full_name="TEST flan:rates user",
+            is_active=True,
+        )
+        session.add(rater)
+        await session.flush()
+        (await rater.awaitable_attrs.roles).append(rater_role)
+
+        # The wildcard admin. `roles.name` is UNIQUE, so this must reuse the
+        # SEEDED 'admin' role — which holds every permission code, flan:rates
+        # included, and would therefore satisfy the field gate explicitly and
+        # make the wildcard assertion pass for the wrong reason. So flan:rates
+        # is STRIPPED from it here: after this, the only thing that can grant
+        # this user the rate field is role.name == "admin". The next test's
+        # TRUNCATE + reseed puts the grant back.
+        admin_role = (
+            await session.execute(select(Role).where(Role.name == "admin"))
+        ).scalars().first()
+        assert admin_role is not None, "seeded 'admin' role not found"
+        admin_perms = await admin_role.awaitable_attrs.permissions
+        for granted in list(admin_perms):
+            if granted.code == "flan:rates":
+                admin_perms.remove(granted)
+        await session.flush()
+        assert "flan:rates" not in {
+            granted.code for granted in await admin_role.awaitable_attrs.permissions
+        }, "flan:rates still explicitly granted to the admin role — wildcard unproven"
+
+        wildcard_admin = User(
+            email=f"test-flan-admin-{unique}@example.test",
+            hashed_password=hash_password("test-flan-admin-pw"),
+            full_name="TEST wildcard admin",
+            is_active=True,
+        )
+        session.add(wildcard_admin)
+        await session.flush()
+        (await wildcard_admin.awaitable_attrs.roles).append(admin_role)
+
         await session.commit()
         writer_id, reader_id, noperm_id = writer.id, reader.id, noperm.id
+        rater_id, admin_id = rater.id, wildcard_admin.id
 
     return {
         "writer_id": writer_id,
         "reader_id": reader_id,
         "noperm_id": noperm_id,
+        "rater_id": rater_id,
+        "admin_id": admin_id,
         "writer_token": create_access_token(writer_id, []),
         "reader_token": create_access_token(reader_id, []),
         "noperm_token": create_access_token(noperm_id, []),
+        "rater_token": create_access_token(rater_id, []),
+        "admin_token": create_access_token(admin_id, []),
     }
 
 
@@ -491,7 +558,10 @@ async def test_flan_team_member_rbac_and_audit(
     """
     project_id = flan_scaffold["project_id"]
     writer_id = flan_identities["writer_id"]
-    payload = {"name": f"RBAC member {flan_scaffold['unique']}", "hourly_rate": "125.50"}
+    # No `hourly_rate` here: this writer holds flan:read + flan:write and NOT
+    # flan:rates, so a body carrying the rate would (correctly) 403 before the
+    # create ever ran. The rate matrix is test_flan_hourly_rate_* below.
+    payload = {"name": f"RBAC member {flan_scaffold['unique']}"}
     path = f"/api/v1/flan/projects/{project_id}/team"
 
     # --- writer (flan:write) → 201 ---
@@ -590,6 +660,198 @@ async def test_flan_assignment_rbac_and_audit(
 
     resp = await client.get(board)
     assert resp.status_code == 401, resp.text
+
+
+# ---------------------------------------------------------------------------
+# Group 6 — the `hourly_rate` FIELD gate (flan:rates).
+#
+# flan:read opens a project's whole roster, and auth/seed.py grants the default
+# 'user' role flan:read + flan:write, so before this gate any rostered
+# contractor could read AND PATCH every teammate's pay. `flan:rates` is seeded
+# and granted to no role; `writer` below is the realistic non-holder.
+#
+# Two shapes are asserted rather than assumed:
+#   * a non-holder's payload has NO `hourly_rate` KEY — not the key set to null,
+#     which already means "no rate recorded" and would come straight back on the
+#     next save as a deliberate clear;
+#   * a non-holder SETTING the key is refused with 403, not silently dropped —
+#     including an explicit `hourly_rate: null`, which is a write.
+# ---------------------------------------------------------------------------
+
+RATE = "125.500000"
+
+
+async def test_hourly_rate_key_is_absent_for_a_caller_without_flan_rates(
+    client: httpx.AsyncClient,
+    flan_identities: dict,
+    flan_scaffold: dict,
+) -> None:
+    """
+    GET .../team omits the `hourly_rate` KEY entirely for a non-holder.
+
+    The rater (flan:read+write+rates) stores a real rate; then the same roster is
+    read three ways. The writer — flan:read + flan:write, exactly the default
+    'user' role — must not see the key AT ALL: `is None` would pass on a nulled
+    field, so this asserts `not in`. The rater sees the backend's own Decimal
+    string verbatim (D-11), and the wildcard admin sees it through role.name
+    alone (the fixture strips the explicit grant from the admin role).
+    """
+    project_id = flan_scaffold["project_id"]
+    path = f"/api/v1/flan/projects/{project_id}/team"
+
+    resp = await client.post(
+        path,
+        json={"name": f"Rated member {flan_scaffold['unique']}", "hourly_rate": RATE},
+        headers=_auth(flan_identities["rater_token"]),
+    )
+    assert resp.status_code == 201, resp.text
+    member_id = resp.json()["id"]
+    assert resp.json()["hourly_rate"] == RATE, "the holder's create response lost the rate"
+
+    def member_of(body: list[dict]) -> dict:
+        return next(m for m in body if m["id"] == member_id)
+
+    # --- the non-holder: the KEY is gone, not nulled ---
+    resp = await client.get(path, headers=_auth(flan_identities["writer_token"]))
+    assert resp.status_code == 200, resp.text
+    row = member_of(resp.json())
+    assert "hourly_rate" not in row, (
+        f"flan:write without flan:rates was served the pay field: {row!r}"
+    )
+    # Every other roster field is still there — this omits one key, not a column.
+    assert row["name"].startswith("Rated member")
+    assert {"id", "project_id", "name", "role", "email", "color", "user_id", "active"} <= set(row)
+
+    # --- the reader (flan:read only) is equally a non-holder ---
+    resp = await client.get(path, headers=_auth(flan_identities["reader_token"]))
+    assert resp.status_code == 200, resp.text
+    assert "hourly_rate" not in member_of(resp.json())
+
+    # --- the holder sees it, as the exact string the backend stored (D-11) ---
+    resp = await client.get(path, headers=_auth(flan_identities["rater_token"]))
+    assert resp.status_code == 200, resp.text
+    assert member_of(resp.json())["hourly_rate"] == RATE
+
+    # --- the admin wildcard grants it with no explicit flan:rates row ---
+    resp = await client.get(path, headers=_auth(flan_identities["admin_token"]))
+    assert resp.status_code == 200, resp.text
+    assert member_of(resp.json())["hourly_rate"] == RATE
+
+
+async def test_setting_hourly_rate_without_flan_rates_is_refused_not_dropped(
+    client: httpx.AsyncClient,
+    test_sessionmaker,
+    flan_identities: dict,
+    flan_scaffold: dict,
+) -> None:
+    """
+    A non-holder sending `hourly_rate` gets 403 — on create AND on patch.
+
+    Silently dropping the field would make the UI report a save that did not
+    happen, so the refusal is loud and comes BEFORE the service: neither a row
+    nor an audit entry is written. An explicit `hourly_rate: null` is refused
+    too — it CLEARS stored compensation data, so it is a write, and
+    `model_fields_set` is what tells it apart from an omitted key.
+    """
+    project_id = flan_scaffold["project_id"]
+    path = f"/api/v1/flan/projects/{project_id}/team"
+    headers = _auth(flan_identities["writer_token"])
+    detail = "Permission denied: flan:rates required"
+
+    # A member that already HAS a rate, stored by the holder.
+    resp = await client.post(
+        path,
+        json={"name": f"Paid member {flan_scaffold['unique']}", "hourly_rate": RATE},
+        headers=_auth(flan_identities["rater_token"]),
+    )
+    assert resp.status_code == 201, resp.text
+    member_id = resp.json()["id"]
+    created_before = await _assert_no_audit(test_sessionmaker, action="team_member.created")
+    updated_before = await _assert_no_audit(test_sessionmaker, action="team_member.updated")
+
+    # --- CREATE carrying a rate → 403 ---
+    resp = await client.post(
+        path, json={"name": "Refused create", "hourly_rate": RATE}, headers=headers
+    )
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["detail"] == detail
+
+    # --- CREATE carrying an EXPLICIT NULL rate → 403 (null is a write) ---
+    resp = await client.post(
+        path, json={"name": "Refused null create", "hourly_rate": None}, headers=headers
+    )
+    assert resp.status_code == 403, resp.text
+
+    # --- PATCH carrying a rate → 403, and PATCH nulling it → 403 ---
+    member_path = f"/api/v1/flan/team/{member_id}"
+    resp = await client.patch(member_path, json={"hourly_rate": "1.00"}, headers=headers)
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["detail"] == detail
+    resp = await client.patch(member_path, json={"hourly_rate": None}, headers=headers)
+    assert resp.status_code == 403, resp.text
+
+    # Nothing was created, nothing was updated, nothing was audited.
+    assert await _assert_no_audit(test_sessionmaker, action="team_member.created") == (
+        created_before
+    ), "a refused rate-bearing create wrote an audit row"
+    assert await _assert_no_audit(test_sessionmaker, action="team_member.updated") == (
+        updated_before
+    ), "a refused rate-bearing patch wrote an audit row"
+
+    # The stored rate is untouched — the refusals did not clear it.
+    resp = await client.get(path, headers=_auth(flan_identities["rater_token"]))
+    assert resp.status_code == 200, resp.text
+    stored = next(m for m in resp.json() if m["id"] == member_id)
+    assert stored["hourly_rate"] == RATE
+    assert stored["name"] == f"Paid member {flan_scaffold['unique']}"
+    assert "Refused create" not in [m["name"] for m in resp.json()]
+
+
+async def test_a_non_holder_still_creates_and_edits_members_without_the_rate_key(
+    client: httpx.AsyncClient,
+    flan_identities: dict,
+    flan_scaffold: dict,
+) -> None:
+    """
+    Omitting `hourly_rate` needs no permission — the gate is on the KEY, not the route.
+
+    A member of the project holding only flan:read + flan:write must still be
+    able to run the roster: add people and edit them, as long as the body says
+    nothing about pay. If this failed, the field gate would have become a route
+    gate.
+    """
+    project_id = flan_scaffold["project_id"]
+    path = f"/api/v1/flan/projects/{project_id}/team"
+    headers = _auth(flan_identities["writer_token"])
+
+    resp = await client.post(
+        path,
+        json={"name": f"Unpaid member {flan_scaffold['unique']}", "role": "Technician"},
+        headers=headers,
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    member_id = body["id"]
+    assert "hourly_rate" not in body, f"the create response leaked the pay field: {body!r}"
+
+    resp = await client.patch(
+        f"/api/v1/flan/team/{member_id}",
+        json={"role": "Senior technician", "color": "#0EA5E9"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["role"] == "Senior technician"
+    assert body["color"] == "#0EA5E9"
+    assert "hourly_rate" not in body
+
+    # The holder confirms the member really was stored with no rate — "the key
+    # was absent" and "the rate is null" are different facts and both are true.
+    resp = await client.get(path, headers=_auth(flan_identities["rater_token"]))
+    assert resp.status_code == 200, resp.text
+    stored = next(m for m in resp.json() if m["id"] == member_id)
+    assert stored["hourly_rate"] is None
+    assert stored["role"] == "Senior technician"
 
 
 # ---------------------------------------------------------------------------

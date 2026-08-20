@@ -38,6 +38,24 @@ Permission gating (D-P10-6, mirrors the GELATO/MOUSSE routers):
   - Every mutation (POST/PATCH/PUT/DELETE) requires flan:write; every read (GET)
     requires flan:read. Unauthenticated → 401, wrong permission → 403 (admin is
     wildcard, handled inside require_permission).
+  - ONE FIELD is gated on top of that: a roster member's `hourly_rate` needs
+    `flan:rates`. flan:read opens the whole roster to everyone on the project,
+    and the default 'user' role holds flan:read + flan:write (auth/seed.py), so
+    without a second scope a rostered contractor would read — and PATCH — every
+    teammate's pay. `flan:rates` is seeded but granted to NO role by default;
+    the admin wildcard covers admins.
+
+    Reads OMIT THE KEY (`_team_member_payload`), never null it: `null` already
+    means "no rate recorded", so a nulled field is indistinguishable from an
+    empty one and a client round-tripping it would WIPE the stored rate (the
+    dialog sends every field back on save). Writes are REFUSED with 403
+    (`_require_rate_write`), never silently dropped, so the UI cannot report a
+    save that did not happen. "Sent the key" is `model_fields_set`, not
+    truthiness — an explicit `hourly_rate: null` is a deliberate CLEAR and needs
+    the permission just as much as a value does; leaving the key out needs
+    nothing. The three routes that carry the field return JSONResponse for that
+    reason: a declared response_model would re-materialise the omitted key with
+    its default.
 
 Audit logging (D-10): every mutation writes one AuditLog row AFTER the service's
 own commit (write_audit self-commits, mirroring the SYERP/GELATO router order).
@@ -85,11 +103,12 @@ assignee field at all, so a phase row could not show the caller what was set.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.modules.auth.dependencies import require_permission
+from app.modules.auth.dependencies import has_permission, require_permission
 from app.modules.auth.service import write_audit
 from app.modules.flan.schemas import (
     AssigneeSet,
@@ -537,6 +556,61 @@ async def delete_task_endpoint(
 
 
 # ---------------------------------------------------------------------------
+# Team roster — the hourly_rate field gate (flan:rates)
+# ---------------------------------------------------------------------------
+
+RATES_PERMISSION = "flan:rates"
+
+
+def _team_member_payload(member, *, include_rate: bool) -> dict:
+    """
+    Serialize one roster member, dropping `hourly_rate` for a non-holder.
+
+    Validation and serialization go through `TeamMemberRead` exactly as a
+    declared response_model would (`model_dump(mode="json")` is what FastAPI
+    calls under the hood), so the wire shape — the Decimal as a string, the
+    datetime as ISO-8601 — is unchanged for a holder. The only difference is
+    the `del`.
+
+    The key is DELETED, not set to None. `hourly_rate: null` is already a real
+    value meaning "no rate recorded", so nulling it would (a) tell a non-holder
+    something false about the member and (b) come straight back on the next
+    save as a deliberate clear — the dialog resends every field — silently
+    wiping the rate for everyone. An absent key round-trips as an absent key,
+    which `model_fields_set` reads as "untouched".
+
+    Both routes that answer with a member and the list route share this one
+    function so the holder and non-holder shapes cannot drift apart.
+    """
+    data = TeamMemberRead.model_validate(member).model_dump(mode="json")
+    if not include_rate:
+        del data["hourly_rate"]
+    return data
+
+
+def _require_rate_write(data: TeamMemberCreate | TeamMemberUpdate, *, allowed: bool) -> None:
+    """
+    Refuse (403) a create/patch body that SETS `hourly_rate` without flan:rates.
+
+    "Sets" is `model_fields_set` — the key being present in the request body —
+    not truthiness and not "is not None". An explicit `hourly_rate: null` is a
+    deliberate clear of stored compensation data and needs the permission
+    exactly as much as a new figure does; a body that omits the key needs none
+    and passes through untouched, so a member without the permission can still
+    create and edit members normally.
+
+    The refusal is loud on purpose. Dropping the field instead would let the UI
+    report a save that did not happen, which is the failure mode a permission
+    check exists to prevent.
+    """
+    if not allowed and "hourly_rate" in data.model_fields_set:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission denied: {RATES_PERMISSION} required",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Team roster — read (FLAN-01.4)
 # ---------------------------------------------------------------------------
 
@@ -547,7 +621,7 @@ async def list_members_endpoint(
     include_removed: bool = False,
     current_user=Depends(require_permission("flan:read")),
     db: AsyncSession = Depends(get_db),
-) -> list[TeamMemberRead]:
+) -> JSONResponse:
     """
     List one project's roster — the pool every assignee is drawn from
     (FLAN-01.4, FLAN-01.5).
@@ -562,9 +636,18 @@ async def list_members_endpoint(
     `get_project_or_404` runs first so an unknown project id 404s instead of
     reading as an empty roster. An archived project's roster is listed normally.
     Read-only: no audit row. Requires flan:read permission.
+
+    `hourly_rate` needs `flan:rates` on top of that and its KEY IS OMITTED for a
+    caller without it (never nulled — see `_team_member_payload`). The whole
+    project can read this roster, so this is the difference between "the team"
+    and "the team's pay".
     """
     await get_project_or_404(db, project_id)
-    return await list_members(db, project_id, include_removed=include_removed)
+    members = await list_members(db, project_id, include_removed=include_removed)
+    include_rate = has_permission(current_user, RATES_PERMISSION)
+    return JSONResponse(
+        content=[_team_member_payload(m, include_rate=include_rate) for m in members]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -582,7 +665,7 @@ async def create_member_endpoint(
     data: TeamMemberCreate,
     current_user=Depends(require_permission("flan:write")),
     db: AsyncSession = Depends(get_db),
-) -> TeamMemberRead:
+) -> JSONResponse:
     """
     Add a member to a project's roster (FLAN-01.4).
 
@@ -595,7 +678,15 @@ async def create_member_endpoint(
     always created active; removal is its own endpoint. Rejects a missing
     project (404) and an archived one (422). Requires flan:write. Writes a
     team_member.created audit row after the create commits.
+
+    Supplying `hourly_rate` additionally requires `flan:rates` — 403 if the key
+    is present without it, checked BEFORE the create so a refused body writes
+    neither a row nor an audit entry. Omitting the key creates the member
+    normally with no rate, which is what a caller without the permission does.
+    The response omits the key for the same caller.
     """
+    include_rate = has_permission(current_user, RATES_PERMISSION)
+    _require_rate_write(data, allowed=include_rate)
     member = await create_member(db, project_id, data)
     await write_audit(
         db,
@@ -605,7 +696,10 @@ async def create_member_endpoint(
         target_id=str(member.id),
         detail=f"Team member added: {member.name} to project {member.project_id}",
     )
-    return member
+    return JSONResponse(
+        content=_team_member_payload(member, include_rate=include_rate),
+        status_code=status.HTTP_201_CREATED,
+    )
 
 
 @router.patch("/flan/team/{member_id}", response_model=TeamMemberRead)
@@ -614,7 +708,7 @@ async def update_member_endpoint(
     data: TeamMemberUpdate,
     current_user=Depends(require_permission("flan:write")),
     db: AsyncSession = Depends(get_db),
-) -> TeamMemberRead:
+) -> JSONResponse:
     """
     Apply a partial update to a roster member (PATCH semantics).
 
@@ -625,7 +719,15 @@ async def update_member_endpoint(
     member; re-sending its own link is a no-op. Rejects a missing member (404),
     an archived project (422) and an unlinkable user (404/422). Requires
     flan:write. Writes a team_member.updated audit row after the update commits.
+
+    Sending `hourly_rate` — a figure OR an explicit null, both of which change
+    stored compensation data — additionally requires `flan:rates`, and is
+    refused with 403 before the update runs. A PATCH that leaves the key out
+    succeeds for anyone with flan:write and leaves the stored rate alone
+    (`exclude_unset`). The response omits the key for a non-holder.
     """
+    include_rate = has_permission(current_user, RATES_PERMISSION)
+    _require_rate_write(data, allowed=include_rate)
     member = await update_member(db, member_id, data)
     await write_audit(
         db,
@@ -635,7 +737,7 @@ async def update_member_endpoint(
         target_id=str(member.id),
         detail=f"Team member updated: {member.name}",
     )
-    return member
+    return JSONResponse(content=_team_member_payload(member, include_rate=include_rate))
 
 
 @router.delete("/flan/team/{member_id}", status_code=status.HTTP_204_NO_CONTENT)

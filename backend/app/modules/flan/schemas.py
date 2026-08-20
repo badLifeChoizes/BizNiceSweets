@@ -460,10 +460,13 @@ class TeamMemberCreate(BaseModel):
     checks the user exists and that no other active member of the project
     already links it (uq_flan_member_project_user).
 
-    `hourly_rate` is a fixed-point Decimal (never float — D-11) and is
-    **stored and read by nothing in v5.0** (D-V5-2 / D-M5-2): no rollup, report
-    or endpoint in this release computes cost from it. It crosses the wire as a
-    JSON string, matching `Decimal` handling everywhere else in the platform.
+    `hourly_rate` is a fixed-point Decimal (never float — D-11) that crosses the
+    wire as a JSON string, matching `Decimal` handling everywhere else in the
+    platform. No rollup, report or endpoint in v5.0 computes a cost from it
+    (D-V5-2 / D-M5-2) — but it is COMPENSATION DATA, so the router gates it
+    separately on `flan:rates`: supplying this key without that permission is
+    refused with 403, not silently dropped (flan/router.py). Omitting the key
+    is the normal case and needs no permission.
 
     `active` is absent — it is the soft-remove flag, owned by
     DELETE /flan/team/{member_id} (which also clears the member's assignment
@@ -493,7 +496,10 @@ class TeamMemberUpdate(BaseModel):
     its own would leave those assignment rows orphaned — exactly the state the
     soft-remove exists to prevent.
 
-    `hourly_rate` remains stored-and-unread in v5.0 (D-V5-2 / D-M5-2).
+    `hourly_rate` remains stored-and-unread in v5.0 (D-V5-2 / D-M5-2), and is
+    gated on `flan:rates` at the router: SETTING this key (to a value or to an
+    explicit null — both are writes) without that permission is refused with
+    403. Leaving it out is untouched-as-usual and needs no permission.
     """
 
     name: str | None = Field(None, min_length=1)
@@ -515,6 +521,16 @@ class TeamMemberRead(BaseModel):
     is None for the common unlinked member. `hourly_rate` is emitted as a JSON
     string (never a float — D-11) and, in v5.0, is read by nothing (D-V5-2 /
     D-M5-2) — it is returned for display and round-tripping only.
+
+    `hourly_rate` is the one field on this model that not every flan:read caller
+    may see. It is compensation data, and the roster is readable by the whole
+    project, so the router OMITS THE KEY ENTIRELY for a caller without
+    `flan:rates` — it is never nulled, because `null` already means "no rate
+    recorded" and a client round-tripping that null would wipe the stored rate.
+    A holder gets the field; a non-holder's payload has no `hourly_rate` key at
+    all. That is why the field carries a default here: this model is the shape
+    of a holder's response, and the non-holder's is that shape minus one key
+    (flan/router.py::_team_member_payload).
     """
 
     id: str

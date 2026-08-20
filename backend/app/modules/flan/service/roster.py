@@ -47,6 +47,14 @@ report or endpoint in this release derives a cost from it, and nothing in this
 module reads it back except to return it verbatim. Do not add a cost
 calculation here.
 
+Unread is not unexposed, though: it is compensation data on a roster the whole
+project can read, so WHO may see or set it is decided one layer up. The router
+gates the field on `flan:rates` — omitting the key from responses for
+non-holders and refusing (403) any create/patch body that sets it (D-V5-2 was
+about the service, not the wire). These functions are permission-blind by
+design: they store and return whatever the router let through, and adding a
+permission check here would put the rule in two places.
+
 **There is deliberately no reactivation path** (owner decision at plan review).
 A soft-removed member stays removed in v5.0: there is no `reactivate_member`,
 and `TeamMemberUpdate` carries no `active` field, so a PATCH cannot flip the

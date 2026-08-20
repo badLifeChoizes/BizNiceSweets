@@ -49,13 +49,26 @@ WHY THIS EXISTS (the router proof — the companion to verify_flan.py):
        `python -` reads an empty program and exits 0 having run nothing.
 
   require_permission reads the user's ROLES FROM THE DATABASE (not the JWT perms
-  claim), so this mints THREE throwaway users backed by throwaway ROLE rows:
+  claim), so this mints FOUR throwaway users backed by throwaway ROLE rows:
     * writer   — role holding flan:read + flan:write (drives the whole lifecycle
                  over HTTP; every audit row asserted below is attributable to
-                 THIS user);
+                 THIS user, except the two the rater writes in section (E));
     * reader   — role holding ONLY flan:read (200 on the six reads, 403 on all
                  fourteen mutations);
-    * noperm   — no roles at all (403 everywhere).
+    * noperm   — no roles at all (403 everywhere);
+    * rater    — role holding flan:read + flan:write + flan:rates, for section
+                 (E). flan:rates is a FIELD scope, not a route scope: it changes
+                 no route's status code, so it cannot be checked by the
+                 twenty-route sweep and needs a section of its own.
+
+  (E) THE hourly_rate FIELD GATE. `flan:rates` is seeded and granted to NO
+  default role (auth/seed.py), while the default 'user' role holds flan:read +
+  flan:write — so the WRITER above is the realistic non-holder. Section (E)
+  asserts on the wire that a non-holder's roster payload has NO `hourly_rate`
+  KEY (not the key nulled: `null` already means "no rate recorded", and a client
+  round-tripping it would wipe the stored rate), that a non-holder SETTING the
+  key — a figure or an explicit null, both writes — is refused 403, and that the
+  rater reads and writes it normally.
   Tokens are minted with create_access_token rather than through the OAuth2 form
   login at /api/v1/auth/login, for a reason that matters to the audit assertions:
   a login round-trip would itself write audit rows attributable to these users
@@ -65,7 +78,7 @@ HOW TO RUN (needs the api SERVING, unlike verify_flan.py which owns its engine):
   podman exec -e PYTHONPATH=/app compose_api_1 python scripts/verify_flan_api.py
 
 CLEANUP: a finally block deletes this run's FLAN rows (assignments -> tasks ->
-phases -> tags -> roster -> project) and the three throwaway users + roles, so
+phases -> tags -> roster -> project) and the four throwaway users + roles, so
 the script is re-runnable against the same database. It deliberately LEAVES THE
 AUDIT ROWS BEHIND: the audit trail is append-only (D-14), so each run leaves ~18
 audit_log rows whose actor_id names a user that no longer exists (actor_id is a
@@ -233,10 +246,11 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
 
     try:
         # -------------------------------------------------------------------
-        # Setup: mint the three throwaway users (writer = read+write,
-        # reader = read-only, noperm = no roles). require_permission reads the
-        # ROLES from the DB, so real Role rows are what make these tokens mean
-        # anything — a hand-forged perms claim would prove nothing.
+        # Setup: mint the four throwaway users (writer = read+write,
+        # reader = read-only, noperm = no roles, rater = read+write+rates).
+        # require_permission reads the ROLES from the DB, so real Role rows are
+        # what make these tokens mean anything — a hand-forged perms claim would
+        # prove nothing.
         # -------------------------------------------------------------------
         async with session_factory() as session:
             perms = {
@@ -300,14 +314,50 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             session.add(noperm)
             await session.flush()
 
+            # The flan:rates holder for section (E). Its two successful
+            # mutations are counted into expected_audit_rows like any other.
+            rates_perm = (
+                await session.execute(
+                    select(Permission).where(Permission.code == "flan:rates")
+                )
+            ).scalars().first()
+            if rates_perm is None:
+                print(
+                    "FAIL: seeded flan:rates permission not found — the api container "
+                    "has not restarted since the seed added it (seeds run at startup)."
+                )
+                sys.exit(2)
+
+            rater_role = Role(
+                name=f"verify-flan-rater-{unique}",
+                description="VERIFY throwaway role: flan:read + flan:write + flan:rates",
+            )
+            session.add(rater_role)
+            await session.flush()
+            (await rater_role.awaitable_attrs.permissions).extend(
+                [perms["flan:read"], perms["flan:write"], rates_perm]
+            )
+
+            rater = User(
+                email=f"verify-flan-rater-{unique}@example.test",
+                hashed_password=hash_password("verify-flan-rater-pw"),
+                full_name="VERIFY flan:rates user",
+                is_active=True,
+            )
+            session.add(rater)
+            await session.flush()
+            (await rater.awaitable_attrs.roles).append(rater_role)
+
             await session.commit()
             writer_id, reader_id, noperm_id = writer.id, reader.id, noperm.id
-            role_ids.extend([writer_role.id, reader_role.id])
-        user_ids.extend([writer_id, reader_id, noperm_id])
+            rater_id = rater.id
+            role_ids.extend([writer_role.id, reader_role.id, rater_role.id])
+        user_ids.extend([writer_id, reader_id, noperm_id, rater_id])
 
         writer_token = create_access_token(writer_id, [])
         reader_token = create_access_token(reader_id, [])
         noperm_token = create_access_token(noperm_id, [])
+        rater_token = create_access_token(rater_id, [])
 
         # ===================================================================
         # (A) HAPPY PATH over HTTP with the writer — every one of the twenty
@@ -426,7 +476,10 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             "POST /flan/projects/{project_id}/team",
             "POST",
             f"/flan/projects/{project_id}/team",
-            {"name": f"Member one {unique}", "role": "Engineer", "hourly_rate": "125.50"},
+            # No hourly_rate: this writer holds flan:read + flan:write and NOT
+            # flan:rates, so a rate-bearing body would (correctly) 403 here.
+            # Section (E) drives the rate with the rater.
+            {"name": f"Member one {unique}", "role": "Engineer"},
             expect=201,
         )
         member1_id = body.get("id") if isinstance(body, dict) else None
@@ -450,6 +503,136 @@ async def run() -> None:  # noqa: C901 - one long linear verification scenario
             "PATCH",
             f"/flan/team/{member1_id}",
             {"role": "Lead engineer"},
+        )
+
+        # ===================================================================
+        # (E) The hourly_rate FIELD gate (flan:rates). Not a route scope: every
+        #     status code in the twenty-route sweep is identical with and
+        #     without it, so only this section can see it. Runs HERE, before
+        #     the archive freezes the project's writes.
+        # ===================================================================
+        rate = "125.500000"
+
+        # The rater stores a real rate and gets it back.
+        s_, body = http(
+            "PATCH", f"/flan/team/{member1_id}", rater_token, {"hourly_rate": rate}
+        )
+        if 200 <= s_ < 300:
+            expected_audit_rows += 1
+        check(
+            "(E) flan:rates holder → 200 setting hourly_rate, echoed as the exact "
+            "Decimal STRING it sent (D-11)",
+            s_ == 200 and isinstance(body, dict) and body.get("hourly_rate") == rate,
+            f"status={s_} body={body!r}",
+        )
+
+        # The writer (flan:read + flan:write, the default 'user' role's scopes)
+        # must not see the KEY — not the key nulled.
+        s_, body = http("GET", f"/flan/projects/{project_id}/team", writer_token)
+        row = (
+            next((m for m in body if m.get("id") == member1_id), None)
+            if isinstance(body, list)
+            else None
+        )
+        check(
+            "(E) flan:write WITHOUT flan:rates → the roster payload carries no "
+            "'hourly_rate' key at all (omitted, never nulled)",
+            s_ == 200 and row is not None and "hourly_rate" not in row,
+            f"status={s_} row={row!r}",
+        )
+        check(
+            "(E) the rest of the member is intact for the same caller — one key is "
+            "omitted, not a column",
+            row is not None
+            and {"id", "project_id", "name", "role", "email", "color", "user_id", "active"}
+            <= set(row),
+            f"row={row!r}",
+        )
+
+        # The flan:read-only reader is a non-holder too.
+        s_, body = http("GET", f"/flan/projects/{project_id}/team", reader_token)
+        row = (
+            next((m for m in body if m.get("id") == member1_id), None)
+            if isinstance(body, list)
+            else None
+        )
+        check(
+            "(E) flan:read-only → no 'hourly_rate' key either",
+            s_ == 200 and row is not None and "hourly_rate" not in row,
+            f"status={s_} row={row!r}",
+        )
+
+        # The holder sees it, still as the exact stored string.
+        s_, body = http("GET", f"/flan/projects/{project_id}/team", rater_token)
+        row = (
+            next((m for m in body if m.get("id") == member1_id), None)
+            if isinstance(body, list)
+            else None
+        )
+        check(
+            "(E) flan:rates holder → the key is present and equals the stored string",
+            s_ == 200 and row is not None and row.get("hourly_rate") == rate,
+            f"status={s_} row={row!r}",
+        )
+
+        # Writes by a non-holder are REFUSED, not dropped — value AND explicit
+        # null, because a null CLEARS stored compensation data.
+        for label, payload in (
+            ("a figure", {"hourly_rate": "1.00"}),
+            ("an explicit null", {"hourly_rate": None}),
+        ):
+            s_, body = http("PATCH", f"/flan/team/{member1_id}", writer_token, payload)
+            check(
+                f"(E) flan:write WITHOUT flan:rates → 403 PATCHing hourly_rate to {label}",
+                s_ == 403
+                and isinstance(body, dict)
+                and body.get("detail") == "Permission denied: flan:rates required",
+                f"status={s_} body={body!r}",
+            )
+            s_, body = http(
+                "POST",
+                f"/flan/projects/{project_id}/team",
+                writer_token,
+                {"name": f"Refused {unique}", **payload},
+            )
+            check(
+                f"(E) flan:write WITHOUT flan:rates → 403 creating with hourly_rate {label}",
+                s_ == 403,
+                f"status={s_} body={body!r}",
+            )
+
+        # ...and the refusals changed nothing.
+        s_, body = http("GET", f"/flan/projects/{project_id}/team", rater_token)
+        row = (
+            next((m for m in body if m.get("id") == member1_id), None)
+            if isinstance(body, list)
+            else None
+        )
+        check(
+            "(E) the refused writes stored nothing — the rate is untouched and no "
+            "'Refused' member exists",
+            row is not None
+            and row.get("hourly_rate") == rate
+            and isinstance(body, list)
+            and not any(m.get("name", "").startswith("Refused") for m in body),
+            f"row={row!r}",
+        )
+
+        # A body that says nothing about pay needs no permission at all — the
+        # gate is on the KEY, not on the route.
+        s_, body = http(
+            "POST",
+            f"/flan/projects/{project_id}/team",
+            writer_token,
+            {"name": f"Unpaid member {unique}", "role": "Technician"},
+        )
+        if 200 <= s_ < 300:
+            expected_audit_rows += 1
+        check(
+            "(E) flan:write WITHOUT flan:rates → 201 creating a member with NO rate key, "
+            "and the response omits the key",
+            s_ == 201 and isinstance(body, dict) and "hourly_rate" not in body,
+            f"status={s_} body={body!r}",
         )
 
         writer_call(
@@ -712,7 +895,7 @@ async def _cleanup(
 ) -> None:
     """
     Delete this run's throwaway rows in FK-safe order: assignment rows -> task
-    tags -> tasks -> phases -> project tags -> roster -> project -> the three
+    tags -> tasks -> phases -> project tags -> roster -> project -> the four
     throwaway users -> their roles.
 
     The audit_log rows are deliberately NOT deleted: the trail is append-only
