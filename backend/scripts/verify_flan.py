@@ -109,12 +109,16 @@ SCENARIOS (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
           cast target is `Numeric` and never `Integer` — the PLUM-01 Phase-7
           defect `7562a02`, which made every create in a project 500 forever.
       B5  two DIFFERENT projects may both hold a `PRJ-1`.
-  (C) DATE VALIDATION (FLAN-01.3) — `due < start` is refused at create (by the
-      schema the router builds the payload with, which is the 422 FastAPI
-      renders) AND on a PATCH that moves only `start_date` (by the service's
-      merged-value check, 422 on `exc.status_code`), while the stored row is
-      left untouched; `due == start` is a valid zero-duration milestone on both
-      paths.
+  (C) DATE VALIDATION AND THE STATUS/RISK LITERALS (FLAN-01.3) — `due < start`
+      is refused at create (by the schema the router builds the payload with,
+      which is the 422 FastAPI renders) AND on a PATCH that moves only
+      `start_date` (by the service's merged-value check, 422 on
+      `exc.status_code`), while the stored row is left untouched; `due == start`
+      is a valid zero-duration milestone on both paths. C4 pins the LITERALS the
+      same schema enforces — a task `status` outside To Do|In Progress|Done, a
+      `risk_level` outside none|low|medium|high and a phase `status` outside
+      pending|in-progress|complete are each refused — so widening one of those
+      `Literal`s to a bare `str` cannot pass unnoticed.
   (D) ROSTER REMOVAL (FLAN-01.4, D-V5P1-6) — a member on 2 tasks and 1 phase is
       removed: the 3 assignment rows go, the tasks come through BYTE-IDENTICAL
       (`updated_at` included — "leaves the tasks intact" is literal), the phase
@@ -122,16 +126,34 @@ SCENARIOS (each line prints PASS:/FAIL:; exits non-zero on any FAIL):
       are scoped by member_id, never by task_id) and the roster row itself is
       kept with `active` cleared. Then, separately, deactivating the linked
       platform user (`users.is_active`) changes neither the roster row nor its
-      remaining assignments.
+      remaining assignments (D2); DELETING that user outright leaves the roster
+      row too — `flan_team_member.user_id` is ON DELETE SET NULL, so the link
+      clears while every other field and every assignment row survives (D3);
+      and a member from ANOTHER project's roster is refused as an assignee with
+      422 on create, on set_task_assignees and on set_phase_assignees alike
+      (D4, FLAN-01.5).
   (E) AN ARCHIVED PROJECT REJECTS WRITES (FLAN-01.1) — 422 from `create_phase`,
       `create_task`, `update_task`, `create_member`, `set_task_assignees` and
       `update_project` alike, while a READ still returns the whole project:
       tags, the phase WITH its derived rollup, the task with its dates and
-      assignee, and the roster. `active` is the only thing that changed.
+      assignee, and the roster. `active` is the only thing that changed. The
+      project is created WITH tags and so is its task, so the tag round-trip
+      through `get_project` / `get_task` — and the `flan_project_tag` /
+      `flan_task_tag` rows behind them — is asserted here on NON-EMPTY sets: an
+      empty-to-empty tag comparison would pass with tags entirely broken.
   (F) PHASE DELETE CASCADES (FLAN-01.2) — a phase with 3 tasks is deleted:
       `count(*) FROM flan_task WHERE phase_id = :id` falls 3 -> 0, the three task
       rows are gone rather than orphaned, and a SIBLING phase's tasks in the SAME
       project are untouched.
+  (G) PROJECT IDENTITY (FLAN-01.1) — two projects created with the IDENTICAL
+      name both land with distinct ids (`flan_project` carries no unique
+      constraint on `name`), and a PATCH body carrying an `id` key leaves the
+      project id alone while the rest of that same body lands.
+  (H) NO VIEW MIXES TWO PROJECTS' DATA (FLAN-01.6) — two populated projects
+      sharing ONE key prefix, side by side: `list_phases`, `list_tasks` and
+      `list_members` each return exactly their own project's rows, and the
+      `phase_id` / `assignee_id` task filters do not open a hole into the
+      neighbour.
 
 TWO HAND-WRITES, both marked at the line and both in (B): forcing the 10-digit
 key (B4) and aiming a duplicate key at the unique constraint (B3). Neither state
@@ -180,6 +202,7 @@ from app.modules.flan.models import (
     ProjectTag,
     Task,
     TaskAssignee,
+    TaskTag,
     TeamMember,
 )
 from app.modules.flan.schemas import (
@@ -201,6 +224,7 @@ from app.modules.flan.service import (
     get_task,
     list_members,
     list_phases,
+    list_projects,
     list_tasks,
     phase_rollups,
     remove_member,
@@ -258,7 +282,11 @@ def build_dsn() -> str:
 
 
 async def _make_project(
-    session_factory, unique: str, tag: str, key_prefix: str | None = None
+    session_factory,
+    unique: str,
+    tag: str,
+    key_prefix: str | None = None,
+    tags: list[str] | None = None,
 ) -> str:
     """
     Create a throwaway FLAN project via the REAL create_project service.
@@ -266,7 +294,9 @@ async def _make_project(
     `key_prefix` defaults to a per-run unique one so nothing collides; scenario
     (B) passes an explicit "PRJ" instead, because the SRD names the literal
     `PRJ-9 → PRJ-10` case and because three projects sharing one prefix is how
-    B5 shows a key is unique per PROJECT rather than globally.
+    B5 shows a key is unique per PROJECT rather than globally. `tags` is the
+    opaque-string set (D-V5P1-5) and defaults to none; scenario (E) passes a
+    NON-EMPTY one, because an empty-to-empty tag comparison proves nothing.
     """
     async with session_factory() as session:
         project = await create_project(
@@ -277,6 +307,7 @@ async def _make_project(
                 category="work",
                 description=f"Throwaway project for verify_flan.py scenario {tag}.",
                 currency="USD",
+                tags=tags or [],
             ),
         )
         return project.id
@@ -299,6 +330,7 @@ async def _make_task_row(
     summary: str,
     start: date | None = None,
     due: date | None = None,
+    tags: list[str] | None = None,
 ) -> Task:
     """
     Create a task via the REAL create_task service and hand back the WHOLE row.
@@ -306,7 +338,8 @@ async def _make_task_row(
     Scenario (B) needs the server-generated `key` off the instance the service
     returned — reading it back with a second query would be asserting on the
     database rather than on what the service handed the router. `_make_task`
-    below is this function with `.id` taken off the end.
+    below is this function with `.id` taken off the end. `tags` (D-V5P1-5)
+    defaults to none and is passed NON-EMPTY by scenario (E).
     """
     async with session_factory() as session:
         return await create_task(
@@ -317,6 +350,7 @@ async def _make_task_row(
                 status="To Do",
                 start_date=start,
                 due_date=due,
+                tags=tags or [],
             ),
         )
 
@@ -393,6 +427,23 @@ async def _refusal_status(session_factory, call) -> int | None:
             return exc.status_code
         return None
 
+def _schema_rejects(factory) -> bool:
+    """
+    True when the REAL schema the router builds its payload with REFUSES the
+    value `factory` tries to construct with.
+
+    A `ValidationError` is what FastAPI renders as the 422 a client receives, so
+    the literal checks in (C4) are asserted in the shape they really have rather
+    than dressed up as an `HTTPException`. Anything else propagates: a
+    `TypeError` from a renamed field must not read as "refused".
+    """
+    try:
+        factory()
+    except ValidationError:
+        return True
+    return False
+
+
 async def _rollups(session_factory, phase_ids: list[str]) -> dict:
     """Read a batch of phase rollups through the REAL phase_rollups service."""
     async with session_factory() as session:
@@ -412,6 +463,24 @@ async def _listed_phases(session_factory, project_id: str) -> dict:
     async with session_factory() as session:
         phases = await list_phases(session, project_id)
     return {phase.id: phase for phase in phases}
+
+
+async def _listed_tasks(
+    session_factory, project_id: str, phase_id: str | None = None, assignee_id: str | None = None
+) -> list[Task]:
+    """
+    Read one project's tasks through `list_tasks` — the read the ROUTER serves
+    (GET /flan/projects/{id}/tasks) — optionally narrowed by the two filters the
+    board sends. Scenario (H) asserts the project scope survives both.
+    """
+    async with session_factory() as session:
+        return await list_tasks(session, project_id, phase_id=phase_id, assignee_id=assignee_id)
+
+
+async def _listed_projects(session_factory) -> list[Project]:
+    """Every project `list_projects` returns — the read GET /flan/projects serves."""
+    async with session_factory() as session:
+        return await list_projects(session)
 
 
 # ---------------------------------------------------------------------------
@@ -944,6 +1013,60 @@ async def scenario_c(session_factory, project_ids: set[str]) -> None:
         f"start={squashed.start_date!r} due={squashed.due_date!r}",
     )
 
+    # --- C4: the status / risk_level / phase-status LITERALS ----------------
+    # These three sets are enforced by their `Literal` types and by nothing else
+    # — which is exactly why they need a check. Widening one to a bare `str` (to
+    # "fix" an import, say) would break no other assertion in this file, in
+    # tests/flan/ or in the frontend, and the column would start accepting
+    # values no reader knows how to render.
+    illegal = {
+        "task status 'Blocked'": _schema_rejects(
+            lambda: TaskCreate(phase_id=phase_id, summary="C illegal status", status="Blocked")
+        ),
+        "task risk_level 'extreme'": _schema_rejects(
+            lambda: TaskCreate(phase_id=phase_id, summary="C illegal risk", risk_level="extreme")
+        ),
+        "task PATCH status 'Archived'": _schema_rejects(lambda: TaskUpdate(status="Archived")),
+        "task PATCH risk_level 'critical'": _schema_rejects(
+            lambda: TaskUpdate(risk_level="critical")
+        ),
+        "phase status 'blocked'": _schema_rejects(
+            lambda: PhaseCreate(name="C illegal phase status", status="blocked")
+        ),
+    }
+    check(
+        "(C4/FLAN-01.3) the literals are enforced: a task status outside To Do|In "
+        "Progress|Done, a risk_level outside none|low|medium|high (on CREATE and on "
+        "PATCH alike) and a phase status outside pending|in-progress|complete are each "
+        "REFUSED by the very schema the router builds the payload with",
+        all(illegal.values()),
+        f"rejected={illegal}",
+    )
+
+    # The non-vacuity half: every LEGAL member of each set still constructs, so
+    # the refusals above are the Literal doing its job and not a schema that has
+    # started refusing the field outright.
+    legal_statuses = [
+        TaskCreate(phase_id=phase_id, summary="C legal status", status=value).status
+        for value in ("To Do", "In Progress", "Done")
+    ]
+    legal_risks = [
+        TaskCreate(phase_id=phase_id, summary="C legal risk", risk_level=value).risk_level
+        for value in ("none", "low", "medium", "high")
+    ]
+    legal_phase_statuses = [
+        PhaseCreate(name="C legal phase status", status=value).status
+        for value in ("pending", "in-progress", "complete")
+    ]
+    check(
+        "(C4/FLAN-01.3) and every LEGAL value of all three sets still constructs — the "
+        "three task statuses, the four risk levels and the three phase statuses",
+        legal_statuses == ["To Do", "In Progress", "Done"]
+        and legal_risks == ["none", "low", "medium", "high"]
+        and legal_phase_statuses == ["pending", "in-progress", "complete"],
+        f"statuses={legal_statuses} risks={legal_risks} phases={legal_phase_statuses}",
+    )
+
 
 # ---------------------------------------------------------------------------
 # (D) ROSTER REMOVAL — clears assignments, leaves the work alone (FLAN-01.4)
@@ -1058,7 +1181,15 @@ async def scenario_d(session_factory, project_ids: set[str]) -> None:
 
     The platform-user column is `users.is_active` (auth/models.py) and the
     deactivation goes through the REAL auth `update_user`, which is the path the
-    admin UI uses.
+    admin UI uses. D3 then goes further and DELETES that user: FLAN-01.4 says
+    deleting a user account does not delete the roster row, which rests entirely
+    on the `ON DELETE SET NULL` in the FK, so it is asserted against a real
+    DELETE rather than against the model declaration.
+
+    D4 borrows the fixture for the other half of the assignment rule (FLAN-01.5):
+    a member of a SECOND project's roster cannot be assigned to this project's
+    task or phase. It needs two projects, which is why it lives here rather than
+    in a scenario that only ever builds one.
     """
     unique = uuid.uuid4().hex[:8]
     project_id = await _make_project(session_factory, unique, "D")
@@ -1142,6 +1273,101 @@ async def scenario_d(session_factory, project_ids: set[str]) -> None:
             f"is_active={deactivated!r} before={stayer_before!r} "
             f"after={stayer_snapshot_after!r} counts={stayer_counts_after}",
         )
+
+        # --- D3: DELETING the linked platform user leaves the roster row ----
+        # The link is `flan_team_member.user_id -> users.id ON DELETE SET NULL`
+        # (models.py, migration 0018). Alembic's default when a FK is
+        # regenerated is NO ACTION, so a future migration that drops the
+        # `ondelete` would make this DELETE fail outright — and a CASCADE would
+        # take the roster row and its whole assignment history with it. Both
+        # break FLAN-01.4, which says the roster row survives the user, so the
+        # delete is driven for real and the row is read back afterwards.
+        delete_error: IntegrityError | None = None
+        try:
+            async with session_factory() as session:
+                await session.execute(delete(User).where(User.id == user_id))
+                await session.commit()
+        except IntegrityError as exc:
+            # A FK regenerated WITHOUT `ondelete` (Alembic's NO ACTION default)
+            # REFUSES this delete — precisely the regression D3 exists to catch.
+            # Record it, then clear the link by hand so this scenario's own
+            # cleanup can still sweep the throwaway user: a RED here must read
+            # as ONE FAIL line, not as a traceback that hides (D4) and (E)-(H).
+            delete_error = exc
+            async with session_factory() as session:
+                await session.execute(
+                    update(TeamMember).where(TeamMember.id == stayer.id).values(user_id=None)
+                )
+                await session.commit()
+        async with session_factory() as session:
+            user_gone = await session.get(User, user_id) is None
+        stayer_after_delete = await _member_snapshot(session_factory, stayer.id)
+        stayer_counts_after_delete = await _assignment_counts(session_factory, stayer.id)
+        check(
+            "(D3/FLAN-01.4) DELETING the linked platform user outright does NOT delete "
+            "the roster row: ON DELETE SET NULL clears user_id and leaves name, role, "
+            "email, colour, rate, active flag and created_at byte-identical, with the "
+            "member's 1 task + 1 phase assignment rows still there",
+            delete_error is None
+            and user_gone
+            and stayer_after_delete[:5] == stayer_before[:5]
+            and stayer_after_delete[5] is None
+            and stayer_after_delete[6:] == stayer_before[6:]
+            and stayer_counts_after_delete == (1, 1),
+            f"delete_error={delete_error!r} user_gone={user_gone} "
+            f"before={stayer_before!r} after={stayer_after_delete!r} "
+            f"counts={stayer_counts_after_delete}",
+        )
+
+        # --- D4: an assignee must be on THIS project's roster (FLAN-01.5) ---
+        # A SECOND project with its own member is what makes the rule visible:
+        # with one project on the table every member is trivially "on the
+        # roster", so `require_project_members` could be deleted outright and
+        # not one assertion in this file would notice.
+        other_project_id = await _make_project(
+            session_factory, uuid.uuid4().hex[:8], "D-other"
+        )
+        project_ids.add(other_project_id)
+        outsider = await _make_member(
+            session_factory, other_project_id, f"D outsider {unique}"
+        )
+        cross_project = {
+            "create_task": await _refusal_status(
+                session_factory,
+                lambda s: create_task(
+                    s,
+                    TaskCreate(
+                        phase_id=phase_id,
+                        summary="D cross-project assignee",
+                        assignee_ids=[outsider.id],
+                    ),
+                ),
+            ),
+            "set_task_assignees": await _refusal_status(
+                session_factory, lambda s: set_task_assignees(s, task_one.id, [outsider.id])
+            ),
+            "set_phase_assignees": await _refusal_status(
+                session_factory, lambda s: set_phase_assignees(s, phase_id, [outsider.id])
+            ),
+        }
+        outsider_counts = await _assignment_counts(session_factory, outsider.id)
+        check(
+            "(D4/FLAN-01.5) a member of ANOTHER project's roster cannot be assigned to "
+            "this project's work: create_task, set_task_assignees and set_phase_assignees "
+            "each refuse with 422 and not one assignment row lands",
+            set(cross_project.values()) == {422} and outsider_counts == (0, 0),
+            f"refusals={cross_project} outsider_rows={outsider_counts}",
+        )
+
+        insider = await _make_member(session_factory, project_id, f"D insider {unique}")
+        accepted = await _assign_task(session_factory, task_two.id, [insider.id])
+        check(
+            "(D4/FLAN-01.5) the IDENTICAL call with a member of the task's OWN project "
+            "is accepted — the 422s above are the roster rule, not a service that "
+            "refuses every assignee list",
+            accepted == [insider.id],
+            f"accepted={accepted!r}",
+        )
     finally:
         await _drop_verify_users(session_factory)
 
@@ -1192,6 +1418,7 @@ async def _project_state(session_factory, project_id: str) -> dict:
                     task.start_date,
                     task.due_date,
                     tuple(task.assignee_ids),
+                    tuple(task.tags),
                 )
                 for task in tasks
             ],
@@ -1210,11 +1437,21 @@ async def scenario_e(session_factory, project_ids: set[str]) -> None:
     be a service that was broken all along.
     """
     unique = uuid.uuid4().hex[:8]
-    project_id = await _make_project(session_factory, unique, "E")
+    # Created WITH tags, and so is the task below: the archived-read comparison
+    # further down is only worth making on a NON-EMPTY tag set, and the tag write
+    # path itself has no other check anywhere in the suite.
+    project_id = await _make_project(
+        session_factory, unique, "E", tags=["alpha", "beta"]
+    )
     project_ids.add(project_id)
     phase_id = await _make_phase(session_factory, project_id, f"E frozen {unique}", 1)
     task = await _make_task_row(
-        session_factory, phase_id, "E task", date(2026, 9, 1), date(2026, 9, 4)
+        session_factory,
+        phase_id,
+        "E task",
+        date(2026, 9, 1),
+        date(2026, 9, 4),
+        tags=["x"],
     )
     member = await _make_member(session_factory, project_id, f"E member {unique}")
     await _assign_task(session_factory, task.id, [member.id])
@@ -1232,6 +1469,40 @@ async def scenario_e(session_factory, project_ids: set[str]) -> None:
         and before["tasks"][0][5] == (member.id,)
         and len(before["members"]) == 1,
         f"state={before}",
+    )
+
+    # --- the TAG round-trip, on non-empty sets (FLAN-01.1, FLAN-01.3) -------
+    # `flan_project_tag` / `flan_task_tag` are read back two ways: through the
+    # REAL get_project / get_task the router serves, and straight from the join
+    # tables as an independent oracle. Drop the tag WRITE path — or stop
+    # consuming `TaskCreate.tags` — and both halves go empty.
+    read_task = await _read_task(session_factory, task.id)
+    async with session_factory() as session:
+        project_tag_rows = sorted(
+            (
+                await session.execute(
+                    select(ProjectTag.tag).where(ProjectTag.project_id == project_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        task_tag_rows = sorted(
+            (await session.execute(select(TaskTag.tag).where(TaskTag.task_id == task.id)))
+            .scalars()
+            .all()
+        )
+    check(
+        "(E/FLAN-01.1 + FLAN-01.3) TAGS ROUND-TRIP on NON-EMPTY sets: the project "
+        "created with ['alpha','beta'] and the task created with ['x'] read back "
+        "through the REAL get_project / get_task with exactly those tags, and "
+        "flan_project_tag / flan_task_tag hold the matching rows",
+        sorted(before["project"][3]) == project_tag_rows == ["alpha", "beta"]
+        and sorted(read_task.tags) == task_tag_rows == ["x"]
+        and sorted(before["tasks"][0][6]) == ["x"],
+        f"project_read={before['project'][3]!r} project_rows={project_tag_rows!r} "
+        f"task_read={read_task.tags!r} task_rows={task_tag_rows!r} "
+        f"task_listed={before['tasks'][0][6]!r}",
     )
 
     async with session_factory() as session:
@@ -1371,6 +1642,209 @@ async def scenario_f(session_factory, project_ids: set[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# (G) PROJECT IDENTITY — duplicate names, immutable id (FLAN-01.1)
+# ---------------------------------------------------------------------------
+
+
+async def scenario_g(session_factory, project_ids: set[str]) -> None:
+    """
+    Two rules FLAN-01.1 states in so many words, and which nothing else in this
+    file or in `tests/flan/` exercises.
+
+    DUPLICATE NAMES ARE ALLOWED (G1). Every other suite's master table has a
+    unique business key — `syerp_partner.code`, `plum_part.part_number` — so the
+    tempting "consistency fix" is a `UniqueConstraint("name")` on
+    `flan_project`, which would break a rule the SRD states outright. Both
+    creates below use the SAME name, through the REAL create_project, and BOTH
+    must land with distinct ids and both be visible to `list_projects`. An
+    IntegrityError is caught and reported as a FAIL rather than left to abort
+    the run, so the failure reads as an assertion and not as a crash.
+
+    THE PROJECT ID IS IMMUTABLE (G2). It is structural: `ProjectUpdate` carries
+    no `id` field at all, so a body that names one is dropped by pydantic before
+    `update_project` ever sees it — and `update_project` writes every key the
+    patch does carry with a plain `setattr`, so an `id` field added to the schema
+    WOULD move the row. Asserted three ways: the field is absent from
+    `ProjectUpdate.model_fields`, the id is unchanged after a PATCH built the way
+    the ROUTER builds it (`model_validate` over a raw body dict, extras
+    ignored), and no row exists under the id the body asked for. The same body
+    also carries a legal `name`, which MUST land — without it this check would
+    pass just as happily against a service that ignored the whole payload.
+    """
+    unique = uuid.uuid4().hex[:8]
+    shared_name = f"VERIFY-FLAN G duplicate {unique}"
+
+    # --- G1: two projects, one name -----------------------------------------
+    # No key_prefix is supplied, so both are DERIVED from the identical name and
+    # collide too — nothing about a project is unique except its id.
+    async with session_factory() as session:
+        first = await create_project(
+            session, ProjectCreate(name=shared_name, category="work", currency="USD")
+        )
+    project_ids.add(first.id)
+
+    duplicate_error: Exception | None = None
+    second = None
+    try:
+        async with session_factory() as session:
+            second = await create_project(
+                session, ProjectCreate(name=shared_name, category="work", currency="USD")
+            )
+        project_ids.add(second.id)
+    except (IntegrityError, HTTPException) as exc:
+        duplicate_error = exc
+
+    listed = {project.id for project in await _listed_projects(session_factory)}
+    check(
+        "(G1/FLAN-01.1) DUPLICATE PROJECT NAMES ARE ALLOWED: two projects created "
+        "through the REAL create_project with the IDENTICAL name both land, with "
+        "distinct ids and the same derived key_prefix, and `list_projects` returns "
+        "both — `flan_project` carries no unique constraint on `name`",
+        duplicate_error is None
+        and second is not None
+        and first.id != second.id
+        and first.name == second.name == shared_name
+        and first.key_prefix == second.key_prefix
+        and {first.id, second.id} <= listed,
+        f"error={duplicate_error!r} ids=({first.id!r}, "
+        f"{getattr(second, 'id', None)!r}) prefixes=({first.key_prefix!r}, "
+        f"{getattr(second, 'key_prefix', None)!r}) listed={len(listed)}",
+    )
+
+    # --- G2: the id is immutable --------------------------------------------
+    hacked_id = f"hacked-{unique}"
+    renamed = f"{shared_name} renamed"
+    # Built the way the ROUTER builds it: `model_validate` over a raw body dict,
+    # so an `id` key travels the same road a real request body would.
+    patch = ProjectUpdate.model_validate({"id": hacked_id, "name": renamed})
+    async with session_factory() as session:
+        updated = await update_project(session, first.id, patch)
+    async with session_factory() as session:
+        still_there = await session.get(Project, first.id)
+        hacked_row = await session.get(Project, hacked_id)
+    check(
+        "(G2/FLAN-01.1) the PROJECT ID IS IMMUTABLE: `ProjectUpdate` has no `id` field, "
+        "so a PATCH body carrying one leaves the id exactly where it was and creates no "
+        "row under the id it asked for — while the `name` in that SAME body DOES land, "
+        "so the payload was not simply ignored",
+        "id" not in ProjectUpdate.model_fields
+        and updated.id == first.id
+        and hacked_row is None
+        and still_there is not None
+        and still_there.name == renamed,
+        f"model_fields={sorted(ProjectUpdate.model_fields)} updated_id={updated.id!r} "
+        f"hacked_row={hacked_row!r} name={getattr(still_there, 'name', None)!r}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# (H) NO VIEW MIXES TWO PROJECTS' DATA (FLAN-01.6)
+# ---------------------------------------------------------------------------
+
+
+async def scenario_h(session_factory, project_ids: set[str]) -> None:
+    """
+    Two fully-populated projects side by side: every list read is scoped to the
+    project it was asked for.
+
+    Every other scenario in this file builds ONE project, so a `list_phases`,
+    `list_tasks` or `list_members` that lost its `project_id` filter would pass
+    all of them — and the first symptom in production is one customer's project
+    showing another's tasks. The two projects here share ONE key prefix on
+    purpose, so both hold a `PRJ-1` and a leaked row looks entirely plausible;
+    only the ids can tell them apart.
+
+    H3 covers the shape the filter is most likely to break in: `list_tasks`
+    takes `phase_id` and `assignee_id` narrowing filters (FLAN-03 extends them),
+    and each must be ANDed with the project scope rather than replace it — a
+    filter that answers the NEIGHBOUR's phase or the neighbour's assignee is the
+    same leak by a different route.
+    """
+    left_id = await _make_project(
+        session_factory, uuid.uuid4().hex[:8], "H-left", key_prefix="PRJ"
+    )
+    right_id = await _make_project(
+        session_factory, uuid.uuid4().hex[:8], "H-right", key_prefix="PRJ"
+    )
+    project_ids.update({left_id, right_id})
+
+    left_phase = await _make_phase(session_factory, left_id, "H left phase", 1)
+    right_phase = await _make_phase(session_factory, right_id, "H right phase", 1)
+    left_tasks = {
+        (await _make_task_row(session_factory, left_phase, f"H left task {n}")).id
+        for n in (1, 2)
+    }
+    right_tasks = {
+        (await _make_task_row(session_factory, right_phase, f"H right task {n}")).id
+        for n in (1, 2)
+    }
+    left_member = await _make_member(session_factory, left_id, "H left member")
+    right_member = await _make_member(session_factory, right_id, "H right member")
+    await _assign_task(session_factory, sorted(left_tasks)[0], [left_member.id])
+    await _assign_task(session_factory, sorted(right_tasks)[0], [right_member.id])
+
+    left_phases = await _listed_phases(session_factory, left_id)
+    right_phases = await _listed_phases(session_factory, right_id)
+    check(
+        "(H1/FLAN-01.6) `list_phases` answers with exactly the requested project's "
+        "phases: the left project's read holds its own phase and not the right one's, "
+        "and every row it returns carries the requested project_id",
+        set(left_phases) == {left_phase}
+        and set(right_phases) == {right_phase}
+        and all(phase.project_id == left_id for phase in left_phases.values())
+        and all(phase.project_id == right_id for phase in right_phases.values()),
+        f"left={sorted(left_phases)} right={sorted(right_phases)}",
+    )
+
+    left_listed = await _listed_tasks(session_factory, left_id)
+    right_listed = await _listed_tasks(session_factory, right_id)
+    check(
+        "(H2/FLAN-01.6) `list_tasks` answers with exactly the requested project's "
+        "tasks — 2 each, disjoint, every row carrying the requested project_id — even "
+        "though both projects share the PRJ prefix and both hold a PRJ-1",
+        {task.id for task in left_listed} == left_tasks
+        and {task.id for task in right_listed} == right_tasks
+        and all(task.project_id == left_id for task in left_listed)
+        and all(task.project_id == right_id for task in right_listed)
+        and {task.key for task in left_listed} == {task.key for task in right_listed},
+        f"left={[t.key for t in left_listed]} right={[t.key for t in right_listed]}",
+    )
+
+    cross_phase = await _listed_tasks(session_factory, left_id, phase_id=right_phase)
+    cross_assignee = await _listed_tasks(
+        session_factory, left_id, assignee_id=right_member.id
+    )
+    own_phase = await _listed_tasks(session_factory, left_id, phase_id=left_phase)
+    own_assignee = await _listed_tasks(
+        session_factory, left_id, assignee_id=left_member.id
+    )
+    check(
+        "(H3/FLAN-01.6) the narrowing filters do not open a hole: asking the LEFT "
+        "project for the RIGHT project's phase, or for the right project's assignee, "
+        "returns nothing — while the same two filters aimed at its OWN phase and its "
+        "OWN member return its 2 tasks and its 1 assigned task",
+        cross_phase == []
+        and cross_assignee == []
+        and {task.id for task in own_phase} == left_tasks
+        and [task.id for task in own_assignee] == [sorted(left_tasks)[0]],
+        f"cross_phase={[t.key for t in cross_phase]} "
+        f"cross_assignee={[t.key for t in cross_assignee]} "
+        f"own_phase={len(own_phase)} own_assignee={len(own_assignee)}",
+    )
+
+    async with session_factory() as session:
+        left_roster = await list_members(session, left_id)
+        right_roster = await list_members(session, right_id)
+    check(
+        "(H4/FLAN-01.6) `list_members` answers with exactly the requested project's "
+        "roster: one member each, neither list naming the other project's member",
+        [member.id for member in left_roster] == [left_member.id]
+        and [member.id for member in right_roster] == [right_member.id],
+        f"left={[m.name for m in left_roster]} right={[m.name for m in right_roster]}",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Scenario driver
 # ---------------------------------------------------------------------------
 
@@ -1396,6 +1870,8 @@ async def run() -> None:
         await scenario_d(session_factory, project_ids)
         await scenario_e(session_factory, project_ids)
         await scenario_f(session_factory, project_ids)
+        await scenario_g(session_factory, project_ids)
+        await scenario_h(session_factory, project_ids)
     finally:
         await _cleanup(session_factory, project_ids)
         await engine.dispose()
