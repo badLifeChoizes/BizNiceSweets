@@ -258,7 +258,7 @@ future scope (expanded via `/zj:spec` when their milestones near).
 > capacity/utilisation figure derives from durations, never from logged hours.
 
 ## FLAN-01: Project, work-breakdown & team core  [traces: PRD-6]  **Status: verified (v5.0 — Phase 1; all 7 ACs)**
-- **Verified:** bd867f4 (Phase 01 verify, 2026-08-19 — `/zj:verify 1`: all seven ACs
+- **Verified:** 17feb3e (Phase 01 verify, 2026-08-19 — `/zj:verify 1`: all seven ACs
   driven empirically over real HTTP, SQL, pytest and Vitest, and every number the build self-reported
   independently re-proved rather than trusted. The phase crux (AC2, phase-derived dates and % complete,
   D-V5-1) was **mutation-proven RED** in both `verify_flan.py` (A0c/A0d) and
