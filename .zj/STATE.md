@@ -1,13 +1,91 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" BUILD COMPLETE — `/zj:build 1`.** All **36** tasks
-done on `feature-flan-core` (35 planned + Task **22a**, added at build by owner decision). Gate GREEN
-on every FLAN-owned surface; one inherited red (`verify_qa_doc.py`) proven pre-existing on master and
-owner-triaged non-blocking — but `verify-scripts` is a **required** branch-protection context, so it
-blocks merging and must be fixed on master before `/zj:ship`. **Next: `/zj:verify 1`.**)
+Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" VERIFIED WITH GAPS — `/zj:verify 1` reports landed,
+FIX LOOP IN FLIGHT.** Verifier and reviewer both ran; artifacts committed. **Verdict: GAPS** —
+0 blockers, 7 major, 7 minor. The phase **goal is true**: all 7 FLAN-01 acceptance criteria were
+driven empirically and every build-reported number was independently re-proved. The gaps are
+regression protection, one reachability miss, and one real concurrency bug. Owner approved the full
+fix loop. **Next: finish the fix loop, then re-run the full verification before the phase closes.**)
 
-## Position: v5.0 Phase 1 — BUILD COMPLETE on `feature-flan-core`, awaiting `/zj:verify 1`
+## Position: v5.0 Phase 1 — VERIFIED **GAPS** on `feature-flan-core`, fix loop in flight
 
-**Position: v5.0 Phase 1 "FLAN core" — BUILD COMPLETE. All 36 tasks done. Next: `/zj:verify 1`.**
+**Position: v5.0 Phase 1 "FLAN core" — `/zj:verify 1` complete, verdict GAPS. Fix loop running.
+Next: re-verify, then close out.**
+
+### `/zj:verify 1` — what the two reports found
+
+Artifacts: `.zj/phases/01-flan-core/VERIFICATION.md`, `REVIEW.md`, `QA.md` (the phase's
+human-tester checklist, 8 checks `C-FLAN-01-01…08`).
+
+**Nothing the build self-reported turned out to be inflated.** The verifier re-proved rather than
+trusted: `268 passed / 0 skipped`, `verify_flan.py` **38 PASS**, `verify_flan_api.py` **123 PASS**,
+Vitest **51 files / 196 tests**, ruff 0, eslint 0, `npm run build` 0, **26 of 28** verify scripts
+exit 0, cold `down`/`up` with **zero** 500s, trial balance `in_balance: true`. It **mutation-proved**
+the crux itself — the amended empty-phase assertion turns RED in both `verify_flan.py` (A0c/A0d)
+and `test_rollup.py`, confirming the plan's claim that the original solo-form check was vacuous.
+The `due < start` wire guards and the RBAC gate also turn RED under mutation.
+
+**It hit silent-failure hazard #1 live:** `podman exec … psql <<SQL` **without `-i`** printed
+nothing and **exited 0**. Every result in the report was read from an explicitly captured exit code.
+
+**The `verify_qa_doc.py` red is CONFIRMED pre-existing** — byte-identical 3-failure output at the
+merge-base `49567ff`, which *is* `master`. Also: `verify_qa_citations.py`'s in-container red is a
+**false** red (`FileNotFoundError: '/.zj/SRD.md'` — `.zj/` is not mounted into the API container);
+from the host it exits 0.
+
+**Major findings (7):**
+1. **R1 — the `key_prefix` row lock does not actually serialize.** `create_task`'s
+   `with_for_update()` select lacks `populate_existing`, so it reads the pre-lock identity-map
+   snapshot; and `update_project` never takes the lock at all. Race end state: a project
+   advertising `CRIS` while holding `PRJ-1`, after which `update_project` 422s on every prefix
+   change **forever** — unrepairable through any endpoint.
+2. **G1 — tags have no UI surface.** An element named literally in FLAN-01.1 *and* FLAN-01.3 is
+   unreachable by a user; all three dialogs explicitly omit `tags`.
+3. **G2 — no automated check anywhere writes a tag.** The only tag assertion compares an empty
+   tuple to an empty tuple.
+4. **G3** — FLAN-01.6 "no view mixes two projects' data" has no server-side test.
+5. **G4** — "assignees drawn from the project roster" is enforced (422) but untested.
+6. **G5** — duplicate names allowed + project id immutable: both unpinned.
+7. **G6** — "deleting a user leaves the roster row" untested; rests entirely on `ON DELETE SET NULL`.
+
+**Minor (7):** `derive_key_prefix` can emit a 12-char prefix from a Unicode ligature → 500 on
+`VARCHAR(10)`, and `"Café"` fails the very pattern `keys.py`'s safety argument claims it honours;
+both assignee hooks declare `Task`/`Phase` where the routes return `AssigneeSet` (an unchecked
+generic assertion `tsc` cannot catch); `hourly_rate` is on the read schema and on screen for the
+default `user` role, which holds `flan:write` by seed; status/risk literal rejection is structural
+only; three docs still say FLAN is unbuilt; `.zj/QA.md` has no FLAN coverage; the inherited
+`verify_qa_doc.py` red blocks the merge.
+
+### Owner decisions at triage (all four binding)
+
+1. **Fix all of it now** — R1 plus every MISSING regression pin plus the stale docs, then re-run
+   the full verification. Applying the rule that a criterion is only as safe as the check that
+   re-runs every phase.
+2. **Build the tag editor in-phase** (G1) rather than deferring to FLAN-04 — the same call made for
+   the Task-22a edit verb. Tags stay **opaque strings**; D-V5P1-5 still forbids facet semantics
+   until FLAN-04.
+3. **Drop `hourly_rate` from `TeamMemberRead`** and the Team column for now. D-V5-2/D-M5-2 say the
+   field is stored and read by nothing in v5.0 — true of the service layer but not of the wire.
+   A later costing rollup adds its own gate.
+4. **Fix the whole `.zj/QA.md` §3 map on this branch** — add the 11 missing rows (`FLAN-02..11`,
+   `NFR-9`) alongside the FLAN-01 coverage, clearing the inherited red and unblocking the merge in
+   the same edit. Arithmetic: 32 covered + 26 bucketed = 58.
+
+### Fix loop — in flight as of this write
+
+Three engineers on disjoint files, with **separate test databases** (`biznice_fix_a`,
+`biznice_fix_c`) because this build already lost a run to two pytest suites sharing `biznice_test`.
+A throwaway `postgres:17-alpine` runs on host port **55432** (user `biznice`, pw `verifypw`) —
+compose `db` is not host-mapped, so the host venv has nothing else to talk to.
+
+- **A** — R1 lock fix + the `derive_key_prefix` re-validation; new `backend/tests/flan/test_key_prefix_lock.py`.
+- **C** — G2–G6 + G8 pins in `verify_flan.py` and `tests/flan/test_rollup.py`.
+- **B** — the tag editor (both project dialogs + task sheet) and the `AssigneeSet` hook typing.
+
+Every one must mutation-prove its checks and paste the RED output. **Manager still owes:** the
+`hourly_rate` removal, all documentation edits (SRD status + `Verified:` stamp, `CLAUDE.md` Suite
+Status, `ROADMAP.md`, phase `QA.md` refresh for the tag editor), the `.zj/QA.md` §3/§4/§5 landing,
+the checklist update, and **a full re-verification after the fixes** — a partial re-check after
+fixes is where regressions slip in.
 
 Branch `feature-flan-core`, 36/36 tasks ticked in `.zj/phases/01-flan-core/PLAN.md`, checklist
 `docs/tasks/feature-flan-core.md` complete. **Nothing is verified yet — `/zj:verify 1` is the gate.**
