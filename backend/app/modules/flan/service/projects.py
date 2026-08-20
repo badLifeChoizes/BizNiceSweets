@@ -277,18 +277,44 @@ async def update_project(db: AsyncSession, project_id: str, data: ProjectUpdate)
     the project's prefix, leaving `PRJ-9` inside a project that claims `CRIS`.
     It is freely editable while the project is still task-free.
 
+    A prefix change therefore takes the project row `FOR UPDATE` **before** the
+    has-tasks read and holds it to the commit. That lock is the same row
+    `create_task` locks before reading `key_prefix`, and it is what makes the
+    D-V5P1-2 invariant hold under concurrency: without it a PATCH could read
+    "no tasks", a concurrent create could issue `PRJ-1`, and the PATCH could
+    then commit `CRIS` over the top — leaving a project advertising `CRIS`,
+    holding `PRJ-1`, and 422ing every subsequent prefix change forever (a state
+    no endpoint can repair). The row is re-read through the lock with
+    `populate_existing`, since `require_writable_project` already mapped it and
+    a plain `select` would hand back that pre-lock snapshot
+    (syerp/service/inventory.py::post_receipt, same staleness).
+
     Only the fields the payload actually SET are written (`exclude_unset`), so
     an omitted field is untouched and an explicit null clears a nullable one; an
     explicit null aimed at a NOT NULL column is ignored rather than turned into
     a database error. Supplying `tags` REPLACES the project's whole tag set;
     omitting them (or sending null) leaves the existing set alone.
     """
+    from app.modules.flan.models import Project
+
     project = await require_writable_project(db, project_id)
 
     patch = data.model_dump(exclude_unset=True)
     tags = patch.pop("tags", None)
 
     if "key_prefix" in patch and patch["key_prefix"] is not None:
+        # Lock the project row for the has-tasks read, and re-read the row
+        # THROUGH the lock (populate_existing — the instance is already in the
+        # identity map from require_writable_project, and a plain select would
+        # not repopulate it). Held until this function's commit, so the prefix
+        # edit and create_task's read-generate-insert window contend on one row.
+        locked = await db.execute(
+            select(Project)
+            .where(Project.id == project_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        project = locked.scalar_one()
         if patch["key_prefix"] != project.key_prefix and await _project_has_tasks(db, project_id):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

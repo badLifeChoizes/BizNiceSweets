@@ -446,7 +446,9 @@ async def create_task(
          create against a deleted phase fails immediately and cheaply);
       2. `require_writable_project` (404 / 422-if-archived);
       3. validate every assignee is an active member of that project (422);
-      4. `SELECT ... FOR UPDATE` the project row, generate the key
+      4. `SELECT ... FOR UPDATE` the project row *with* `populate_existing` (the
+         prefix must be the post-lock value, not the identity-map snapshot
+         `require_writable_project` left behind), generate the key
          (`generate_task_key`, numeric-safe — D-P8-6) and insert, at most
          `_MAX_KEY_ATTEMPTS` times;
       5. write the tag and assignee rows, then ONE commit — so a task can never
@@ -481,10 +483,19 @@ async def create_task(
 
     for attempt in range(1, _MAX_KEY_ATTEMPTS + 1):
         # Lock the project row for the read-generate-insert window, and read the
-        # prefix off the locked row (never off a stale instance: a previous
-        # attempt's rollback expired it).
+        # prefix off the locked row (never off a stale instance). populate_existing
+        # is load-bearing: require_writable_project already mapped this Project via
+        # db.get, and SQLAlchemy hands back that identity-mapped instance WITHOUT
+        # repopulating it — so without this the prefix read here is the pre-lock
+        # snapshot, not what the lock just serialized against, and a concurrent
+        # committed prefix change (update_project, which locks the same row) would
+        # be invisible. Same identity-map staleness post_receipt was given
+        # db.refresh for (syerp/service/inventory.py).
         locked = await db.execute(
-            select(Project).where(Project.id == phase_project_id).with_for_update()
+            select(Project)
+            .where(Project.id == phase_project_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         key_prefix = locked.scalar_one().key_prefix
         key = await generate_task_key(db, phase_project_id, key_prefix)
