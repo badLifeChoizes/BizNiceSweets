@@ -1,7 +1,7 @@
 # Verification: 01 — FLAN core (v5.0 Phase 1)
 Date: 2026-08-19 | Commits: `49567ff..dbbcba9` (86 commits, branch `feature-flan-core`)
 Requirement: SRD **FLAN-01** (AC1–AC7) · touches NFR-1, NFR-5, CORE-05, CORE-07/08
-Verdict: **GAPS**
+Verdict: **GAPS** on first pass → **PASS** after the fix loop (see the closing section)
 
 **Summary.** The phase goal is **true**. Every one of the seven acceptance criteria was driven
 empirically — over real HTTP against the live stack, at the SQL level, through the pytest suite and
@@ -331,4 +331,71 @@ host it exits **0**.
 
 ---
 
-Verdict: GAPS
+---
+
+## Fix loop — all 14 findings closed, then the whole verification re-run
+
+Owner approved fixing everything rather than logging any of it. Four engineers on disjoint files
+with **separate test databases**, because this build had already lost a run to two pytest suites
+sharing `biznice_test`.
+
+| Finding | Closed by | Note |
+|---|---|---|
+| **R1** [major] `key_prefix` lock does not serialize | `af2f426` | `populate_existing` on `create_task`'s locked select; `update_project` takes the lock **before** `_project_has_tasks` and holds it to commit — conditionally, only on the branch that changes the prefix, so a name/tag PATCH no longer contends with task creation |
+| **R2** [minor] `derive_key_prefix` violates its own invariant | `c343d72` | re-validates against `KEY_PREFIX_PATTERN`, falling back to `DEFAULT_KEY_PREFIX`; closes both the `VARCHAR(10)` overflow 500 and the non-conforming charset |
+| **G1** [major] tags unreachable in the UI | `b1ded29` | `TagInput` chip editor in both project dialogs and the task sheet + `TagList` columns; opaque strings only (D-V5P1-5) |
+| **G2–G6, G8** missing regression pins | `3df78ce`, `9943846` | `verify_flan.py` **38 → 50 PASS** (new scenarios `(G)` identity, `(H)` cross-project scoping); `tests/flan/test_rollup.py` **16 → 29** |
+| **R3** [minor] assignee hooks mistyped | `033e2a8` | `AssigneeSet` replaces the `Task`/`Phase` assertions |
+| **R4** [minor] `hourly_rate` exposed to every user | `56ec0cf`, `d025897`, `aa7d3a9` | new **`flan:rates`** permission, D-V5P1-8 |
+| **G7** [minor] three docs said FLAN was unbuilt | `1e08aca` + this close | `CLAUDE.md`, `.zj/SRD.md`, `.zj/ROADMAP.md` |
+| **G9/G10** `.zj/QA.md` had no FLAN coverage, and was red | this close | §4.8 landed **plus** the 11 rows missing since the v5.0 spec |
+
+### Two decisions the fix loop forced
+
+1. **`hourly_rate`: the owner's first choice was unsafe and was reversed on new information.**
+   Dropping the field from `TeamMemberRead` alone would have made `MemberDialog` — which seeds its
+   input from `member.hourly_rate` and sends it on every save — **silently wipe every stored rate on
+   any member edit**, a worse defect than the exposure. Gated on `flan:rates` instead. The key is
+   **omitted**, never nulled (null is indistinguishable from "no rate recorded"), and a write
+   carrying it from a non-holder is **403**, not a silent drop, keyed off `model_fields_set` so an
+   explicit `null` still counts as a write.
+2. **The frontend gate was flaky before any FLAN change** — a baseline run with all FLAN work
+   stashed already failed four tests at vitest's 5s default under parallel backend runs. Raised to
+   15s (`c8f05df`) rather than making the tests shallower. A gate whose result depends on host load
+   is not a gate.
+
+### Three traps worth carrying into LEARNINGS
+
+- **The SQLAlchemy identity map is weak.** Engineer A's first lock test **passed against the
+  reverted fix**, because the unreferenced `Project` was garbage-collected and the next `db.get`
+  silently re-read it from the database. The test now deliberately holds a reference. A mutation
+  proof that depends on GC timing proves nothing.
+- **A blocking test does not always discriminate.** For "does `update_project` hold the row lock",
+  the obvious test — session 2 blocks — stays **green against the mutation**, because without the
+  lock the plain `UPDATE` blocks on the held row anyway at commit. A `FOR UPDATE NOWAIT` probe
+  (55P03 = held) was needed instead.
+- **A uniqueness constraint can make a test pass for the wrong reason.** `roles.name` is unique, so
+  a second role named `admin` is impossible and a wildcard assertion against the seeded admin —
+  which holds every permission — would have passed without proving the wildcard. The fixture strips
+  the explicit grant first.
+
+### Re-verification after the fixes — the full gate, not a partial re-check
+
+| Command | Result |
+|---|---|
+| `pytest -q` (whole suite, host venv) | **295 passed, 0 skipped** — exit 0 (was 268) |
+| `pytest tests/flan --collect-only` | **49 tests** (was 23) |
+| `backend/.venv/bin/ruff check .` | `All checks passed!` — exit 0 |
+| all 28 `backend/scripts/verify_*.py`, exit code captured per script | **26 exit 0 in-container**; `verify_qa_doc.py` + `verify_qa_citations.py` exit 0 **on the host** — their in-container red is `FileNotFoundError: '/.zj/SRD.md'`, i.e. `.zj/` is not mounted into the API container, not a content failure. **28/28 in their correct environment** |
+| `verify_flan.py` | **50 PASS / 0 FAIL** — exit 0 |
+| `verify_flan_api.py` | **134 PASS / 0 FAIL** — exit 0 |
+| `verify_qa_doc.py` (host) | **16/16 PASS** — 58 requirements, 32 covered, 26 bucketed. **The inherited red is cleared**, unblocking the merge |
+| `verify_qa_citations.py` (host) | **PASS** — 270 citations across 69 blocks all resolve |
+| `npm run lint` / `test -- --run` / `build` | exit 0 / **51 files, 203 tests** / exit 0 |
+| `GET /api/v1/syerp/reports/trial-balance` | `in_balance: true`, debit == credit — FLAN posts no GL, so any movement here would itself have been the regression |
+
+All ten gaps and four review findings are closed. No finding was logged rather than fixed.
+
+---
+
+Verdict: **PASS**

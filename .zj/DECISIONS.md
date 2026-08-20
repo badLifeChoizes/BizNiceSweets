@@ -206,6 +206,7 @@ at milestone close, never hand-edit it. 171 decisions (regenerated at the v4.0 c
 - **D-V5P1-5:** FLAN tags live in two join tables (`flan_project_tag`, `flan_task_tag`) holding opaque strings — 2a's basis filter and group-by-facet are SQL aggregations, and no ARRAY/JSON column exists anywhere in the codebase today…
 - **D-V5P1-6:** Removing a roster member is a SOFT-remove (`active=False`) plus deletion of that member's assignment rows — it makes "history untouched" true by construction and matches the archive-not-delete precedent in every other suite…
 - **D-V5P1-7:** FLAN task keys are UNPADDED (`PRJ-9 → PRJ-10`) — the SRD's own verification literal and both prototypes agree; the D-P8-6 digit-boundary defect lives in the numeric cast, not the padding, so it is caught either way…
+- **D-V5P1-8:** A roster member's `hourly_rate` is gated on a NEW `flan:rates` permission, not granted to the default `user` role — the field crossed the wire behind suite-wide `flan:read`/`flan:write`, so every rostered contractor could read and edit every teammate's pay; dropping it from the read schema alone would have made the member dialog wipe stored rates on every edit…
 
 ## Product & Architecture
 
@@ -1480,6 +1481,29 @@ restart every milestone. Later v5.0 phases follow the same shape — `D-V5P2a-*`
   scenario (B) to hand-insert a legacy `PRJ-9` to reach the digit boundary instead of arriving
   there naturally. *Consequence carried into the plan as a risk:* a plain string sort puts `PRJ-10`
   before `PRJ-9`, so every list ordering by key must sort on the **numeric suffix**.
+
+- **D-V5P1-8 (owner, `/zj:verify 1` fix loop):** **A roster member's `hourly_rate` is gated on a
+  new `flan:rates` permission**, seeded but deliberately **not** granted to the default `user`
+  role. Reads omit the key entirely for a non-holder; a write carrying the key from a non-holder is
+  **403**, not a silent drop. *Why:* the verify reviewer found the field on `TeamMemberRead` behind
+  suite-wide `flan:read` and rendered in the Team table, while `auth/seed.py` grants both
+  `flan:read` and `flan:write` to `user` — so any rostered contractor could read **and PATCH**
+  every teammate's pay rate, and no other suite puts a compensation figure behind a suite-wide read
+  permission. *Rejected:* dropping `hourly_rate` from `TeamMemberRead` and the Team column, which
+  the owner chose first and then reversed on new information — `MemberDialog.tsx` seeds its input
+  from `member.hourly_rate` and sends it on every save, so a read-only removal would have made
+  **every member edit silently wipe the stored rate**, a worse defect than the exposure. *Also
+  rejected:* removing the field from the write path too, which leaves nothing able to record a rate
+  and strains FLAN-01.4's "a team member carries … an hourly rate". *Consequences:* (1) the key is
+  **omitted**, never nulled — null is indistinguishable from "no rate recorded" and a client
+  round-tripping it would re-create the wipe; (2) refusal keys off `model_fields_set`, so an
+  explicit `null` is still a write and still 403s, since clearing compensation data is a write;
+  (3) `require_permission`'s admin wildcard means admins keep the field for free; (4) existing
+  deployments need one API restart to pick up the seeded permission.
+
+  *This supersedes the wire half of D-V5-2 / D-M5-2.* "Stored and read by nothing in v5.0" stays
+  true of the service layer — no rollup, report or total reads the rate — but it no longer
+  describes the API surface, which is now permission-gated in both directions.
 
 *Also corrected at plan review (a fact, not a decision):* **FLAN seeds `enabled=True`.** The
 `False` in `("flan", "FLAN — Project Management", False, 30)`

@@ -7,7 +7,22 @@ move on.
 
 **Scope of this file:** the checks a *human* is the pin for. Everything else about this phase is
 pinned by machine and listed under "✅ Machine already proved" inside each check — **do not
-re-check those**. §7 states exactly what `.zj/QA.md` needs in order to absorb these checks.
+re-check those**.
+
+> ## ⚠ Read `.zj/QA.md` §4.8 instead — this file is the phase's record, not the runbook
+>
+> These eight checks were **landed into the standing checklist** at the phase close, renumbered
+> `C-FLAN-01` … `C-FLAN-08`, and **revised there for what the verify fix loop changed**. The
+> canonical, as-shipped versions live in `.zj/QA.md` §4.8; both QA scripts
+> (`verify_qa_doc.py`, `verify_qa_citations.py`) pass over them, so every citation there is
+> re-greppable. This file is kept as the phase artefact — the record of what the verifier wrote
+> before the fix loop ran.
+>
+> **What changed after this file was written** (and is therefore corrected only in §4.8):
+> `C-FLAN-01`/`-02`/`-05` gained **tag** steps, because tags went from unreachable to editable;
+> `C-FLAN-06` gained the note that the **Hourly rate** column is visible to you only because you
+> are an admin — pay rates are now gated on `flan:rates` (D-V5P1-8), which the default `user` role
+> does not hold.
 
 ---
 
@@ -277,10 +292,12 @@ you can recognise a regression:
 
 ## 6. Known limitations — do not re-file these
 
-- **Tags cannot be set anywhere in the UI.** The API stores project and task tags, but no dialog
-  offers a tag field and no table shows one. Raised as gap **G1** in
-  `.zj/phases/01-flan-core/VERIFICATION.md`; the tag editor naturally belongs with FLAN-04's facet
-  taxonomy (v5.0 phase 2a).
+- ~~**Tags cannot be set anywhere in the UI.**~~ **NO LONGER TRUE — fixed in the verify fix loop
+  (`b1ded29`).** This was gap **G1**: the API stored project and task tags but no dialog offered a
+  field, so an element named in both AC1 and AC3 was unreachable. Both project dialogs and the task
+  sheet now carry a chip editor (Enter or comma commits, × removes), and Projects and Tasks each
+  have a **Tags** column. Tags remain **opaque strings** — D-V5P1-5 forbids facet semantics until
+  FLAN-04, so there is deliberately no vocabulary, no colour mapping and no autocomplete.
 - **A soft-removed roster member cannot be reactivated**, and removed members cannot be listed.
   Deliberate owner decision at plan review; FLAN-01.4 does not ask for one. Recorded in
   `backend/app/modules/flan/service/roster.py`'s module docstring and in `.zj/STATE.md`.
@@ -291,11 +308,22 @@ you can recognise a regression:
   uniqueness among live rows); filed **p2** in `.zj/BACKLOG.md:166` to be fixed by FLAN-10 at the
   latest.
 - **`Hourly rate` is stored and read by nothing** — no cost, budget or utilisation is derived from
-  it in v5.0 (D-M5-2). Its absence from every total is correct.
+  it in v5.0 (D-M5-2). Its absence from every total is correct. **Changed in the verify fix loop:**
+  it is now gated on a new **`flan:rates`** permission (D-V5P1-8) that the default `user` role does
+  **not** hold — a non-holder gets no rate column, no dialog input, and the key does not cross the
+  wire at all. You see it because `require_permission` has an admin wildcard.
 - **No scheduling, board, timeline, calendar, risks, deliveries, budgets, exports or analytics.**
   Those are FLAN-02 … FLAN-11, phases 2a–7. The Tasks screen is deliberately a plain table.
 
-## 7. What `.zj/QA.md` needs in order to absorb these checks
+## 7. What `.zj/QA.md` needed in order to absorb these checks — ✅ **ALL LANDED**
+
+> **Done at the phase close.** §3 gained the FLAN-01 row (retitled, status `verified`) **and the
+> eleven rows that were missing entirely** — `FLAN-02..11` plus `NFR-9`; the headline moved from
+> "31 of 47" to **"32 of 58"**; §4.8 was added with the eight checks; §5's "Not built yet" bucket
+> lost FLAN-01 and gained the eleven. `verify_qa_doc.py` and `verify_qa_citations.py` both exit 0.
+> **That also cleared the inherited red** which had been failing on `master` — and with it the
+> merge block on the required `verify-scripts` status context. The original plan follows, for the
+> record.
 
 `verify_qa_doc.py` enforces the master doc's arithmetic, so these edits must land together:
 
@@ -329,7 +357,7 @@ you can recognise a regression:
 |---|---|
 | Tester | _(unrun)_ |
 | Date | |
-| Build / commit | `dbbcba9` (`feature-flan-core`) |
+| Build / commit | phase closed post-fix-loop; see `.zj/ROADMAP.md` and tag `zj/good-01-flan-core` |
 | Verdict | **pending** |
 | Notes | |
 

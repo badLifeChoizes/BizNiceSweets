@@ -177,3 +177,53 @@ _(appended as they occur; mirrored to `PLAN.md` `## Deviations`)_
 ## Noticed
 
 _(unrelated defects found in passing; reported at phase end, not fixed mid-task)_
+
+- **`HTTP_422_UNPROCESSABLE_ENTITY` is deprecated** in favour of `HTTP_422_UNPROCESSABLE_CONTENT`;
+  `flan/service/tasks.py` and `assignments.py` emit a `StarletteDeprecationWarning` on every 422
+  path. Suite-wide and pre-existing.
+- **`tests/conftest.py:290`** — `SAWarning: Cannot correctly sort tables; there are unresolvable
+  cycles between tables "crumb_lead, crumb_opportunity"`. The truncate helper's table sort;
+  "may raise an error in a future release".
+- **Concurrent agents share one git index.** Staging and committing in one command is not enough;
+  `git commit --only <paths>` is. One engineer's staged backend files were briefly swept into
+  another's frontend commit and had to be split back out.
+- **Two pytest runs against one test DB fail in confusing ways** — `DeadlockDetectedError`,
+  duplicate-key on `ix_permissions_code`, and bogus 401s at fixture setup, all of which read like
+  product bugs. A conftest advisory lock on the test DB would end it (BACKLOG p2 already filed).
+- **`getVisibleModules`** (`frontend/src/components/AppShell.tsx:37-46`) carries its own copy of the
+  admin-wildcard rule and could now call the new `hasPermission` helper.
+- **`flan_task_assignee.member_id` / `flan_phase_assignee.member_id` carry no index** — the
+  composite PKs lead with `task_id`/`phase_id`, so the board's assignee filter seq-scans the
+  cross-project join table. One line in the next migration.
+- **A phase's derived window can read backwards** — `MIN(start_date)` and `MAX(due_date)` are
+  computed independently over tasks that may each carry only one of the two dates, so a phase can
+  render as starting after it is due. Arguably the honest derivation, but it is the one rollup
+  output a user is likely to report as a bug.
+- **Archiving a project is a one-way door** — no `active` on `ProjectUpdate`, no un-archive route.
+  The roster's equivalent is a recorded owner decision; the project one is not recorded anywhere.
+
+---
+
+## Verify fix loop (`/zj:verify 1`, 2026-08-19)
+
+Verify returned **GAPS** — 0 blockers, 7 major, 7 minor. Owner approved fixing all of it. Four
+engineers on disjoint files with separate test databases.
+
+- [x] **R1** — `key_prefix` row lock actually serializes: `populate_existing` on `create_task`'s
+      locked select, and `update_project` takes the lock before `_project_has_tasks` (`af2f426`)
+- [x] **R2** — `derive_key_prefix` re-validates against its own pattern (`c343d72`)
+- [x] **A-tests** — `tests/flan/test_key_prefix_lock.py`, 10 items, mutation-proven (`b845c81`)
+- [x] **G2–G6, G8** — tags, cross-project scoping, roster-scoped assignees, duplicate names +
+      immutable id, user-delete, literal rejection: `verify_flan.py` 38 → **50 PASS**,
+      `test_rollup.py` 16 → **29** (`3df78ce`, `9943846`)
+- [x] **G1** — tag editor + tag columns; opaque strings only, D-V5P1-5 (`b1ded29`)
+- [x] **R3** — assignee hooks typed `AssigneeSet` (`033e2a8`)
+- [x] **R4** — `hourly_rate` gated on the new `flan:rates` permission, D-V5P1-8
+      (`56ec0cf`, `d025897`, `aa7d3a9`)
+- [x] **Flaky gate** — vitest `testTimeout: 15000`; the form-filling suites were failing at 5s
+      under load **before any FLAN change** (`c8f05df`)
+- [x] **G7** — `CLAUDE.md` Suite Status corrected for FLAN **and** GELATO (`1e08aca`)
+- [x] **G9/G10** — `.zj/QA.md` §4.8 landed with the eight `C-FLAN-*` checks, **plus** the eleven
+      rows missing since the v5.0 spec; `verify_qa_doc.py` green, merge unblocked
+- [x] **Full re-verification** — 295 pytest / 0 skipped, 28/28 `verify_*`, 51 files / 203 Vitest,
+      ruff 0, eslint 0, build 0, trial balance in balance

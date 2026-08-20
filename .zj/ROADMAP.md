@@ -492,7 +492,7 @@ module, and `flan/data/Crisis.json` is not a requirements source.
 
 | Phase | Delivers | Why here |
 |-------|----------|----------|
-| **1** ✅planned | **FLAN-01** — project/phase/task core, team roster (optional user link), assignment, RBAC `flan:read`/`flan:write`, audit | Nothing else has anything to attach to. Establishes the unified task model (D-V5-1): a phase *derives* its dates and % from its tasks |
+| **1** ✅**[verified]** | **FLAN-01** — project/phase/task core, team roster (optional user link), assignment, RBAC `flan:read`/`flan:write`, audit | Nothing else has anything to attach to. Establishes the unified task model (D-V5-1): a phase *derives* its dates and % from its tasks |
 | **2a** | **FLAN-02** scheduling engine + gate verdict, **FLAN-04** facet taxonomy | Pure server-side math over a graph; the taxonomy ships with it because the engine's `in-plan`/`Parked` basis *is* a reserved facet |
 | **2b** | **FLAN-03** timeline board, list, calendar, search/filter/grouping, flags | The 11a/11b split that worked in v3.0 — engine proven headless before the surface that renders it |
 | **3** | **FLAN-05** risks/milestones/decisions, **FLAN-06** deliveries + notes | Flat CRUD over the core; no new integration. Cheapest full-parity group |
@@ -501,6 +501,26 @@ module, and `flan/data/Crisis.json` is not a requirements source.
 | **5** | **FLAN-09** analytics — health, resource table, utilisation, critical path, velocity, estimate-vs-actual | Derives from everything above; nothing depends on it |
 | **6** | **FLAN-10** exports (CSV/Excel/JSON/ICS/PDF/HTML), comments, activity log, deep links, one-step undo | Server-native equivalents per D-V5-6 — no public share tokens |
 | **7** | **FLAN-11** prototype supersession — capability-coverage matrix, both prototypes committed and frozen, working proof | Audits every phase before it; the DoD sentence executed |
+
+> **Phase 1 shipped and verified — 2026-08-19, `/zj:verify 1`, tag `zj/good-01-flan-core`.**
+> All 7 FLAN-01 acceptance criteria delivered on `feature-flan-core`: eight `flan_*` tables +
+> migration `0018`, a `service/` package, a 20-operation router with `flan:read`/`flan:write` and
+> audit on every mutation, and four React screens. The crux (D-V5-1: a phase carries **no**
+> `start_date`, `due_date` or `percent_complete` column — they are computed on every read, and the
+> empty phase reports no dates and `"0.00"`) is mutation-proven RED in both `verify_flan.py` and
+> `tests/flan/test_rollup.py`.
+>
+> Verify returned **GAPS** first (0 blockers, 7 major, 7 minor) and every finding was fixed rather
+> than logged: the `key_prefix` row lock did not actually serialize, tags were storable but
+> unreachable in the UI, five acceptance-criterion sentences had no automated pin at all, and
+> `hourly_rate` was readable and writable by every user (now gated on **`flan:rates`**, D-V5P1-8).
+> Final gate after the fixes: pytest **295 passed / 0 skipped**, `verify_flan.py` **50 PASS**,
+> `verify_flan_api.py` **134 PASS**, **28/28** `verify_*` scripts, Vitest **51 files / 203 tests**,
+> ruff 0, eslint 0, build 0, trial balance `in_balance: true`.
+>
+> Landing `.zj/QA.md` §4.8 also absorbed the **eleven** requirement rows missing since the v5.0 spec
+> (`FLAN-02..11`, `NFR-9`), which is what had kept `verify_qa_doc.py` red **on `master`** — clearing
+> the merge block on the required `verify-scripts` status context.
 
 **NFR-9** (deterministic, bounded schedule computation) is verified in Phase **2a** and re-asserted
 by CI thereafter.

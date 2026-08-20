@@ -257,7 +257,24 @@ future scope (expanded via `/zj:spec` when their milestones near).
 > prototype's `timeEntries` are **not** ported — a task carries a duration in days, and every
 > capacity/utilisation figure derives from durations, never from logged hours.
 
-## FLAN-01: Project, work-breakdown & team core  [traces: PRD-6]  **Status: planned**
+## FLAN-01: Project, work-breakdown & team core  [traces: PRD-6]  **Status: verified (v5.0 — Phase 1; all 7 ACs)**
+- **Verified:** bd867f4 (Phase 01 verify, 2026-08-19 — `/zj:verify 1`: all seven ACs
+  driven empirically over real HTTP, SQL, pytest and Vitest, and every number the build self-reported
+  independently re-proved rather than trusted. The phase crux (AC2, phase-derived dates and % complete,
+  D-V5-1) was **mutation-proven RED** in both `verify_flan.py` (A0c/A0d) and
+  `tests/flan/test_rollup.py::test_phase_rollup_crux` — confirming the build's own finding that the
+  original solo-form `phase_rollups([empty])` check was **vacuous**, since `phase_ids[0]` *is* the
+  empty phase; the amended check asserts the empty phase inside a batch whose first member is
+  non-empty. The `due < start` wire guards and the RBAC gate also turn RED under mutation.
+  Verdict was **GAPS** on first pass — 0 blockers, 7 major, 7 minor — all closed in the fix loop:
+  the `key_prefix` row lock now actually serializes (`populate_existing` on the locked read +
+  `update_project` taking the lock before `_project_has_tasks`); tags gained a UI editor (they were
+  storable over the API but unreachable by a user, an element named in AC1 *and* AC3); and the five
+  AC sentences that had **no automated pin at all** — tags round-trip, cross-project isolation,
+  roster-scoped assignees, duplicate names / immutable id, and user-delete leaving the roster row —
+  are now pinned and each mutation-proven. `hourly_rate` gated on the new `flan:rates` permission
+  (D-V5P1-8). Final gate: `verify_flan.py` **50 PASS**, `verify_flan_api.py` **134 PASS**,
+  pytest **295 passed / 0 skipped**, **28/28** `verify_*` scripts green in their correct environment, Vitest **51 files / 203 tests**, ruff 0, eslint 0, `npm run build` 0, trial balance `in_balance: true` with debit == credit — FLAN posts no GL, so any movement there would itself have been the regression. Reviewer: 0 blockers. Tag `zj/good-01-flan-core`.)
 - **Statement:** The system shall provide FLAN projects on the platform — a **project** containing
   **phases**, each phase containing **tasks**, with a **project team roster** whose members can be
   assigned to phases and tasks — as a registered module with its own RBAC and audit trail.
