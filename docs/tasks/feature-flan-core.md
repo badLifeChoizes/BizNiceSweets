@@ -227,3 +227,15 @@ engineers on disjoint files with separate test databases.
       rows missing since the v5.0 spec; `verify_qa_doc.py` green, merge unblocked
 - [x] **Full re-verification** — 295 pytest / 0 skipped, 28/28 `verify_*`, 51 files / 203 Vitest,
       ruff 0, eslint 0, build 0, trial balance in balance
+
+---
+
+## Retro (`/zj:retro 1`, 2026-08-19)
+
+- [x] Learnings banked → `.zj/LEARNINGS.md` "Phase 01 — FLAN core"
+- [x] Roadmap trued up — Phase 1 `[done — verified + retro'd]`; **no phase resized**
+- [x] Deferred items homed — 4 new p2, 3 grouped p3 (15 residue items), p1 QA.md item **RESOLVED**,
+      p3 "suite cannot run in-container" trued up with the working repo-root-mount recipe
+- [x] Owner calls: project **un-archive** → BACKLOG p2, homed at Phase 2b; frontend
+      **code-splitting** → BACKLOG p2, not a chore phase
+- [x] `.zj/STATE.md` → next action `/zj:ship`

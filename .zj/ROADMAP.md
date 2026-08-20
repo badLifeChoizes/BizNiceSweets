@@ -1,5 +1,11 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-08-18 (**v5.0 "FLAN port" SPEC'D** — PRD-6 rewritten; SRD FLAN-01 expanded into
+Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" DONE — verified + retro'd**, tag
+`zj/good-01-flan-core`. FLAN-01's seven ACs all delivered; verify's 14 findings were all fixed
+rather than logged. Learnings banked (headline: four distinct ways a check can measure nothing,
+three of them exit-0 green). 4 p2 + 3 grouped p3 backlog items filed; the p1 QA.md gap RESOLVED,
+clearing the `verify-scripts` merge block. **No phase resized.** Next: `/zj:ship`, then
+`/zj:plan 2a`.)
+Prior: 2026-08-18 (**v5.0 "FLAN port" SPEC'D** — PRD-6 rewritten; SRD FLAN-01 expanded into
 **FLAN-01..11 + NFR-9**; phase→FR mapping proposed below (7 phases / 9 units, DoD crux at **4b**).
 Scope grew at the owner's direction: a **second source prototype**, `schedule_gate-v45.html`, joined
 `prj-mgmt-v24.html`, and all four v24 capability groups are in (D-V5-3). No prototype **data** is
@@ -492,7 +498,7 @@ module, and `flan/data/Crisis.json` is not a requirements source.
 
 | Phase | Delivers | Why here |
 |-------|----------|----------|
-| **1** ✅**[verified]** | **FLAN-01** — project/phase/task core, team roster (optional user link), assignment, RBAC `flan:read`/`flan:write`, audit | Nothing else has anything to attach to. Establishes the unified task model (D-V5-1): a phase *derives* its dates and % from its tasks |
+| **1** ✅**[done — verified + retro'd 2026-08-19]** | **FLAN-01** — project/phase/task core, team roster (optional user link), assignment, RBAC `flan:read`/`flan:write`, audit | Nothing else has anything to attach to. Establishes the unified task model (D-V5-1): a phase *derives* its dates and % from its tasks |
 | **2a** | **FLAN-02** scheduling engine + gate verdict, **FLAN-04** facet taxonomy | Pure server-side math over a graph; the taxonomy ships with it because the engine's `in-plan`/`Parked` basis *is* a reserved facet |
 | **2b** | **FLAN-03** timeline board, list, calendar, search/filter/grouping, flags | The 11a/11b split that worked in v3.0 — engine proven headless before the surface that renders it |
 | **3** | **FLAN-05** risks/milestones/decisions, **FLAN-06** deliveries + notes | Flat CRUD over the core; no new integration. Cheapest full-parity group |
@@ -521,6 +527,28 @@ module, and `flan/data/Crisis.json` is not a requirements source.
 > Landing `.zj/QA.md` §4.8 also absorbed the **eleven** requirement rows missing since the v5.0 spec
 > (`FLAN-02..11`, `NFR-9`), which is what had kept `verify_qa_doc.py` red **on `master`** — clearing
 > the merge block on the required `verify-scripts` status context.
+
+**Retro 2026-08-19** (`/zj:retro 1`) — learnings banked in `.zj/LEARNINGS.md` "Phase 01". The
+phase's dominant lesson is **vacuous verification**: four distinct ways a check can measure nothing
+were found in one phase, three of them exit-0 green — `podman run --rm` without `-i` makes a
+`python -` heredoc read an empty program and exit 0; on FastAPI 0.138 `app.routes` no longer yields
+flattened `APIRoute`s, so a naive iteration finds zero module routes and passes; the plan's **own**
+non-vacuity guard for the empty-phase crux was itself immune to the mutation it was written to
+catch; and a mutation proof passed against the reverted fix because its subject was
+garbage-collected. Also banked: `with_for_update()` does **not** repopulate an already-mapped
+instance (the review's only real correctness bug — 5th phase running that review-overrides-PASS was
+load-bearing), a field documented "read by nothing" was still on the wire and on the screen
+(`hourly_rate` → D-V5P1-8), and **"the backend pytest suite cannot run in-container" was false** —
+it is a mount-point problem, and that four-phase standing tax is retired.
+
+Four **p2** items filed, two owner-triaged at the retro: **project archive is a one-way door** with
+no un-archive route (homed at **Phase 2b**, where the list/filter surfaces give a "Show archived"
+view real use), the **905 kB un-split frontend bundle** (`React.lazy` per suite — deliberately not a
+chore phase, so it never competes with the DoD at 4b), a phase's **derived date window that can read
+backwards** (wants a decision before 2b renders phases on a timeline), and the missing `member_id`
+**indexes** on both assignee join tables (first felt by FLAN-09's member-keyed reports in Phase 5).
+Three grouped **p3** entries home the remaining 15 residue items. The p1 `.zj/QA.md`-behind-`SRD.md`
+item is **RESOLVED** by this phase's close. **No phase was resized; the mapping below stands.**
 
 **NFR-9** (deterministic, bounded schedule computation) is verified in Phase **2a** and re-asserted
 by CI thereafter.

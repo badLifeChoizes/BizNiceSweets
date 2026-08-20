@@ -1,5 +1,12 @@
 # BACKLOG — BizNiceSweets
-Updated: 2026-08-19 (v5.0 Phase 1 Task 33 regression gate — two **p1** items filed: **`.zj/QA.md` is
+Updated: 2026-08-19 (**v5.0 Phase 1 retro** — the **p1** `.zj/QA.md`-behind-`SRD.md` item is
+**RESOLVED** by the phase close, clearing the required `verify-scripts` merge block. Four **p2**
+items filed, two of them owner-triaged: FLAN project archive is a one-way door with no
+un-archive (home = Phase 2b), the 905 kB un-split frontend bundle, a phase's derived date
+window that can read backwards, and the missing `member_id` indexes on both assignee join
+tables. Three **p3** entries group the phase's 15 residue items. The p3 "suite cannot run
+in-container" item is trued up — the recipe exists, only the docs are owed)
+Prior: 2026-08-19 (v5.0 Phase 1 Task 33 regression gate — two **p1** items filed: **`.zj/QA.md` is
 11 requirements behind `.zj/SRD.md`**, which makes `verify_qa_doc.py` and CI's `verify-scripts` job
 red on master (owner-triaged non-blocking for the phase, fix belongs in a `docs(qa):` commit on
 master); and the two `verify_qa_*.py` scripts failing opaquely under the documented in-container idiom)
@@ -54,8 +61,14 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p1 — quality/infra debt that already bit once
 
-- [ ] **`.zj/QA.md` is 11 requirements behind `.zj/SRD.md`, so `verify_qa_doc.py` and CI's
-  `verify-scripts` job are RED on master** (found by v5.0 Phase 1 Task 33's regression gate,
+- [x] **`.zj/QA.md` is 11 requirements behind `.zj/SRD.md`** — **RESOLVED at the v5.0 Phase 1
+  close (2026-08-19, `/zj:verify 1` fix loop, gaps G9/G10).** `.zj/QA.md` §4.8 landed for
+  `FLAN-01` **plus** the eleven §3 rows and §5 buckets missing since the v5.0 spec
+  (`FLAN-02..FLAN-11`, `NFR-9`). `verify_qa_doc.py` now reports **16/16 PASS** — 58
+  requirements, 32 covered, 26 bucketed — and `verify_qa_citations.py` resolves 270 citations
+  across 69 blocks. The required `verify-scripts` branch-protection context is therefore no
+  longer red, unblocking every PR into master. *Original text follows.*
+  (found by v5.0 Phase 1 Task 33's regression gate,
   2026-08-19; owner triaged 2026-08-19 as non-blocking for the phase) — `.zj/SRD.md` holds **58**
   requirements, `.zj/QA.md` §3 prose says **47**, and §5's 16 bucketed + §3's 31 covered = 47. The
   eleven missing ids are **`FLAN-02..FLAN-11` and `NFR-9`**, added to the SRD on **master** in
@@ -152,6 +165,53 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   both now history, carried into `.zj/QA.md` verbatim.)*
 
 ## p2 — architecture & docs
+
+- [ ] **Archiving a FLAN project is a one-way door — there is no un-archive path** (v5.0 Phase 1
+  review Question, owner-triaged 2026-08-19) — `ProjectUpdate` carries no `active`,
+  `archive_project` only ever sets `False`, and no route sets it back. A single confirm in
+  `frontend/src/routes/flan/Projects.tsx` therefore **permanently** freezes every write in that
+  project: `require_writable_project` 422s all fourteen mutating service functions, and the state is
+  unreachable through any endpoint — only a hand edit of `flan_project`. FLAN-01.1 reads
+  "Create/view/edit/archive" without saying which way, so this is compliant as specified rather than
+  a defect. **Owner call 2026-08-19: file it, do not reopen the verified phase.** Natural home is
+  **Phase 2b (FLAN-03)** — that phase builds the list/filter/board surfaces where a "Show archived"
+  view earns its keep, so the un-archive route and its button land where someone will actually use
+  them. Fix: `POST /flan/projects/{id}/unarchive` mirroring `archive_project` (idempotent, no
+  `require_writable_project` guard — the same reason the archive call skips it), plus
+  `useUnarchiveProject` invalidating `projectsKey()`. Note the roster's equivalent one-way door
+  (no reactivation for a soft-removed member) is a separate, deliberate decision — see p3 below.
+
+- [ ] **The production bundle is 905 kB (228 kB gzip) with no code-splitting, and six more FLAN
+  phases of screens land on top of it** (v5.0 Phase 1 PLAN `## Noticed`, owner-triaged 2026-08-19) —
+  past Vite's 500 kB warn threshold, because `frontend/src/App.tsx` eagerly imports every suite's
+  routes. A modular monolith whose modules are **installable** is the natural fit for `React.lazy`
+  per suite: a shop that has FLAN disabled should not be paying for FLAN's chunk. It only gets worse
+  — FLAN-02..11 are the largest UI surface in the milestone, and CRISP has not started. **Owner call
+  2026-08-19: p2 backlog, not a chore phase and not folded into Phase 7** — picked up when it hurts,
+  so it never competes with the v5.0 definition of done at 4b. Fix: `React.lazy` + `Suspense` per
+  suite route group in `App.tsx`, and set `build.chunkSizeWarningLimit` deliberately rather than
+  living past it.
+
+- [ ] **A FLAN phase's derived date window can read backwards** (v5.0 Phase 1 review Question,
+  2026-08-19) — `flan/service/rollup.py` computes `MIN(start_date)` and `MAX(due_date)` as
+  **independent** aggregates over tasks that may each carry only one of the two dates. A phase
+  holding task A (start `2026-03-01`, no due) and task B (no start, due `2026-01-01`) renders on the
+  Phases screen as **starting after it is due**. Arguably the honest derivation — the module
+  docstring addresses NULL-skipping, but not this pairing — and it is the one rollup output a user is
+  likely to report as a bug. Nothing is corrupt; the numbers are exactly what the aggregate says.
+  Fix options: suppress the window when `min_start > max_due` and surface it as a phase-level flag,
+  or derive the window only from tasks carrying both dates. Wants a decision before **Phase 2b**
+  renders phases on a timeline, where a backwards bar is a visible artifact rather than two cells.
+
+- [ ] **Neither FLAN assignee join table has an index on `member_id`** (v5.0 Phase 1 review Question,
+  2026-08-19) — `flan_task_assignee` and `flan_phase_assignee` have composite PKs that lead with
+  `task_id`/`phase_id`, so every `member_id`-keyed access seq-scans the whole cross-project join
+  table: `remove_member`'s two scoped `DELETE`s, and `list_tasks`' assignee filter
+  (`IN (SELECT task_id FROM flan_task_assignee WHERE member_id = :id)`). No wrong outcome is
+  constructible — this is latency only, and fine at one shop's scale. Flagged because filter-by-
+  assignee is the board's hot read and **FLAN-09's resource table and utilisation reports (Phase 5)
+  are member-keyed by definition**, which is where it will first be felt. Fix: two `CREATE INDEX`
+  lines in whichever migration Phase 2a or later already needs.
 
 - [ ] **`backend/tests/conftest.py` has no test-database isolation, so two concurrent pytest runs
   silently corrupt each other** (v5.0 Phase 1 Tasks 33/35, 2026-08-19) — both runs default to the same
@@ -443,6 +503,81 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
 
 ## p3 — hygiene
 
+- [ ] **FLAN Phase-1 residue — six product/API gaps, each small and each deliberately out of
+  FLAN-01's scope** (v5.0 Phase 1 PLAN `## Noticed` + review, 2026-08-19). Grouped because they are
+  all one-to-ten-line fixes with a natural later home; split any one out if it grows.
+  - **No reactivation path for a soft-removed roster member.** `DELETE /flan/team/{member_id}` sets
+    `active=False` and deletes that member's assignment rows in the same transaction (D-V5P1-6);
+    nothing sets `active` back, and `TeamMemberUpdate` deliberately omits the field so a PATCH cannot
+    orphan the assignment rows the decision exists to protect. **This is an owner decision, not an
+    oversight** — recorded at `.zj/phases/01-flan-core/PLAN.md:1232` and in the module docstring. The
+    member row and its history survive, so reactivation is purely additive whenever it is wanted; it
+    must be its own endpoint, never a PATCH field.
+  - **`GET /flan/projects/{project_id}/team` has no `include_removed` query param**, so
+    `useTeam(projectId)` takes none. The service already supports it
+    (`list_members(db, project_id, include_removed=False)`) — D-V5P1-6 excludes soft-removed members
+    from the *default* listing, which implies a non-default. If the roster UI ever shows removed
+    members the param must be added to the endpoint **and** to `teamKey`, or the two views collide
+    in one cache entry.
+  - **`flan_task.key` is `String(20)` with unpadded keys**, so a 10-char prefix leaves 9 digits and
+    `ABCDEFGHIJ-999999999` would increment to 21 chars. Needs ~10⁹ tasks in one project and Postgres
+    raises rather than truncating, so it is not a live risk — but `String(20)` → `String(32)` in a
+    later migration is the cheap airtight fix.
+  - **No `flan_*` `project_id` FK carries an `ondelete`**, and `flan_phase.project_id`,
+    `flan_team_member.project_id` and `flan_phase_assignee.member_id` have none either. Consistent
+    with the archive-not-delete posture Phase 1 builds, and there is no project-delete endpoint — but
+    "delete a project" would be a four-statement operation, so any phase that wants one needs a
+    migration first.
+  - **The tag/link helper trio is on its second copy.** `Project` has no ORM relationship to
+    `ProjectTag` (D-V5P1-5 keeps tags in join tables), so `flan/service/projects.py` hand-rolls
+    `_load_tags`/`_attach_tags`/`_replace_tags` and `tasks.py` repeats the shape for `flan_task_tag`
+    and the assignee links. **Extract on the third copy** — FLAN-04's facet taxonomy (Phase 2a) is
+    the likely trigger. Flagged now so the duplication is a decision rather than an accident.
+  - **`crisp` is seeded in `modules` with `enabled=true` despite having no code at all.** Harmless
+    today because nothing registers it, but it is a nav/gating surprise for whoever builds CRISP, and
+    for anyone reading the modules list as ground truth.
+
+- [ ] **Verification-tooling and doc rot found in passing during v5.0 Phase 1** (PLAN `## Noticed`,
+  2026-08-19) — seven independent one-line fixes, none behavioural, all of the "a reader who follows
+  this verbatim gets a false result" family that this project keeps paying for.
+  - **`backend/scripts/verify_gelato.py`'s header documents the wrong container and psql role** — it
+    names `compose_api_1` and `psql -U postgres`, but the role `postgres` **does not exist** on this
+    database (the compose user is `app`). Anyone following it verbatim gets an auth failure that
+    reads like a broken script.
+  - **`verify_gelato_api.py` deletes its audit rows in cleanup**, directly against the append-only
+    rule (D-14) that Task 30 applied to FLAN. Two scripts in one repo now treat `audit_log` by
+    opposite rules; pick one.
+  - **`frontend/package.json`'s `test` script is bare `vitest`** — i.e. watch mode — so every
+    non-interactive invocation must remember `-- --run`. It has already bitten a task brief in this
+    phase. Make `test` non-watch or add `test:run`.
+  - **Prettier is a devDependency that nothing runs**, and `routes/gelato/hooks.ts` +
+    `routes/crumb/hooks.ts` both fail `npx prettier --check`. A formatter the repo does not enforce
+    is a gate people believe in. Either wire it beside the lint baseline or drop the dependency.
+  - **`backend/app/modules/auth/seed.py`'s module docstring enumerates a stale permission list** —
+    its step-1 enumeration stops at `plum:*`, omitting `mousse:*`, `crumb:*`, `gelato:*`,
+    `settings:manage` and now `flan:*`. Doc-only; no behaviour depends on it.
+  - **`.github/workflows/ci.yml:21-24` and `:411-413` contradict branch protection** — the comments
+    say `container-image` and `verify-scripts-api` "report but do not block", but
+    `gh api repos/:owner/:repo/branches/master/protection` lists **both** as required. Two stale
+    comment blocks; this is exactly what made the `verify_qa_doc.py` red get triaged as cosmetic when
+    it was blocking every PR.
+  - **`docs/features/requirements-progress.md`'s header caveat is stale** — its top blockquote and
+    the per-module "the backend live-DB pytest harness is still broken (D-P7-4)" notes on
+    SYERP/MOUSSE/CRUMB/GELATO are now false: the harness was repaired in v4.0 Phase 2a and the suite
+    runs green. Wants its own `docs:` commit.
+  - **Root `CLAUDE.md`'s ⚠ banner contradicts its own body** — the banner says "Technology Stack" and
+    "Architecture" describe the legacy prototypes only, but both sections were rewritten to describe
+    the live codebase. (The Suite Status table's FLAN/GELATO rows **were** corrected at the Phase 1
+    close, gap G7.)
+
+- [ ] **No `flan:read` / `flan:rates`-holding non-admin fixture user exists in the dev database**
+  (v5.0 Phase 1 Task 30, 2026-08-19) — the only non-admin fixture is `UAT-PLUM-ONLY` (`plum:read`).
+  `verify_flan_api.py` mints its own throwaway users so the automated RBAC proof is unaffected, but
+  **human** UAT of FLAN's permission gating — including the new `flan:rates` split that hides
+  `hourly_rate` key-and-all (D-V5P1-8) — has nobody to log in as. Fix: seed one in
+  `backend/scripts/seed_uat_fixtures.py` alongside the PLUM-only user, and cite it from `.zj/QA.md`
+  §4.8.
+
 - [ ] **The two new QA-doc guard scripts cannot run the documented in-container way**
   (v4.0 Phase 5 verify, N-1, 2026-08-17) — `backend/scripts/verify_qa_doc.py` and
   `verify_qa_citations.py` (`ba4c074`, `8352858`) read `.zj/QA.md` and `.zj/SRD.md`, which the
@@ -465,7 +600,24 @@ kept items of `docs/tasks/chore-architecture-planning.md` — owner decision D-A
   every run, so the rot is visible rather than invisible. Fix properly by re-lettering the
   letterless `verify_*` scripts to the `(G1)`-style scheme the newer ones use, then tightening the
   citations.
-- [ ] **The API image carries no `pytest`, so the backend suite cannot run in-container**
+- [ ] **The API image carries no `pytest`, so the backend suite cannot run in-container** —
+  **RECIPE FOUND at v5.0 Phase 1 preflight (2026-08-19); only the documentation half remains.**
+  The blocker was never the image, it was the **mount point**. Under the dev overlay's
+  `-v ../backend:/app`, `tests/test_compose_config.py` and `tests/test_containerfile_config.py`
+  resolve the repo root by walking up from `__file__`, land on `/`, and give
+  `3 failed, 236 passed, 6 errors`. Mounting the **repo root** clears both walls at once:
+  ```bash
+  podman run --rm --user root --network compose_default -v "$PWD:/repo:z" -w /repo/backend \
+    --env-file .env --env-file .env.db \
+    -e POSTGRES_HOST=db -e PYTHONPATH=/repo/backend -e TEST_POSTGRES_DB=biznice_test \
+    compose_api sh -c "pip install -q -r requirements-dev.txt >/dev/null 2>&1; python -m pytest -q"
+  ```
+  Verified: those 9 layout tests go **9 passed** under it, and the whole suite runs. Note the
+  `pip install` is still per-run, which is the remaining reason to add a builder/test stage
+  carrying `requirements-dev.txt`. **The claim "the backend pytest suite CANNOT run
+  in-container" had ridden four phases as a standing tax and was simply false.** Fix: document
+  this recipe in `docs/deployment/local-dev.md` beside the other verified commands, and delete
+  the in-container-is-impossible claim wherever it appears. *Original text follows.*
   (split out of the now-resolved p1 rebuild item, v4.0 Phase 5 Task 33, 2026-08-17) — the runtime
   stage installs `requirements.txt` only, and the bind-mounted `backend/.venv/bin/pytest` carries
   host-path shebangs, so neither route works. Every "run the suite in the container" instruction in

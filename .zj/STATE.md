@@ -1,14 +1,32 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" — `/zj:verify 1` COMPLETE, verdict PASS.** First
-pass returned GAPS (0 blockers, 7 major, 7 minor); **all 14 findings were fixed rather than logged**,
-and the **whole** verification re-run afterwards rather than a partial re-check. Tagged
-`zj/good-01-flan-core` at `dfebb2f`. The inherited `verify_qa_doc.py` red is **cleared**, so the
-required `verify-scripts` context no longer blocks the merge. **Next: `/zj:retro 1`.**)
+Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" — `/zj:retro 1` COMPLETE. Phase is `[done]`.**
+Learnings banked to `.zj/LEARNINGS.md` "Phase 01"; roadmap trued up (**no phase resized**); four p2
+and three grouped p3 backlog items filed, and the p1 `.zj/QA.md`-behind-`SRD.md` item **RESOLVED**.
+Two owner calls taken at the retro: project **un-archive** is homed at Phase **2b**, and frontend
+**code-splitting** is a p2 backlog item rather than a chore phase. Tag `zj/good-01-flan-core`.
+**Next: `/zj:ship`.**)
 
-## Position: v5.0 Phase 1 — **VERIFIED (PASS)**, tagged, ready to retro or ship
+## Position: v5.0 Phase 1 — **DONE** (verified + retro'd), ready to ship
 
-**Position: v5.0 Phase 1 "FLAN core" — verified PASS, tag `zj/good-01-flan-core`.
-Next: `/zj:retro 1` (this phase produced real lessons), then `/zj:ship`.**
+**Position: v5.0 Phase 1 "FLAN core" — `[done]`, tag `zj/good-01-flan-core`.
+Next: `/zj:ship` (merge `feature-flan-core` → `master`), then `/zj:plan 2a`.**
+
+### Retro outcome (2026-08-19)
+
+The keeper is **vacuous verification** — four distinct ways a check can measure nothing, three of
+them exit-0 green, all found in this one phase: `podman run --rm` without `-i` makes a `python -`
+heredoc read an empty program and exit 0; on FastAPI 0.138 `app.routes` no longer yields flattened
+`APIRoute`s, so a naive iteration finds zero module routes and passes; the plan's **own**
+non-vacuity guard for the empty-phase crux was itself immune to the mutation it existed to catch;
+and a mutation proof passed against the **reverted** fix because its subject was garbage-collected.
+Also banked: `with_for_update()` does not repopulate an already-mapped instance (the review's only
+real correctness bug — fifth phase running that review-overrides-PASS was load-bearing); a field
+documented "read by nothing" was still on the wire and on the screen; and **"the backend pytest
+suite cannot run in-container" was false** — it is a mount-point problem, and that four-phase
+standing tax is now retired with a working recipe.
+
+Merge is unblocked: the required `verify-scripts` branch-protection context is green because the
+phase close landed `.zj/QA.md` §4.8 **plus** the eleven rows missing since the v5.0 spec.
 
 ### Final gate — re-run in full after the fix loop
 
@@ -1602,6 +1620,17 @@ owner wants it (raise at `/zj:ideate`).
 
 - **Stack for verification:** `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`;
   run verify scripts in-container: `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/<name>.py`.
+  **Caveats found in v5.0 Phase 1:** the two `verify_qa_*.py` scripts must run **on the host** from a
+  full checkout (`.zj/` is not mounted into the API container); a `python -` heredoc needs
+  `podman run --rm -i` or it silently reads an empty program and exits 0; and for any DB-free check
+  prefer a throwaway container off the `compose_api` image over `podman exec compose_api_1`, which is
+  fragile across the stack restarts a phase requires.
+- **The backend pytest suite DOES run in a container** — mount the **repo root**, not `backend/`:
+  `podman run --rm --user root --network compose_default -v "$PWD:/repo:z" -w /repo/backend
+  --env-file .env --env-file .env.db -e POSTGRES_HOST=db -e PYTHONPATH=/repo/backend
+  -e TEST_POSTGRES_DB=<unique> compose_api sh -c "pip install -q -r requirements-dev.txt; python -m pytest -q"`.
+  Give concurrent runs **different** `TEST_POSTGRES_DB` values — sharing `biznice_test` corrupts both
+  and surfaces as spurious 401s plus a TRUNCATE stall, not as an obvious lock error.
   Vite dev server for UI/UAT at `http://localhost:5173`.
 - **v2.0 tag placement (D-M2-3, mirrors D-M1-1):** the `v2.0` tag (`d6c91cb`) was applied on the
   then-unmerged branch tip; the fast-forward ship (PR #2) preserved the SHA and it is now reachable
