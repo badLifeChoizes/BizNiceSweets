@@ -6,12 +6,13 @@ All operations are idempotent — safe to call on repeated `podman-compose up`
 (D-02, D-09).
 
 Seed sequence:
-  1. Upsert permission rows by code (users:manage, syerp:read, syerp:write,
-     plum:read, plum:write, flan:read, flan:write) — check existence before
-     insert.
+  1. Upsert permission rows by code (users:manage, settings:manage, the
+     per-suite <suite>:read / <suite>:write pairs, and flan:rates) — check
+     existence before insert.
   2. Upsert 'admin' and 'user' roles by name.
   3. Assign ALL permissions to 'admin'; assign the business read/write
-     permissions to 'user' (but NOT users:manage).
+     permissions to 'user' (but NOT users:manage, settings:manage or
+     flan:rates — see _USER_ROLE_PERMS).
   4. Create the admin User only if no row with bns_admin_email exists; hash
      the password via hash_password; attach the 'admin' role.
   5. Write an AuditLog row action='seed.admin_created' ONLY when the admin is
@@ -44,10 +45,20 @@ _PERMISSIONS: list[tuple[str, str]] = [
     ("gelato:write", "Write access to GELATO"),
     ("flan:read", "Read access to FLAN (project management)"),
     ("flan:write", "Write access to FLAN"),
+    ("flan:rates", "See and set FLAN team-member hourly rates (compensation data)"),
     ("settings:manage", "Configure system settings and enable/disable modules"),
 ]
 
-# Permissions granted to the standard 'user' role (all EXCEPT users:manage)
+# Permissions granted to the standard 'user' role — the per-suite read/write
+# pairs only.
+#
+# Three seeded codes are deliberately ABSENT: users:manage and settings:manage
+# (administration), and flan:rates. The last one is the odd member of the set
+# because it is not a suite scope but a FIELD scope: a roster member's
+# `hourly_rate` is compensation data, and flan:read opens the whole roster to
+# everyone on it, so a rostered contractor holding the default 'user' role would
+# otherwise read — and PATCH — every teammate's pay (flan/router.py). Grant it
+# by adding it to a role, never by widening this set.
 _USER_ROLE_PERMS: set[str] = {
     "syerp:read",
     "syerp:write",
