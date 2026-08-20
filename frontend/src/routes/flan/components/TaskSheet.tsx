@@ -1,6 +1,6 @@
 // ABOUTME: Create/edit Sheet for a FLAN task (FLAN-01.3, FLAN-01.5) — phase, summary,
-// ABOUTME: status, risk, start/due dates, pinned and a multi-select assignee picker fed
-// ABOUTME: by the project roster. There is NO key input: the key is server-generated
+// ABOUTME: status, risk, start/due dates, pinned, tags and a multi-select assignee picker
+// ABOUTME: fed by the project roster. There is NO key input: the key is server-generated
 // ABOUTME: (D-V5P1-2), and a `key` in the body would be an unknown-field 422.
 
 /**
@@ -32,8 +32,10 @@
  *
  * Every key in the POST/PATCH body exists in the backend's TaskCreate /
  * TaskUpdate: phase_id, summary, status, risk_level, start_date, due_date,
- * pinned, assignee_ids. `tags` is omitted — TaskCreate defaults it to an empty
- * list and Phase 1 has no tag editor (FLAN-04 owns that).
+ * pinned, assignee_ids and tags. Tags are OPAQUE strings in Phase 1 (D-V5P1-5 —
+ * facets are FLAN-04's), and, exactly like `assignee_ids`, supplying `tags` in
+ * the PATCH **replaces** the whole set: the editor is seeded from the task's own
+ * tags on open so the body always carries the complete list.
  *
  * Mirrors routes/gelato/components/BinSheet.tsx (create/edit in one sheet, local
  * field state, `getApiErrorMessage` on the failure path).
@@ -61,6 +63,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { getApiErrorMessage } from '@/routes/crumb/components/apiError'
+import { TagInput } from './TagInput'
 import { useCreateTask, usePhases, useTeam, useUpdateTask } from '../hooks'
 import type { RiskLevel, Task, TaskStatus } from '../hooks'
 
@@ -116,6 +119,7 @@ export function TaskSheet({
   const [dueDate, setDueDate] = useState('')
   const [pinned, setPinned] = useState(false)
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>([])
 
   // Seed on open: the edited task's own values, or a blank create form whose
   // phase defaults to the board's filter (falling back to the first phase).
@@ -130,6 +134,9 @@ export function TaskSheet({
       setDueDate(task.due_date ?? '')
       setPinned(task.pinned)
       setAssigneeIds(task.assignee_ids)
+      // The task's CURRENT tags — a PATCH replaces the set, so it must start
+      // as what the task has or saving would clear them.
+      setTags(task.tags)
       return
     }
     setPhaseId(defaultPhaseId || firstPhaseId)
@@ -140,6 +147,7 @@ export function TaskSheet({
     setDueDate('')
     setPinned(false)
     setAssigneeIds([])
+    setTags([])
   }, [open, mode, task, defaultPhaseId, firstPhaseId])
 
   const createMutation = useCreateTask()
@@ -168,6 +176,9 @@ export function TaskSheet({
       due_date: dueDate || null,
       pinned,
       assignee_ids: assigneeIds,
+      // Opaque strings (D-V5P1-5); the complete set after the save, like
+      // `assignee_ids` above — supplying it replaces, it does not merge.
+      tags,
     }
     const onError = (err: unknown) => {
       toast.error(
@@ -359,6 +370,14 @@ export function TaskSheet({
               </div>
             )}
           </div>
+
+          <TagInput
+            id="task-tags"
+            label="Tags"
+            value={tags}
+            onChange={setTags}
+            placeholder="e.g. blocked"
+          />
         </div>
 
         <SheetFooter className="flex gap-2 pt-4">

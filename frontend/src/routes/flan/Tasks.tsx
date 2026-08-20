@@ -9,7 +9,7 @@
  * Layout: p-8 space-y-6, mirroring routes/flan/Phases.tsx.
  *
  * Table columns: Key | Summary | Phase | Status | Start | Due | Risk | Pinned
- *                | Assignees | Actions
+ *                | Assignees | Tags | Actions
  *
  * Two rules are load-bearing here:
  *
@@ -55,6 +55,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { FlanNav } from './components/FlanNav'
+import { TagList } from './components/TagList'
 import { TaskSheet } from './components/TaskSheet'
 import { usePhases, useTasks, useTeam } from './hooks'
 import type { Task } from './hooks'
@@ -255,6 +256,7 @@ export function Tasks() {
               <TableHead>Risk</TableHead>
               <TableHead>Pinned</TableHead>
               <TableHead>Assignees</TableHead>
+              <TableHead>Tags</TableHead>
               <TableHead className="w-12">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -277,6 +279,10 @@ export function Tasks() {
                 </TableCell>
                 <TableCell>{task.pinned ? 'Pinned' : '—'}</TableCell>
                 <TableCell>{assigneeLabel(task.assignee_ids)}</TableCell>
+                {/* Opaque strings in the API's own order (D-V5P1-5). */}
+                <TableCell>
+                  <TagList tags={task.tags} />
+                </TableCell>
                 <TableCell>
                   <Button
                     variant="ghost"

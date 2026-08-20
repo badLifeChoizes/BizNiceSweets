@@ -1,5 +1,6 @@
 // ABOUTME: Create-a-project dialog (FLAN-01.1) — name (required), optional key prefix,
-// ABOUTME: category, currency, start/gate dates and description, then POST /flan/projects.
+// ABOUTME: category, currency, start/gate dates, description and tags, then POST
+// ABOUTME: /flan/projects.
 // ABOUTME: Success invalidates the project list, toasts and closes; a 4xx keeps the dialog
 // ABOUTME: open and surfaces the server's own `detail` (a refused key prefix is a 422).
 
@@ -23,9 +24,11 @@
  * `category` is the prototype's classification (work | personal | client) and is
  * NULL when unclassified, so the Select's "None" option sends `null`.
  *
- * Every key in the POST body exists in the backend's `ProjectCreate` schema
- * (name, key_prefix, category, description, currency, start_date, gate_date);
- * `tags` is omitted, which the schema defaults to an empty list.
+ * Every key in the POST body exists in the backend's `ProjectCreate` schema:
+ * name, key_prefix, category, description, currency, start_date, gate_date and
+ * `tags` — the last a list of OPAQUE strings (D-V5P1-5), empty when the user
+ * added none. See ./TagInput.tsx for the trim/blank/de-dupe rules it applies
+ * before a tag ever reaches the body.
  */
 
 import { useEffect, useState } from 'react'
@@ -50,6 +53,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { getApiErrorMessage } from '@/routes/crumb/components/apiError'
+import { TagInput } from './TagInput'
 import { useCreateProject } from '../hooks'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -85,6 +89,7 @@ export function ProjectCreateDialog({ open, onOpenChange }: ProjectCreateDialogP
   const [startDate, setStartDate] = useState('')
   const [gateDate, setGateDate] = useState('')
   const [description, setDescription] = useState('')
+  const [tags, setTags] = useState<string[]>([])
 
   useEffect(() => {
     if (!open) return
@@ -95,6 +100,7 @@ export function ProjectCreateDialog({ open, onOpenChange }: ProjectCreateDialogP
     setStartDate('')
     setGateDate('')
     setDescription('')
+    setTags([])
   }, [open])
 
   const createMutation = useCreateProject()
@@ -113,6 +119,8 @@ export function ProjectCreateDialog({ open, onOpenChange }: ProjectCreateDialogP
         currency: currency.trim().toUpperCase() || DEFAULT_CURRENCY,
         start_date: startDate || null,
         gate_date: gateDate || null,
+        // Opaque strings, already trimmed and de-duplicated by TagInput.
+        tags,
       },
       {
         onSuccess: (project) => {
@@ -219,6 +227,13 @@ export function ProjectCreateDialog({ open, onOpenChange }: ProjectCreateDialogP
               placeholder="Optional"
             />
           </div>
+          <TagInput
+            id="project-tags"
+            label="Tags"
+            value={tags}
+            onChange={setTags}
+            placeholder="e.g. hardware"
+          />
         </div>
 
         <DialogFooter className="flex gap-2 pt-2">

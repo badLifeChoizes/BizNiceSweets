@@ -1,7 +1,8 @@
 // ABOUTME: Component tests for the FLAN Tasks screen (FLAN-01.3, FLAN-01.5) — the key
 // ABOUTME: CELL RENDERS THE API'S VALUE, rows keep the server's numeric key order
 // ABOUTME: (PRJ-9 before PRJ-10, which a string sort would flip), the create POST body
-// ABOUTME: carries no `key`, the assignee filter re-fetches with assignee_id, and a
+// ABOUTME: carries no `key` but does carry the user's tags, the edit sheet PATCHes the
+// ABOUTME: REPLACED tag set, the assignee filter re-fetches with assignee_id, and a
 // ABOUTME: 422 due<start surfaces the server's own detail through toast.error.
 
 /**
@@ -30,6 +31,10 @@
  *      zero-duration milestone — the client adds no date rule of its own).
  *   6. The sheet offers no key input at all, and a soft-removed roster member is
  *      neither selectable nor filterable.
+ *   7. **Tags are reachable** (FLAN-01.3): the row renders the task's own tags,
+ *      the create body carries the ones the user entered, and the edit sheet
+ *      opens seeded with the task's tags and PATCHes the REPLACED set — `tags`
+ *      replaces rather than merges, exactly like `assignee_ids`.
  *
  * Modelled on routes/flan/Phases.test.tsx.
  */
@@ -200,7 +205,9 @@ const TASK_NINE = {
   due_date: '2026-03-16',
   pinned: true,
   assignee_ids: ['m1'],
-  tags: [],
+  // Tagged here and untagged on PRJ-10: a literal in the tags cell cannot
+  // satisfy both rows.
+  tags: ['blocked', 'firmware'],
   created_at: '2026-01-05T00:00:00Z',
   updated_at: '2026-01-05T00:00:00Z',
 }
@@ -264,6 +271,19 @@ function renderTasks() {
       </MemoryRouter>
     </QueryClientProvider>
   )
+}
+
+/**
+ * userEvent with the inter-keystroke delay switched OFF.
+ *
+ * Every keystroke here re-renders a dialog full of Radix primitives, and the
+ * default `delay: 0` still yields to a timer between them: under the full suite
+ * (51 files in parallel) the form-filling tests below drifted past vitest's 5s
+ * per-test timeout on typing alone. `delay: null` removes the yield, not an
+ * assertion — the same events are dispatched in the same order.
+ */
+function setupUser() {
+  return userEvent.setup({ delay: null })
 }
 
 /** The row whose accessible name is the row's own "Task {key}" label. */
@@ -350,6 +370,12 @@ describe('Tasks screen', () => {
     expect(nine[7]).toBe('Pinned')
     expect(nine[8]).toBe('Ada Lovelace')
 
+    // Tags (cell 9) render the task's OWN opaque strings, in the API's order.
+    const nineTags = within(taskRow('PRJ-9')).getAllByRole('cell')[9]
+    expect(within(nineTags).getByText('blocked')).toBeInTheDocument()
+    expect(within(nineTags).getByText('firmware')).toBeInTheDocument()
+    expect(cellText('PRJ-10')[9]).toBe('—')
+
     // The undated, unassigned, unpinned task renders em-dashes rather than blanks.
     expect(cellText('PRJ-10').slice(0, 9)).toEqual([
       'PRJ-10',
@@ -365,7 +391,7 @@ describe('Tasks screen', () => {
   })
 
   it('POSTs a TaskCreate body with no key field (the server assigns the key)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     mockPost.mockResolvedValueOnce({ data: { ...TASK_TEN, id: 't11', key: 'PRJ-11' } })
 
@@ -385,6 +411,15 @@ describe('Tasks screen', () => {
     fireEvent.change(sheet().getByLabelText('Due date'), { target: { value: '2026-04-01' } })
     await user.click(sheet().getByLabelText('Pinned'))
     await user.click(sheet().getByLabelText('Assign Ada Lovelace'))
+    // Tags commit on Enter and on comma; a blank entry is never committed
+    // (the schema 422s one) and an exact repeat is dropped (D-V5P1-5).
+    const tags = sheet().getByLabelText('Tags')
+    await user.type(tags, 'blocked{Enter}')
+    await user.type(tags, '   {Enter}')
+    await user.type(tags, 'firmware,')
+    await user.type(tags, 'blocked{Enter}')
+    expect(sheet().getByText('blocked')).toBeInTheDocument()
+    expect(sheet().getByText('firmware')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Create Task' }))
 
@@ -401,6 +436,7 @@ describe('Tasks screen', () => {
       due_date: '2026-04-01',
       pinned: true,
       assignee_ids: ['m1'],
+      tags: ['blocked', 'firmware'],
     })
     // (b) Nothing we send is outside TaskCreate, and `key` is not in the body:
     // the schema has no such field, so it would be an unknown-key 422.
@@ -411,7 +447,7 @@ describe('Tasks screen', () => {
   })
 
   it('PATCHes a TaskUpdate body from the edit sheet, showing the key read-only', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     mockPatch.mockResolvedValueOnce({ data: { ...TASK_NINE, status: 'Done' } })
 
@@ -434,12 +470,43 @@ describe('Tasks screen', () => {
         due_date: '2026-03-16',
         pinned: true,
         assignee_ids: ['m1'],
+        // Round-tripped untouched: the sheet seeded them from the task, and the
+        // body carries the COMPLETE set because `tags` replaces, not merges.
+        tags: ['blocked', 'firmware'],
       })
     })
   })
 
+  it('PATCHes the REPLACED tag set from the edit sheet — one added, one removed', async () => {
+    const user = setupUser()
+    mockGets()
+    mockPatch.mockResolvedValueOnce({ data: { ...TASK_NINE, tags: ['firmware', 'urgent'] } })
+
+    renderTasks()
+    await screen.findByText('Wire the sensor harness')
+
+    await user.click(screen.getByRole('button', { name: 'Edit PRJ-9' }))
+    await screen.findByRole('heading', { name: 'Edit Task' })
+
+    // Seeded from the task itself — otherwise saving would clear both tags.
+    expect(sheet().getByText('blocked')).toBeInTheDocument()
+    expect(sheet().getByText('firmware')).toBeInTheDocument()
+
+    await user.click(sheet().getByLabelText('Remove tag blocked'))
+    await user.type(sheet().getByLabelText('Tags'), 'urgent{Enter}')
+
+    await user.click(screen.getByRole('button', { name: 'Save Task' }))
+
+    await waitFor(() => {
+      expect(mockPatch).toHaveBeenCalledWith(
+        '/api/v1/flan/tasks/t9',
+        expect.objectContaining({ tags: ['firmware', 'urgent'] })
+      )
+    })
+  })
+
   it('re-fetches with assignee_id in the params when the assignee filter is set', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     renderTasks()
 
@@ -459,7 +526,7 @@ describe('Tasks screen', () => {
   })
 
   it('re-fetches with phase_id in the params when the phase filter is set', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     renderTasks()
 
@@ -475,7 +542,7 @@ describe('Tasks screen', () => {
   })
 
   it("surfaces a 422 due<start as an error toast in the server's own words", async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     const detail =
       'due_date (2026-03-01) must not precede start_date (2026-03-05); ' +
@@ -504,7 +571,7 @@ describe('Tasks screen', () => {
   })
 
   it('offers no key input in the sheet and no removed member in the pickers', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     renderTasks()
 

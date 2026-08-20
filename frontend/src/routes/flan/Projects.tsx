@@ -1,5 +1,5 @@
 // ABOUTME: FLAN Projects list screen (/flan/projects) — a table of projects (name,
-// ABOUTME: category, currency, start/gate date, key prefix, archived badge), a
+// ABOUTME: category, currency, start/gate date, key prefix, tags, archived badge), a
 // ABOUTME: "Show archived" switch, create/edit dialogs and a soft-archive action behind a
 // ABOUTME: confirmation. Rows navigate to /flan/projects/:id/phases (FLAN-01.1, FLAN-01.6).
 
@@ -9,7 +9,7 @@
  * Layout: p-8 space-y-6 (matches the CRUMB Leads / GELATO Bins list pattern).
  *
  * Table columns: Name | Key prefix | Category | Currency | Start | Gate | Status
- *                | Actions
+ *                | Tags | Actions
  *
  * Three project rules show through the UI here:
  *
@@ -73,6 +73,7 @@ import { getApiErrorMessage } from '@/routes/crumb/components/apiError'
 import { FlanNav } from './components/FlanNav'
 import { ProjectCreateDialog } from './components/ProjectCreateDialog'
 import { ProjectEditDialog } from './components/ProjectEditDialog'
+import { TagList } from './components/TagList'
 import { useArchiveProject, useProjects } from './hooks'
 import type { Project } from './hooks'
 
@@ -256,6 +257,7 @@ export function Projects() {
               <TableHead>Start</TableHead>
               <TableHead>Gate</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Tags</TableHead>
               <TableHead className="w-12">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -276,6 +278,10 @@ export function Projects() {
                 <TableCell>{formatDate(project.gate_date)}</TableCell>
                 <TableCell>
                   <StatusBadge active={project.active} />
+                </TableCell>
+                {/* Opaque strings in the API's own order (D-V5P1-5). */}
+                <TableCell>
+                  <TagList tags={project.tags} />
                 </TableCell>
                 {/* Row click opens the project, so the actions cell keeps its clicks. */}
                 <TableCell onClick={(e) => e.stopPropagation()}>

@@ -1,5 +1,5 @@
 // ABOUTME: Edit-a-project dialog (FLAN-01.1, the "edit" verb) — name, key prefix, category,
-// ABOUTME: currency, start/gate dates and description seeded from the row, then PATCH
+// ABOUTME: currency, start/gate dates, description and tags seeded from the row, then PATCH
 // ABOUTME: /flan/projects/{id}. The body carries only ProjectUpdate keys — never `id`, never
 // ABOUTME: `active`. A refused key-prefix change comes back 422 and is toasted verbatim.
 
@@ -23,8 +23,11 @@
  *   - **The payload never carries `id` or `active`.** `ProjectUpdate` has no
  *     such fields: the project id is immutable and archiving is its own endpoint
  *     (POST /flan/projects/{id}/archive), which the Projects screen calls.
- *   - **`tags` is omitted**, because this form has no tag editor and supplying
- *     `tags` REPLACES the project's whole tag set — an omitted key leaves it alone.
+ *   - **`tags` REPLACES the project's whole tag set**, it does not merge. That
+ *     is precisely why the tag editor is seeded from `project.tags` on open:
+ *     the body carries the complete list the project should end up with, so a
+ *     form that opened empty would silently clear every existing tag. Removing
+ *     a chip and saving is how a tag is deleted.
  *
  * Name, key prefix and currency back NOT NULL columns, so submit stays disabled
  * while any of them is blank: `update_project` skips an explicit null aimed at
@@ -55,6 +58,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { getApiErrorMessage } from '@/routes/crumb/components/apiError'
+import { TagInput } from './TagInput'
 import { useUpdateProject } from '../hooks'
 import type { Project } from '../hooks'
 
@@ -90,6 +94,7 @@ export function ProjectEditDialog({ open, project, onClose }: ProjectEditDialogP
   const [startDate, setStartDate] = useState('')
   const [gateDate, setGateDate] = useState('')
   const [description, setDescription] = useState('')
+  const [tags, setTags] = useState<string[]>([])
 
   // Seed on open from the row's OWN values — never a blank form, never defaults.
   useEffect(() => {
@@ -101,6 +106,9 @@ export function ProjectEditDialog({ open, project, onClose }: ProjectEditDialogP
     setStartDate(project.start_date ?? '')
     setGateDate(project.gate_date ?? '')
     setDescription(project.description ?? '')
+    // The project's CURRENT tags: the PATCH replaces the set with whatever this
+    // list holds at save time, so it must start as what the project has.
+    setTags(project.tags)
   }, [open, project])
 
   const updateMutation = useUpdateProject()
@@ -127,6 +135,9 @@ export function ProjectEditDialog({ open, project, onClose }: ProjectEditDialogP
           currency: currency.trim().toUpperCase(),
           start_date: startDate || null,
           gate_date: gateDate || null,
+          // The COMPLETE tag set after the save — supplying it replaces, never
+          // merges, which is what makes removing a chip delete that tag.
+          tags,
         },
       },
       {
@@ -231,6 +242,13 @@ export function ProjectEditDialog({ open, project, onClose }: ProjectEditDialogP
               placeholder="Optional"
             />
           </div>
+          <TagInput
+            id="project-edit-tags"
+            label="Tags"
+            value={tags}
+            onChange={setTags}
+            placeholder="e.g. hardware"
+          />
         </div>
 
         <DialogFooter className="flex gap-2 pt-2">

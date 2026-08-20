@@ -1,8 +1,9 @@
 // ABOUTME: Component tests for the FLAN Projects screen (FLAN-01.1, FLAN-01.6) — rows
 // ABOUTME: render each project's OWN key prefix, the create dialog POSTs a ProjectCreate
-// ABOUTME: body, the edit dialog opens pre-filled and PATCHes a ProjectUpdate body,
-// ABOUTME: archived rows stay hidden until the Show-archived switch is on, a 4xx detail
-// ABOUTME: reaches toast.error, and archiving confirms before POSTing /archive.
+// ABOUTME: body (tags included), the edit dialog opens pre-filled and PATCHes a
+// ABOUTME: ProjectUpdate body whose tag set REPLACES the row's, archived rows stay hidden
+// ABOUTME: until the Show-archived switch is on, a 4xx detail reaches toast.error, and
+// ABOUTME: archiving confirms before POSTing /archive.
 
 /**
  * Projects screen — component tests.
@@ -33,6 +34,12 @@
  *   8. A 422 refusing a `key_prefix` change on a project that already has tasks
  *      (D-V5P1-2) surfaces the server's own `detail` through toast.error — the
  *      client never predicts that lock.
+ *   9. **Tags are reachable** (FLAN-01.1): the row renders the project's own
+ *      tags, the create body carries the ones the user entered, and the edit
+ *      dialog opens seeded with the row's tags and PATCHes the REPLACED set —
+ *      one added, one removed — because `tags` in a PATCH replaces rather than
+ *      merges. Blank and duplicate entries never reach the body (the schema
+ *      422s a blank one; de-duplication is case-sensitive — D-V5P1-5).
  *
  * Modelled on routes/gelato/Bins.test.tsx.
  */
@@ -112,7 +119,9 @@ const CRISIS = {
   start_date: '2026-01-05',
   gate_date: '2026-06-30',
   active: true,
-  tags: [],
+  // Two tags here and NONE on Manikin: a hard-coded literal in the tags cell
+  // cannot satisfy both rows.
+  tags: ['hardware', 'gate-review'],
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 }
@@ -176,6 +185,19 @@ function renderProjects() {
   )
 }
 
+/**
+ * userEvent with the inter-keystroke delay switched OFF.
+ *
+ * Every keystroke here re-renders a dialog full of Radix primitives, and the
+ * default `delay: 0` still yields to a timer between them: under the full suite
+ * (51 files in parallel) the form-filling tests below drifted past vitest's 5s
+ * per-test timeout on typing alone. `delay: null` removes the yield, not an
+ * assertion — the same events are dispatched in the same order.
+ */
+function setupUser() {
+  return userEvent.setup({ delay: null })
+}
+
 /** The row whose accessible name is the row's own "Open project {name}" label. */
 function projectRow(name: string) {
   return screen.getByRole('row', { name: `Open project ${name}` })
@@ -212,10 +234,17 @@ describe('Projects screen', () => {
     // Undated project renders an em-dash for both dates; both rows read Active.
     expect(cellText('Manikin Refresh').slice(4, 7)).toEqual(['—', '—', 'Active'])
     expect(cellText('Crisis Simulator')[6]).toBe('Active')
+
+    // Tags (cell 7) render the row's OWN opaque strings, in the API's order;
+    // an untagged project reads as an em-dash, not as a blank cell.
+    const crisisTags = within(projectRow('Crisis Simulator')).getAllByRole('cell')[7]
+    expect(within(crisisTags).getByText('hardware')).toBeInTheDocument()
+    expect(within(crisisTags).getByText('gate-review')).toBeInTheDocument()
+    expect(cellText('Manikin Refresh')[7]).toBe('—')
   })
 
   it('POSTs the ProjectCreate payload from the create dialog', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     mockPost.mockResolvedValueOnce({ data: { ...CRISIS, id: 'p9', name: 'Gate Review Rig' } })
 
@@ -241,6 +270,16 @@ describe('Projects screen', () => {
     fireEvent.change(screen.getByLabelText('Gate date'), { target: { value: '2026-09-30' } })
     await user.type(screen.getByLabelText('Description'), 'Second-gen sim rig')
 
+    // Tags commit on Enter AND on comma; each becomes a chip.
+    const tags = screen.getByLabelText('Tags')
+    await user.type(tags, 'hardware{Enter}')
+    await user.type(tags, 'gate-review,')
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText('hardware')).toBeInTheDocument()
+    expect(dialog.getByText('gate-review')).toBeInTheDocument()
+    // The committed text left the input — it lives in the chip list now.
+    expect(tags).toHaveValue('')
+
     await user.click(screen.getByRole('button', { name: 'Create Project' }))
 
     await waitFor(() => {
@@ -252,12 +291,45 @@ describe('Projects screen', () => {
         currency: 'EUR',
         start_date: '2026-02-01',
         gate_date: '2026-09-30',
+        tags: ['hardware', 'gate-review'],
       })
     })
   })
 
+  it('never submits a blank or duplicate tag', async () => {
+    const user = setupUser()
+    mockGets()
+    mockPost.mockResolvedValueOnce({ data: { ...CRISIS, id: 'p9', name: 'Tidy Tags' } })
+
+    renderProjects()
+    await screen.findByText('Crisis Simulator')
+
+    await user.click(screen.getByRole('button', { name: 'New Project' }))
+    await screen.findByRole('heading', { name: 'New Project' })
+    await user.type(screen.getByLabelText('Name'), 'Tidy Tags')
+
+    const tags = screen.getByLabelText('Tags')
+    // Whitespace-only entries: the schema 422s a blank tag, so none is committed.
+    await user.type(tags, '   {Enter}')
+    await user.type(tags, ',')
+    // A padded repeat of an existing tag is the SAME tag once trimmed…
+    await user.type(tags, 'red{Enter}')
+    await user.type(tags, '  red  {Enter}')
+    // …but case is meaningful in Phase 1 (D-V5P1-5), so this is a second tag.
+    await user.type(tags, 'Red{Enter}')
+
+    await user.click(screen.getByRole('button', { name: 'Create Project' }))
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/v1/flan/projects',
+        expect.objectContaining({ tags: ['red', 'Red'] })
+      )
+    })
+  })
+
   it('sends key_prefix null when the field is left blank (server derives it)', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     mockPost.mockResolvedValueOnce({ data: { ...CRISIS, id: 'p9', name: 'Derived Prefix' } })
 
@@ -278,12 +350,13 @@ describe('Projects screen', () => {
         currency: 'USD',
         start_date: null,
         gate_date: null,
+        tags: [],
       })
     })
   })
 
   it('hides archived projects until the Show archived switch is on', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
 
     renderProjects()
@@ -302,7 +375,7 @@ describe('Projects screen', () => {
   })
 
   it('surfaces a 4xx detail from create as an error toast', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     mockPost.mockRejectedValueOnce({
       isAxiosError: true,
@@ -331,7 +404,7 @@ describe('Projects screen', () => {
   })
 
   it('archives a project only after the confirmation is accepted', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     mockPost.mockResolvedValueOnce({ data: { ...CRISIS, active: false } })
 
@@ -362,7 +435,7 @@ describe('Projects screen', () => {
   }
 
   it('opens the edit dialog pre-filled with the edited row’s OWN values', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
 
     renderProjects()
@@ -377,6 +450,11 @@ describe('Projects screen', () => {
     expect(screen.getByLabelText('Gate date')).toHaveValue('2026-06-30')
     expect(screen.getByLabelText('Category')).toHaveTextContent('Client')
     expect(screen.getByLabelText('Description')).toHaveValue('')
+    // Seeded from the row: a PATCH REPLACES the tag set, so a form that opened
+    // with no chips would silently clear both of these on save.
+    const crisisDialog = within(screen.getByRole('dialog'))
+    expect(crisisDialog.getByText('hardware')).toBeInTheDocument()
+    expect(crisisDialog.getByText('gate-review')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     await waitFor(() => {
@@ -392,10 +470,13 @@ describe('Projects screen', () => {
     expect(screen.getByLabelText('Start date')).toHaveValue('')
     expect(screen.getByLabelText('Gate date')).toHaveValue('')
     expect(screen.getByLabelText('Category')).toHaveTextContent('None')
+    // Manikin carries no tag, so the untagged form shows no chip at all.
+    const manikinDialog = within(screen.getByRole('dialog'))
+    expect(manikinDialog.queryByLabelText(/^Remove tag /)).toBeNull()
   })
 
   it('PATCHes a ProjectUpdate body carrying neither id nor active', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     mockPatch.mockResolvedValueOnce({ data: { ...CRISIS, name: 'Crisis Simulator II' } })
 
@@ -430,6 +511,7 @@ describe('Projects screen', () => {
         currency: 'USD',
         start_date: '2026-01-05',
         gate_date: '2026-07-31',
+        tags: ['hardware', 'gate-review'],
       })
     })
 
@@ -441,8 +523,37 @@ describe('Projects screen', () => {
     expect(body).not.toHaveProperty('active')
   })
 
+  it('PATCHes the REPLACED tag set — one added, one removed', async () => {
+    const user = setupUser()
+    mockGets()
+    mockPatch.mockResolvedValueOnce({ data: { ...CRISIS, tags: ['gate-review', 'urgent'] } })
+
+    renderProjects()
+    await screen.findByText('Crisis Simulator')
+    await openEditDialog(user, 'Crisis Simulator')
+
+    const dialog = within(screen.getByRole('dialog'))
+    // Remove one of the row's two tags…
+    await user.click(dialog.getByLabelText('Remove tag hardware'))
+    expect(dialog.queryByText('hardware')).toBeNull()
+    // …and add one.
+    await user.type(dialog.getByLabelText('Tags'), 'urgent{Enter}')
+
+    await user.click(screen.getByRole('button', { name: 'Save Project' }))
+
+    // `tags` in a PATCH REPLACES the project's whole set, so the body must be
+    // the complete list the project should end up with — not a delta, and not
+    // the pair it started with.
+    await waitFor(() => {
+      expect(mockPatch).toHaveBeenCalledWith(
+        '/api/v1/flan/projects/p1',
+        expect.objectContaining({ tags: ['gate-review', 'urgent'] })
+      )
+    })
+  })
+
   it('surfaces the server’s 422 detail when a key prefix can no longer change', async () => {
-    const user = userEvent.setup()
+    const user = setupUser()
     mockGets()
     // The client never predicts the lock (D-V5P1-2) — it tries, and reports back.
     mockPatch.mockRejectedValueOnce({
