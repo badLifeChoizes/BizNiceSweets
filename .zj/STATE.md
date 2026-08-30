@@ -11,6 +11,28 @@ Two owner calls taken at the retro: project **un-archive** is homed at Phase **2
 **Position: v5.0 Phase 1 "FLAN core" — `[done]`, tag `zj/good-01-flan-core`.
 Next: `/zj:ship` (merge `feature-flan-core` → `master`), then `/zj:plan 2a`.**
 
+### ⚠ Working tree is deliberately DIRTY — three uncommitted files (owner decision)
+
+Not phase work. A **temporary dev-login convenience** added at the owner's request while clicking
+through the running stack, to be deleted before launch:
+
+| File | Change |
+|---|---|
+| `frontend/src/routes/Login.tsx` | amber "Dev sign-in" panel — credentials + a fill button |
+| `frontend/src/vite-env.d.ts` | types for the two `VITE_DEV_LOGIN_*` vars |
+| `.gitignore` | added `.env.local` / `.env.*.local` (the bare `.env` pattern did not cover them) |
+
+The credentials themselves live in **`frontend/.env.local`**, which is **gitignored** and therefore
+not part of this. The panel renders only when both vars are non-empty, so **deleting that one file
+removes it** — no code edit. Verified both ways: a build with the file carries the password in
+`dist/assets/index-*.js`; a build without it has neither the password nor the panel markup
+(dead-code-eliminated). Note Vite loads `.env.local` in **production** mode too, so the gitignore is
+what keeps it out of CI and any clean deploy.
+
+**Owner chose to leave these uncommitted** (2026-08-30) so `feature-flan-core` stays byte-identical
+to the tree `zj/good-01-flan-core` was verified against, and the ship PR carries only FLAN work.
+**`/zj:ship` needs a clean tree — commit, stash, or discard these three files at that point.**
+
 ### Retro outcome (2026-08-19)
 
 The keeper is **vacuous verification** — four distinct ways a check can measure nothing, three of
