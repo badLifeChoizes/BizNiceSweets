@@ -3,7 +3,7 @@
 # ABOUTME: Builds the API image from the Containerfile uncached and boots it against Postgres.
 # ABOUTME: This is the retired container-image job — the artifact a self-hoster actually gets.
 #
-# Usage: scripts/local-ci/clean-room.sh [--ref <git-ref>]
+# Usage: scripts/local-ci/clean-room.sh [--ref <git-ref>] [--port <host-port>]
 #
 # WHY uncached, and WHY it is not folded into gate.sh: defect U2 — the API image could not be
 # built AT ALL — hid for five phases precisely because no automated process ever cold-built it,
@@ -19,9 +19,13 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 . scripts/local-ci/lib.sh
 
 REF="HEAD"
+# Not 8000: that is where ./scripts/uat.sh's dev stack lives, and a busy port used to turn this
+# check green against the wrong container.
+API_PORT="${API_PORT:-8097}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --ref) shift; REF="${1:?--ref needs a value}" ;;
+    --port) shift; API_PORT="${1:?--port needs a value}" ;;
     -h|--help) sed -n '1,22p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -29,6 +33,18 @@ while [ $# -gt 0 ]; do
 done
 
 need_podman
+
+# WHY the port is asserted free, and not 8000: a dev stack from ./scripts/uat.sh publishes
+# compose_api_1 on 8000 for weeks at a time. Publishing onto an occupied port makes `podman run`
+# fail with `rootlessport listen tcp: bind: address already in use` — and then a probe of that
+# port is answered by the OTHER container, so this script reported a green boot for an image it
+# had never started. Same silent-failure class as U2, in U2's own replacement.
+if (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -qE "[:.]${API_PORT}[[:space:]]"; then
+  echo "port ${API_PORT} is already in use — refusing to probe a port somebody else may answer." >&2
+  echo "Stop what holds it (podman ps) or re-run with --port <free-port>." >&2
+  exit 1
+fi
+
 SHA="$(git rev-parse --short "$REF")"
 WORK="$(mktemp -d)"
 API_NAME=bns-local-ci-api
@@ -69,17 +85,27 @@ pg_up || exit 1
 
 # POSTGRES_HOST is overridden because .env ships the compose service name `db`, which is not
 # this network's name for it — the same override compose.yml makes in its `environment:` block.
-podman run -d --name "$API_NAME" --network "$NET" \
+if ! podman run -d --name "$API_NAME" --network "$NET" \
   --env-file .env --env-file .env.db \
   -e POSTGRES_HOST="$PG_NAME" -e POSTGRES_PORT=5432 \
-  -p 127.0.0.1:8000:8000 \
-  biznicesweets-api:local-ci >/dev/null
+  -p "127.0.0.1:${API_PORT}:8000" \
+  biznicesweets-api:local-ci >/dev/null; then
+  echo "podman run failed — the image built but could not be started at all" >&2
+  exit 1
+fi
 
 for _ in $(seq 1 60); do
+  # A probe is only evidence if OUR container is the thing that could answer it. If it has
+  # exited, stop now and print why rather than polling a port for two minutes.
+  if [ "$(podman inspect -f '{{.State.Running}}' "$API_NAME" 2>/dev/null)" != "true" ]; then
+    echo "the container exited while coming up. Log follows." >&2
+    podman logs "$API_NAME" >&2 || true
+    exit 1
+  fi
   # /health/ready returns 503 while the DB is unreachable, so a passing curl proves migrations
   # ran and the pool connects — not merely that a process started.
-  if curl -fsS http://127.0.0.1:8000/health/ready; then
-    echo; echo "the built image booted and reports ready"
+  if curl -fsS "http://127.0.0.1:${API_PORT}/health/ready"; then
+    echo; echo "the built image booted and reports ready on ${API_PORT}"
     exit 0
   fi
   sleep 2
