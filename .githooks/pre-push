@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# .githooks/pre-push
+# ABOUTME: Runs the local CI gate before a push, replacing the GitHub Actions run that used to.
+# ABOUTME: Set ZJ_SKIP_GATE=1 to push without it when you have a reason and know what it is.
+
+set -uo pipefail
+if [ "${ZJ_SKIP_GATE:-0}" = "1" ]; then echo "pre-push: gate skipped (ZJ_SKIP_GATE=1)"; exit 0; fi
+ROOT="$(git rev-parse --show-toplevel)"
+GATE="$ROOT/scripts/local-ci/gate.sh"
+[ -x "$GATE" ] || { echo "pre-push: $GATE missing — allowing push"; exit 0; }
+echo "pre-push: running the local CI gate (ZJ_SKIP_GATE=1 to bypass)"
+bash "$GATE" && exit 0
+cat >&2 <<'MSG'
+
+push refused: the local gate failed. This is the check GitHub Actions used to run.
+
+The image build and boot probe are a separate, deliberate run:
+  scripts/local-ci/clean-room.sh
+MSG
+exit 1

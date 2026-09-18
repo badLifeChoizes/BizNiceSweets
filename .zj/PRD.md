@@ -1,5 +1,9 @@
 # PRD — BizNiceSweets
-Updated: 2026-07-20 (PRD-12 added at the v4.0 spec — trustworthy, contributor-ready engineering
+Updated: 2026-08-18 (**PRD-6 rewritten and promoted to the active next milestone at the v5.0 spec**
+— FLAN is no longer "port the prototype": it is project planning whose estimates become SYERP spend,
+sourced from **two** prototypes (`prj-mgmt-v24.html` + `schedule_gate-v45.html`). Covered by
+SRD FLAN-01..11 + NFR-9; D-V5-1..8)
+Prior: 2026-07-20 (PRD-12 added at the v4.0 spec — trustworthy, contributor-ready engineering
 baseline: CI, enforced lint, runnable integration tests, ledger race-safety, human UAT; D-M4-1..3)
 Prior: 2026-07-16 (PRD-8 refined + promoted to the active next milestone at the v3.0 spec —
 order-to-cash + WMS scope, sell-side real books; D-V3-1..9)
@@ -68,15 +72,43 @@ Originally: 2026-07-04 (reverse-engineered at ZJ adoption from code, `.planning/
 - **Status: partial** — parts/revisions/BOM/costing shipped; AVL and vendor import/export
   broken at runtime + Phase-6 human verification never run (see SRD PLUM-04..10; Phase 7).
 
-## PRD-6: FLAN — project management on the new stack
-- **Statement:** The product shall provide project management (projects, phases, tasks,
-  timeline, budgets, team) as a module on the new stack, porting the FLAN prototype.
-- **Why:** Second proven prototype; project management connects product development to
-  execution. Prototype is frozen — the port is the only path forward.
-- **Priority:** should (deferred milestone)
-- **Source:** FLAN prototype (v24); v2 requirement FLAN-01
-- **Acceptance signal:** The team runs a real project in the module instead of the prototype.
-- **Status: planned**
+## PRD-6: FLAN — project management, from first estimate to booked cost
+- **Statement:** The product shall let a shop **plan and run a project** as a module of the suite:
+  projects broken into phases and **dependency-scheduled tasks** judged against a deadline, an
+  assigned team, governance (risks, milestones, decisions), a **budget that starts as estimates and
+  becomes real spend** — because an estimate line can be promoted into a SYERP purchase order — and
+  a project cost view reporting **Estimated / Committed / Actual**, where Actual is what the general
+  ledger actually holds.
+- **Why:** Two reasons, and the second is the one that outlives the port.
+  1. **FLAN is the last frozen prototype.** ~11.6k lines of proven project-management logic
+     (`prj-mgmt-v24.html`) plus a ~3.8k-line scheduling and deadline-gate engine
+     (`schedule_gate-v45.html`, written after BizNiceSweets was first planned) live nowhere on the
+     platform. Porting them leaves **no suite running outside the stack** and closes the chapter the
+     re-platform opened at v1.0.
+  2. **A project is where a manufacturer's money is decided before it is spent.** Every other suite
+     records a commitment that already exists — a PO, a work order, an invoice. A project is the
+     only place the shop reasons about cost while it is still an estimate. Connecting that estimate
+     to the ledger it eventually becomes is what makes "design → projects → purchasing →
+     manufacturing" one system rather than four. A straight parity port was offered and **declined**
+     for exactly this reason (D-M5-2): one real foreign key to the hub is what made CRUMB and GELATO
+     land as suite *members* rather than islands.
+- **Priority:** should (**active next milestone — v5.0 "FLAN port"**)
+- **Source:** FLAN prototypes `flan/app/prj-mgmt-v24.html` (v24) and
+  `flan/app/schedule_gate-v45.html` (v45, added to scope by the owner at the v5.0 spec, D-V5-3);
+  milestone choice D-M5-1; DoD D-M5-2; spec decisions D-V5-1..8.
+- **Acceptance signal:** The owner plans a real project in the module — phases, dependency-linked
+  tasks, a team, a gate verdict — approves a budget, **promotes one estimate line into a SYERP
+  purchase order**, receives and bills it, and watches the project's Committed figure retire into
+  Actual with the trial balance still netting zero. Neither prototype is opened to do it.
+- **Evidence:** FLAN-01..11 + NFR-9 (see SRD). **FLAN-08 is the DoD crux** — the SYERP cost roll-up
+  and estimate promotion.
+- **Deliberately out of scope for v5.0:** labor/time capture against tasks and its costing (D-M5-2 —
+  it couples FLAN's and PLUM's costing models in one milestone); unauthenticated public share links
+  and the prototype's multi-step client-side undo/snapshots, both replaced by server-native
+  equivalents (D-V5-6); and any migration of prototype **data** — FLAN is a new module, not a data
+  port, so `flan/data/Crisis.json` is not a requirements source (D-V5-4).
+- **Status: planned** — v5.0 spec complete (this doc + SRD FLAN-01..11, NFR-9); phases not yet
+  planned or built.
 
 ## PRD-7: Operations — extended ERP and manufacturing execution
 - **Statement:** The product shall support operations: inventory, purchase orders, then a

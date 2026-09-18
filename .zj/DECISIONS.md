@@ -1,5 +1,9 @@
 # DECISIONS — BizNiceSweets
-Updated: 2026-08-18 (**v4.0 milestone close** — D-M4-4 (C4 amended, not met), D-M4-5 (NFR-7 names `pick`), D-M5-1/2 (v5.0 = FLAN port, port + one hub integration). Index regenerated to match the body exactly; 171 decisions)
+Updated: 2026-08-18 (**v5.0 "FLAN port" spec** — D-V5-1..8: unified task model, roster with optional
+user link, full prototype scope **plus the second prototype `schedule_gate-v45.html`**, no data
+migration, **estimate→SYERP-PO promotion (the crux)**, server-native sharing/undo, NFR-9 bound,
+phase mapping. Index appended, not regenerated; **179 decisions**)
+Prior: 2026-08-18 (**v4.0 milestone close** — D-M4-4 (C4 amended, not met), D-M4-5 (NFR-7 names `pick`), D-M5-1/2 (v5.0 = FLAN port, port + one hub integration). Index regenerated to match the body exactly; 171 decisions)
 Prior: 2026-08-17 (v4.0 Phase 5 close — D-P5-1..11 appended, incl. D-P5-10 the dedicated `.env.db` that fixed blocker U0, and D-P5-11 the rescope making the QA checklist the deliverable rather than the owner's reading; 148 decisions)
 Prior: 2026-07-20 (v4.0 "Infra-debt + quality paydown" spec — D-M4-1..3 scope/CI-platform/lint-baseline; v3.0 shipped to master via PR #3, D-M3-4 updated; 137 decisions)
 
@@ -185,6 +189,24 @@ at milestone close, never hand-edit it. 171 decisions (regenerated at the v4.0 c
 - **D-M4-5:** NFR-7's Statement extended to name `pick` — an omission in a requirement's enumeration is a scope boundary verification honours literally, which is how execute_pick stayed unlocked through Phase 4…
 - **D-M5-1:** Next milestone = v5.0 FLAN port — the last frozen prototype; chosen over Quality & release, PLUM-advanced and a consolidation milestone…
 - **D-M5-2:** v5.0 DoD = port + ONE hub integration (project cost rolls up from SYERP actuals); a straight parity port was declined so FLAN lands as a suite member, not an island; labor/time capture out…
+
+- **D-V5-1:** Unified task model — a phase groups scheduled tasks and derives its dates and % from them; v24's hand-set progress slider is not ported, because two sources of truth for a date let the gate verdict and the phase board disagree…
+- **D-V5-2:** FLAN team roster is project-owned with an OPTIONAL platform-user link — real teams include people who will never hold a login, and a users-only model cannot hold the data the module exists for…
+- **D-V5-3:** Full prototype scope (all four capability groups) PLUS a second source prototype, `schedule_gate-v45.html` — a dependency-scheduling/deadline-gate engine built after BizNiceSweets was planned; this is why the spec produced eleven FLAN requirements, not one…
+- **D-V5-4:** No prototype data migration — FLAN is a new module, not a ported dataset; a `Crisis.json` importer was declined, so FLAN-11's capability-coverage matrix replaces it as the checkable evidence of retirement…
+- **D-V5-5:** SYERP owns spend; FLAN estimates are PROMOTED into SYERP purchase orders carrying `flan_project_id`, and the project reports Estimated/Committed/Actual with Actual GL-posted — the v5.0 crux; v24's parallel expenses/vendors/POs tables are not ported…
+- **D-V5-6:** Server-native equivalents for sharing/snapshots/undo — deep links that enforce login + `flan:read`, server baselines, one-step undo; NO unauthenticated public share tokens, which would be the platform's first public attack surface…
+- **D-V5-7:** NFR-9 asserts schedule determinism (shuffled input → identical schedule) and a deliberately generous 1 s bound at 500 tasks/1,000 links — a tight threshold on a shared runner goes flaky and then gets deleted…
+- **D-V5-8:** v5.0 phase mapping = 7 phases / 9 units (1 → 2a/2b → 3 → 4a/4b → 5 → 6 → 7), engine before board and budget before promotion; analytics and exports sit after the DoD crux so a long milestone risks the tail, not the definition of done…
+
+- **D-V5P1-1:** v5.0 Phase 1 is ONE full-stack phase in wave order, not sub-split — FLAN-01 has exactly one provable crux (phase-derived rollups incl. the empty phase), and the standing rule is to sub-split only at two…
+- **D-V5P1-2:** Task key prefix is a per-project `key_prefix` column, defaulted from the project name and LOCKED once the first task is issued — v45's majority-inference is not ported, and a mutable prefix splits one project's key series in two…
+- **D-V5P1-3:** FLAN's active project is URL-scoped (`/flan/projects/:projectId/...`) with a switcher that merely navigates — it makes FLAN-01.6's "no view mixes two projects" structural rather than a rule to remember, and is the shape FLAN-10's deep links need…
+- **D-V5P1-4:** Refresh `.zj/codebase/MAP.md` at Phase 1 close — its Concerns section still calls a Phase-7-fixed blocker live and states there is no CI, which would misdirect every architect from 2a to 7; splitting `plum/service.py` and regenerating the atlas stay out…
+- **D-V5P1-5:** FLAN tags live in two join tables (`flan_project_tag`, `flan_task_tag`) holding opaque strings — 2a's basis filter and group-by-facet are SQL aggregations, and no ARRAY/JSON column exists anywhere in the codebase today…
+- **D-V5P1-6:** Removing a roster member is a SOFT-remove (`active=False`) plus deletion of that member's assignment rows — it makes "history untouched" true by construction and matches the archive-not-delete precedent in every other suite…
+- **D-V5P1-7:** FLAN task keys are UNPADDED (`PRJ-9 → PRJ-10`) — the SRD's own verification literal and both prototypes agree; the D-P8-6 digit-boundary defect lives in the numeric cast, not the padding, so it is caught either way…
+- **D-V5P1-8:** A roster member's `hourly_rate` is gated on a NEW `flan:rates` permission, not granted to the default `user` role — the field crossed the wire behind suite-wide `flan:read`/`flan:write`, so every rostered contractor could read and edit every teammate's pay; dropping it from the read schema alone would have made the member dialog wipe stored rates on every edit…
 
 ## Product & Architecture
 
@@ -1280,3 +1302,212 @@ engine, subledger↔control Decimal-exact tie-outs, `asyncio.gather` concurrency
   couples FLAN's and PLUM's costing models in one milestone; unblocking PLUM-13 is not a v5.0 goal);
   CRISP-01 and NFR-3 stay PRD-9/PRD-10. Phase mapping deferred to `/zj:spec`, with a 9a/b/c-shaped
   sub-split expected.
+
+---
+
+## v5.0 "FLAN port" spec (2026-08-18)
+
+- **D-V5-1 (owner, `/zj:spec`):** **Unified task model — a phase groups scheduled tasks and derives
+  from them.** FLAN is `Project → Phase → Task`, where the **Task** carries the full
+  `schedule_gate-v45` field set (start/due, `blockedBy`/`blocks`, pinned, risk level, facet tags,
+  `To Do|In Progress|Done`) and a **Phase's start date, due date and % complete are computed from
+  its tasks** — earliest start, latest due, share `Done` — never hand-set. *Why:* the two prototypes
+  model work incompatibly (v24: phases with a hand-dragged progress slider and checkbox subtasks;
+  v45: flat dependency-scheduled tasks), and keeping both would give every date two sources of truth
+  that can silently disagree — the gate verdict would say one thing and the phase board another.
+  v24's slider is the weaker model on its own terms: `docs/features/flan/INVARIANTS.md` already
+  records that "subtask deletion does NOT affect phase progress" because progress is slider-based
+  and unrelated to the work beneath it. Rejected: layered (both keep their own dates) and two
+  separate per-project objects. *Cost accepted:* a phase can no longer be marked "80% done" by
+  judgement — it is 80% done when its tasks say so.
+- **D-V5-2 (owner, `/zj:spec`):** **Team roster with an optional platform-user link.** A FLAN team
+  member is a project-owned row (name, role, email, colour, rate) that **may** reference a
+  `CORE-04` user account but need not. *Why:* real project teams include people who will never hold
+  a login (contractors, vendor engineers, another department), so a users-only model cannot hold the
+  data the module exists to hold; the optional link still makes assignment attributable for the
+  people who do have accounts. Rejected: users-only (blocks non-account collaborators) and a
+  standalone roster with no link (assignment never attributable). *Invariant kept from the
+  prototype's spec:* deleting a user must never delete roster history.
+- **D-V5-3 (owner, `/zj:spec`):** **Full prototype scope — all four capability groups — plus a
+  second source prototype, `schedule_gate-v45.html`.** The owner selected governance (risks/
+  milestones/decisions), deliveries + notes, analytics & visualisation, **and** exports &
+  collaboration, and disclosed a **second app built after BizNiceSweets was first planned** —
+  `flan/app/schedule_gate-v45.html`, a ~3.8k-line dependency-scheduling and deadline-gate engine
+  (topological auto-move, pins, snap/sweep, projected finish, breach gate, named calculation basis,
+  facet taxonomy, baselines) — as in-scope capability to reuse. *Consequence, on the record:* v5.0
+  is materially larger than a v24 parity port, and is the reason the spec produced **eleven** FLAN
+  requirements rather than one. The size is managed by phase sequencing, not by silently trimming
+  the spec: FLAN-01/02/07/08 carry the DoD, FLAN-09/10 are the tail most safely deferred if the
+  milestone runs long, and any such deferral is an owner call at that point, not an assumption made
+  here.
+- **D-V5-4 (owner, `/zj:spec`):** **No prototype data migration — FLAN is a new module, not a
+  port of a dataset.** A `Crisis.json` importer was offered as the way to make "prototype retired"
+  objectively verifiable and was **declined**: that data belongs to the first prototype the owner
+  happened to use, not to FLAN. *Consequence:* retirement can no longer be evidenced by "the old
+  data renders on the platform", so **FLAN-11 replaces it with a capability-coverage matrix** —
+  every capability of both prototypes mapped to the requirement that delivers it or to a dated
+  deferral. This is the v4.0 audit's lesson applied forward (D-M4-5): an omission in an enumeration
+  is invisible to every gate downstream of it, so the enumeration has to be the artefact.
+- **D-V5-5 (owner, `/zj:spec`):** **SYERP owns spend; FLAN estimates are *promoted* into it.** A
+  FLAN project holds **estimate lines** (the v24 budget UX, but explicitly estimates), and an
+  approved line can be **promoted** into a real SYERP purchase order carrying an optional
+  `flan_project_id`. The project then reports **Estimated / Committed / Actual**, where Actual is
+  **GL-posted**. FLAN never writes a SYERP table directly — it calls the SYERP service. *Why:* the
+  owner asked that FLAN work be able to "transition from prototype to actual, ready for SYERP data",
+  which needs both halves — FLAN must be fully usable with no ERP document in existence (early-stage
+  projects are where estimates live), *and* the same project must become ERP-backed without
+  re-keying. Promotion is the only construction that gives both without creating a second place a
+  cost can be born: once promoted, the spend is SYERP's, and the estimate line records the PO it
+  became. Rejected: porting v24's parallel expenses/vendors/POs tables (duplicates a shipped
+  subsystem — SYERP purchasing + AP + GL — and gives one cost two homes), independent
+  estimate-vs-actual with no traceable link, and a per-project prototype/production flag (carries no
+  estimate across the boundary). *This is the milestone's crux (FLAN-08) and its hardest
+  verification: Committed must retire exactly as Actual appears, with no double count and the trial
+  balance still netting zero.*
+- **D-V5-6 (owner, `/zj:spec`):** **Server-native equivalents for sharing, snapshots and undo — no
+  public share tokens.** Exports (CSV/Excel/JSON/ICS/PDF/HTML report) port as-is; **comments and the
+  activity log become server-side**; the prototype's "shareable link" becomes an **in-app deep link
+  that still enforces login and `flan:read`**; client snapshots become **server-side named
+  baselines** (FLAN-02.9); and the 50-deep client history stack becomes **one-step undo of the last
+  action**, bulk operations included. *Why:* all three ported behaviours assume one user owns one
+  file — an assumption that stopped being true at `CORE-02` and would be actively wrong the first
+  time two people edit a project. Rejected: unauthenticated tokenised public URLs, which would add
+  the platform's **first** public attack surface (token issuance, expiry, revocation, scope) for a
+  capability nobody has asked for yet; if external sharing is wanted later it should be specified
+  deliberately, not inherited from a single-user prototype.
+- **D-V5-7 (manager, `/zj:spec`):** **NFR-9 asserts schedule determinism and a 1-second bound at
+  500 tasks / 1,000 links** — deliberately generous against a sub-200 ms target. *Why:* the
+  scheduling engine is the one piece of FLAN that is pure math over a graph, so it is the one piece
+  where an accidental O(n²) walk or an N+1 query per link would pass every functional test and only
+  show up as "the board got slow". A tight threshold on a shared CI runner goes flaky and then gets
+  deleted, which is worse than no gate; a loose one still catches the regression class it exists
+  for. Determinism is asserted by shuffling input order and demanding an identical schedule — the
+  property `schedule_gate-v45`'s layered DATA→STATE→SCHED→LAYOUT→RENDER design was built to have,
+  and the one most easily lost when the math moves server-side.
+- **D-V5-8 (manager, `/zj:spec`):** **v5.0 phase mapping = 7 phases / 9 units**, with the
+  9a/b/c-shaped sub-split D-M5-2 anticipated: 1 (FLAN-01 core) → 2a (FLAN-02 engine + FLAN-04
+  taxonomy) → 2b (FLAN-03 board) → 3 (FLAN-05 + FLAN-06) → 4a (FLAN-07 budget) → **4b (FLAN-08
+  SYERP roll-up + promotion — the DoD crux)** → 5 (FLAN-09) → 6 (FLAN-10) → 7 (FLAN-11
+  supersession). *Why this order:* the engine (2a) is pure server-side math and must land before the
+  board that renders it (2b), which is the 11a/11b split that worked in v3.0; budget (4a) must
+  exist before promotion (4b) has anything to promote; and FLAN-11's coverage matrix is last because
+  it audits everything before it. Analytics (5) and exports (6) sit deliberately **after** the crux
+  so that if the milestone runs long, what is at risk is the tail rather than the definition of
+  done.
+
+## v5.0 Phase 1 planning — FLAN core (2026-08-18)
+
+*ID namespace note:* v5.0 phase decisions use **`D-V5P1-*`** (milestone v5.0, Phase 1) because
+`D-P1-*` was already spent by v4.0's Phase 1 (`D-P1-1`, the react-hooks pin) and phase numbers
+restart every milestone. Later v5.0 phases follow the same shape — `D-V5P2a-*`, `D-V5P4b-*`.
+
+- **D-V5P1-1 (owner, `/zj:plan 1`):** **Phase 1 is ONE full-stack phase in wave order** — schema →
+  service+router → UI → verification → close — not sub-split into backend/frontend units. *Why:*
+  FLAN-01 has exactly one provable crux (the phase-derived dates and % rollup, including the
+  empty-phase case), and the v3.0 keeper is "sub-split when a phase has two provable cruxes; keep
+  whole when the second half is near-mechanical." It mirrors D-P8-8 and Phase 11a (CRUMB core),
+  both of which shipped whole. *Rejected:* a 1a-backend / 1b-UI split — it buys ceremony, not
+  safety, on a phase whose backend and frontend are not independently risky, and delays the first
+  FLAN screen behind an extra plan/build/verify cycle. Result: 35 tasks in five waves.
+- **D-V5P1-2 (owner, `/zj:plan 1`):** **The task key prefix is a per-project `key_prefix` column,
+  defaulted from the project name at create, editable until the first task is issued and immutable
+  after.** *Why:* keys are a project's stable public handles — once `PRJ-1..PRJ-40` exist, changing
+  the prefix either rewrites history or splits the series in two, and the numeric-safe generator
+  (D-P8-6) then has to scan a mixed series. Locking at first issue keeps it over exactly one
+  series. *Rejected:* always-editable (the split-series problem); a fixed global `TASK-` prefix
+  (kills the per-project identity both prototypes had, and makes a key meaningless once FLAN-10's
+  deep links and exports quote it). *Explicitly not ported:* v45's `keyPrefix()` majority-inference
+  over existing keys (`flan/app/schedule_gate-v45.html:3197-3207`) — inference is fragile
+  server-side; the platform stores the prefix.
+- **D-V5P1-3 (owner, `/zj:plan 1`):** **FLAN's active project is URL-scoped** —
+  `/flan/projects/:projectId/{phases,tasks,team}`, with a project switcher in the FLAN nav that
+  simply navigates. *Why:* it makes FLAN-01.6 ("no view mixes two projects' data") **structural**
+  rather than a service-layer rule to remember — a view cannot mix two projects because it only
+  ever receives one id — needs no server-side session state, and is already the shape FLAN-10's
+  authenticated deep links (D-V5-6) will require. *Rejected:* a server-persisted active project
+  with flat `/flan/tasks` routes (sticky across devices, but kills deep-linkability — a shared URL
+  shows the recipient *their* active project — and turns the no-mixing rule into a discipline
+  enforced on every query); and URL-scoped with no switcher (a round trip through the project list
+  on every change).
+- **D-V5P1-4 (owner, `/zj:plan 1`):** **Refresh `.zj/codebase/MAP.md` at the close of Phase 1**;
+  leave `plum/service.py` and the atlas alone. *Why:* the map's body is current through v3.0, but
+  its **Concerns** section carries four claims that are now false and would actively misdirect the
+  architects and engineers of phases 2a–7 — Concern 1 calls the Phase-7-fixed `SyerpPartner` import
+  a live BLOCKER, Concern 5 states "No CI: no `.github/`, no pipeline config anywhere (verified)"
+  when v4.0 Phase 3 shipped six required jobs with branch protection, it cites the deleted
+  `frontend/.eslintrc.cjs` as the lint config, and its registered-module list omits `gelato`. A map
+  with confident false statements is worse than an old one. *Rejected:* deferring it (six more
+  phases planned against a wrong map); folding in the `plum/service.py` split (~3,000 lines — a
+  refactor whose blast radius is PLUM's whole test surface does not belong on the critical path to
+  the v5.0 DoD; stays BACKLOG p2); and regenerating `.zj/atlas/atlas.html` (genuinely frozen at
+  2026-07-04 and missing all of v2.0–v4.0, but better done at the v5.0 close when FLAN is whole).
+  *Owner clarification captured at plan:* `MAP.md` is the agent-facing text map; the human-facing
+  visualization is the atlas — they are different artifacts with different refresh cadences.
+- **D-V5P1-5 (owner, `/zj:plan 1`):** **FLAN tags live in two join tables** —
+  `flan_project_tag(project_id, tag)` and `flan_task_tag(task_id, tag)` — storing the tag as a
+  plain normalized string, exactly as both prototypes hold it (`schedule_gate-v45.html:1513`,
+  `:860` parse `Facet:Value` at read rather than storing it decomposed). *Why:* FLAN-02.6's
+  `in-plan` basis filter and FLAN-03.4's group-by-facet are both SQL aggregations over tags, which
+  a join table answers with a plain `JOIN … GROUP BY` — the shape Phase 2a needs, and one 2a can
+  add facet validation to without a migration. It also preserves the codebase's
+  zero-exotic-column-types record: no `ARRAY`, `JSONB` or `JSON` column exists in any
+  `backend/app/modules/*/models.py` today. *Rejected:* an `ARRAY(String)` column (a 1:1 match to
+  the prototype's in-memory shape, but group-by-facet in 2a then needs Postgres-specific `unnest`,
+  and it would be the codebase's first array column); and deferring tags to 2a entirely (AC1 and
+  AC3 both name tags literally, so FLAN-01 could not be marked complete at Phase 1's verify and the
+  roadmap's phase→FR mapping would have needed amending). *Scope limit:* Phase 1 stores, reads and
+  round-trips tags as **opaque strings** — no facet semantics, no exclusivity, no `Facet:Value`
+  parsing. That is FLAN-04.
+- **D-V5P1-6 (owner, `/zj:plan 1`):** **Removing a roster member is a soft-remove** — set
+  `active=False` on the `flan_team_member` row and delete that member's `flan_task_assignee` /
+  `flan_phase_assignee` rows in the same transaction, scoped by `member_id` and never touching a
+  task row. Removed members are excluded from `list_members` and assignee pickers by default.
+  *Why:* it makes FLAN-01.4's "does not delete the roster row or any of its history" true **by
+  construction** rather than by care — a removed member's name stays resolvable behind any past
+  reference, which FLAN-05/06/10 (risks, notes, comments, activity log) will all need — and it
+  matches the archive-not-delete precedent every other suite already follows (`crumb_lead.active`,
+  `gelato_bin.active`, `syerp_partner.active`). *Rejected:* hard-deleting the row after clearing
+  assignments — the literal reading of "removing" and the simplest service code, but a later phase
+  rendering who *used* to own a task finds a dangling id, and any future FK from FLAN-05/06 to a
+  member would have to be nullable-and-orphanable.
+- **D-V5P1-7 (owner, `/zj:plan 1`):** **FLAN task keys are unpadded** — `PRJ-1`, `PRJ-9`, `PRJ-10`,
+  not `PRJ-0001`. *Why:* it is what the SRD's own verification literal says (`PRJ-9 → PRJ-10`) and
+  what both prototypes do (`schedule_gate-v45.html:3205`, `return pre+'-'+(max+1)`); a task key is
+  a handle people type and say aloud, inherited from the prototypes, not a document number like
+  `QUOTE-0001`. The digit-boundary defect D-P8-6 exists to prevent lives in the **numeric cast**,
+  not in the padding, so it is caught either way. *Rejected:* zero-padding to the SRD's `####`
+  format sketch, matching the platform's other generated series (`QUOTE-`/`SO-`/`WO-####`) and
+  sorting correctly as a plain string — but disagreeing with both prototypes and forcing verify
+  scenario (B) to hand-insert a legacy `PRJ-9` to reach the digit boundary instead of arriving
+  there naturally. *Consequence carried into the plan as a risk:* a plain string sort puts `PRJ-10`
+  before `PRJ-9`, so every list ordering by key must sort on the **numeric suffix**.
+
+- **D-V5P1-8 (owner, `/zj:verify 1` fix loop):** **A roster member's `hourly_rate` is gated on a
+  new `flan:rates` permission**, seeded but deliberately **not** granted to the default `user`
+  role. Reads omit the key entirely for a non-holder; a write carrying the key from a non-holder is
+  **403**, not a silent drop. *Why:* the verify reviewer found the field on `TeamMemberRead` behind
+  suite-wide `flan:read` and rendered in the Team table, while `auth/seed.py` grants both
+  `flan:read` and `flan:write` to `user` — so any rostered contractor could read **and PATCH**
+  every teammate's pay rate, and no other suite puts a compensation figure behind a suite-wide read
+  permission. *Rejected:* dropping `hourly_rate` from `TeamMemberRead` and the Team column, which
+  the owner chose first and then reversed on new information — `MemberDialog.tsx` seeds its input
+  from `member.hourly_rate` and sends it on every save, so a read-only removal would have made
+  **every member edit silently wipe the stored rate**, a worse defect than the exposure. *Also
+  rejected:* removing the field from the write path too, which leaves nothing able to record a rate
+  and strains FLAN-01.4's "a team member carries … an hourly rate". *Consequences:* (1) the key is
+  **omitted**, never nulled — null is indistinguishable from "no rate recorded" and a client
+  round-tripping it would re-create the wipe; (2) refusal keys off `model_fields_set`, so an
+  explicit `null` is still a write and still 403s, since clearing compensation data is a write;
+  (3) `require_permission`'s admin wildcard means admins keep the field for free; (4) existing
+  deployments need one API restart to pick up the seeded permission.
+
+  *This supersedes the wire half of D-V5-2 / D-M5-2.* "Stored and read by nothing in v5.0" stays
+  true of the service layer — no rollup, report or total reads the rate — but it no longer
+  describes the API surface, which is now permission-gated in both directions.
+
+*Also corrected at plan review (a fact, not a decision):* **FLAN seeds `enabled=True`.** The
+`False` in `("flan", "FLAN — Project Management", False, 30)`
+(`backend/app/core/modules_seed.py:26`) is `always_on`, not `enabled` — the insert at `:52`
+hardcodes `enabled=True` and migration `0003` gives the column `server_default=true`. The draft
+plan had asserted the opposite, which would have made the CORE-07/08 nav-gating check pass
+vacuously; it is now asserted by toggling FLAN **off** and seeing the nav item disappear.

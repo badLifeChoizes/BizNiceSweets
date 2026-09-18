@@ -1,5 +1,17 @@
 # ROADMAP — BizNiceSweets
-Updated: 2026-08-18 (**Milestone v4.0 "Infra-debt + quality paydown" CLOSED + tagged `v4.0`** at
+Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" DONE — verified + retro'd**, tag
+`zj/good-01-flan-core`. FLAN-01's seven ACs all delivered; verify's 14 findings were all fixed
+rather than logged. Learnings banked (headline: four distinct ways a check can measure nothing,
+three of them exit-0 green). 4 p2 + 3 grouped p3 backlog items filed; the p1 QA.md gap RESOLVED,
+clearing the `verify-scripts` merge block. **No phase resized.** Next: `/zj:ship`, then
+`/zj:plan 2a`.)
+Prior: 2026-08-18 (**v5.0 "FLAN port" SPEC'D** — PRD-6 rewritten; SRD FLAN-01 expanded into
+**FLAN-01..11 + NFR-9**; phase→FR mapping proposed below (7 phases / 9 units, DoD crux at **4b**).
+Scope grew at the owner's direction: a **second source prototype**, `schedule_gate-v45.html`, joined
+`prj-mgmt-v24.html`, and all four v24 capability groups are in (D-V5-3). No prototype **data** is
+migrated (D-V5-4); FLAN estimates **promote into SYERP purchase orders** rather than FLAN keeping
+its own spend tables (D-V5-5). D-V5-1..8. **Next: `/zj:plan 1`.**)
+Prior: 2026-08-18 (**Milestone v4.0 "Infra-debt + quality paydown" CLOSED + tagged `v4.0`** at
 `6549142` on **master** — and this time the tag is on master, not a branch: the whole v4.0 stack
 merged via PR #5 (CI 6/6 green), clearing **four consecutive milestones** of master-merge debt.
 Until that merge `origin/master` carried **no `.github/` at all**, so a fresh clone got none of
@@ -470,9 +482,89 @@ roll-up from SYERP actuals is the smallest clause that forces it.
 PLUM's costing models in one milestone, and unblocking PLUM-13 is not a v5.0 goal). CRISP-01 and
 NFR-3 offline stay deferred — they remain PRD-9/PRD-10.
 
-**Phase mapping:** to be proposed at `/zj:spec`. Expect a sub-split in the 9a/b/c and 11a/b shape:
-the domain port (projects → phases → tasks → team) is separable from the timeline/budget surface
-and from the SYERP cost roll-up, and the third depends on the first two.
+**Requirements (spec'd 2026-08-18, D-V5-1..8):** SRD **FLAN-01..11 + NFR-9**, all `planned`. PRD-6
+was rewritten from "port the prototype" into project planning whose estimates become SYERP spend.
+
+**Two source prototypes, not one (D-V5-3).** The owner disclosed a second app at the spec —
+`flan/app/schedule_gate-v45.html` (~3.8k lines: dependency links, topological auto-move, pins,
+snap/sweep, projected finish, a deadline **gate verdict**, a named calculation basis, a facet tag
+taxonomy, baselines), built after BizNiceSweets was first planned — and put its capabilities in
+scope alongside `prj-mgmt-v24.html`. All four v24 capability groups are in as well. **v5.0 is
+therefore materially larger than a parity port**, on the record; the size is managed by the phase
+order below, not by trimming the spec. **No prototype data is migrated** (D-V5-4) — FLAN is a new
+module, and `flan/data/Crisis.json` is not a requirements source.
+
+**Phase → FR mapping (D-V5-8) — 7 phases, 9 units:**
+
+| Phase | Delivers | Why here |
+|-------|----------|----------|
+| **1** ✅**[done — verified + retro'd 2026-08-19]** | **FLAN-01** — project/phase/task core, team roster (optional user link), assignment, RBAC `flan:read`/`flan:write`, audit | Nothing else has anything to attach to. Establishes the unified task model (D-V5-1): a phase *derives* its dates and % from its tasks |
+| **2a** | **FLAN-02** scheduling engine + gate verdict, **FLAN-04** facet taxonomy | Pure server-side math over a graph; the taxonomy ships with it because the engine's `in-plan`/`Parked` basis *is* a reserved facet |
+| **2b** | **FLAN-03** timeline board, list, calendar, search/filter/grouping, flags | The 11a/11b split that worked in v3.0 — engine proven headless before the surface that renders it |
+| **3** | **FLAN-05** risks/milestones/decisions, **FLAN-06** deliveries + notes | Flat CRUD over the core; no new integration. Cheapest full-parity group |
+| **4a** | **FLAN-07** budget envelope, approval FSM, estimate lines, import | Promotion needs something to promote |
+| **4b** | **FLAN-08 — SYERP cost roll-up + estimate promotion** | **The DoD crux.** `flan_project_id` on PO/bill/work-order, estimate→PO promotion, Estimated/Committed/Actual with Actual GL-posted, trial balance still nets zero |
+| **5** | **FLAN-09** analytics — health, resource table, utilisation, critical path, velocity, estimate-vs-actual | Derives from everything above; nothing depends on it |
+| **6** | **FLAN-10** exports (CSV/Excel/JSON/ICS/PDF/HTML), comments, activity log, deep links, one-step undo | Server-native equivalents per D-V5-6 — no public share tokens |
+| **7** | **FLAN-11** prototype supersession — capability-coverage matrix, both prototypes committed and frozen, working proof | Audits every phase before it; the DoD sentence executed |
+
+> **Phase 1 shipped and verified — 2026-08-19, `/zj:verify 1`, tag `zj/good-01-flan-core`.**
+> All 7 FLAN-01 acceptance criteria delivered on `feature-flan-core`: eight `flan_*` tables +
+> migration `0018`, a `service/` package, a 20-operation router with `flan:read`/`flan:write` and
+> audit on every mutation, and four React screens. The crux (D-V5-1: a phase carries **no**
+> `start_date`, `due_date` or `percent_complete` column — they are computed on every read, and the
+> empty phase reports no dates and `"0.00"`) is mutation-proven RED in both `verify_flan.py` and
+> `tests/flan/test_rollup.py`.
+>
+> Verify returned **GAPS** first (0 blockers, 7 major, 7 minor) and every finding was fixed rather
+> than logged: the `key_prefix` row lock did not actually serialize, tags were storable but
+> unreachable in the UI, five acceptance-criterion sentences had no automated pin at all, and
+> `hourly_rate` was readable and writable by every user (now gated on **`flan:rates`**, D-V5P1-8).
+> Final gate after the fixes: pytest **295 passed / 0 skipped**, `verify_flan.py` **50 PASS**,
+> `verify_flan_api.py` **134 PASS**, **28/28** `verify_*` scripts, Vitest **51 files / 203 tests**,
+> ruff 0, eslint 0, build 0, trial balance `in_balance: true`.
+>
+> Landing `.zj/QA.md` §4.8 also absorbed the **eleven** requirement rows missing since the v5.0 spec
+> (`FLAN-02..11`, `NFR-9`), which is what had kept `verify_qa_doc.py` red **on `master`** — clearing
+> the merge block on the required `verify-scripts` status context.
+
+**Retro 2026-08-19** (`/zj:retro 1`) — learnings banked in `.zj/LEARNINGS.md` "Phase 01". The
+phase's dominant lesson is **vacuous verification**: four distinct ways a check can measure nothing
+were found in one phase, three of them exit-0 green — `podman run --rm` without `-i` makes a
+`python -` heredoc read an empty program and exit 0; on FastAPI 0.138 `app.routes` no longer yields
+flattened `APIRoute`s, so a naive iteration finds zero module routes and passes; the plan's **own**
+non-vacuity guard for the empty-phase crux was itself immune to the mutation it was written to
+catch; and a mutation proof passed against the reverted fix because its subject was
+garbage-collected. Also banked: `with_for_update()` does **not** repopulate an already-mapped
+instance (the review's only real correctness bug — 5th phase running that review-overrides-PASS was
+load-bearing), a field documented "read by nothing" was still on the wire and on the screen
+(`hourly_rate` → D-V5P1-8), and **"the backend pytest suite cannot run in-container" was false** —
+it is a mount-point problem, and that four-phase standing tax is retired.
+
+Four **p2** items filed, two owner-triaged at the retro: **project archive is a one-way door** with
+no un-archive route (homed at **Phase 2b**, where the list/filter surfaces give a "Show archived"
+view real use), the **905 kB un-split frontend bundle** (`React.lazy` per suite — deliberately not a
+chore phase, so it never competes with the DoD at 4b), a phase's **derived date window that can read
+backwards** (wants a decision before 2b renders phases on a timeline), and the missing `member_id`
+**indexes** on both assignee join tables (first felt by FLAN-09's member-keyed reports in Phase 5).
+Three grouped **p3** entries home the remaining 15 residue items. The p1 `.zj/QA.md`-behind-`SRD.md`
+item is **RESOLVED** by this phase's close. **No phase was resized; the mapping below stands.**
+
+**NFR-9** (deterministic, bounded schedule computation) is verified in Phase **2a** and re-asserted
+by CI thereafter.
+
+**Phase 1 planned 2026-08-18** (`/zj:plan 1`) — `.zj/phases/01-flan-core/PLAN.md`, **35 tasks** in
+five waves (schema → service+router → UI → verification → close), one full-stack phase per D-V5P1-1.
+All 7 of FLAN-01's acceptance criteria covered and cited. Crux = the phase-derived dates/% rollup
+with **no stored columns**, empty-phase case fixtured first and mutation-proven. 7 owner decisions,
+**D-V5P1-1..7** (namespace `D-V5P1-*` because `D-P1-*` was spent by v4.0's Phase 1). Two draft
+errors caught at plan review: FLAN seeds `enabled=True` (the `False` in the seed tuple is
+`always_on`), which would have made the CORE-07/08 nav check pass vacuously; and a padded-key format
+that contradicted the plan's own `PRJ-9 → PRJ-10` verify scenario. **Next: `/zj:build 1`.**
+
+**Sequencing intent:** the DoD lands at **4b**. Analytics (5) and exports (6) sit deliberately after
+it, so a milestone that runs long puts the *tail* at risk rather than the definition of done — and
+any trim there is an owner call at that point, not an assumption baked in now.
 
 **Standing debt carried in, not scheduled:** the human QA checklist stays unrun by design
 (BACKLOG p1, `.zj/QA.md` §6); pick-path race **Q2** is still open (p2 — a pick can append to a

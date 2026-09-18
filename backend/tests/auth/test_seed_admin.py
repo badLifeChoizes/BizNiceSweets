@@ -7,6 +7,9 @@ Behaviors tested (CORE-04, D-02, D-09):
   - After seed, the admin user has the "admin" role; collect_permissions(admin)
     includes the wildcard "*".
   - The "user" role includes syerp:read + plum:write but NOT users:manage.
+  - "flan:rates" is seeded as a permission row but granted to NO default role —
+    it gates a roster member's hourly_rate, which flan:read would otherwise
+    expose to everyone on the project (flan/router.py).
   - The seeded admin's hashed_password != plaintext and verifies via verify_password.
 
 Tests require a live PostgreSQL database (skip_if_no_db).
@@ -148,6 +151,45 @@ async def test_user_role_lacks_users_manage(seeded_db) -> None:
     assert "users:manage" not in codes, (
         f"'users:manage' should NOT be in user role permissions; got {codes}"
     )
+
+
+async def test_flan_rates_is_seeded_but_not_granted_to_the_user_role(seeded_db) -> None:
+    """
+    'flan:rates' exists as a permission row and is on NO default role but admin.
+
+    It gates a FLAN roster member's `hourly_rate` — compensation data on a
+    roster the whole project can read. The default 'user' role holds flan:read
+    AND flan:write, so if this code ever joins that set, every rostered
+    contractor can read and PATCH their teammates' pay again. The admin role
+    keeps it (it holds every code, and role.name == "admin" is the wildcard
+    anyway).
+    """
+    from sqlalchemy import select
+
+    from app.modules.auth.models import Permission, Role
+
+    perm = (
+        await seeded_db.execute(select(Permission).where(Permission.code == "flan:rates"))
+    ).scalars().first()
+    assert perm is not None, "'flan:rates' was not seeded as a permission row"
+
+    user_role = (
+        await seeded_db.execute(select(Role).where(Role.name == "user"))
+    ).scalars().first()
+    assert user_role is not None
+    codes = {p.code for p in user_role.permissions}
+    assert {"flan:read", "flan:write"} <= codes, (
+        f"the 'user' role should still hold the FLAN suite scopes; got {codes}"
+    )
+    assert "flan:rates" not in codes, (
+        f"'flan:rates' must NOT be granted to the default 'user' role; got {codes}"
+    )
+
+    admin_role = (
+        await seeded_db.execute(select(Role).where(Role.name == "admin"))
+    ).scalars().first()
+    assert admin_role is not None
+    assert "flan:rates" in {p.code for p in admin_role.permissions}
 
 
 # ---------------------------------------------------------------------------

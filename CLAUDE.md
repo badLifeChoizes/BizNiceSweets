@@ -91,11 +91,11 @@ The vanilla-JS / CDN / localStorage details in the "Legacy prototypes" subsectio
 |-------|---------------|--------|
 | SYERP (ERP — hub) | `backend/app/modules/syerp/`, `frontend/src/routes/syerp/` | Building (partners + GL; inventory + purchasing added in Phase 8 / v2.0) |
 | PLUM (PLM) | `backend/app/modules/plum/`, `frontend/src/routes/plum/` | Building (parts, revisions, BOM, costing, AVL, import/export); legacy `plum/app/plm_v54.html` |
-| FLAN (Project Mgmt) | — (legacy `flan/app/prj-mgmt-v24.html`) | Prototype only, not yet re-platformed |
+| FLAN (Project Mgmt) | `backend/app/modules/flan/`, `frontend/src/routes/flan/` | Building (projects + phases + tasks + team roster + assignment; phase dates and % complete **derived** from tasks, never stored; FLAN-01 verified v5.0 Phase 1). Legacy `flan/app/prj-mgmt-v24.html` and `flan/app/schedule_gate-v45.html` remain frozen reference — scheduling, board, tags taxonomy, budgets and exports are FLAN-02..11 |
 | CRUMB (CRM) | `backend/app/modules/crumb/`, `frontend/src/routes/crumb/` | Building (leads → opportunities (stage FSM) → quotes (PLUM-derived line pricing + status FSM) + append-only communication log + sales orders (FSM + accepted-quote→SO conversion + soft-reservation crux, no GL); CRUMB-01 complete, verified Phase 11a + 11b) |
 | MOUSSE (MES) | `backend/app/modules/mousse/`, `frontend/src/routes/mousse/` | Building (materials-only work orders: create/release/issue/complete, WIP clears to zero; verified Phase 10) |
 | CRISP (QMS) | — | Planned |
-| GELATO (WMS) | — | Planned |
+| GELATO (WMS) | `backend/app/modules/gelato/`, `frontend/src/routes/gelato/` | Building (inbound receipt→putaway + outbound pick→pack→ship; GELATO-01 verified Phase 12a + 12b) |
 
 ## Conventions
 

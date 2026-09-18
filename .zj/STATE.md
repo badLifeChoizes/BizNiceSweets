@@ -1,8 +1,420 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-18 (**Milestone v4.0 CLOSED + tagged `v4.0` at `6549142` on master.**
-Milestone v5.0 "FLAN port" chosen and its DoD owner-approved. `.zj/phases/` is empty.)
+Updated: 2026-09-18 (**v5.0 Phase 1 "FLAN core" SHIPPED — PR #7 open against `master`, `MERGEABLE`
+/ `CLEAN`.** https://github.com/badLifeChoizes/BizNiceSweets/pull/7 · Ship preflight found **two
+inoperable jobs** in the local-CI port `da2cb50` shipped — the UAT-seed-idempotency job could never
+pass (`71b6378`), and `clean-room.sh`'s boot probe could never fail, answering from a two-week-old
+dev stack on port 8000 (`a593d65`). Both fixed and mutation-proven; the full gate then passed on the
+final tip via the pre-push hook. Also: tip amended to conventional `chore:` (`da2cb50`),
+`Depth: full` stamped on VERIFICATION (`b93a4dc`), and the six dead GitHub-Actions contexts cleared
+from `master` protection — without which **no** PR into `master` could ever have merged.
+`stash@{0}` has been **popped**: the dev-login three + `.vscode` are uncommitted again, by design.
+**Next: owner merges #7, then `/zj:plan 2a`.** The ship is recorded in
+`docs/tasks/feature-flan-core.md` `## Ship`, whose one open box is the owner's merge + branch
+cleanup + archiving that file.)
 
-## Position: between milestones — v5.0 not yet spec'd
+## SHIPPED — v5.0 Phase 1, PR #7 open and mergeable
+
+**Position: v5.0 Phase 1 "FLAN core" — `[done]`, verified, tag `zj/good-01-flan-core`, and
+**SHIPPED**: PR **#7** open against `master`, `MERGEABLE` / `mergeStateStatus: CLEAN`.
+https://github.com/badLifeChoizes/BizNiceSweets/pull/7
+
+Next: **owner merges PR #7**, then `git branch -d feature-flan-core` +
+`git push origin --delete feature-flan-core`, then `/zj:plan 2a`.**
+
+### Ship preflight — what has happened so far (2026-09-18)
+
+| Step | State |
+|---|---|
+| Phase verified `[done]` + retro'd | ✅ unchanged — verdict PASS, depth full |
+| Working tree clean | ✅ four files stashed as `stash@{0}` (dev-login three + `.vscode`) — **owner chose stash; pop after the PR** |
+| Tip commit conventional | ✅ `f3621e1` → `da2cb50` `chore: retire GitHub Actions…` (amended pre-push, no rewrite of shared history) |
+| `Depth:` line (doctor error) | ✅ `b93a4dc` — `Depth: full`, closing project standard §15 |
+| `master` branch protection | ✅ six dead Actions contexts cleared by owner decision; force-push/deletion/`enforce_admins` guards left ON |
+| Changelog | ⏭ deliberately skipped — `CHANGELOG.md` is per-milestone (v1.0–v4.0), no Unreleased section; v5.0's entry belongs at `/zj:milestone` |
+| **Full local gate** (`gate.sh`) | ✅ **green** after `71b6378` — `gate passed`, and the idempotency job green *for the right reason*: `seeds applied`, then `manifest byte-identical across two runs on a fresh database` (prints only after both the manifest diff and the whole-database census diff come back clean) |
+| **Image check** (`clean-room.sh`) | ✅ **green** after `a593d65` — uncached build, log clean, **zero** bind errors, probe watched the container come up (three `Connection reset by peer`, then `{"status":"ok","db":"connected"}`) on 8097 |
+| Push | ✅ `dbbcba9..29fb90b` — the pre-push hook ran the **full gate on the final tip**: `gate passed` |
+| PR | ✅ **#7**, `MERGEABLE` / `CLEAN` (would have read `BLOCKED` before the contexts were cleared) |
+
+### ⚠ The gate defect this ship found
+
+`scripts/local-ci/gate.sh`'s **UAT seed idempotency** job created a fresh `uatseed` database,
+ran `alembic upgrade head`, and went straight to `seed_uat_fixtures.py`. The `ci.yml` it replaced
+ran `app.core.seed`'s `run_seeds` between those two steps; the port dropped it. The seed script's
+own guard then fired — `RuntimeError: permission 'plum:read' is missing` — killing the job in
+`build_core_partners` before it reached anything it exists to measure.
+
+**It could not pass on any branch.** `da2cb50`'s claim that every retired job has a working local
+equivalent was false for this one — not weakened, inoperable. Fixed in `71b6378` by restoring the
+`run_seeds` block.
+
+**Not a FLAN defect**: the failure precedes any `flan_*` code, and the phase's own evidence
+(295 pytest, 28/28 verify scripts, 50/134 FLAN verify PASS) is untouched.
+
+Two things worth carrying: the phase's own green never ran this job, so only a *fresh* full gate
+at ship time could have caught it; and on the first run I piped `gate.sh` to `tail -60`, which
+reported `tail`'s exit 0 and hid a red gate — the same silent-failure class as defect `U2`, in the
+session auditing the commit that exists to prevent it.
+
+### ⚠ Second, worse gate defect — `clean-room.sh` could not fail
+
+`clean-room.sh` is the replacement for the retired `container-image` job — the check that exists
+*because* defect `U2` (the API image could not be built at all) hid for five phases. Its first run
+here **reported green without ever starting the image it built.**
+
+The script distrusts `podman build`'s exit status deliberately and at length, then trusted
+`podman run`'s implicitly: stdout to `/dev/null`, stderr left to scroll, return value never read.
+It published `127.0.0.1:8000`, where `./scripts/uat.sh`'s `compose_api_1` had been listening for
+**two weeks**. So `podman run` died with `rootlessport listen tcp: bind: address already in use`,
+`curl` was answered by *that* container, and the script printed `the built image booted and reports
+ready` and exited 0. It would have passed on a completely broken image.
+
+Fixed in `a593d65`: default port 8000 → **8097** (`--port` overrides), a free-port assertion that
+runs **before** the build (a collision costs a message, not an uncached build), `podman run`'s status
+read, and every poll asserting our own container is still running so an exited container is reported
+with its log instead of timing out against a port nobody owns. Proven both ways — `--port 8000`
+exits 1 naming the conflict; a default run boots the image it built.
+
+### ⚠ Two of the six ported CI jobs did not work — and the pattern is the phase's own keeper
+
+`da2cb50` states "No check is weakened: each job of ci.yml has an equivalent in gate.sh". Of the
+six, **two were inoperable**: idempotency could never pass, the image job could never fail. Both
+were found only by running the gate fresh at ship time; the phase's own green had never exercised
+either.
+
+This is the **third and fourth instance of `vacuous verification`** — the keeper banked from this
+very phase's retro — and they were sitting in the commit written to prevent it. A fifth instance was
+mine, in this session: piping `gate.sh` to `tail -60` reported `tail`'s exit 0 and hid a red gate.
+Worth adding to `.zj/LEARNINGS.md` "Phase 01" at the next retro touch: **a check that has never been
+observed failing is not known to work**, and a port, a pipe and an unread exit status are three ways
+to be answered by something other than what you are testing.
+
+### ⚠ While `stash@{0}` is out, `frontend/.env.local` is NOT gitignored
+
+The stash took the `.gitignore` hunk with it, so the file holding the dev-login password shows as
+untracked. **Never `git add -A` / `git add .` until the stash is popped.**
+
+## Position: v5.0 Phase 1 — **DONE** (verified + retro'd), ready to ship
+
+**Position: v5.0 Phase 1 "FLAN core" — `[done]`, tag `zj/good-01-flan-core`.
+Next: `/zj:ship` (merge `feature-flan-core` → `master`), then `/zj:plan 2a`.**
+
+### ⚠ Working tree is deliberately DIRTY — three uncommitted files (owner decision)
+
+Not phase work. A **temporary dev-login convenience** added at the owner's request while clicking
+through the running stack, to be deleted before launch:
+
+| File | Change |
+|---|---|
+| `frontend/src/routes/Login.tsx` | amber "Dev sign-in" panel — credentials + a fill button |
+| `frontend/src/vite-env.d.ts` | types for the two `VITE_DEV_LOGIN_*` vars |
+| `.gitignore` | added `.env.local` / `.env.*.local` (the bare `.env` pattern did not cover them) |
+
+The credentials themselves live in **`frontend/.env.local`**, which is **gitignored** and therefore
+not part of this. The panel renders only when both vars are non-empty, so **deleting that one file
+removes it** — no code edit. Verified both ways: a build with the file carries the password in
+`dist/assets/index-*.js`; a build without it has neither the password nor the panel markup
+(dead-code-eliminated). Note Vite loads `.env.local` in **production** mode too, so the gitignore is
+what keeps it out of CI and any clean deploy.
+
+**Owner chose to leave these uncommitted** (2026-08-30) so `feature-flan-core` stays byte-identical
+to the tree `zj/good-01-flan-core` was verified against, and the ship PR carries only FLAN work.
+**`/zj:ship` needs a clean tree — commit, stash, or discard these three files at that point.**
+
+### Retro outcome (2026-08-19)
+
+The keeper is **vacuous verification** — four distinct ways a check can measure nothing, three of
+them exit-0 green, all found in this one phase: `podman run --rm` without `-i` makes a `python -`
+heredoc read an empty program and exit 0; on FastAPI 0.138 `app.routes` no longer yields flattened
+`APIRoute`s, so a naive iteration finds zero module routes and passes; the plan's **own**
+non-vacuity guard for the empty-phase crux was itself immune to the mutation it existed to catch;
+and a mutation proof passed against the **reverted** fix because its subject was garbage-collected.
+Also banked: `with_for_update()` does not repopulate an already-mapped instance (the review's only
+real correctness bug — fifth phase running that review-overrides-PASS was load-bearing); a field
+documented "read by nothing" was still on the wire and on the screen; and **"the backend pytest
+suite cannot run in-container" was false** — it is a mount-point problem, and that four-phase
+standing tax is now retired with a working recipe.
+
+Merge is unblocked: the required `verify-scripts` branch-protection context is green because the
+phase close landed `.zj/QA.md` §4.8 **plus** the eleven rows missing since the v5.0 spec.
+
+### Final gate — re-run in full after the fix loop
+
+| Check | Result |
+|---|---|
+| `pytest -q` (whole suite) | **295 passed, 0 skipped** — exit 0 (was 268) |
+| `pytest tests/flan` | **49 tests** (was 23) |
+| `ruff check .` | exit 0 |
+| all 28 `verify_*` scripts | **28/28** in their correct environment — 26 in-container; the two QA doc scripts on the host, since `.zj/` is not mounted into the API container and their in-container red is a `FileNotFoundError: '/.zj/SRD.md'` path artefact |
+| `verify_flan.py` / `verify_flan_api.py` | **50 PASS** / **134 PASS** (were 38 / 123) |
+| `verify_qa_doc.py` / `verify_qa_citations.py` | both exit 0 — **the inherited red is gone** |
+| frontend lint / vitest / build | exit 0 / **51 files, 203 tests** / exit 0 |
+| trial balance | `in_balance: true`, debit == credit — FLAN posts no GL |
+
+### What the verification actually caught
+
+The phase **goal was true** from the first pass — all 7 ACs drove correctly, and no number the build
+self-reported turned out to be inflated. The GAPS verdict was about **regression protection,
+reachability, and one real concurrency bug**:
+
+1. **The `key_prefix` row lock did not serialize.** `create_task`'s `with_for_update()` select
+   lacked `populate_existing`, so it read the pre-lock identity-map snapshot; and `update_project`
+   never took the lock at all. A prefix edit racing the first task create left a project advertising
+   `CRIS` while holding `PRJ-1` — and because it then had a task, `update_project` 422'd on every
+   later prefix change **forever**, unrepairable through any endpoint. Fixed `af2f426`.
+2. **Tags were storable over the API but unreachable by a user** — an element named literally in
+   AC1 *and* AC3. Owner chose to build the editor in-phase (`b1ded29`), as with Task 22a's edit verb.
+3. **Five explicit AC sentences had no automated pin at all** — tags round-trip, cross-project
+   isolation, roster-scoped assignees, duplicate names + immutable id, and user-delete leaving the
+   roster row. All now pinned and each mutation-proven (`3df78ce`, `9943846`).
+4. **`hourly_rate` was readable *and writable* by every user**, since the default `user` role holds
+   both `flan:read` and `flan:write`. Now gated on **`flan:rates`** (D-V5P1-8).
+
+### Three traps worth carrying into `/zj:retro 1`
+
+- **The SQLAlchemy identity map is weak.** The first lock test **passed against the reverted fix** —
+  the unreferenced `Project` was garbage-collected and the next `db.get` silently re-read it from
+  the database. A mutation proof whose outcome depends on GC timing proves nothing.
+- **A blocking test does not always discriminate.** For "does `update_project` hold the row lock",
+  the obvious test — session 2 blocks — stays **green against the mutation**, because without the
+  lock the plain `UPDATE` blocks on the held row anyway at commit. A `FOR UPDATE NOWAIT` probe was
+  needed.
+- **A uniqueness constraint can make a test pass for the wrong reason.** `roles.name` is unique, so
+  a wildcard-admin assertion against the seeded admin — which already holds every permission —
+  would have passed without proving the wildcard at all.
+
+Plus one process finding: **the frontend gate was flaky before any FLAN change** (a stashed baseline
+failed four tests at vitest's 5s default under load), and **concurrent agents share one git index**,
+so `git add … && git commit` is not atomic — `git commit --only <paths>` is.
+
+### An owner decision reversed on new information
+
+`hourly_rate` was first to be dropped from `TeamMemberRead`. Executing it surfaced that
+`MemberDialog` seeds its input from that field and sends it on every save — so the removal would
+have made **every member edit silently wipe the stored rate**, worse than the exposure. Re-asked;
+owner chose `flan:rates`. The key is **omitted**, never nulled, and a write carrying it from a
+non-holder is **403**, not a silent drop.
+
+### Merge is no longer blocked
+
+Landing `.zj/QA.md` §4.8 also absorbed the **eleven** requirement rows missing since the v5.0 spec
+(`FLAN-02..11`, `NFR-9`) — which is what had kept `verify_qa_doc.py` red **on `master`**. §3 now
+reads **32 of 58**, §5 buckets 26, and both QA scripts exit 0. The p1 backlog item is closed by this.
+
+### Fix loop — original dispatch
+
+Three engineers on disjoint files, with **separate test databases** (`biznice_fix_a`,
+`biznice_fix_c`) because this build already lost a run to two pytest suites sharing `biznice_test`.
+A throwaway `postgres:17-alpine` runs on host port **55432** (user `biznice`, pw `verifypw`) —
+compose `db` is not host-mapped, so the host venv has nothing else to talk to.
+
+- **A** — R1 lock fix + the `derive_key_prefix` re-validation; new `backend/tests/flan/test_key_prefix_lock.py`.
+- **C** — G2–G6 + G8 pins in `verify_flan.py` and `tests/flan/test_rollup.py`.
+- **B** — the tag editor (both project dialogs + task sheet) and the `AssigneeSet` hook typing.
+
+Every one must mutation-prove its checks and paste the RED output. **Manager still owes:** the
+`hourly_rate` removal, all documentation edits (SRD status + `Verified:` stamp, `CLAUDE.md` Suite
+Status, `ROADMAP.md`, phase `QA.md` refresh for the tag editor), the `.zj/QA.md` §3/§4/§5 landing,
+the checklist update, and **a full re-verification after the fixes** — a partial re-check after
+fixes is where regressions slip in.
+
+Branch `feature-flan-core`, 36/36 tasks ticked in `.zj/phases/01-flan-core/PLAN.md`, checklist
+`docs/tasks/feature-flan-core.md` complete. **Nothing is verified yet — `/zj:verify 1` is the gate.**
+
+**What shipped (SRD FLAN-01, all 7 acceptance criteria):** eight `flan_*` tables + migration `0018`;
+a `service/` package (`_common, rollup, projects, phases, keys, tasks, roster, assignments`); a
+**20-operation** router under `/api/v1/flan` with `flan:read`/`flan:write` on every route and audit
+on every mutation; **four** React screens (Projects, Phases, Tasks, Team) + `FlanNav` + `hooks.ts`,
+wired into `App.tsx` behind a `/flan → /flan/projects` redirect.
+
+**Regression gate (Task 33) — GREEN on every FLAN-owned surface:** ruff 0, eslint 0, **268 backend
+tests / 0 skipped**, **26 of 26 runnable `verify_*` scripts** on a cold `down`/`up` with no
+cross-module FK-resolution 500, **Vitest 51 files / 196 tests**, `npm run build` 0, trial balance
+`in_balance: true` with debit == credit == `8547.250000` (FLAN posts no GL, so any movement would
+have been a regression). `verify_flan.py` **38 PASS**, `verify_flan_api.py` **123 PASS**.
+
+**⚠ ONE RED, INHERITED FROM MASTER, AND IT BLOCKS MERGING.** `verify_qa_doc.py` fails because
+`.zj/QA.md` is 11 requirements behind `.zj/SRD.md` (`FLAN-02..11`, `NFR-9`, added on master in
+`6f664a9`/`23bf467`). Proven pre-existing: this branch touches neither file, and master exits 1
+identically. **`verify-scripts` is a REQUIRED branch-protection context**, so every PR into master is
+currently blocked on it. Owner triaged it non-blocking for the phase; **it must be fixed on master
+before `/zj:ship`.** Filed p1 in `.zj/BACKLOG.md`.
+
+**Three owner decisions taken mid-build:** (1) **Task 22a added** — FLAN-01.1's "edit" verb was
+covered by no planned task, so verify could not have marked FLAN-01 complete without it; (2) **no
+reactivation path** for a soft-removed roster member (FLAN-01.4 does not ask for one); (3)
+**task-key reuse accepted** for Phase 1 (FLAN-01.3 requires only uniqueness among live rows), filed
+p2 for FLAN-10 at the latest.
+
+**Five verification gaps found and fixed in the PLAN itself** — every one in the plan's *checks*, not
+its code, and every one found by an engineer running the thing rather than reading it:
+1. **Task 27's A0 was vacuous** — and this was then **empirically confirmed**: under the empty-phase
+   mutation the solo form `phase_rollups([empty])` stayed **GREEN** while the batched forms went RED.
+   The phase's headline crux had a verification that could not detect its own violation.
+2. Task 20's Verify was a `grep -c` count that cannot show *which* hooks invalidate.
+3. Task 14's Done-when regex `\d{4,}` contradicted D-V5P1-7's unpadded keys.
+4. Task 33's frontend gate would have **hung** — `npm run test` is watch mode.
+5. `due < start` was proven in-process by three separate checks, none proving the wire status
+   FLAN-01.3 actually states (closed in Task 32; both new assertions mutation-proved).
+
+**One defect found and fixed in-build (`5b3d09f`):** `useDeletePhase` invalidated only `phasesKey`,
+but `flan_task.phase_id` cascades — the Tasks screen would have listed deleted rows. **Keeper: a
+cascade is a write to a table you did not name.**
+
+**Two manager errors, both mine, both from parallel scheduling, both invisible in the plan's
+`Files:` lists:** tasks declare neither the files they *temporarily* mutate (two tasks mutated
+`rollup.py` concurrently → one silent false green) nor the *database* they share (two pytest runs on
+`biznice_test` → spurious 401s that read like an auth bug). Filed p2 for conftest isolation.
+
+**Four silent-failure hazards discovered — checks that measure nothing and pass:** `podman run`
+without `-i`; `app.routes` on FastAPI 0.138 (`{'_IncludedRouter': 10, 'Route': 4}`, naive scan finds
+**0** module routes); OpenAPI `security` proving a scheme not a permission; and
+`podman exec … || echo` masking exit codes.
+
+**⚠ A FOURTH GATE DEFECT, fixed before it fired.** `frontend/package.json`'s `test` script is bare
+`vitest` — **watch mode**, which never exits. The plan's frontend gate (`npm run lint && npm run test
+&& npm run build`) appears twice and would have **hung Task 33**. Both occurrences now read
+`npm run test -- --run`.
+
+**⚠ OWNER DECISIONS taken mid-build (both binding):**
+1. **Task 22a added — FLAN-01.1's "edit" verb was covered by NO task.** The criterion reads
+   "Create/view/**edit**/archive a project"; Tasks 22-26 built create, view and archive only. Phases,
+   Tasks and Team each got an edit dialog; Project was the sole omission, while `update_project` and
+   `useUpdateProject` sat verified and uncalled. The owner chose to close it in-phase rather than
+   narrow the SRD. **Without 22a, verify could not honestly mark FLAN-01 complete.**
+2. **No reactivation path for a soft-removed roster member, deliberately.** FLAN-01.4 does not ask
+   for one; the row and its history survive, so a later phase can add it additively. Recorded in
+   `roster.py`'s module docstring so the omission reads as a decision.
+3. **Task-key reuse accepted for Phase 1.** `generate_task_key` takes the max *existing* key, so
+   deleting the highest-numbered task frees its number — `audit_log` already names two task ids under
+   `T18P-1`. FLAN-01.3 requires only "unique within the project", which holds. **Filed p2 in
+   `.zj/BACKLOG.md`** with FLAN-10 named as the latest phase to fix it, since that is where deep
+   links make a key a durable handle. The autogenerate-drift item was filed p2 at the same time.
+
+**⚠ DEFECT FOUND AND FIXED IN-BUILD (`5b3d09f`).** `useDeletePhase` invalidated only `phasesKey`, but
+`flan_task.phase_id` is `ondelete="CASCADE"` — deleting a phase destroys its tasks, so the Tasks
+screen would have gone on listing rows that no longer exist. Same stale-cache class as the plan's
+top-listed risk but on the **delete** path, which that risk row covers only for writes. **Carry into
+LEARNINGS as a widening: _a cascade is a write to a table you did not name._**
+
+**⚠ FOUR PLAN DEFECTS CAUGHT IN-BUILD, all amended in place in `PLAN.md`** — each found by an
+engineer *running* the thing rather than reading it, which is the argument for demanding pasted
+output over "DONE":
+1. **Task 27's A0 was vacuous** — asserting the empty phase via a solo `phase_rollups([id])` is
+   immune to Task 29's mutation 3, because `phase_ids[0]` *is* the empty phase. The phase's headline
+   crux had a check that would pass while broken. A0 now requires a batch with a non-empty phase first.
+2. **Task 14's Done-when contradicted D-V5P1-7** — it required `^<PREFIX>-\d{4,}$`, the pre-decision
+   *padded* form, so `PRJ-1` would have failed its own acceptance check. Now `\d+`.
+3. **Task 14 would have silently dropped `assignee_ids` and `tags`** — the schemas accept both; the
+   task text described only the insert. Amended to require consumption **and** a
+   `TaskRead.model_validate` round-trip.
+4. **Task 15's `user_id` conflict rule would have 500'd** — `uq_flan_member_project_user` has no
+   `active` predicate, so the plan's "refuse only if an *active* member links it" passes the service
+   check and then raises `IntegrityError` at flush. Widened to refuse both cases.
+
+**⚠ THREE SILENT-FAILURE HAZARDS — checks that measure nothing and pass. All three matter most in
+Wave D, which is entirely verification:**
+1. **`podman run --rm` without `-i`** leaves stdin unattached, so a `python -` heredoc reads an empty
+   program, prints nothing and **exits 0** — indistinguishable from a real pass in a transcript.
+2. **On FastAPI 0.138, `app.routes` no longer yields flattened `APIRoute`s** — includes are wrapped
+   in `_IncludedRouter`, so you must walk `.original_router`. A script iterating `app.routes` finds
+   **zero** module routes and passes vacuously. Tasks 30 and 32 are warned in the plan text.
+3. **OpenAPI cannot prove RBAC.** Its `security` block records only the bearer *scheme*, never
+   *which* permission — so a check that greps it passes on a route gated by the wrong permission.
+   Task 17 introspected the live dependency graph instead; Tasks 30/32 must do the same.
+
+**⚠ Wave D input:** `verify_flan.py` must `import app.modules.auth.models` before touching
+`flan_team_member`, or SQLAlchemy raises `NoReferencedTableError` on the `user_id → users.id` FK.
+Amended into Task 27's text. Do **not** copy `verify_gelato.py`'s header — it documents the wrong
+container and psql role.
+
+Ticked tasks are marked `### [x]` in `.zj/phases/01-flan-core/PLAN.md`; **resume at the first
+`### [ ]`** — revert and re-run any in-flight task rather than trusting a partial edit. An
+an untracked `backend/tests/flan/` is Task 31 mid-write.
+
+**Wave A verified live by the manager, not taken on report:** `alembic_version` = `0018`; all eight
+`flan_*` tables; all five load-bearing constraint shapes in the database (`flan_task.phase_id`,
+`flan_task_assignee.task_id`, `flan_phase_assignee.phase_id` → `CASCADE`;
+`flan_team_member.user_id` → `SET NULL`; **both** `member_id` FKs → `NO ACTION`, which D-V5P1-6's
+soft-remove depends on); both named unique constraints; `registry` lists `flan` among seven modules;
+cold `down`/`up` boot clean; `ruff` 0.
+
+**⚠ Standing warning for every later autogenerate.** Task 6's draft proposed **seven destructive
+drops** against PLUM and SYERP unique constraints — pre-existing metadata-vs-DB drift, not FLAN's
+doing. Removed from `0018`, but the drift remains and every future `--autogenerate` proposes them
+again. Worth a BACKLOG entry.
+
+**Corrected commands** (the plan's Context block is wrong on all four; table in
+`docs/tasks/feature-flan-core.md` → "Build notes"):
+- `psql -U app -d biznice` — not `-U postgres` / `-U biznice`
+- `/health/ready` — not `/api/v1/health`
+- `/api/v1/core/modules`, auth-gated via OAuth2 **form** login — not `/api/v1/modules`
+- alembic and pytest run from a **throwaway container, repo root at `/repo`, `--user root`, on
+  `--network compose_default`**; for DB-free import checks mount `backend/` at `/app` instead.
+  **Mounting the scratchpad into a container hits `Permission denied`** — pipe probe scripts in on
+  stdin via `python -`.
+
+Commits: `74e4b30` (T1), `fdf556c` (T2), `ae13509` (T3), `dadbf58` (T4), `9dfd406` (T5),
+`67e191d` (T6), `cde26d9` (T7), `c97bac8` (T8), `f0be8f1` (T9), `ffdbc01` (T11), plus the
+`docs(zj):` bookkeeping commits and `9cfbf66` (ABOUTME fix).
+
+## Position (as planned): v5.0 Phase 1 planned — build not started
+
+**Phase 1 = SRD FLAN-01** (project/phase/task core, team roster with an optional platform-user link,
+assignment, RBAC `flan:read`/`flan:write`, audit) — the first phase of the 7-phase v5.0 FLAN port
+mapped at D-V5-8. It stacks on nothing unverified: v4.0 closed and tagged, every phase archived
+with a PASS verdict.
+
+**Plan shape (`/zj:plan 1`, architect + manager goal-backward check):** one full-stack phase in wave
+order (D-V5P1-1) — **A** schema (5 tasks: models, roster + assignment join tables, permission seed,
+module registration, migration `0018`) → **B** service + router (12) → **C** UI (8) → **D**
+verification (7) → **E** close (2). 35 tasks, one atomic commit each.
+
+**The one crux: phase-derived dates and % complete (FLAN-01.2, D-V5-1).** A phase carries **no**
+`start_date`, `due_date` or `percent_complete` column at all — the three values are computed on
+every read from the phase's tasks in one grouped query. Storing them would make "never hand-set" a
+rule someone must remember; omitting the columns makes it structural. The **empty-phase case** (no
+tasks → null dates, `"0.00"`) is fixtured **first** in `verify_flan.py` scenario (A) and is one of
+the three mutations Task 29 must drive RED — it is precisely the case a happy-path fixture would
+miss.
+
+**7 owner decisions at plan → D-V5P1-1..7** (ID namespace note: `D-P1-*` was already spent by v4.0's
+Phase 1, so v5.0 phase decisions are `D-V5P1-*`):
+1. **One full-stack phase, not sub-split** — FLAN-01 has one provable crux, and the standing rule is
+   to sub-split at two.
+2. **Task key prefix = per-project `key_prefix` column**, defaulted from the project name, **locked
+   once the first task is issued**. v45's majority-inference is not ported.
+3. **Active project is URL-scoped** — `/flan/projects/:projectId/...` + a switcher that merely
+   navigates. Makes FLAN-01.6's "no view mixes two projects" structural, and is the shape FLAN-10's
+   deep links need.
+4. **Refresh `.zj/codebase/MAP.md` at phase close.** `plum/service.py` split and the atlas stay out.
+5. **Tags = two join tables** (`flan_project_tag`, `flan_task_tag`) holding **opaque strings** — no
+   facet semantics in Phase 1, that is FLAN-04 at 2a.
+6. **Roster removal is a soft-remove** (`active=False` + delete that member's assignment rows).
+7. **Task keys are unpadded** — `PRJ-9 → PRJ-10`, per the SRD's own verification literal.
+
+**Two errors caught at the manager's plan review, both now corrected in `PLAN.md`:**
+- **FLAN seeds `enabled=True`, not disabled.** The `False` in `("flan", …, False, 30)`
+  (`backend/app/core/modules_seed.py:26`) is `always_on`; the insert at `:52` hardcodes
+  `enabled=True`. The draft plan asserted the opposite, which would have made the CORE-07/08
+  nav-gating check **pass vacuously** ("enable it, then see the nav"). It is now asserted the other
+  way — toggle FLAN **off**, assert the nav item disappears, toggle back on.
+- **The key format contradicted its own verify scenario** — padded `PRJ-0001` while scenario (B)
+  drove a project to `PRJ-9` and demanded `PRJ-10`, which padding makes unreachable. Resolved
+  unpadded (D-V5P1-7), with the string-sort consequence (`PRJ-10` before `PRJ-9`) carried into the
+  plan's risk table and Task 24's Done-when.
+
+**Standing debt carried in, not scheduled:** the human QA checklist stays unrun by design (BACKLOG
+p1, `.zj/QA.md` §6 holds zero readings — non-blocking per owner preference); pick-path race `Q2`
+open (p2); no server-side module-enable gate (p2); `plum/service.py` ~3,000 lines unsplit (p2).
+
+**Also known going in:** the backend pytest suite **cannot** run in-container (`pytest` is absent
+from the image and the bind-mounted venv carries host-path shebangs) — run it from the host venv
+against a reachable Postgres. Verify scripts need `PYTHONPATH=/app` in-container. CI needs no
+workflow edit: the `verify-scripts` jobs are glob-driven, so `verify_flan.py` and
+`verify_flan_api.py` are picked up automatically.
+
+## Prior position: v5.0 spec'd — Phase 1 not yet planned
 
 **v4.0 "Infra-debt + quality paydown" is closed.** Six phases (1, 2a, 2b, 3, 4, 5), 187 commits,
 ~31.0 h across 15 sessions, 2026-07-20 → 2026-08-18. No new end-user capability — CI on every push,
@@ -34,7 +446,50 @@ actuals — with `flan/app/prj-mgmt-v24.html` retired as a reference."*
 
 A straight parity port was offered and declined — the SYERP cost roll-up clause is what makes FLAN
 land as a suite member rather than an island. Labor/time capture is **out**; CRISP-01 and NFR-3
-offline stay deferred (PRD-9/PRD-10). A 9a/b/c-shaped sub-split is expected at plan.
+offline stay deferred (PRD-9/PRD-10).
+
+### Spec complete — 2026-08-18 (`/zj:spec`, D-V5-1..8)
+
+PRD-6 rewritten from "port the prototype" into project planning whose estimates become SYERP spend.
+SRD **FLAN-01** expanded from one line into **FLAN-01..11 + NFR-9** — 11 requirements, 75
+acceptance criteria, every one with a named verification. No ID renumbered (append-only).
+
+**Two things changed the shape of the milestone at this spec, both owner calls:**
+
+1. **A second source prototype (D-V5-3).** `flan/app/schedule_gate-v45.html` (~3.8k lines) — a
+   dependency-scheduling and deadline-gate engine written *after* BizNiceSweets was first planned:
+   `blocks`/`blockedBy` links, topological auto-move, pins, snap/sweep, projected finish, a
+   **gate verdict** (`ON TRACK` / `MISSES GATE` / `NO BASIS`), a named calculation basis
+   (`in-plan` | `all` | `visible` | `marked`), a `Facet:Value` tag taxonomy with exclusive facets,
+   and baselines. Its capabilities are in scope alongside **all four** `prj-mgmt-v24.html` groups.
+   **v5.0 is materially larger than a parity port** — managed by phase order, not by trimming.
+   ⚠ The file is **untracked in git today**; FLAN-11.2 commits it.
+2. **No prototype data migration (D-V5-4).** A `Crisis.json` importer was offered as objective
+   retirement evidence and declined — that data belongs to the first prototype the owner used, not
+   to FLAN. **FLAN-11's capability-coverage matrix replaces it**: every capability of both
+   prototypes mapped to the requirement that delivers it or to a dated deferral.
+
+**The hub clause resolved (D-V5-5) — this is the crux, FLAN-08.** SYERP keeps sole ownership of
+spend. A FLAN project holds **estimate lines**; an approved line is **promoted** into a real SYERP
+purchase order carrying an optional `flan_project_id` (also on `syerp_bill` and
+`mousse_work_order`); the project then reports **Estimated / Committed / Actual** with **Actual
+GL-posted**. FLAN never writes a SYERP table directly. The hard verification: **Committed must
+retire exactly as Actual appears**, no double count, trial balance still nets zero.
+
+**Other decisions:** unified task model — a phase *derives* dates and % from its tasks, v24's
+progress slider not ported (D-V5-1); team roster with an **optional** platform-user link, since real
+teams include people who never hold a login (D-V5-2); server-native sharing/undo — deep links that
+enforce `flan:read`, server baselines, one-step undo, and **no public share tokens** (D-V5-6);
+NFR-9's deliberately generous 1 s / 500-task schedule bound (D-V5-7).
+
+**Phase → FR mapping (D-V5-8) — 7 phases, 9 units** (table in `ROADMAP.md`):
+1 (FLAN-01 core) → 2a (FLAN-02 engine + FLAN-04 taxonomy) → 2b (FLAN-03 board) → 3 (FLAN-05/06) →
+4a (FLAN-07 budget) → **4b (FLAN-08 — the DoD crux)** → 5 (FLAN-09) → 6 (FLAN-10) → 7 (FLAN-11).
+Analytics and exports sit **after** the crux on purpose: a long milestone then risks the tail, not
+the definition of done.
+
+**Open, owner-facing:** nothing blocks planning. Two items to be aware of — the milestone is large
+by the owner's own scoping, and `schedule_gate-v45.html` needs committing before FLAN-11 can verify.
 
 **Carried in as standing debt, not scheduled:** the human QA checklist is unrun by design
 (BACKLOG p1); pick-path race **Q2** is still open (p2 — a pick can append to a shipment a
@@ -45,9 +500,20 @@ concurrent pack just flipped to `packed`); module enable/disable has no server-s
 ## Next action
 
 ```
-/zj:spec
+/zj:build 1
 ```
-Sharpen the v5.0 DoD into clauses and expand FLAN-01 into numbered requirements, then `/zj:plan 1`.
+Execute `.zj/phases/01-flan-core/PLAN.md` — 35 tasks, wave order, one atomic commit each, on a
+`feature-flan-core` branch off master with its `docs/tasks/feature-flan-core.md` checklist.
+Read `CONTEXT.md` alongside it: it carries the binding decisions, the verified codebase facts, and
+the LEARNINGS keepers that apply (chief among them — this phase mirrors CRUMB/GELATO heavily, and
+*mirroring an exemplar retires architectural risk, never correctness risk; the copy is un-audited
+exactly where your case differs*. The named trap here is the key-collision retry: FLAN's task insert
+carries a `phase_id` FK the quote exemplar lacks, so the `except IntegrityError` must be narrowed to
+`uq_flan_task_project_key` and bounded — that is the Phase-13 `create_invoice` unbounded-recursion
+500 in miniature).
+
+*(Superseded, kept for the record: the previous next action was `/zj:spec`, now done — PRD-6
+rewritten, SRD FLAN-01..11 + NFR-9, D-V5-1..8.)*
 
 *(One open item first if you want it clean: **PR #6** from `chore-v4-close-rollforward` carries
 this roll-forward plus the archived milestone-close checklist and needs merging to master — the
@@ -1264,6 +1730,17 @@ owner wants it (raise at `/zj:ideate`).
 
 - **Stack for verification:** `podman-compose -f compose/compose.yml -f compose/compose.dev.yml up -d`;
   run verify scripts in-container: `podman exec -e PYTHONPATH=/app compose_api_1 python scripts/<name>.py`.
+  **Caveats found in v5.0 Phase 1:** the two `verify_qa_*.py` scripts must run **on the host** from a
+  full checkout (`.zj/` is not mounted into the API container); a `python -` heredoc needs
+  `podman run --rm -i` or it silently reads an empty program and exits 0; and for any DB-free check
+  prefer a throwaway container off the `compose_api` image over `podman exec compose_api_1`, which is
+  fragile across the stack restarts a phase requires.
+- **The backend pytest suite DOES run in a container** — mount the **repo root**, not `backend/`:
+  `podman run --rm --user root --network compose_default -v "$PWD:/repo:z" -w /repo/backend
+  --env-file .env --env-file .env.db -e POSTGRES_HOST=db -e PYTHONPATH=/repo/backend
+  -e TEST_POSTGRES_DB=<unique> compose_api sh -c "pip install -q -r requirements-dev.txt; python -m pytest -q"`.
+  Give concurrent runs **different** `TEST_POSTGRES_DB` values — sharing `biznice_test` corrupts both
+  and surfaces as spurious 401s plus a TRUNCATE stall, not as an obvious lock error.
   Vite dev server for UI/UAT at `http://localhost:5173`.
 - **v2.0 tag placement (D-M2-3, mirrors D-M1-1):** the `v2.0` tag (`d6c91cb`) was applied on the
   then-unmerged branch tip; the fast-forward ship (PR #2) preserved the SHA and it is now reachable

@@ -8,10 +8,19 @@ Provides the reusable security gates every later module's routers use:
   get_current_user(token, db) — decodes the Bearer JWT, loads the user, checks
     is_active. Raises 401 (WWW-Authenticate: Bearer) on any failure.
 
+  has_permission(user, permission_code) — the grant RULE itself, as a plain
+    non-raising predicate. An "admin" role grants everything (wildcard); any
+    other role must have an explicit permission.code == permission_code.
+
   require_permission(permission_code) — factory returning a FastAPI dependency
-    that calls get_current_user and then checks the user's roles. An "admin"
-    role grants everything (wildcard). Any other role must have an explicit
-    permission.code == permission_code, else 403.
+    that calls get_current_user and then applies has_permission, raising 403
+    when it answers False.
+
+require_permission is the gate; has_permission is for the case a gate cannot
+express — a route that is open to everyone but whose RESPONSE or PAYLOAD carries
+a field only some callers may see (FLAN's `flan:rates`, flan/router.py). Both
+read the same predicate on purpose: two copies of "does this user hold X" drift,
+and the copy that drifts is the one that stops refusing.
 
 Usage:
     # Gate a route on a specific permission
@@ -21,6 +30,10 @@ Usage:
     @router.get("/me")
     async def me(current_user=Depends(get_current_user)):
         ...
+
+    # Branch on a permission without refusing the request
+    if not has_permission(current_user, "flan:rates"):
+        payload.pop("hourly_rate")
 
 Sources:
   RESEARCH.md Pattern 3
@@ -90,6 +103,38 @@ async def get_current_user(
 
 
 # ---------------------------------------------------------------------------
+# has_permission — the grant rule, as a predicate
+# ---------------------------------------------------------------------------
+
+
+def has_permission(user, permission_code: str) -> bool:
+    """
+    Answer whether `user` holds `permission_code`, without raising.
+
+    The rule, in one place:
+      - Any role named "admin" grants everything (wildcard; T-02-11).
+      - Otherwise some role.permissions[].code must equal permission_code.
+
+    This is the SAME rule require_permission enforces — that factory calls this
+    function rather than repeating the loop, so a change to how a grant is
+    decided cannot apply to the gate and not to the field-level checks (or the
+    reverse). Roles and their permissions are selectin-loaded by get_user_by_id,
+    so no IO happens here.
+
+    Use it where a 403 would be the wrong answer: the caller may have the route,
+    but not every field on it (FLAN's `flan:rates` gates `hourly_rate` inside
+    responses that flan:read otherwise opens).
+    """
+    for role in user.roles:
+        if role.name == "admin":
+            return True
+        for perm in role.permissions:
+            if perm.code == permission_code:
+                return True
+    return False
+
+
+# ---------------------------------------------------------------------------
 # require_permission
 # ---------------------------------------------------------------------------
 
@@ -100,8 +145,8 @@ def require_permission(permission_code: str):
 
     Returns an async dependency that:
       - Calls get_current_user (inheriting its 401 behaviour).
-      - Grants access if any role.name == "admin" (wildcard; T-02-11).
-      - Grants access if any role.permissions[].code == permission_code.
+      - Returns the user when has_permission(user, permission_code) is True
+        (admin role is the wildcard; any other role needs the explicit code).
       - Raises HTTP 403 otherwise.
 
     Usage:
@@ -113,12 +158,8 @@ def require_permission(permission_code: str):
     """
 
     async def _check(current_user=Depends(get_current_user)):
-        for role in current_user.roles:
-            if role.name == "admin":
-                return current_user
-            for perm in role.permissions:
-                if perm.code == permission_code:
-                    return current_user
+        if has_permission(current_user, permission_code):
+            return current_user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Permission denied: {permission_code} required",

@@ -287,7 +287,7 @@ Full-issue WIP value for `WO-000001`: **`58`**.
 
 ## 3. Coverage map
 
-**31 of 47 requirements have at least one human check.**
+**32 of 58 requirements have at least one human check.**
 Requirements with none are itemised in [§5](#5-requirements-with-no-human-check).
 
 | Requirement | Status | Checks |
@@ -329,7 +329,17 @@ Requirements with none are itemised in [§5](#5-requirements-with-no-human-check
 | **MOUSSE-01** — Manufacturing execution core | partially verified | `C-MOUSSE-01`, `C-MOUSSE-02`, `C-MOUSSE-03`, `C-MOUSSE-04`, `C-SC6-c` |
 | **CRUMB-01** — CRM core & sales orders | verified | `C-CRUMB-01`, `C-CRUMB-02`, `C-CRUMB-03`, `C-CRUMB-04`, `C-CRUMB-05`, `C-CRUMB-06`, `C-CRUMB-07`, `C-CRUMB-08` |
 | **GELATO-01** — Warehouse core | VERIFIED | `C-GELATO-01`, `C-GELATO-02`, `C-GELATO-03`, `C-GELATO-04` |
-| **FLAN-01** — FLAN port | planned | — |
+| **FLAN-01** — Project, work-breakdown & team core | verified | `C-FLAN-01`, `C-FLAN-02`, `C-FLAN-03`, `C-FLAN-04`, `C-FLAN-05`, `C-FLAN-06`, `C-FLAN-07`, `C-FLAN-08` |
+| **FLAN-02** — Dependency scheduling & deadline gate | planned | — |
+| **FLAN-03** — Timeline, board & views | planned | — |
+| **FLAN-04** — Tags & facet taxonomy | planned | — |
+| **FLAN-05** — Risks, milestones & decision log | planned | — |
+| **FLAN-06** — Deliveries & project notes | planned | — |
+| **FLAN-07** — Project budget & cost estimates | planned | — |
+| **FLAN-08** — SYERP cost roll-up & estimate promotion | planned | — |
+| **FLAN-09** — Analytics & insights | planned | — |
+| **FLAN-10** — Exports, comments & project record | planned | — |
+| **FLAN-11** — Prototype supersession | planned | — |
 | **CRISP-01** — Quality core | planned | — |
 | **NFR-1** — Audit trail | implemented | — |
 | **NFR-2** — Permissive-license dependencies | implemented | — |
@@ -339,6 +349,7 @@ Requirements with none are itemised in [§5](#5-requirements-with-no-human-check
 | **NFR-6** — Enforced static-analysis (lint) gates | verified | — |
 | **NFR-7** — Concurrency-safe inventory ledger | implemented | — |
 | **NFR-8** — Human-verified release readiness | verified | — |
+| **NFR-9** — Deterministic, bounded schedule computation | planned | — |
 
 ---
 
@@ -1689,6 +1700,237 @@ Two items one row apart in the same dialog, behaving oppositely. That contrast *
 
 ---
 
+### 4.8 FLAN — project management (8 checks)
+
+**FLAN went from a frozen HTML prototype to a real module.** There is now a **FLAN** item in the
+sidebar; behind it a **Projects** list and, per project, **Phases**, **Tasks** and **Team** screens
+reached through a switcher in the FLAN sub-nav. Two things are unlike anything else in the suite and
+are what these checks are really for: a phase's **start date, due date and % complete are never
+typed in** — they are computed from its tasks on every read, and there is deliberately no field to
+type them into — and task **keys** (`CRIS-1`, `CRIS-2`, …) are issued by the server.
+
+FLAN posts **nothing** to the general ledger. No money, stock or ledger behaviour changed.
+
+**There are no seeded FLAN fixtures** — `backend/scripts/seed_uat_fixtures.py` creates none, so each
+check below states exactly what to type. Run them **in order**; `C-FLAN-02` onward depend on the
+project made in `C-FLAN-01`.
+
+> **Do not write a nav check as "enable FLAN, then look for the item".** FLAN ships **enabled**
+> (`modules_seed.py:26`'s `False` is `always_on`, not `enabled`), so that check would pass without
+> proving anything. `C-FLAN-08` tests it the other way round.
+
+### FLAN-01 — Project, work-breakdown & team core
+
+#### C-FLAN-01 · Create a project, with tags, and confirm it lands in the list
+
+**Fixture (type exactly):** Name `Crisis Simulator`, Category `Client`, Currency `USD`,
+Start date `2026-03-01`, Gate date `2026-09-30`, Tags `hardware` and `gate-review`. Leave
+**Key prefix** blank.
+
+- ✅ **Machine already proved:** `src/routes/flan/Projects.test.tsx "POSTs the ProjectCreate payload from the create
+  dialog"`, `"sends key_prefix null when the field is left blank (server derives it)"`,
+  `"renders a row per project, each with its OWN key prefix"`, `"never submits a blank or duplicate
+  tag"`; `verify_flan_api.py (A)`; `verify_flan.py (E)` proves tags round-trip on non-empty sets.
+- **Do:** sidebar → **FLAN** (it lands on **Projects**). **New Project**, fill the fixture — type
+  each tag and press **Enter** (or comma) to turn it into a chip — then **Create Project**.
+- 👁 **You are confirming:**
+  - a row appears **without a page refresh**, reading `Crisis Simulator` | `CRIS` | `Client` |
+    `USD` | `2026-03-01` | `2026-09-30` | `Active`, with both tags shown in the **Tags** column
+  - the **Key prefix** cell says `CRIS` — the server derived it from the name; you never typed it
+  - typing a blank tag, or `hardware` a second time, adds **no** second chip
+  - the `Active` indicator is legible as **text**, not colour alone
+- ✗ **Would be wrong:** an empty Key prefix cell, a `PRJ` fallback, tags vanishing after save, or
+  having to press F5 to see the new row.
+
+#### C-FLAN-02 · Edit, replace tags, then archive — and read the archive copy
+
+**Fixture:** create a **second** project also named `Crisis Simulator` (same name, nothing else
+filled). Then edit the *first* one's Description to `Q3 rebuild`, and change its tags to
+`hardware` + `q3` (remove `gate-review`, add `q3`).
+
+- ✅ **Machine already proved:** `src/routes/flan/Projects.test.tsx "opens the edit dialog pre-filled with the
+  edited row’s OWN values"`, `"PATCHes a ProjectUpdate body carrying neither id nor active"`,
+  `"PATCHes the REPLACED tag set — one added, one removed"`, `"archives a project only after the
+  confirmation is accepted"`, `"hides archived projects until the Show archived switch is on"`;
+  `verify_flan.py (E)` proves the archived project refuses all six write kinds and still reads back
+  complete; `(G)` proves duplicate names are allowed and the id immutable.
+- **Do:** create the duplicate-named project. Open **Actions** (⋯) on the *second* row → **Edit**;
+  check the dialog is filled with **that** row's values, not the first row's; cancel. Edit the
+  *first* row: Description `Q3 rebuild`, remove the `gate-review` chip with its **×**, add `q3`,
+  **Save Project**. Then Actions → **Archive** on the second project, read the dialog before
+  accepting, accept, and toggle **Show archived**.
+- 👁 **You are confirming:**
+  - two rows with the **same name** coexist — duplicate project names are allowed by design
+  - the edit dialog opens pre-filled with the row you clicked, tags included (a stale-dialog bug
+    shows the previously-opened row's values)
+  - after saving, the Tags column reads exactly `hardware`, `q3` — the set was **replaced**, not
+    merged; `gate-review` is gone
+  - the archive dialog says the project **keeps all of its phases, tasks and team, and stays
+    readable — only writes inside it are refused**, and that it is hidden until "Show archived" is on
+  - after accepting, the row disappears; with **Show archived** on it returns badged `Archived`,
+    and its Actions menu offers **no** Edit and **no** Archive
+- ✗ **Would be wrong:** the archive dialog using the word "delete" without saying the data survives;
+  the archived row still offering Edit; the duplicate name being refused; `gate-review` surviving
+  the edit.
+- ⓘ There is **no un-archive**. Archiving is currently a one-way door in the UI.
+
+#### C-FLAN-03 · The empty phase, and watching the derived values move
+
+**Fixture:** in `Crisis Simulator`, create two phases — `Design` (Order `1`, Status `Pending`) and
+`Build` (Order `2`, Status `Pending`). Then, on **Tasks**, create three tasks **in `Design`**:
+
+| Summary | Start | Due |
+|---|---|---|
+| `Wireframes` | `2026-03-05` | `2026-03-20` |
+| `Schematics` | `2026-03-01` | `2026-03-11` |
+| `Enclosure`  | `2026-03-09` | `2026-03-14` |
+
+- ✅ **Machine already proved:** `src/routes/flan/Phases.test.tsx "renders each phase's derived dates and the API's
+  OWN percent string"`, `"renders an em-dash for both dates and 0.00% on a phase with no tasks"`,
+  `"offers no date and no percent input in the edit dialog"`; `verify_flan.py (A)`
+  (mutation-proven RED); `tests/flan/test_rollup.py::test_phase_rollup_crux`.
+- **Do:** create the two phases and look at the **Phases** table **before** adding any task. Open
+  **Edit Phase** on `Design`, look at the fields, cancel. Add the three tasks on **Tasks**. Return to
+  **Phases**. Then set `Wireframes` to **Done** and return; then set all three **Done** and return.
+- 👁 **You are confirming:**
+  - with no tasks, **both** `Derived start` and `Derived due` show an **em-dash (—)** and
+    `% complete` reads exactly **`0.00%`** — not blank, not `0%`, not `NaN`
+  - the **Edit Phase** dialog offers **no** date field and **no** percent field at all
+  - after the three tasks, `Design` reads `Derived start` **2026-03-01** and `Derived due`
+    **2026-03-20** — the earliest start and the latest due, *not* the first or last task you typed
+  - `% complete` goes `0.00%` → **`33.33%`** (1 of 3 Done) → **`100.00%`** (3 of 3), each time
+    **without a page refresh**
+  - `Build`, still empty, stays at `—` / `—` / `0.00%` throughout
+- ✗ **Would be wrong:** derived start showing `2026-03-05` (the first task you entered);
+  `33.33333…%`; the percentage failing to move until you reload; any date or percent input
+  appearing in the phase dialog.
+- ⓘ **This is the phase's one crux.** A phase carries no `start_date`, `due_date` or
+  `percent_complete` column at all — omitting the columns is what makes "never hand-set" structural
+  instead of a rule someone has to remember.
+
+#### C-FLAN-04 · Deleting a phase names the tasks it will take with it
+
+**Fixture:** `Design` now holds 3 tasks; `Build` holds 0.
+
+- ✅ **Machine already proved:** `src/routes/flan/Phases.test.tsx "names the cascaded task count and deletes only
+  after the confirmation"`, `"says a phase has no tasks when nothing will be cascaded"`;
+  `verify_flan.py (F)` and `tests/flan/test_rollup.py::test_phase_delete_cascades_to_its_tasks_only` prove the
+  database cascade and that the sibling phase is untouched.
+- **Do:** on **Phases**, Actions → **Delete phase** on `Build`; read the dialog; cancel. Same on
+  `Design`; read the dialog; **cancel** (later checks need these tasks).
+- 👁 **You are confirming:**
+  - `Build`'s dialog says the phase has **no tasks**
+  - `Design`'s dialog names **3 tasks** explicitly, in words, before you can confirm
+  - cancelling leaves both phases and all three tasks present
+- ✗ **Would be wrong:** a generic "Are you sure?" that never mentions the tasks — they are destroyed
+  with the phase, and a tester who deletes a phase expecting them to survive has been misled.
+- ⓘ If you *do* delete a phase, its tasks must vanish from **Tasks** immediately. This was a real
+  in-build defect (`5b3d09f`): the delete refreshed only the phase list, so the Tasks screen went on
+  listing rows that no longer existed. **A cascade is a write to a table you did not name.**
+
+#### C-FLAN-05 · Keys you never type, a rejected date range, and task tags
+
+**Fixture:** in `Crisis Simulator` / phase `Design`, create tasks until you have **ten**; give one of
+them the tags `firmware` and `urgent`. Then try one more with Start `2026-05-10` / Due `2026-05-09`,
+then one with Start `2026-06-01` / Due `2026-06-01`.
+
+- ✅ **Machine already proved:** `src/routes/flan/Tasks.test.tsx "POSTs a TaskCreate body with no key field (the
+  server assigns the key)"`, `"renders each task's server-generated key in the order the API
+  returned"`, `"surfaces a 422 due<start as an error toast in the server's own words"`,
+  `"PATCHes the REPLACED tag set from the edit sheet"`; `verify_flan.py (B)`, `(C)`;
+  `tests/flan/test_rollup.py::test_task_keys_are_numeric_safe`;
+  `tests/flan/test_api.py::test_task_create_refuses_due_before_start_on_the_wire`.
+- **Do:** open **New Task** and look for a Key field (there is none). Create tasks until the list
+  holds ten. Then one with Due **before** Start; then one with Due **equal to** Start. Finally open
+  **Edit Task** on any row.
+- 👁 **You are confirming:**
+  - keys read `CRIS-1` … `CRIS-9`, **`CRIS-10`** — and `CRIS-10` sorts **after** `CRIS-9`, not
+    between `CRIS-1` and `CRIS-2`
+  - the tagged task shows `firmware` and `urgent` in the **Tags** column
+  - the Due-before-Start create shows a **legible error toast in the server’s own words** and the
+    sheet stays open — no blank screen, no 500, no silently-created task
+  - the Due-**equals**-Start task is **accepted** (a zero-duration milestone is legal)
+  - in **Edit Task** the Key is shown **read-only**
+- ✗ **Would be wrong:** `CRIS-0001`-style padding; `CRIS-10` ordered before `CRIS-9`; the bad-date
+  create producing a raw `422 Unprocessable Entity` string or a crash instead of a readable message.
+
+#### C-FLAN-06 · Remove a member and confirm the tasks survive
+
+**Fixture:** on **Team**, add `Ada Lovelace` — Role `Engineer`, Email `ada@example.com`, Colour any,
+Hourly rate `125.50`, Platform user **No platform user**. Add `Grace Hopper` with name only. Then on
+**Tasks**, assign **both** to `CRIS-1` and **Ada only** to `CRIS-2`.
+
+- ✅ **Machine already proved:** `src/routes/flan/Team.test.tsx "renders the name, role, email, colour and linked
+  user, em-dashing the rest"`, `"renders a member's hourly rate as the string the API returned"`,
+  `"hides the Hourly rate column entirely without flan:rates"`, `"hides the rate input and OMITS the
+  key from the PATCH without flan:rates"`, `"names the assignment clearing in the remove
+  confirmation, then DELETEs"`; `verify_flan.py (D)` proves the two tasks come back
+  **byte-identical** (including `updated_at`), the same scenario proves that deactivating the linked login leaves the
+  roster row untouched, and that **deleting** the platform user outright leaves it too.
+- **Do:** add both members, make the assignments, then Actions → **Remove member** on `Ada
+  Lovelace`. **Read the dialog** before accepting. Accept. Return to **Tasks**.
+- 👁 **You are confirming:**
+  - the roster shows `125.50`-style rate text and **nowhere** multiplies it by anything — no cost,
+    total or budget column appears anywhere in FLAN
+  - a member with **no** platform user is fully usable as an assignee (Ada is)
+  - the remove dialog states that removing Ada **clears her task and phase assignments** and that
+    **the tasks themselves are left intact** — before you accept
+  - after accepting: Ada is gone from the roster **and from the assignee pickers**; `CRIS-1` still
+    exists and still lists **Grace Hopper**; `CRIS-2` still exists with **no** assignee; neither
+    task's summary, status or dates changed
+- ✗ **Would be wrong:** `CRIS-2` disappearing along with Ada; Grace being cleared off `CRIS-1` too;
+  a rate-derived number appearing anywhere.
+- ⓘ **You see the Hourly rate column only because you are logged in as an admin.** Pay rates are
+  gated on `flan:rates` (D-V5P1-8), which the default `user` role does **not** hold — for such a
+  user the column and the dialog input are absent and the field never crosses the wire. If you want
+  to see that by hand, log in as the non-admin user from `C-CORE-03`.
+- ⓘ There is deliberately **no reactivate** action and no "show removed" toggle.
+
+#### C-FLAN-07 · The assignee filter, and two projects that never mix
+
+**Fixture:** the second `Crisis Simulator` was archived in `C-FLAN-02`. Create a third project
+`Bench Rig` (Key prefix blank) with one phase `Fixtures`, one task `Mount plate`, and one team
+member `Katherine Johnson`.
+
+- ✅ **Machine already proved:** `src/routes/flan/Tasks.test.tsx "re-fetches with assignee_id in the params when the
+  assignee filter is set"`, `"re-fetches with phase_id in the params when the phase filter is set"`;
+  `src/routes/flan/components/FlanNav.test.tsx "shows the project from useParams().projectId, not the first in the list"`,
+  `"switching projects preserves the current section"`; `verify_flan.py (H)` proves server-side that
+  `list_phases`, `list_tasks` and `list_members` each answer with only their own project's rows —
+  including two projects that **share** the `PRJ` prefix and both hold a `PRJ-1`; and `(D)` proves a
+  member of another project's roster cannot be assigned.
+- **Do:** on `Crisis Simulator` / **Tasks**, set the assignee filter to `Grace Hopper`, then back to
+  **All assignees**; set the phase filter to `Design`, then back to **All phases**. Now use the
+  project switcher to move to `Bench Rig`, staying on the **Tasks** tab. Look at the URL. Switch back.
+- 👁 **You are confirming:**
+  - filtering by `Grace Hopper` narrows the list to `CRIS-1` only; clearing it restores all rows
+  - the switcher lists **both live projects** and the archived one is **not** offered
+  - switching to `Bench Rig` keeps you on the **Tasks** tab, changes the URL to
+    `/flan/projects/<other-id>/tasks`, and the table shows **only** `Mount plate` — **no `CRIS-*`
+    row is visible**, not even briefly
+  - the **Team** tab under `Bench Rig` shows only `Katherine Johnson`, never `Grace Hopper`
+- ✗ **Would be wrong:** any `CRIS-*` key appearing under `Bench Rig`, even for a flash while loading;
+  the switcher jumping you back to the Phases tab; the assignee dropdown offering a member of the
+  other project.
+
+#### C-FLAN-08 · Turn FLAN off, confirm the nav item goes away, turn it back on
+
+- ✅ **Machine already proved:** `src/components/AppShell.test.tsx` (9 cases over `getVisibleModules` — enabled ∩
+  `<key>:read`, admin wildcard, disabled-module exclusion); `verify_flan_api.py (B)`, `(C)` prove all
+  20 endpoints refuse a token without `flan:write`/`flan:read` over real HTTP, and `verify_flan_api.py (D)` that every
+  mutation writes exactly one attributable `audit_log` row while the reads write none.
+- **Do:** go to **Settings → Modules** (`/settings/modules`), switch **FLAN** off, look at the
+  sidebar, then switch it back on.
+- 👁 **You are confirming:**
+  - with FLAN off, the **FLAN** sidebar item disappears **without a page refresh**
+  - switching it back on brings the item back, and `/flan` still lands on the Projects list
+- ✗ **Would be wrong:** the item staying visible with the module off, or needing F5 either way.
+- ⓘ Turning the module off hides the **navigation** only — `/api/v1/flan/*` keeps answering, exactly
+  as PLUM's and every other suite's do. That is the platform's current CORE-07 behaviour, not a FLAN
+  defect; the server-side module gate is a standing p2 backlog item.
+
+---
+
 ## 5. Requirements with no human check
 
 ### Real gaps — human-checkable, currently unchecked
@@ -1699,7 +1941,14 @@ no manual step).
 
 ### Not built yet — correctly uncovered
 
-**PLUM-11**, **PLUM-12**, **PLUM-13**, **PLUM-14**, **PLUM-15**, **PLUM-16**, **FLAN-01**, **CRISP-01**, **NFR-3** — all `planned`; there is nothing to click.
+**PLUM-11**, **PLUM-12**, **PLUM-13**, **PLUM-14**, **PLUM-15**, **PLUM-16**, **FLAN-02**, **FLAN-03**, **FLAN-04**, **FLAN-05**, **FLAN-06**, **FLAN-07**, **FLAN-08**, **FLAN-09**, **FLAN-10**, **FLAN-11**, **CRISP-01**, **NFR-3**, **NFR-9** — all `planned`; there is nothing to click.
+
+> **FLAN-01 left this bucket at the v5.0 Phase 1 verify** (2026-08-19) and now owns §4.8. The
+> ten FLAN requirements that joined it, plus **NFR-9**, were added to `.zj/SRD.md` at the v5.0
+> spec and had been missing from §3 entirely — which is what kept
+> `backend/scripts/verify_qa_doc.py` red on `master` (§3 counted 47 requirements against the
+> SRD's 58). Landing them here closes that, and with it the merge block on the required
+> `verify-scripts` status context.
 
 ### Machine-only by nature — correctly uncovered
 

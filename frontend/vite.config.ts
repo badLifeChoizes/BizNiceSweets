@@ -13,6 +13,14 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
+    // Vitest's 5s default is not enough for the form-filling suites on a loaded
+    // machine: `userEvent` yields between keystrokes, and a dialog with three
+    // Radix Selects plus a tag input can drift past 5s under parallel backend
+    // test runs while passing comfortably on an idle box. A gate that depends
+    // on host load is not a gate, so the budget is raised rather than the tests
+    // being made shallower. Found at the v5.0 Phase 1 verify fix loop, where a
+    // baseline run with all FLAN work stashed already failed four tests this way.
+    testTimeout: 15000,
   },
   server: {
     host: true,
