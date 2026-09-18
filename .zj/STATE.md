@@ -1,25 +1,22 @@
 # STATE — BizNiceSweets
-Updated: 2026-09-18 (**v5.0 Phase 1 "FLAN core" SHIPPED — PR #7 open against `master`, `MERGEABLE`
-/ `CLEAN`.** https://github.com/badLifeChoizes/BizNiceSweets/pull/7 · Ship preflight found **two
-inoperable jobs** in the local-CI port `da2cb50` shipped — the UAT-seed-idempotency job could never
-pass (`71b6378`), and `clean-room.sh`'s boot probe could never fail, answering from a two-week-old
-dev stack on port 8000 (`a593d65`). Both fixed and mutation-proven; the full gate then passed on the
-final tip via the pre-push hook. Also: tip amended to conventional `chore:` (`da2cb50`),
-`Depth: full` stamped on VERIFICATION (`b93a4dc`), and the six dead GitHub-Actions contexts cleared
-from `master` protection — without which **no** PR into `master` could ever have merged.
-`stash@{0}` has been **popped**: the dev-login three + `.vscode` are uncommitted again, by design.
-**Next: owner merges #7, then `/zj:plan 2a`.** The ship is recorded in
-`docs/tasks/feature-flan-core.md` `## Ship`, whose one open box is the owner's merge + branch
-cleanup + archiving that file.)
+Updated: 2026-09-18 (**v5.0 Phase 1 "FLAN core" MERGED — phase complete.** PR #7 merged as
+`8e2315c`, branch deleted locally and on origin, `master` fast-forwarded 115 commits and carrying
+FLAN. Ship preflight found and fixed **two inoperable jobs** in the local-CI port `da2cb50`
+shipped: UAT-seed-idempotency could never pass (`71b6378`), and `clean-room.sh`'s boot probe could
+never fail — it answered from a two-week-old dev stack on port 8000 (`a593d65`). The six dead
+GitHub-Actions contexts were cleared from `master` protection, without which no PR could ever have
+merged. The dev-login three + `.vscode` are restored uncommitted on `master`, by design.
+**Next: `/zj:plan 2a`.**)
 
-## SHIPPED — v5.0 Phase 1, PR #7 open and mergeable
+## MERGED — v5.0 Phase 1 complete; next phase is 2a
 
 **Position: v5.0 Phase 1 "FLAN core" — `[done]`, verified, tag `zj/good-01-flan-core`, and
 **SHIPPED**: PR **#7** open against `master`, `MERGEABLE` / `mergeStateStatus: CLEAN`.
 https://github.com/badLifeChoizes/BizNiceSweets/pull/7
 
-Next: **owner merges PR #7**, then `git branch -d feature-flan-core` +
-`git push origin --delete feature-flan-core`, then `/zj:plan 2a`.**
+**MERGED 2026-09-18** — PR #7 merged as `8e2315c`; `feature-flan-core` deleted locally and on
+origin; local `master` fast-forwarded 115 commits.
+Next: `/zj:plan 2a`.**
 
 ### Ship preflight — what has happened so far (2026-09-18)
 
