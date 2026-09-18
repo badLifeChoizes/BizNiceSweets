@@ -1,10 +1,11 @@
 # STATE — BizNiceSweets
-Updated: 2026-09-18 (**`/zj:ship` IN PROGRESS — not yet pushed, no PR open.** Preflight found a
-**red gate**: `gate.sh`'s UAT-seed-idempotency job dropped the startup seed when it was ported
-from `ci.yml`, so it could not pass on any branch — fixed in `71b6378`, re-run in flight. Also
-done: tip amended to conventional `chore:` (`da2cb50`), `Depth: full` stamped on VERIFICATION
-(`b93a4dc`), and the six dead GitHub-Actions contexts cleared from `master` protection.
-Working tree changes are stashed at `stash@{0}` — **pop them after the PR**.
+Updated: 2026-09-18 (**`/zj:ship` IN PROGRESS — not yet pushed, no PR open.** Preflight found
+**two inoperable jobs** in the local-CI port `da2cb50` shipped: the UAT-seed-idempotency job could
+never pass (`71b6378`), and `clean-room.sh`'s boot probe could never fail — it answered from a
+two-week-old dev stack on port 8000 (`a593d65`). Owner approved push + PR + a pre-PR image check;
+the image check is **re-running and unconfirmed**. Also done: tip amended to conventional `chore:`
+(`da2cb50`), `Depth: full` stamped on VERIFICATION (`b93a4dc`), six dead GitHub-Actions contexts
+cleared from `master` protection. Working tree is stashed at `stash@{0}` — **pop after the PR**.
 **Next: finish `/zj:ship`.**)
 
 ## Ship in progress — v5.0 Phase 1, branch `feature-flan-core`
@@ -23,7 +24,8 @@ Next: re-run `scripts/local-ci/gate.sh` to green, then push + `gh pr create`, th
 | `Depth:` line (doctor error) | ✅ `b93a4dc` — `Depth: full`, closing project standard §15 |
 | `master` branch protection | ✅ six dead Actions contexts cleared by owner decision; force-push/deletion/`enforce_admins` guards left ON |
 | Changelog | ⏭ deliberately skipped — `CHANGELOG.md` is per-milestone (v1.0–v4.0), no Unreleased section; v5.0's entry belongs at `/zj:milestone` |
-| **Full local gate** | ❌ → 🔄 **failed on first run**, fixed in `71b6378`, **re-run in flight and unconfirmed** |
+| **Full local gate** (`gate.sh`) | ✅ **green** after `71b6378` — `gate passed`, and the idempotency job green *for the right reason*: `seeds applied`, then `manifest byte-identical across two runs on a fresh database` (prints only after both the manifest diff and the whole-database census diff come back clean) |
+| **Image check** (`clean-room.sh`) | 🔄 **re-running, unconfirmed** — its first run was a **false green** (see below), fixed in `a593d65` |
 | Push / PR | ⛔ **not done** — nothing pushed, no PR |
 
 ### ⚠ The gate defect this ship found
@@ -45,6 +47,39 @@ Two things worth carrying: the phase's own green never ran this job, so only a *
 at ship time could have caught it; and on the first run I piped `gate.sh` to `tail -60`, which
 reported `tail`'s exit 0 and hid a red gate — the same silent-failure class as defect `U2`, in the
 session auditing the commit that exists to prevent it.
+
+### ⚠ Second, worse gate defect — `clean-room.sh` could not fail
+
+`clean-room.sh` is the replacement for the retired `container-image` job — the check that exists
+*because* defect `U2` (the API image could not be built at all) hid for five phases. Its first run
+here **reported green without ever starting the image it built.**
+
+The script distrusts `podman build`'s exit status deliberately and at length, then trusted
+`podman run`'s implicitly: stdout to `/dev/null`, stderr left to scroll, return value never read.
+It published `127.0.0.1:8000`, where `./scripts/uat.sh`'s `compose_api_1` had been listening for
+**two weeks**. So `podman run` died with `rootlessport listen tcp: bind: address already in use`,
+`curl` was answered by *that* container, and the script printed `the built image booted and reports
+ready` and exited 0. It would have passed on a completely broken image.
+
+Fixed in `a593d65`: default port 8000 → **8097** (`--port` overrides), a free-port assertion that
+runs **before** the build (a collision costs a message, not an uncached build), `podman run`'s status
+read, and every poll asserting our own container is still running so an exited container is reported
+with its log instead of timing out against a port nobody owns. Proven both ways — `--port 8000`
+exits 1 naming the conflict; a default run boots the image it built.
+
+### ⚠ Two of the six ported CI jobs did not work — and the pattern is the phase's own keeper
+
+`da2cb50` states "No check is weakened: each job of ci.yml has an equivalent in gate.sh". Of the
+six, **two were inoperable**: idempotency could never pass, the image job could never fail. Both
+were found only by running the gate fresh at ship time; the phase's own green had never exercised
+either.
+
+This is the **third and fourth instance of `vacuous verification`** — the keeper banked from this
+very phase's retro — and they were sitting in the commit written to prevent it. A fifth instance was
+mine, in this session: piping `gate.sh` to `tail -60` reported `tail`'s exit 0 and hid a red gate.
+Worth adding to `.zj/LEARNINGS.md` "Phase 01" at the next retro touch: **a check that has never been
+observed failing is not known to work**, and a port, a pipe and an unread exit status are three ways
+to be answered by something other than what you are testing.
 
 ### ⚠ While `stash@{0}` is out, `frontend/.env.local` is NOT gitignored
 
