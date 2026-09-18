@@ -1,10 +1,55 @@
 # STATE — BizNiceSweets
-Updated: 2026-08-19 (**v5.0 Phase 1 "FLAN core" — `/zj:retro 1` COMPLETE. Phase is `[done]`.**
-Learnings banked to `.zj/LEARNINGS.md` "Phase 01"; roadmap trued up (**no phase resized**); four p2
-and three grouped p3 backlog items filed, and the p1 `.zj/QA.md`-behind-`SRD.md` item **RESOLVED**.
-Two owner calls taken at the retro: project **un-archive** is homed at Phase **2b**, and frontend
-**code-splitting** is a p2 backlog item rather than a chore phase. Tag `zj/good-01-flan-core`.
-**Next: `/zj:ship`.**)
+Updated: 2026-09-18 (**`/zj:ship` IN PROGRESS — not yet pushed, no PR open.** Preflight found a
+**red gate**: `gate.sh`'s UAT-seed-idempotency job dropped the startup seed when it was ported
+from `ci.yml`, so it could not pass on any branch — fixed in `71b6378`, re-run in flight. Also
+done: tip amended to conventional `chore:` (`da2cb50`), `Depth: full` stamped on VERIFICATION
+(`b93a4dc`), and the six dead GitHub-Actions contexts cleared from `master` protection.
+Working tree changes are stashed at `stash@{0}` — **pop them after the PR**.
+**Next: finish `/zj:ship`.**)
+
+## Ship in progress — v5.0 Phase 1, branch `feature-flan-core`
+
+**Position: v5.0 Phase 1 "FLAN core" — `[done]` and verified, tag `zj/good-01-flan-core`, but
+NOT yet merged. `/zj:ship` is mid-flight.
+Next: re-run `scripts/local-ci/gate.sh` to green, then push + `gh pr create`, then `/zj:plan 2a`.**
+
+### Ship preflight — what has happened so far (2026-09-18)
+
+| Step | State |
+|---|---|
+| Phase verified `[done]` + retro'd | ✅ unchanged — verdict PASS, depth full |
+| Working tree clean | ✅ four files stashed as `stash@{0}` (dev-login three + `.vscode`) — **owner chose stash; pop after the PR** |
+| Tip commit conventional | ✅ `f3621e1` → `da2cb50` `chore: retire GitHub Actions…` (amended pre-push, no rewrite of shared history) |
+| `Depth:` line (doctor error) | ✅ `b93a4dc` — `Depth: full`, closing project standard §15 |
+| `master` branch protection | ✅ six dead Actions contexts cleared by owner decision; force-push/deletion/`enforce_admins` guards left ON |
+| Changelog | ⏭ deliberately skipped — `CHANGELOG.md` is per-milestone (v1.0–v4.0), no Unreleased section; v5.0's entry belongs at `/zj:milestone` |
+| **Full local gate** | ❌ → 🔄 **failed on first run**, fixed in `71b6378`, **re-run in flight and unconfirmed** |
+| Push / PR | ⛔ **not done** — nothing pushed, no PR |
+
+### ⚠ The gate defect this ship found
+
+`scripts/local-ci/gate.sh`'s **UAT seed idempotency** job created a fresh `uatseed` database,
+ran `alembic upgrade head`, and went straight to `seed_uat_fixtures.py`. The `ci.yml` it replaced
+ran `app.core.seed`'s `run_seeds` between those two steps; the port dropped it. The seed script's
+own guard then fired — `RuntimeError: permission 'plum:read' is missing` — killing the job in
+`build_core_partners` before it reached anything it exists to measure.
+
+**It could not pass on any branch.** `da2cb50`'s claim that every retired job has a working local
+equivalent was false for this one — not weakened, inoperable. Fixed in `71b6378` by restoring the
+`run_seeds` block.
+
+**Not a FLAN defect**: the failure precedes any `flan_*` code, and the phase's own evidence
+(295 pytest, 28/28 verify scripts, 50/134 FLAN verify PASS) is untouched.
+
+Two things worth carrying: the phase's own green never ran this job, so only a *fresh* full gate
+at ship time could have caught it; and on the first run I piped `gate.sh` to `tail -60`, which
+reported `tail`'s exit 0 and hid a red gate — the same silent-failure class as defect `U2`, in the
+session auditing the commit that exists to prevent it.
+
+### ⚠ While `stash@{0}` is out, `frontend/.env.local` is NOT gitignored
+
+The stash took the `.gitignore` hunk with it, so the file holding the dev-login password shows as
+untracked. **Never `git add -A` / `git add .` until the stash is popped.**
 
 ## Position: v5.0 Phase 1 — **DONE** (verified + retro'd), ready to ship
 
