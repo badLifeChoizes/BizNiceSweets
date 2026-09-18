@@ -1,18 +1,23 @@
 # STATE — BizNiceSweets
-Updated: 2026-09-18 (**`/zj:ship` IN PROGRESS — not yet pushed, no PR open.** Preflight found
-**two inoperable jobs** in the local-CI port `da2cb50` shipped: the UAT-seed-idempotency job could
-never pass (`71b6378`), and `clean-room.sh`'s boot probe could never fail — it answered from a
-two-week-old dev stack on port 8000 (`a593d65`). Owner approved push + PR + a pre-PR image check;
-the image check is **re-running and unconfirmed**. Also done: tip amended to conventional `chore:`
-(`da2cb50`), `Depth: full` stamped on VERIFICATION (`b93a4dc`), six dead GitHub-Actions contexts
-cleared from `master` protection. Working tree is stashed at `stash@{0}` — **pop after the PR**.
-**Next: finish `/zj:ship`.**)
+Updated: 2026-09-18 (**v5.0 Phase 1 "FLAN core" SHIPPED — PR #7 open against `master`, `MERGEABLE`
+/ `CLEAN`.** https://github.com/badLifeChoizes/BizNiceSweets/pull/7 · Ship preflight found **two
+inoperable jobs** in the local-CI port `da2cb50` shipped — the UAT-seed-idempotency job could never
+pass (`71b6378`), and `clean-room.sh`'s boot probe could never fail, answering from a two-week-old
+dev stack on port 8000 (`a593d65`). Both fixed and mutation-proven; the full gate then passed on the
+final tip via the pre-push hook. Also: tip amended to conventional `chore:` (`da2cb50`),
+`Depth: full` stamped on VERIFICATION (`b93a4dc`), and the six dead GitHub-Actions contexts cleared
+from `master` protection — without which **no** PR into `master` could ever have merged.
+`stash@{0}` has been **popped**: the dev-login three + `.vscode` are uncommitted again, by design.
+**Next: owner merges #7, then `/zj:plan 2a`.**)
 
-## Ship in progress — v5.0 Phase 1, branch `feature-flan-core`
+## SHIPPED — v5.0 Phase 1, PR #7 open and mergeable
 
-**Position: v5.0 Phase 1 "FLAN core" — `[done]` and verified, tag `zj/good-01-flan-core`, but
-NOT yet merged. `/zj:ship` is mid-flight.
-Next: re-run `scripts/local-ci/gate.sh` to green, then push + `gh pr create`, then `/zj:plan 2a`.**
+**Position: v5.0 Phase 1 "FLAN core" — `[done]`, verified, tag `zj/good-01-flan-core`, and
+**SHIPPED**: PR **#7** open against `master`, `MERGEABLE` / `mergeStateStatus: CLEAN`.
+https://github.com/badLifeChoizes/BizNiceSweets/pull/7
+
+Next: **owner merges PR #7**, then `git branch -d feature-flan-core` +
+`git push origin --delete feature-flan-core`, then `/zj:plan 2a`.**
 
 ### Ship preflight — what has happened so far (2026-09-18)
 
@@ -25,8 +30,9 @@ Next: re-run `scripts/local-ci/gate.sh` to green, then push + `gh pr create`, th
 | `master` branch protection | ✅ six dead Actions contexts cleared by owner decision; force-push/deletion/`enforce_admins` guards left ON |
 | Changelog | ⏭ deliberately skipped — `CHANGELOG.md` is per-milestone (v1.0–v4.0), no Unreleased section; v5.0's entry belongs at `/zj:milestone` |
 | **Full local gate** (`gate.sh`) | ✅ **green** after `71b6378` — `gate passed`, and the idempotency job green *for the right reason*: `seeds applied`, then `manifest byte-identical across two runs on a fresh database` (prints only after both the manifest diff and the whole-database census diff come back clean) |
-| **Image check** (`clean-room.sh`) | 🔄 **re-running, unconfirmed** — its first run was a **false green** (see below), fixed in `a593d65` |
-| Push / PR | ⛔ **not done** — nothing pushed, no PR |
+| **Image check** (`clean-room.sh`) | ✅ **green** after `a593d65` — uncached build, log clean, **zero** bind errors, probe watched the container come up (three `Connection reset by peer`, then `{"status":"ok","db":"connected"}`) on 8097 |
+| Push | ✅ `dbbcba9..29fb90b` — the pre-push hook ran the **full gate on the final tip**: `gate passed` |
+| PR | ✅ **#7**, `MERGEABLE` / `CLEAN` (would have read `BLOCKED` before the contexts were cleared) |
 
 ### ⚠ The gate defect this ship found
 
