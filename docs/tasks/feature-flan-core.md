@@ -239,3 +239,30 @@ engineers on disjoint files with separate test databases.
 - [x] Owner calls: project **un-archive** → BACKLOG p2, homed at Phase 2b; frontend
       **code-splitting** → BACKLOG p2, not a chore phase
 - [x] `.zj/STATE.md` → next action `/zj:ship`
+
+---
+
+## Ship (`/zj:ship`, 2026-09-18)
+
+- [x] Preflight — phase `[done]`/verified, tree cleared to `stash@{0}`, conventions checked
+- [x] Tip commit amended to conventional form — `chore: retire GitHub Actions…` (`da2cb50`)
+- [x] `Depth: full` stamped on `VERIFICATION.md`, closing the `zj doctor` §15 error (`b93a4dc`)
+- [x] `master` branch protection — six dead GitHub-Actions contexts cleared (owner call). Without
+      this **no** PR into `master` could ever have merged: the contexts were required with
+      `enforce_admins`, and `da2cb50` had deleted the workflow that reported them
+- [x] **Gate defect 1** — UAT seed idempotency could never pass; the port dropped `run_seeds`, so
+      `seed_uat_fixtures.py` hit its own `plum:read` guard (`71b6378`)
+- [x] **Gate defect 2** — `clean-room.sh` could never fail; `podman run` died on port 8000 (held by
+      a two-week-old `compose_api_1`), its status went unread, and `curl` was answered by that other
+      container. Green boot reported for an image never started (`a593d65`)
+- [x] Full gate green on the final tip via the pre-push hook — `gate passed`
+- [x] Image check green for the right reason — uncached build, zero bind errors, probe watched the
+      container come up on 8097
+- [x] **PR #7** open, `MERGEABLE` / `CLEAN` — https://github.com/badLifeChoizes/BizNiceSweets/pull/7
+- [x] `stash@{0}` popped — the dev-login three + `.vscode` are uncommitted again, by design
+- [ ] **Owner:** merge #7, then `git branch -d feature-flan-core` +
+      `git push origin --delete feature-flan-core`, then archive this file to
+      `docs/tasks/_completed/2026-09-18-feature-flan-core.md`
+
+Changelog deliberately untouched — `CHANGELOG.md` is per-milestone (v1.0–v4.0, no Unreleased
+section), so v5.0's entry belongs at `/zj:milestone`, not a phase PR.

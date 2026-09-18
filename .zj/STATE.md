@@ -8,7 +8,9 @@ final tip via the pre-push hook. Also: tip amended to conventional `chore:` (`da
 `Depth: full` stamped on VERIFICATION (`b93a4dc`), and the six dead GitHub-Actions contexts cleared
 from `master` protection — without which **no** PR into `master` could ever have merged.
 `stash@{0}` has been **popped**: the dev-login three + `.vscode` are uncommitted again, by design.
-**Next: owner merges #7, then `/zj:plan 2a`.**)
+**Next: owner merges #7, then `/zj:plan 2a`.** The ship is recorded in
+`docs/tasks/feature-flan-core.md` `## Ship`, whose one open box is the owner's merge + branch
+cleanup + archiving that file.)
 
 ## SHIPPED — v5.0 Phase 1, PR #7 open and mergeable
 
