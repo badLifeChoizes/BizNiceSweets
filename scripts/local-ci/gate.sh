@@ -121,6 +121,16 @@ asyncio.run(main())
 print("created database uatseed")
 PY
     python -m alembic upgrade head
+    python - <<PY
+import asyncio
+from app.core.db import AsyncSessionLocal
+from app.core.seed import run_seeds
+async def main():
+    async with AsyncSessionLocal() as db:
+        await run_seeds(db)
+asyncio.run(main())
+print("seeds applied")
+PY
     cat > /tmp/census.py <<PY
 import asyncio, os, asyncpg
 TABLES = ("SELECT table_name FROM information_schema.tables WHERE table_schema = %s "
